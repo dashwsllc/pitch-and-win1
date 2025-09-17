@@ -5,6 +5,9 @@ import { SalesChart } from "@/components/dashboard/SalesChart"
 import { ProductsChart } from "@/components/dashboard/ProductsChart"
 import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FilterTabs } from "@/components/dashboard/FilterTabs"
+import { useDashboardData } from "@/hooks/useDashboardData"
+import { useRankingData } from "@/hooks/useRankingData"
+import { useAuth } from "@/hooks/useAuth"
 import { 
   DollarSign, 
   ShoppingCart, 
@@ -16,17 +19,12 @@ import {
 
 export default function Dashboard() {
   const [selectedFilter, setSelectedFilter] = useState("30dias")
+  const { user } = useAuth()
+  const { metrics, loading } = useDashboardData()
+  const { ranking } = useRankingData()
 
-  // Dados simulados - na implementação real, viriam de uma API
-  const userName = "Carlos Silva" // TODO: Buscar do contexto de autenticação
-  const metrics = {
-    totalVendas: "R$ 45.234",
-    quantidadeVendas: 23,
-    ticketMedio: "R$ 1.966",
-    abordagens: 67,
-    conversao: "34.3%",
-    ranking: 3
-  }
+  const userName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || "Usuário"
+  const userPosition = ranking.findIndex(r => r.isCurrentUser) + 1
 
   return (
     <DashboardLayout>
@@ -53,11 +51,15 @@ export default function Dashboard() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <MetricCard
             title="Total de Vendas"
-            value={metrics.totalVendas}
+            value={new Intl.NumberFormat('pt-BR', { 
+              style: 'currency', 
+              currency: 'BRL' 
+            }).format(metrics.totalVendas)}
             icon={<DollarSign className="w-6 h-6" />}
             trend={{ value: 12.5, isPositive: true }}
             gradient
             className="xl:col-span-2"
+            loading={loading}
           />
           
           <MetricCard
@@ -65,13 +67,18 @@ export default function Dashboard() {
             value={metrics.quantidadeVendas}
             icon={<ShoppingCart className="w-6 h-6" />}
             trend={{ value: 8.2, isPositive: true }}
+            loading={loading}
           />
           
           <MetricCard
             title="Ticket Médio"
-            value={metrics.ticketMedio}
+            value={new Intl.NumberFormat('pt-BR', { 
+              style: 'currency', 
+              currency: 'BRL' 
+            }).format(metrics.ticketMedio)}
             icon={<TrendingUp className="w-6 h-6" />}
             trend={{ value: 5.1, isPositive: true }}
+            loading={loading}
           />
           
           <MetricCard
@@ -79,29 +86,32 @@ export default function Dashboard() {
             value={metrics.abordagens}
             icon={<Users className="w-6 h-6" />}
             trend={{ value: -2.4, isPositive: false }}
+            loading={loading}
           />
           
           <MetricCard
             title="Taxa Conversão"
-            value={metrics.conversao}
+            value={`${metrics.conversao.toFixed(1)}%`}
             icon={<Target className="w-6 h-6" />}
             trend={{ value: 15.8, isPositive: true }}
+            loading={loading}
           />
           
           <MetricCard
             title="Posição Ranking"
-            value={`#${metrics.ranking}`}
-            subtitle="de 12 vendedores"
+            value={userPosition > 0 ? `#${userPosition}` : "-"}
+            subtitle={`de ${ranking.length} vendedores`}
             icon={<Award className="w-6 h-6" />}
             className="animate-pulse-glow"
+            loading={loading}
           />
         </div>
 
         {/* Gráficos e ações */}
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
-            <SalesChart />
-            <ProductsChart />
+            <SalesChart data={metrics.vendasMes} loading={loading} />
+            <ProductsChart data={metrics.produtosMaisVendidos} loading={loading} />
           </div>
           
           <div>

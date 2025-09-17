@@ -2,56 +2,8 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useRankingData } from "@/hooks/useRankingData"
 import { Trophy, Medal, Award, TrendingUp, Target, Crown } from "lucide-react"
-
-const rankingData = [
-  {
-    position: 1,
-    name: "Ana Silva",
-    sales: "R$ 78.450",
-    deals: 45,
-    conversion: "42.5%",
-    avatar: "",
-    badges: ["closer-mes", "maior-ticket"]
-  },
-  {
-    position: 2,
-    name: "Carlos Santos",
-    sales: "R$ 65.230",
-    deals: 38,
-    conversion: "38.2%",
-    avatar: "",
-    badges: ["mais-abordagens"]
-  },
-  {
-    position: 3,
-    name: "João Silva",
-    sales: "R$ 45.234",
-    deals: 23,
-    conversion: "34.3%",
-    avatar: "",
-    badges: ["destaque-mes"],
-    isCurrentUser: true
-  },
-  {
-    position: 4,
-    name: "Maria Oliveira",
-    sales: "R$ 38.920",
-    deals: 28,
-    conversion: "31.8%",
-    avatar: "",
-    badges: []
-  },
-  {
-    position: 5,
-    name: "Pedro Costa",
-    sales: "R$ 32.150",
-    deals: 19,
-    conversion: "29.4%",
-    avatar: "",
-    badges: []
-  }
-]
 
 const badges = {
   "closer-mes": { label: "Closer do Mês", icon: Crown, color: "bg-gold" },
@@ -61,6 +13,31 @@ const badges = {
 }
 
 export default function Ranking() {
+  const { ranking, loading } = useRankingData()
+  
+  const rankingData = ranking.map((user, index) => ({
+    position: index + 1,
+    name: user.name,
+    sales: new Intl.NumberFormat('pt-BR', { 
+      style: 'currency', 
+      currency: 'BRL' 
+    }).format(user.totalVendas),
+    deals: user.quantidadeVendas,
+    conversion: `${user.conversao.toFixed(1)}%`,
+    avatar: "",
+    badges: [] as string[],
+    isCurrentUser: user.isCurrentUser
+  }))
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    )
+  }
   const getMedalIcon = (position: number) => {
     switch (position) {
       case 1:

@@ -8,7 +8,36 @@ const data = [
   { produto: "Starter", valor: 250, vendas: 8 },
 ]
 
-export function ProductsChart() {
+interface ProductsChartProps {
+  data?: Array<{
+    nome: string
+    quantidade: number
+    valor: number
+  }>
+  loading?: boolean
+}
+
+export function ProductsChart({ data = [], loading = false }: ProductsChartProps) {
+  if (loading) {
+    return (
+      <Card className="border-border/50">
+        <CardHeader>
+          <CardTitle className="text-foreground">Top Produtos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 bg-muted animate-pulse rounded"></div>
+        </CardContent>
+      </Card>
+    )
+  }
+  
+  const chartData = data.length > 0 ? data.map(item => ({
+    produto: item.nome,
+    vendas: item.quantidade,
+    valor: item.valor
+  })) : [
+    { produto: "Sem dados", vendas: 0, valor: 0 }
+  ]
   return (
     <Card className="border-border/50">
       <CardHeader>
@@ -17,7 +46,7 @@ export function ProductsChart() {
       <CardContent>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis 
                 dataKey="produto" 

@@ -13,6 +13,7 @@ interface MetricCardProps {
   }
   className?: string
   gradient?: boolean
+  loading?: boolean
 }
 
 export function MetricCard({ 
@@ -22,8 +23,29 @@ export function MetricCard({
   icon, 
   trend, 
   className,
-  gradient = false 
+  gradient = false,
+  loading = false
 }: MetricCardProps) {
+  if (loading) {
+    return (
+      <Card className={cn(
+        "relative overflow-hidden border-border/50 animate-pulse",
+        gradient && "bg-gradient-card",
+        className
+      )}>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2 flex-1">
+              <div className="h-4 bg-muted rounded w-24"></div>
+              <div className="h-8 bg-muted rounded w-16"></div>
+              <div className="h-3 bg-muted rounded w-20"></div>
+            </div>
+            <div className="w-12 h-12 bg-muted rounded-xl"></div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
   return (
     <Card className={cn(
       "relative overflow-hidden border-border/50 transition-all hover:scale-105 hover:shadow-lg",

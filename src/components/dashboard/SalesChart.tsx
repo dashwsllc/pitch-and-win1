@@ -10,7 +10,37 @@ const data = [
   { name: "Jun", vendas: 2390, abordagens: 3800 },
 ]
 
-export function SalesChart() {
+interface SalesChartProps {
+  data?: Array<{
+    month: string
+    vendas: number
+    abordagens: number
+  }>
+  loading?: boolean
+}
+
+export function SalesChart({ data = [], loading = false }: SalesChartProps) {
+  if (loading) {
+    return (
+      <Card className="border-border/50">
+        <CardHeader>
+          <CardTitle className="text-foreground">Evolução de Vendas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 bg-muted animate-pulse rounded"></div>
+        </CardContent>
+      </Card>
+    )
+  }
+  
+  const chartData = data.length > 0 ? data : [
+    { month: "Jan", vendas: 0, abordagens: 0 },
+    { month: "Fev", vendas: 0, abordagens: 0 },
+    { month: "Mar", vendas: 0, abordagens: 0 },
+    { month: "Abr", vendas: 0, abordagens: 0 },
+    { month: "Mai", vendas: 0, abordagens: 0 },
+    { month: "Jun", vendas: 0, abordagens: 0 }
+  ]
   return (
     <Card className="border-border/50">
       <CardHeader>
@@ -19,10 +49,10 @@ export function SalesChart() {
       <CardContent>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
+            <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis 
-                dataKey="name" 
+                dataKey="month" 
                 stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
               />
