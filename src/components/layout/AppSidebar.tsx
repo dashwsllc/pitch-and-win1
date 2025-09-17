@@ -3,7 +3,9 @@ import {
   Home,
   MessageSquare,
   DollarSign,
-  Trophy
+  Trophy,
+  User,
+  Settings
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
@@ -12,18 +14,17 @@ const menuItems = [
   { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Ranking", url: "/ranking", icon: Trophy },
+  { title: "Perfil", url: "/perfil", icon: User },
+  { title: "Configurações", url: "/configuracoes", icon: Settings },
 ]
 
 export function AppSidebar() {
   return (
     <aside className="w-16 min-h-screen bg-sidebar border-r border-sidebar-border flex flex-col fixed left-0 top-0 z-40">
       <div className="p-4">
-        <div className="flex flex-col items-center justify-center">
-          <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center mb-1">
+        <div className="flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
             <BarChart3 className="w-5 h-5 text-white" />
-          </div>
-          <div className="text-xs font-bold text-sidebar-foreground text-center">
-            WS<br/>LTDA
           </div>
         </div>
       </div>
