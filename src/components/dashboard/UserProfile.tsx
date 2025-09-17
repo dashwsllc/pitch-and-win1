@@ -9,19 +9,29 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Settings, LogOut, User } from "lucide-react"
+import { useAuth } from "@/hooks/useAuth"
 
 export function UserProfile() {
-  const userName = "João Silva"
-  const userEmail = "joao@empresa.com"
+  const { user, signOut } = useAuth()
+
+  const handleSignOut = async () => {
+    await signOut()
+  }
+
+  const getInitials = (email: string) => {
+    return email.substring(0, 2).toUpperCase()
+  }
+
+  const displayName = user?.user_metadata?.display_name || 'Usuário'
   
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10 border-2 border-primary/20">
-            <AvatarImage src="" alt={userName} />
+            <AvatarImage src="" alt={displayName} />
             <AvatarFallback className="bg-gradient-primary text-white font-semibold">
-              {userName.split(" ").map(n => n[0]).join("")}
+              {user?.email ? getInitials(user.email) : 'U'}
             </AvatarFallback>
           </Avatar>
         </Button>
@@ -30,9 +40,9 @@ export function UserProfile() {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{userName}</p>
+            <p className="text-sm font-medium leading-none">{displayName}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {userEmail}
+              {user?.email}
             </p>
           </div>
         </DropdownMenuLabel>
@@ -51,7 +61,10 @@ export function UserProfile() {
         
         <DropdownMenuSeparator />
         
-        <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
+        <DropdownMenuItem 
+          className="cursor-pointer text-destructive focus:text-destructive"
+          onClick={handleSignOut}
+        >
           <LogOut className="mr-2 h-4 w-4" />
           <span>Sair</span>
         </DropdownMenuItem>

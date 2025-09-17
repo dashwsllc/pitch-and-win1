@@ -14,7 +14,102 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      abordagens: {
+        Row: {
+          created_at: string
+          dados_abordados: string
+          id: string
+          mostrou_ia: boolean
+          nomes_abordados: string
+          tempo_medio_abordagem: number
+          updated_at: string
+          user_id: string
+          visao_geral: string
+        }
+        Insert: {
+          created_at?: string
+          dados_abordados: string
+          id?: string
+          mostrou_ia?: boolean
+          nomes_abordados: string
+          tempo_medio_abordagem: number
+          updated_at?: string
+          user_id: string
+          visao_geral: string
+        }
+        Update: {
+          created_at?: string
+          dados_abordados?: string
+          id?: string
+          mostrou_ia?: boolean
+          nomes_abordados?: string
+          tempo_medio_abordagem?: number
+          updated_at?: string
+          user_id?: string
+          visao_geral?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      vendas: {
+        Row: {
+          created_at: string
+          email_comprador: string
+          id: string
+          nome_comprador: string
+          nome_produto: string
+          updated_at: string
+          user_id: string
+          valor_venda: number
+          whatsapp_comprador: string
+        }
+        Insert: {
+          created_at?: string
+          email_comprador: string
+          id?: string
+          nome_comprador: string
+          nome_produto: string
+          updated_at?: string
+          user_id: string
+          valor_venda: number
+          whatsapp_comprador: string
+        }
+        Update: {
+          created_at?: string
+          email_comprador?: string
+          id?: string
+          nome_comprador?: string
+          nome_produto?: string
+          updated_at?: string
+          user_id?: string
+          valor_venda?: number
+          whatsapp_comprador?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
