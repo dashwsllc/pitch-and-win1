@@ -1,9 +1,12 @@
+import { useState } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useRankingDataWithMock } from "@/hooks/useRankingDataWithMock"
-import { Trophy, Medal, Award, TrendingUp, Target, Crown } from "lucide-react"
+import { Trophy, Medal, Award, TrendingUp, Target, Crown, ChevronDown, ChevronUp, Gift, Percent, DollarSign } from "lucide-react"
 
 const badges = {
   "closer-mes": { label: "Closer do Mês", icon: Crown, color: "bg-gold" },
@@ -14,6 +17,7 @@ const badges = {
 
 export default function Ranking() {
   const { ranking, loading } = useRankingDataWithMock()
+  const [showFullRanking, setShowFullRanking] = useState(false)
   
   const rankingData = ranking.map((user, index) => ({
     position: index + 1,
@@ -146,78 +150,174 @@ export default function Ranking() {
           ))}
         </div>
 
-        {/* Ranking completo */}
-        <Card className="border-border/50">
+        {/* Ranking completo - Colapsável */}
+        <Collapsible open={showFullRanking} onOpenChange={setShowFullRanking}>
+          <Card className="border-border/50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-foreground">Ranking Completo</CardTitle>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-9 p-0">
+                    {showFullRanking ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="space-y-3">
+                  {rankingData.map((seller) => (
+                    <div 
+                      key={seller.position}
+                      className={`flex items-center gap-4 p-4 rounded-lg transition-all hover:scale-[1.02] ${
+                        getPositionStyle(seller.position, seller.isCurrentUser)
+                      }`}
+                    >
+                      <div className="flex-shrink-0">
+                        {getMedalIcon(seller.position)}
+                      </div>
+                      
+                      <Avatar className="w-10 h-10">
+                        <AvatarImage src={seller.avatar} alt={seller.name} />
+                        <AvatarFallback>
+                          {seller.name.split(" ").map(n => n[0]).join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2 md:gap-4">
+                        <div>
+                          <p className="font-semibold text-foreground flex items-center gap-2">
+                            {seller.name}
+                            {seller.isCurrentUser && (
+                              <Badge variant="outline" className="border-primary text-primary text-xs">
+                                Você
+                              </Badge>
+                            )}
+                          </p>
+                        </div>
+                        
+                        <div className="text-right md:text-center">
+                          <p className="text-lg font-bold text-foreground">{seller.sales}</p>
+                          <p className="text-xs text-muted-foreground">Total vendas</p>
+                        </div>
+                        
+                        <div className="text-right md:text-center">
+                          <p className="font-semibold">{seller.deals}</p>
+                          <p className="text-xs text-muted-foreground">Quantidade</p>
+                        </div>
+                        
+                        <div className="text-right md:text-center">
+                          <p className="font-semibold">{seller.conversion}</p>
+                          <p className="text-xs text-muted-foreground">Conversão</p>
+                        </div>
+                      </div>
+
+                      {seller.badges.length > 0 && (
+                        <div className="hidden md:flex flex-wrap gap-1">
+                          {seller.badges.map((badgeKey) => {
+                            const badge = badges[badgeKey as keyof typeof badges]
+                            const Icon = badge.icon
+                            return (
+                              <Badge 
+                                key={badgeKey}
+                                className={`${badge.color} text-white text-xs`}
+                              >
+                                <Icon className="w-3 h-3 mr-1" />
+                                {badge.label}
+                              </Badge>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        {/* Seção de Prêmios e Bônus */}
+        <Card className="border-border/50 bg-gradient-card">
           <CardHeader>
-            <CardTitle className="text-foreground">Ranking Completo</CardTitle>
+            <CardTitle className="text-foreground flex items-center gap-3">
+              <Gift className="w-6 h-6 text-gold" />
+              Prêmios e Bônus de Comissionamento
+            </CardTitle>
+            <p className="text-muted-foreground">
+              Sistema de recompensas para alta performance
+            </p>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {rankingData.map((seller) => (
-                <div 
-                  key={seller.position}
-                  className={`flex items-center gap-4 p-4 rounded-lg transition-all hover:scale-[1.02] ${
-                    getPositionStyle(seller.position, seller.isCurrentUser)
-                  }`}
-                >
-                  <div className="flex-shrink-0">
-                    {getMedalIcon(seller.position)}
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {/* Bônus Principal */}
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                    <Percent className="w-6 h-6 text-primary" />
                   </div>
-                  
-                  <Avatar className="w-10 h-10">
-                    <AvatarImage src={seller.avatar} alt={seller.name} />
-                    <AvatarFallback>
-                      {seller.name.split(" ").map(n => n[0]).join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2 md:gap-4">
-                    <div>
-                      <p className="font-semibold text-foreground flex items-center gap-2">
-                        {seller.name}
-                        {seller.isCurrentUser && (
-                          <Badge variant="outline" className="border-primary text-primary text-xs">
-                            Você
-                          </Badge>
-                        )}
-                      </p>
-                    </div>
-                    
-                    <div className="text-right md:text-center">
-                      <p className="text-lg font-bold text-foreground">{seller.sales}</p>
-                      <p className="text-xs text-muted-foreground">Total vendas</p>
-                    </div>
-                    
-                    <div className="text-right md:text-center">
-                      <p className="font-semibold">{seller.deals}</p>
-                      <p className="text-xs text-muted-foreground">Quantidade</p>
-                    </div>
-                    
-                    <div className="text-right md:text-center">
-                      <p className="font-semibold">{seller.conversion}</p>
-                      <p className="text-xs text-muted-foreground">Conversão</p>
-                    </div>
-                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">Bônus Adicional</h3>
+                  <p className="text-3xl font-bold text-primary mb-2">+10%</p>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Comissionamento adicional para vendedores de alta performance
+                  </p>
+                  <Badge className="bg-success text-success-foreground">
+                    Total: 22% de Comissão
+                  </Badge>
+                </CardContent>
+              </Card>
 
-                  {seller.badges.length > 0 && (
-                    <div className="hidden md:flex flex-wrap gap-1">
-                      {seller.badges.map((badgeKey) => {
-                        const badge = badges[badgeKey as keyof typeof badges]
-                        const Icon = badge.icon
-                        return (
-                          <Badge 
-                            key={badgeKey}
-                            className={`${badge.color} text-white text-xs`}
-                          >
-                            <Icon className="w-3 h-3 mr-1" />
-                            {badge.label}
-                          </Badge>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
+              {/* Prêmio TOP 1 */}
+              <Card className="border-gold/20 bg-gold/5">
+                <CardContent className="p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-gold/10 flex items-center justify-center mx-auto mb-4">
+                    <Crown className="w-6 h-6 text-gold" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">1º Lugar</h3>
+                  <p className="text-3xl font-bold text-gold mb-2">R$ 5.000</p>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Prêmio em dinheiro para o vendedor #1 do mês
+                  </p>
+                  <Badge className="bg-gold text-white">
+                    Closer do Mês
+                  </Badge>
+                </CardContent>
+              </Card>
+
+              {/* Prêmio TOP 3 */}
+              <Card className="border-chart-3/20 bg-chart-3/5">
+                <CardContent className="p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-chart-3/10 flex items-center justify-center mx-auto mb-4">
+                    <DollarSign className="w-6 h-6 text-chart-3" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">TOP 3</h3>
+                  <p className="text-3xl font-bold text-chart-3 mb-2">R$ 1.500</p>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Premiação para os 3 primeiros colocados
+                  </p>
+                  <Badge className="bg-chart-3 text-white">
+                    2º e 3º Lugar
+                  </Badge>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Informações adicionais */}
+            <div className="mt-6 p-4 bg-muted/30 rounded-lg">
+              <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                Como Conquistar os Bônus
+              </h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Mantenha taxa de conversão acima de 75%</li>
+                <li>• Realize pelo menos 50 abordagens no mês</li>
+                <li>• Alcance meta de R$ 25.000 em vendas mensais</li>
+                <li>• Participe ativamente do ranking</li>
+              </ul>
             </div>
           </CardContent>
         </Card>

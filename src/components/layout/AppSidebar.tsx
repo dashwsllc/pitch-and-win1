@@ -2,7 +2,7 @@ import {
   BarChart3, 
   Home,
   MessageSquare,
-  ShoppingCart,
+  DollarSign,
   Trophy
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
@@ -10,7 +10,7 @@ import { NavLink } from "react-router-dom"
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
-  { title: "Vendas", url: "/vendas", icon: ShoppingCart },
+  { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Ranking", url: "/ranking", icon: Trophy },
 ]
 
