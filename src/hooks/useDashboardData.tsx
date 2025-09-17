@@ -20,7 +20,7 @@ interface DashboardMetrics {
   }>
 }
 
-export function useDashboardData() {
+export function useDashboardData(dateFilter: string = "30dias") {
   const { user } = useAuth()
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     totalVendas: 0,
@@ -34,6 +34,26 @@ export function useDashboardData() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const getDateRange = (filter: string) => {
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    
+    switch (filter) {
+      case "hoje":
+        return { start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+      case "ontem":
+        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+        return { start: yesterday, end: today }
+      case "7dias":
+        return { start: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+      case "14dias":
+        return { start: new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+      case "30dias":
+      default:
+        return { start: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+    }
+  }
+
   useEffect(() => {
     if (!user) return
 
@@ -42,19 +62,25 @@ export function useDashboardData() {
         setLoading(true)
         setError(null)
 
-        // Buscar vendas do usuário
+        const { start, end } = getDateRange(dateFilter)
+
+        // Buscar vendas do usuário no período
         const { data: vendas, error: vendasError } = await supabase
           .from('vendas')
           .select('*')
           .eq('user_id', user.id)
+          .gte('created_at', start.toISOString())
+          .lt('created_at', end.toISOString())
 
         if (vendasError) throw vendasError
 
-        // Buscar abordagens do usuário
+        // Buscar abordagens do usuário no período
         const { data: abordagens, error: abordagensError } = await supabase
           .from('abordagens')
           .select('*')
           .eq('user_id', user.id)
+          .gte('created_at', start.toISOString())
+          .lt('created_at', end.toISOString())
 
         if (abordagensError) throw abordagensError
 
@@ -143,7 +169,7 @@ export function useDashboardData() {
     }
 
     fetchDashboardData()
-  }, [user])
+  }, [user, dateFilter])
 
   return { metrics, loading, error }
 }

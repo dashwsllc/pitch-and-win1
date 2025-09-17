@@ -6,7 +6,7 @@ import { ProductsChart } from "@/components/dashboard/ProductsChart"
 import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FilterTabs } from "@/components/dashboard/FilterTabs"
 import { useDashboardData } from "@/hooks/useDashboardData"
-import { useRankingData } from "@/hooks/useRankingData"
+import { useRankingDataWithMock } from "@/hooks/useRankingDataWithMock"
 import { useAuth } from "@/hooks/useAuth"
 import { 
   DollarSign, 
@@ -18,10 +18,10 @@ import {
 } from "lucide-react"
 
 export default function Dashboard() {
-  const [selectedFilter, setSelectedFilter] = useState("30dias")
+  const [selectedFilter, setSelectedFilter] = useState("hoje")
   const { user } = useAuth()
-  const { metrics, loading } = useDashboardData()
-  const { ranking } = useRankingData()
+  const { metrics, loading } = useDashboardData(selectedFilter)
+  const { ranking } = useRankingDataWithMock()
 
   const userName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || "Usuário"
   const userPosition = ranking.findIndex(r => r.isCurrentUser) + 1

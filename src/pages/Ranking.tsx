@@ -2,7 +2,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useRankingData } from "@/hooks/useRankingData"
+import { useRankingDataWithMock } from "@/hooks/useRankingDataWithMock"
 import { Trophy, Medal, Award, TrendingUp, Target, Crown } from "lucide-react"
 
 const badges = {
@@ -13,7 +13,7 @@ const badges = {
 }
 
 export default function Ranking() {
-  const { ranking, loading } = useRankingData()
+  const { ranking, loading } = useRankingDataWithMock()
   
   const rankingData = ranking.map((user, index) => ({
     position: index + 1,
