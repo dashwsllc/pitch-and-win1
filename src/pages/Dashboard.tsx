@@ -21,7 +21,7 @@ import {
 export default function Dashboard() {
   const [selectedFilter, setSelectedFilter] = useState("hoje")
   const { user } = useAuth()
-  const { metrics, loading } = useDashboardData(selectedFilter)
+  const { metrics, loading, refetch } = useDashboardData(selectedFilter)
   const { ranking } = useRankingDataWithMock()
 
   const userName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || "Usuário"
@@ -42,7 +42,7 @@ export default function Dashboard() {
             </div>
             
             <Button 
-              onClick={() => window.location.reload()} 
+              onClick={() => refetch()} 
               variant="outline"
               className="w-fit"
             >
