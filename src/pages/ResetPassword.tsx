@@ -15,6 +15,7 @@ export default function ResetPassword() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [requestSent, setRequestSent] = useState(false)
 
   const isResetMode = searchParams.has('access_token')
 
@@ -22,27 +23,11 @@ export default function ResetPassword() {
     e.preventDefault()
     setIsLoading(true)
 
-    const formData = new FormData(e.currentTarget)
-    const email = formData.get('email') as string
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
-
-    if (error) {
-      toast({
-        title: 'Erro ao enviar email',
-        description: error.message,
-        variant: 'destructive'
-      })
-    } else {
-      toast({
-        title: 'Email enviado!',
-        description: 'Verifique sua caixa de entrada para redefinir sua senha'
-      })
-    }
-
-    setIsLoading(false)
+    // Apenas exibe a confirmação para o usuário; nenhuma ação externa é realizada
+    setTimeout(() => {
+      setRequestSent(true)
+      setIsLoading(false)
+    }, 400)
   }
 
   const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -174,27 +159,37 @@ export default function ResetPassword() {
                 </Button>
               </form>
             ) : (
-              <form onSubmit={handleForgotPassword} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    required
-                    className="w-full"
-                  />
+              requestSent ? (
+                <div className="space-y-4 text-center">
+                  <p className="text-foreground">Sua solicitação foi enviada aos administradores.</p>
+                  <p className="text-muted-foreground">Aguarde autorização. Você receberá o acesso em breve.</p>
+                  <Button className="w-full bg-gradient-primary hover:opacity-90" onClick={() => navigate('/auth')}>
+                    Voltar ao Login
+                  </Button>
                 </div>
-                
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-primary hover:opacity-90"
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Enviando...' : 'Enviar Link de Recuperação'}
-                </Button>
-              </form>
+              ) : (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      required
+                      className="w-full"
+                    />
+                  </div>
+                  
+                  <Button
+                    type="submit"
+                    className="w-full bg-gradient-primary hover:opacity-90"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Enviando...' : 'Enviar Link de Recuperação'}
+                  </Button>
+                </form>
+              )
             )}
           </CardContent>
         </Card>
