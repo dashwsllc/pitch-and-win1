@@ -1,15 +1,18 @@
 import { ReactNode } from "react"
-import { AppSidebar } from "./AppSidebar"
+import { ExecutiveAppSidebar } from "./ExecutiveAppSidebar"
 import { UserProfile } from "@/components/dashboard/UserProfile"
+import { useRoles } from "@/hooks/useRoles"
 
 interface DashboardLayoutProps {
   children: ReactNode
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
+  const { isExecutive } = useRoles()
+  
   return (
     <div className="min-h-screen bg-background">
-      <AppSidebar />
+      <ExecutiveAppSidebar isExecutive={isExecutive} />
       
       <div className="ml-16 min-h-screen flex flex-col">
         <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">

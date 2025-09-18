@@ -7,10 +7,12 @@ import { Label } from '@/components/ui/label'
 import { BarChart3, Eye, EyeOff, Lock } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -23,11 +25,31 @@ export default function ResetPassword() {
     e.preventDefault()
     setIsLoading(true)
 
-    // Apenas exibe a confirmação para o usuário; nenhuma ação externa é realizada
-    setTimeout(() => {
+    const formData = new FormData(e.currentTarget)
+    const email = formData.get('email') as string
+
+    try {
+      // Create password reset request in database
+      const { error } = await supabase
+        .from('password_reset_requests')
+        .insert([
+          {
+            user_id: user?.id || '00000000-0000-0000-0000-000000000000',
+            email: email
+          }
+        ])
+
+      if (error) {
+        console.error('Error creating password reset request:', error)
+      }
+
       setRequestSent(true)
+    } catch (error) {
+      console.error('Error in handleForgotPassword:', error)
+      setRequestSent(true) // Still show success to user
+    } finally {
       setIsLoading(false)
-    }, 400)
+    }
   }
 
   const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
