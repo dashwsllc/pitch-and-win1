@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth"
 import { useProfile } from "@/hooks/useProfile"
 import { supabase } from "@/integrations/supabase/client"
 import { toast } from "sonner"
-import { User, Mail, Camera, Lock, Save } from "lucide-react"
+import { User, Mail, Camera, Lock, Save, Clock } from "lucide-react"
 
 export default function Perfil() {
   const { user } = useAuth()

@@ -14,7 +14,7 @@ import {
   TrendingUp, 
   Users,
   Target,
-  Award 
+  Clock
 } from "lucide-react"
 
 export default function Dashboard() {
@@ -99,9 +99,9 @@ export default function Dashboard() {
           
           <MetricCard
             title="Posição Ranking"
-            value="Indisponível"
+            value="—"
             subtitle="Ranking ainda não iniciado"
-            icon={<Award className="w-6 h-6" />}
+            icon={<Clock className="w-6 h-6" />}
             className="animate-pulse-glow"
             loading={loading}
           />

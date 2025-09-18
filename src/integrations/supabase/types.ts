@@ -50,6 +50,45 @@ export type Database = {
         }
         Relationships: []
       }
+      assinaturas: {
+        Row: {
+          created_at: string
+          email_cliente: string
+          id: string
+          nome_cliente: string
+          nome_produto: string
+          status: string
+          updated_at: string
+          user_id: string
+          valor_assinatura: string
+          whatsapp_cliente: string
+        }
+        Insert: {
+          created_at?: string
+          email_cliente: string
+          id?: string
+          nome_cliente: string
+          nome_produto: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          valor_assinatura: string
+          whatsapp_cliente: string
+        }
+        Update: {
+          created_at?: string
+          email_cliente?: string
+          id?: string
+          nome_cliente?: string
+          nome_produto?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          valor_assinatura?: string
+          whatsapp_cliente?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

@@ -4,6 +4,7 @@ import {
   MessageSquare,
   DollarSign,
   Trophy,
+  Users,
   User,
   Settings
 } from "lucide-react"
@@ -14,6 +15,7 @@ const menuItems = [
   { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Ranking", url: "/ranking", icon: Trophy },
+  { title: "Clientes", url: "/clientes", icon: Users },
   { title: "Perfil", url: "/perfil", icon: User },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ]

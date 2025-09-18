@@ -13,6 +13,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Ranking from "./pages/Ranking";
 import NovaAbordagem from "./pages/NovaAbordagem";
 import RegistrarVenda from "./pages/RegistrarVenda";
+import Clientes from "./pages/Clientes";
 import Perfil from "./pages/Perfil";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
@@ -49,6 +50,11 @@ const App = () => (
               <Route path="/vendas" element={
                 <ProtectedRoute>
                   <RegistrarVenda />
+                </ProtectedRoute>
+              } />
+              <Route path="/clientes" element={
+                <ProtectedRoute>
+                  <Clientes />
                 </ProtectedRoute>
               } />
               <Route path="/perfil" element={
