@@ -11,10 +11,9 @@ interface ExecutiveDashboardData {
   activeSubscriptions: number
   conversionRate: number
   salesByPeriod: Array<{
-    period: string
+    month: string
     vendas: number
     abordagens: number
-    valor: number
   }>
   topSellers: Array<{
     seller_name: string
@@ -93,14 +92,14 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       // Buscar vendas no período
       const { data: salesData } = await supabase
         .from('vendas')
-        .select('*, profiles!inner(display_name)')
+        .select('*')
         .gte('created_at', start)
         .lte('created_at', end)
 
       // Buscar abordagens no período
       const { data: approachesData } = await supabase
         .from('abordagens')
-        .select('*, profiles!inner(display_name)')
+        .select('*')
         .gte('created_at', start)
         .lte('created_at', end)
 
@@ -132,12 +131,10 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
           approach.created_at.startsWith(dateStr)
         ) || []
         
-        salesByDay.push({
-          period: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        salesByPeriod.push({
           month: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
           vendas: daySales.length,
-          abordagens: dayApproaches.length,
-          valor: daySales.reduce((sum, sale) => sum + Number(sale.valor_venda), 0)
+          abordagens: dayApproaches.length
         })
       }
 
@@ -145,7 +142,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       const sellerStats = new Map()
       
       salesData?.forEach(sale => {
-        const sellerName = sale.profiles?.display_name || sale.profiles?.email || 'Seller'
+        const sellerName = `Seller ${sale.user_id.substring(0, 8)}`
         if (!sellerStats.has(sellerName)) {
           sellerStats.set(sellerName, {
             seller_name: sellerName,
@@ -160,7 +157,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       })
 
       approachesData?.forEach(approach => {
-        const sellerName = approach.profiles?.display_name || approach.profiles?.email || 'Seller'
+        const sellerName = `Seller ${approach.user_id.substring(0, 8)}`
         if (!sellerStats.has(sellerName)) {
           sellerStats.set(sellerName, {
             seller_name: sellerName,
@@ -185,13 +182,13 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       const recentActivity = [
         ...salesData?.slice(0, 5).map(sale => ({
           type: 'sale' as const,
-          seller_name: sale.profiles?.display_name || 'Seller',
+          seller_name: `Seller ${sale.user_id.substring(0, 8)}`,
           details: `Venda de ${sale.nome_produto} - R$ ${Number(sale.valor_venda).toLocaleString('pt-BR')}`,
           created_at: sale.created_at
         })) || [],
         ...approachesData?.slice(0, 5).map(approach => ({
           type: 'approach' as const,
-          seller_name: approach.profiles?.display_name || 'Seller',
+          seller_name: `Seller ${approach.user_id.substring(0, 8)}`,
           details: `${approach.nomes_abordados} pessoas abordadas`,
           created_at: approach.created_at
         })) || []
@@ -206,7 +203,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
         totalSubscriptions,
         activeSubscriptions,
         conversionRate,
-        salesByPeriod: salesByDay,
+        salesByPeriod: salesByPeriod,
         topSellers,
         recentActivity
       })

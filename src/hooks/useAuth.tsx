@@ -66,7 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut()
     if (!error) {
-      window.location.href = '/auth'
+      setUser(null)
+      setSession(null)
+      // The auth state change will handle redirect automatically
     }
   }
 

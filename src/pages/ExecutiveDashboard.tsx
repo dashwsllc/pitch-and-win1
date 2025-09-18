@@ -61,32 +61,32 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* Filter Tabs */}
-        <FilterTabs selectedFilter={selectedFilter} onFilterChange={setSelectedFilter} />
+        <FilterTabs value={selectedFilter} onValueChange={setSelectedFilter} />
 
         {/* Main Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard
             title="Total de Vendedores"
             value={data.totalSellers.toString()}
-            icon={Users}
+            icon={<Users className="w-5 h-5" />}
             loading={loading}
           />
           <MetricCard
             title="Vendas Totais"
             value={data.totalSales.toString()}
-            icon={DollarSign}
+            icon={<DollarSign className="w-5 h-5" />}
             loading={loading}
           />
           <MetricCard
             title="Faturamento Total"
             value={formatCurrency(data.totalRevenue)}
-            icon={TrendingUp}
+            icon={<TrendingUp className="w-5 h-5" />}
             loading={loading}
           />
           <MetricCard
             title="Taxa de Conversão"
             value={formatPercent(data.conversionRate)}
-            icon={Trophy}
+            icon={<Trophy className="w-5 h-5" />}
             loading={loading}
           />
         </div>
@@ -96,20 +96,20 @@ export default function ExecutiveDashboard() {
           <MetricCard
             title="Total de Abordagens"
             value={data.totalApproaches.toString()}
-            icon={MessageSquare}
+            icon={<MessageSquare className="w-5 h-5" />}
             loading={loading}
           />
           <MetricCard
             title="Assinaturas Ativas"
             value={data.activeSubscriptions.toString()}
             subtitle={`${data.totalSubscriptions} total`}
-            icon={UserCheck}
+            icon={<UserCheck className="w-5 h-5" />}
             loading={loading}
           />
           <MetricCard
             title="Assinaturas Inativas"
             value={(data.totalSubscriptions - data.activeSubscriptions).toString()}
-            icon={UserX}
+            icon={<UserX className="w-5 h-5" />}
             loading={loading}
           />
         </div>

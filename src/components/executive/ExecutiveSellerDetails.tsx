@@ -216,19 +216,19 @@ export function ExecutiveSellerDetails() {
             <MetricCard
               title="Total de Vendas"
               value={stats.totalSales.toString()}
-              icon={DollarSign}
+              icon={<DollarSign className="w-5 h-5" />}
               loading={loading}
             />
             <MetricCard
               title="Faturamento Total"
               value={formatCurrency(stats.totalRevenue)}
-              icon={TrendingUp}
+              icon={<TrendingUp className="w-5 h-5" />}
               loading={loading}
             />
             <MetricCard
               title="Taxa de Conversão"
               value={formatPercent(stats.conversionRate)}
-              icon={MessageSquare}
+              icon={<MessageSquare className="w-5 h-5" />}
               loading={loading}
             />
           </div>
@@ -237,20 +237,20 @@ export function ExecutiveSellerDetails() {
             <MetricCard
               title="Total de Abordagens"
               value={stats.totalApproaches.toString()}
-              icon={MessageSquare}
+              icon={<MessageSquare className="w-5 h-5" />}
               loading={loading}
             />
             <MetricCard
               title="Assinaturas Ativas"
               value={stats.activeSubscriptions.toString()}
               subtitle={`${stats.totalSubscriptions} total`}
-              icon={UserCheck}
+              icon={<UserCheck className="w-5 h-5" />}
               loading={loading}
             />
             <MetricCard
               title="Assinaturas Inativas"
               value={(stats.totalSubscriptions - stats.activeSubscriptions).toString()}
-              icon={UserCheck}
+              icon={<UserCheck className="w-5 h-5" />}
               loading={loading}
             />
           </div>
