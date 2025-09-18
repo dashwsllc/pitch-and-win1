@@ -14,11 +14,24 @@ interface Profile {
 
 export function useProfile() {
   const { user } = useAuth()
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(() => {
+    if (typeof window === 'undefined') return null
+    if (!user) return null
+    try {
+      const cached = localStorage.getItem(`profile_${user.id}`)
+      return cached ? JSON.parse(cached) as Profile : null
+    } catch {
+      return null
+    }
+  })
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!user) return
+useEffect(() => {
+  if (!user) {
+    setProfile(null)
+    setLoading(false)
+    return
+  }
 
     const fetchProfile = async () => {
       try {
@@ -103,6 +116,14 @@ export function useProfile() {
       throw error
     }
   }
+
+  useEffect(() => {
+    if (user?.id && profile) {
+      try {
+        localStorage.setItem(`profile_${user.id}`, JSON.stringify(profile))
+      } catch {}
+    }
+  }, [user?.id, profile])
 
   return {
     profile,

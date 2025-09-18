@@ -36,9 +36,9 @@ export function UserProfile() {
             <AvatarImage 
               src={profile?.avatar_url || ""} 
               alt={displayName}
-              onLoad={() => {}} // Force consistent rendering
+              className="object-cover"
             />
-            <AvatarFallback className="bg-gradient-primary text-white font-semibold">
+            <AvatarFallback delayMs={300} className="bg-gradient-primary text-white font-semibold">
               {user?.email ? getInitials(user.email) : 'U'}
             </AvatarFallback>
           </Avatar>
