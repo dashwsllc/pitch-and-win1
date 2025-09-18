@@ -48,14 +48,14 @@ export default function Dashboard() {
         </div>
 
         {/* Métricas principais */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           <MetricCard
             title="Total de Vendas"
             value={new Intl.NumberFormat('pt-BR', { 
               style: 'currency', 
               currency: 'BRL' 
             }).format(metrics.totalVendas)}
-            icon={<DollarSign className="w-6 h-6" />}
+            icon={<DollarSign className="w-8 h-8" />}
             trend={{ value: 12.5, isPositive: true }}
             gradient
             loading={loading}
@@ -64,7 +64,7 @@ export default function Dashboard() {
           <MetricCard
             title="Quantidade de Vendas"
             value={metrics.quantidadeVendas}
-            icon={<ShoppingCart className="w-6 h-6" />}
+            icon={<ShoppingCart className="w-8 h-8" />}
             trend={{ value: 8.2, isPositive: true }}
             loading={loading}
           />
@@ -75,7 +75,7 @@ export default function Dashboard() {
               style: 'currency', 
               currency: 'BRL' 
             }).format(metrics.ticketMedio)}
-            icon={<TrendingUp className="w-6 h-6" />}
+            icon={<TrendingUp className="w-8 h-8" />}
             trend={{ value: 5.1, isPositive: true }}
             loading={loading}
           />
@@ -83,7 +83,7 @@ export default function Dashboard() {
           <MetricCard
             title="Abordagens"
             value={metrics.abordagens}
-            icon={<Users className="w-6 h-6" />}
+            icon={<Users className="w-8 h-8" />}
             trend={{ value: -2.4, isPositive: false }}
             loading={loading}
           />
@@ -91,7 +91,7 @@ export default function Dashboard() {
           <MetricCard
             title="Taxa Conversão"
             value={`${metrics.conversao.toFixed(1)}%`}
-            icon={<Target className="w-6 h-6" />}
+            icon={<Target className="w-8 h-8" />}
             trend={{ value: 15.8, isPositive: true }}
             loading={loading}
           />
@@ -100,7 +100,7 @@ export default function Dashboard() {
             title="Posição Ranking"
             value="—"
             subtitle="Ranking ainda não iniciado"
-            icon={<Clock className="w-6 h-6" />}
+            icon={<Clock className="w-8 h-8" />}
             className="animate-pulse-glow"
             loading={loading}
           />

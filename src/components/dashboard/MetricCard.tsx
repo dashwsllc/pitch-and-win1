@@ -33,14 +33,14 @@ export function MetricCard({
         gradient && "bg-gradient-card",
         className
       )}>
-        <CardContent className="p-6">
+        <CardContent className="p-8">
           <div className="flex items-center justify-between">
-            <div className="space-y-2 flex-1">
+            <div className="space-y-3 flex-1">
               <div className="h-4 bg-muted rounded w-24"></div>
-              <div className="h-8 bg-muted rounded w-16"></div>
-              <div className="h-3 bg-muted rounded w-20"></div>
+              <div className="h-10 bg-muted rounded w-20"></div>
+              <div className="h-3 bg-muted rounded w-28"></div>
             </div>
-            <div className="w-12 h-12 bg-muted rounded-xl"></div>
+            <div className="w-16 h-16 bg-muted rounded-xl ml-4"></div>
           </div>
         </CardContent>
       </Card>
@@ -52,13 +52,13 @@ export function MetricCard({
       gradient && "bg-gradient-card",
       className
     )}>
-      <CardContent className="p-6">
+      <CardContent className="p-8">
         <div className="flex items-center justify-between">
-          <div className="space-y-2">
+          <div className="space-y-3 flex-1">
             <p className="text-sm font-medium text-muted-foreground">
               {title}
             </p>
-            <p className="text-3xl font-bold text-foreground">
+            <p className="text-4xl font-bold text-foreground leading-none">
               {value}
             </p>
             {subtitle && (
@@ -79,7 +79,7 @@ export function MetricCard({
             )}
           </div>
           
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+          <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center text-primary ml-4">
             {icon}
           </div>
         </div>
