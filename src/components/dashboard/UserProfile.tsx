@@ -10,9 +10,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Settings, LogOut, User } from "lucide-react"
 import { useAuth } from "@/hooks/useAuth"
+import { useNavigate } from "react-router-dom"
+import { useProfile } from "@/hooks/useProfile"
 
 export function UserProfile() {
   const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+  const { profile } = useProfile()
 
   const handleSignOut = async () => {
     await signOut()
@@ -29,7 +33,7 @@ export function UserProfile() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10 border-2 border-primary/20">
-            <AvatarImage src="" alt={displayName} />
+            <AvatarImage src={profile?.avatar_url || ""} alt={displayName} />
             <AvatarFallback className="bg-gradient-primary text-white font-semibold">
               {user?.email ? getInitials(user.email) : 'U'}
             </AvatarFallback>
@@ -49,12 +53,12 @@ export function UserProfile() {
         
         <DropdownMenuSeparator />
         
-        <DropdownMenuItem className="cursor-pointer">
+        <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/perfil')}>
           <User className="mr-2 h-4 w-4" />
           <span>Perfil</span>
         </DropdownMenuItem>
         
-        <DropdownMenuItem className="cursor-pointer">
+        <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/configuracoes')}>
           <Settings className="mr-2 h-4 w-4" />
           <span>Configurações</span>
         </DropdownMenuItem>

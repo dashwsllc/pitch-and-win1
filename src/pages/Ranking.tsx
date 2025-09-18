@@ -246,14 +246,14 @@ export default function Ranking() {
           <CardHeader>
             <CardTitle className="text-foreground flex items-center gap-3">
               <Gift className="w-6 h-6 text-gold" />
-              Prêmios e Bônus de Comissionamento
+              Prêmios E Bônus De Comissão
             </CardTitle>
             <p className="text-muted-foreground">
               Sistema de recompensas para alta performance
             </p>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-3">
               {/* Bônus Principal */}
               <Card className="border-primary/20 bg-primary/5">
                 <CardContent className="p-6 text-center">
@@ -288,19 +288,56 @@ export default function Ranking() {
                 </CardContent>
               </Card>
 
-              {/* Prêmio TOP 3 */}
+              {/* Prêmio 2º Lugar */}
+              <Card className="border-silver/20 bg-silver/5">
+                <CardContent className="p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-silver/10 flex items-center justify-center mx-auto mb-4">
+                    <Medal className="w-6 h-6 text-silver" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">2º Lugar</h3>
+                  <p className="text-3xl font-bold text-silver mb-2">R$ 2.500</p>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Premiação para o segundo colocado
+                  </p>
+                  <Badge className="bg-silver text-white">
+                    Vice-Campeão
+                  </Badge>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Segunda linha de prêmios */}
+            <div className="grid gap-6 md:grid-cols-2 mt-6">
+              {/* Prêmio 3º Lugar */}
+              <Card className="border-bronze/20 bg-bronze/5">
+                <CardContent className="p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-bronze/10 flex items-center justify-center mx-auto mb-4">
+                    <Award className="w-6 h-6 text-bronze" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">3º Lugar</h3>
+                  <p className="text-3xl font-bold text-bronze mb-2">R$ 1.500</p>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Premiação para o terceiro colocado
+                  </p>
+                  <Badge className="bg-bronze text-white">
+                    Terceiro Lugar
+                  </Badge>
+                </CardContent>
+              </Card>
+
+              {/* TOP 3 Geral */}
               <Card className="border-chart-3/20 bg-chart-3/5">
                 <CardContent className="p-6 text-center">
                   <div className="w-12 h-12 rounded-full bg-chart-3/10 flex items-center justify-center mx-auto mb-4">
                     <DollarSign className="w-6 h-6 text-chart-3" />
                   </div>
                   <h3 className="text-xl font-bold text-foreground mb-2">TOP 3</h3>
-                  <p className="text-3xl font-bold text-chart-3 mb-2">R$ 1.500</p>
+                  <p className="text-3xl font-bold text-chart-3 mb-2">Bônus Extra</p>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Premiação para os 3 primeiros colocados
+                    Benefícios exclusivos para os 3 primeiros
                   </p>
                   <Badge className="bg-chart-3 text-white">
-                    2º e 3º Lugar
+                    Reconhecimento
                   </Badge>
                 </CardContent>
               </Card>

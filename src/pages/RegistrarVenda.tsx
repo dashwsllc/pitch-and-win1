@@ -11,6 +11,11 @@ import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { ShoppingCart, ArrowLeft } from 'lucide-react'
 
+const PRODUTOS_MENTORIA = [
+  { value: 'Mentoria Jogador De Elite', label: 'Mentoria Jogador De Elite' },
+  { value: 'Mentoria Jogador Milionário', label: 'Mentoria Jogador Milionário' }
+]
+
 const VALORES_VENDA = [
   { value: '2997', label: 'R$ 2.997,00' },
   { value: '500', label: 'R$ 500,00' },
@@ -32,9 +37,13 @@ export default function RegistrarVenda() {
     setIsSubmitting(true)
 
     const formData = new FormData(e.currentTarget)
+    
+    // Captura o produto selecionado do Select
+    const nomeProduto = formData.get('nome_produto') as string
+    
     const data = {
       user_id: user.id,
-      nome_produto: formData.get('nome_produto') as string,
+      nome_produto: nomeProduto,
       valor_venda: parseFloat(valorSelecionado),
       nome_comprador: formData.get('nome_comprador') as string,
       whatsapp_comprador: formData.get('whatsapp_comprador') as string,
@@ -94,18 +103,26 @@ export default function RegistrarVenda() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="nome_produto">Nome do produto vendido *</Label>
-                  <Input
-                    id="nome_produto"
+                  <Label htmlFor="nome_produto">Nome Do Produto Vendido *</Label>
+                  <Select
                     name="nome_produto"
-                    placeholder="Ex: Consultoria Premium, Curso Avançado..."
                     required
-                    className="w-full"
-                  />
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecione o produto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRODUTOS_MENTORIA.map((produto) => (
+                        <SelectItem key={produto.value} value={produto.value}>
+                          {produto.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="valor_venda">Valor da venda *</Label>
+                  <Label htmlFor="valor_venda">Valor Da Venda *</Label>
                   <Select
                     name="valor_venda"
                     value={valorSelecionado}
@@ -127,7 +144,7 @@ export default function RegistrarVenda() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="nome_comprador">Nome do comprador *</Label>
+                <Label htmlFor="nome_comprador">Nome Do Comprador *</Label>
                 <Input
                   id="nome_comprador"
                   name="nome_comprador"
@@ -139,7 +156,7 @@ export default function RegistrarVenda() {
 
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="whatsapp_comprador">WhatsApp do comprador *</Label>
+                  <Label htmlFor="whatsapp_comprador">WhatsApp Do Comprador *</Label>
                   <Input
                     id="whatsapp_comprador"
                     name="whatsapp_comprador"
@@ -150,7 +167,7 @@ export default function RegistrarVenda() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email_comprador">Email do comprador *</Label>
+                  <Label htmlFor="email_comprador">Email Do Comprador *</Label>
                   <Input
                     id="email_comprador"
                     name="email_comprador"

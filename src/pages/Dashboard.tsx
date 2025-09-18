@@ -2,7 +2,7 @@ import { useState } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { MetricCard } from "@/components/dashboard/MetricCard"
 import { SalesChart } from "@/components/dashboard/SalesChart"
-import { ProductsChart } from "@/components/dashboard/ProductsChart"
+import { ProductsRanking } from "@/components/dashboard/ProductsRanking"
 import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FilterTabs } from "@/components/dashboard/FilterTabs"
 import { useDashboardData } from "@/hooks/useDashboardData"
@@ -99,8 +99,8 @@ export default function Dashboard() {
           
           <MetricCard
             title="Posição Ranking"
-            value={userPosition > 0 ? `#${userPosition}` : "-"}
-            subtitle={`de ${ranking.length} vendedores`}
+            value="Indisponível"
+            subtitle="Ranking ainda não iniciado"
             icon={<Award className="w-6 h-6" />}
             className="animate-pulse-glow"
             loading={loading}
@@ -111,7 +111,7 @@ export default function Dashboard() {
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
             <SalesChart data={metrics.vendasMes} loading={loading} />
-            <ProductsChart data={metrics.produtosMaisVendidos} loading={loading} />
+            <ProductsRanking data={metrics.produtosMaisVendidos} loading={loading} />
           </div>
           
           <div>
