@@ -246,7 +246,7 @@ export default function Ranking() {
           <CardHeader>
             <CardTitle className="text-foreground flex items-center gap-3">
               <Gift className="w-6 h-6 text-gold" />
-              Prêmios E Bônus De Comissão
+              Prêmios e Bônus de Comissão
             </CardTitle>
             <p className="text-muted-foreground">
               Sistema de recompensas para alta performance
@@ -350,10 +350,10 @@ export default function Ranking() {
                 Como Conquistar os Bônus
               </h4>
               <ul className="text-sm text-muted-foreground space-y-1">
-                <li>• Mantenha taxa de conversão acima de 75%</li>
-                <li>• Realize pelo menos 50 abordagens no mês</li>
-                <li>• Alcance meta de R$ 25.000 em vendas mensais</li>
-                <li>• Participe ativamente do ranking</li>
+                <li>• Mantenha a taxa de conversão acima de 25%</li>
+                <li>• Realize pelo menos 200 abordagens no mês</li>
+                <li>• Alcance a meta mínima de R$30.000 em vendas mensais</li>
+                <li>• Participe ativamente do grupo</li>
               </ul>
             </div>
           </CardContent>

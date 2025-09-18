@@ -199,13 +199,19 @@ export default function Configuracoes() {
               
               <div className="text-center p-4 bg-muted/30 rounded-lg">
                 <h4 className="font-semibold text-foreground">Última Atualização</h4>
-                <p className="text-sm text-muted-foreground">Janeiro 2025</p>
+                <p className="text-sm text-muted-foreground">Setembro 2025</p>
               </div>
               
               <div className="text-center p-4 bg-muted/30 rounded-lg">
                 <h4 className="font-semibold text-foreground">Suporte</h4>
                 <p className="text-sm text-muted-foreground">24/7 Online</p>
               </div>
+            </div>
+            
+            <div className="mt-6 pt-6 border-t border-border/50 text-center">
+              <p className="text-sm text-muted-foreground">
+                Created and developed by <span className="font-medium text-foreground">Sinclair</span>
+              </p>
             </div>
           </CardContent>
         </Card>

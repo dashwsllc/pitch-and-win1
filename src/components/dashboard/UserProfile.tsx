@@ -26,14 +26,18 @@ export function UserProfile() {
     return email.substring(0, 2).toUpperCase()
   }
 
-  const displayName = user?.user_metadata?.display_name || 'Usuário'
+  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Usuário'
   
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10 border-2 border-primary/20">
-            <AvatarImage src={profile?.avatar_url || ""} alt={displayName} />
+            <AvatarImage 
+              src={profile?.avatar_url || ""} 
+              alt={displayName}
+              onLoad={() => {}} // Force consistent rendering
+            />
             <AvatarFallback className="bg-gradient-primary text-white font-semibold">
               {user?.email ? getInitials(user.email) : 'U'}
             </AvatarFallback>

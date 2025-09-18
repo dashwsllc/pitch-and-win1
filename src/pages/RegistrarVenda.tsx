@@ -18,6 +18,10 @@ const PRODUTOS_MENTORIA = [
 
 const VALORES_VENDA = [
   { value: '2997', label: 'R$ 2.997,00' },
+  { value: '1497', label: 'R$ 1.497,00' },
+  { value: '1247', label: 'R$ 1.247,00' },
+  { value: '987', label: 'R$ 987,00' },
+  { value: '847', label: 'R$ 847,00' },
   { value: '500', label: 'R$ 500,00' },
   { value: '275', label: 'R$ 275,00' },
   { value: '250', label: 'R$ 250,00' }
