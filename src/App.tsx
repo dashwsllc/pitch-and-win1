@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import EmailConfirmation from "./pages/EmailConfirmation";
 import ResetPassword from "./pages/ResetPassword";
+import ExecutiveDashboard from "./pages/ExecutiveDashboard";
 import Ranking from "./pages/Ranking";
 import NovaAbordagem from "./pages/NovaAbordagem";
 import RegistrarVenda from "./pages/RegistrarVenda";
@@ -29,12 +30,17 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-        <Route path="/auth" element={<Auth />} />
-        <Route path="/email-confirmation" element={<EmailConfirmation />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/email-confirmation" element={<EmailConfirmation />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/" element={
                 <ProtectedRoute>
                   <Index />
+                </ProtectedRoute>
+              } />
+              <Route path="/executive" element={
+                <ProtectedRoute>
+                  <ExecutiveDashboard />
                 </ProtectedRoute>
               } />
               <Route path="/ranking" element={
