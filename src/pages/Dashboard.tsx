@@ -5,6 +5,7 @@ import { SalesChart } from "@/components/dashboard/SalesChart"
 import { ProductsRanking } from "@/components/dashboard/ProductsRanking"
 import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FilterTabs } from "@/components/dashboard/FilterTabs"
+import { Button } from "@/components/ui/button"
 import { useDashboardData } from "@/hooks/useDashboardData"
 import { useRankingDataWithMock } from "@/hooks/useRankingDataWithMock"
 import { useAuth } from "@/hooks/useAuth"
@@ -39,6 +40,14 @@ export default function Dashboard() {
                 Aqui está um resumo da sua performance de vendas
               </p>
             </div>
+            
+            <Button 
+              onClick={() => window.location.reload()} 
+              variant="outline"
+              className="w-fit"
+            >
+              Atualizar Dados
+            </Button>
           </div>
           
           <FilterTabs 
@@ -78,6 +87,7 @@ export default function Dashboard() {
             icon={<TrendingUp className="w-8 h-8" />}
             trend={{ value: 5.1, isPositive: true }}
             loading={loading}
+            className="[&_.text-4xl]:text-2xl"
           />
           
           <MetricCard
