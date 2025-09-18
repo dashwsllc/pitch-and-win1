@@ -48,7 +48,7 @@ export default function Dashboard() {
         </div>
 
         {/* Métricas principais */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <MetricCard
             title="Total de Vendas"
             value={new Intl.NumberFormat('pt-BR', { 
@@ -58,7 +58,6 @@ export default function Dashboard() {
             icon={<DollarSign className="w-6 h-6" />}
             trend={{ value: 12.5, isPositive: true }}
             gradient
-            className="xl:col-span-2"
             loading={loading}
           />
           
