@@ -7,12 +7,10 @@ import { Label } from '@/components/ui/label'
 import { BarChart3, Eye, EyeOff, Lock } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useToast } from '@/hooks/use-toast'
-import { useAuth } from '@/hooks/useAuth'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -26,27 +24,29 @@ export default function ResetPassword() {
     setIsLoading(true)
 
     const formData = new FormData(e.currentTarget)
-    const email = formData.get('email') as string
+    const email = (formData.get('email') as string).trim()
+
+    if (!email) {
+      toast({ title: 'Email obrigatório', description: 'Informe seu email.', variant: 'destructive' })
+      setIsLoading(false)
+      return
+    }
 
     try {
-      // Create password reset request in database
-      const { error } = await supabase
-        .from('password_reset_requests')
-        .insert([
-          {
-            user_id: user?.id || '00000000-0000-0000-0000-000000000000',
-            email: email
-          }
-        ])
+      // Send password reset email via Supabase Auth
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      })
 
       if (error) {
-        console.error('Error creating password reset request:', error)
+        console.error('Error sending reset email:', error)
       }
 
+      // Always show success to prevent email enumeration
       setRequestSent(true)
     } catch (error) {
       console.error('Error in handleForgotPassword:', error)
-      setRequestSent(true) // Still show success to user
+      setRequestSent(true)
     } finally {
       setIsLoading(false)
     }
@@ -70,23 +70,31 @@ export default function ResetPassword() {
       return
     }
 
-    const { error } = await supabase.auth.updateUser({ password })
+    try {
+      const { error } = await supabase.auth.updateUser({ password })
 
-    if (error) {
+      if (error) {
+        toast({
+          title: 'Erro ao redefinir senha',
+          description: error.message,
+          variant: 'destructive'
+        })
+      } else {
+        toast({
+          title: 'Senha redefinida com sucesso!',
+          description: 'Você será redirecionado para o login'
+        })
+        setTimeout(() => navigate('/auth'), 2000)
+      }
+    } catch (error: any) {
       toast({
-        title: 'Erro ao redefinir senha',
-        description: error.message,
+        title: 'Erro inesperado',
+        description: error?.message || 'Tente novamente.',
         variant: 'destructive'
       })
-    } else {
-      toast({
-        title: 'Senha redefinida com sucesso!',
-        description: 'Você será redirecionado para o login'
-      })
-      setTimeout(() => navigate('/auth'), 2000)
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   return (
@@ -183,8 +191,8 @@ export default function ResetPassword() {
             ) : (
               requestSent ? (
                 <div className="space-y-4 text-center">
-                  <p className="text-foreground">Sua solicitação foi enviada aos administradores.</p>
-                  <p className="text-muted-foreground">Aguarde autorização. Você receberá o acesso em breve.</p>
+                  <p className="text-foreground">Se o email estiver cadastrado, você receberá um link de recuperação.</p>
+                  <p className="text-muted-foreground">Verifique sua caixa de entrada e spam.</p>
                   <Button className="w-full bg-gradient-primary hover:opacity-90" onClick={() => navigate('/auth')}>
                     Voltar ao Login
                   </Button>
