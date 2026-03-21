@@ -41,9 +41,10 @@ export function useDashboardData(dateFilter: string = "30dias") {
     switch (filter) {
       case "hoje":
         return { start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
-      case "ontem":
+      case "ontem": {
         const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
         return { start: yesterday, end: today }
+      }
       case "7dias":
         return { start: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
       case "14dias":
@@ -63,76 +64,74 @@ export function useDashboardData(dateFilter: string = "30dias") {
 
       const { start, end } = getDateRange(dateFilter)
 
-      // Buscar vendas do usuário no período
+      // Fetch only needed columns
       const { data: vendas, error: vendasError } = await supabase
         .from('vendas')
-        .select('*')
+        .select('nome_produto, valor_venda, created_at')
         .eq('user_id', user.id)
         .gte('created_at', start.toISOString())
         .lt('created_at', end.toISOString())
+        .limit(1000)
 
       if (vendasError) throw vendasError
 
-      // Buscar abordagens do usuário no período
       const { data: abordagens, error: abordagensError } = await supabase
         .from('abordagens')
-        .select('*')
+        .select('created_at')
         .eq('user_id', user.id)
         .gte('created_at', start.toISOString())
         .lt('created_at', end.toISOString())
+        .limit(1000)
 
       if (abordagensError) throw abordagensError
 
-      // Calcular métricas
+      // Calculate metrics
       const totalVendas = vendas?.reduce((sum, venda) => sum + Number(venda.valor_venda), 0) || 0
       const quantidadeVendas = vendas?.length || 0
       const ticketMedio = quantidadeVendas > 0 ? totalVendas / quantidadeVendas : 0
       const totalAbordagens = abordagens?.length || 0
       const conversao = totalAbordagens > 0 ? (quantidadeVendas / totalAbordagens) * 100 : 0
 
-      // Dados por mês (últimos 6 meses)
-      const vendasPorMes = new Map()
-      const abordagensPorMes = new Map()
+      // Monthly data (last 6 months)
+      const vendasPorMes = new Map<string, number>()
+      const abordagensPorMes = new Map<string, number>()
       
-      const últimos6Meses = Array.from({ length: 6 }, (_, i) => {
+      const ultimos6Meses = Array.from({ length: 6 }, (_, i) => {
         const date = new Date()
         date.setMonth(date.getMonth() - i)
-        return date.toISOString().slice(0, 7) // YYYY-MM
+        return date.toISOString().slice(0, 7)
       }).reverse()
 
-      // Inicializar com zeros
-      últimos6Meses.forEach(mes => {
+      ultimos6Meses.forEach(mes => {
         vendasPorMes.set(mes, 0)
         abordagensPorMes.set(mes, 0)
       })
 
-      // Agrupar vendas por mês
       vendas?.forEach(venda => {
         const mes = new Date(venda.created_at).toISOString().slice(0, 7)
         if (vendasPorMes.has(mes)) {
-          vendasPorMes.set(mes, vendasPorMes.get(mes) + Number(venda.valor_venda))
+          vendasPorMes.set(mes, vendasPorMes.get(mes)! + Number(venda.valor_venda))
         }
       })
 
-      // Agrupar abordagens por mês
       abordagens?.forEach(abordagem => {
         const mes = new Date(abordagem.created_at).toISOString().slice(0, 7)
         if (abordagensPorMes.has(mes)) {
-          abordagensPorMes.set(mes, abordagensPorMes.get(mes) + 1)
+          abordagensPorMes.set(mes, abordagensPorMes.get(mes)! + 1)
         }
       })
 
-      const vendasMes = últimos6Meses.map(mes => ({
+      const vendasMes = ultimos6Meses.map(mes => ({
         month: new Date(mes + '-01').toLocaleDateString('pt-BR', { month: 'short' }),
-        vendas: vendasPorMes.get(mes),
-        abordagens: abordagensPorMes.get(mes)
+        vendas: vendasPorMes.get(mes) || 0,
+        abordagens: abordagensPorMes.get(mes) || 0
       }))
 
-      // Produtos mais vendidos
-      const produtosCont = new Map()
+      // Top products
+      const produtosCont = new Map<string, { quantidade: number; valor: number }>()
       vendas?.forEach(venda => {
-        if (produtosCont.has(venda.nome_produto)) {
-          const existing = produtosCont.get(venda.nome_produto)
+        const existing = produtosCont.get(venda.nome_produto)
+        if (existing) {
           produtosCont.set(venda.nome_produto, {
             quantidade: existing.quantidade + 1,
             valor: existing.valor + Number(venda.valor_venda)
