@@ -89,6 +89,98 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_positions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          max_members: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          max_members?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          max_members?: number
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      document_categories: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      documents: {
+        Row: {
+          category_id: string
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          link_url: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          link_url: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          link_url?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "document_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       password_reset_requests: {
         Row: {
           email: string
@@ -125,6 +217,8 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          last_seen_at: string
+          suspended: boolean
           updated_at: string
           user_id: string
         }
@@ -133,6 +227,8 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          last_seen_at?: string
+          suspended?: boolean
           updated_at?: string
           user_id: string
         }
@@ -141,8 +237,198 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          last_seen_at?: string
+          suspended?: boolean
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      saldos_disponiveis: {
+        Row: {
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+          valor_liberado_para_saque: number
+          valor_sacado: number
+          valor_total_comissoes: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          valor_liberado_para_saque?: number
+          valor_sacado?: number
+          valor_total_comissoes?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          valor_liberado_para_saque?: number
+          valor_sacado?: number
+          valor_total_comissoes?: number
+        }
+        Relationships: []
+      }
+      saques: {
+        Row: {
+          chave_pix: string
+          created_at: string
+          data_processamento: string | null
+          data_solicitacao: string
+          id: string
+          observacoes: string | null
+          processado_por: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          valor_solicitado: number
+        }
+        Insert: {
+          chave_pix: string
+          created_at?: string
+          data_processamento?: string | null
+          data_solicitacao?: string
+          id?: string
+          observacoes?: string | null
+          processado_por?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          valor_solicitado: number
+        }
+        Update: {
+          chave_pix?: string
+          created_at?: string
+          data_processamento?: string | null
+          data_solicitacao?: string
+          id?: string
+          observacoes?: string | null
+          processado_por?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          valor_solicitado?: number
+        }
+        Relationships: []
+      }
+      security_audit_log: {
+        Row: {
+          action: string
+          created_at: string | null
+          details: Json | null
+          id: string
+          ip_address: unknown
+          record_id: string | null
+          table_name: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: unknown
+          record_id?: string | null
+          table_name: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: unknown
+          record_id?: string | null
+          table_name?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      team_member_history: {
+        Row: {
+          action_type: string
+          created_at: string
+          created_by: string | null
+          id: string
+          member_id: string | null
+          new_values: Json | null
+          old_values: Json | null
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          member_id?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          member_id?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_member_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_members: {
+        Row: {
+          created_at: string
+          custom_tags: string[] | null
+          date_added: string
+          id: string
+          name: string
+          position: string
+          status: string
+          status_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_tags?: string[] | null
+          date_added?: string
+          id?: string
+          name: string
+          position: string
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_tags?: string[] | null
+          date_added?: string
+          id?: string
+          name?: string
+          position?: string
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -172,6 +458,7 @@ export type Database = {
       }
       vendas: {
         Row: {
+          consideracoes_gerais: string | null
           created_at: string
           email_comprador: string
           id: string
@@ -183,6 +470,7 @@ export type Database = {
           whatsapp_comprador: string
         }
         Insert: {
+          consideracoes_gerais?: string | null
           created_at?: string
           email_comprador: string
           id?: string
@@ -194,6 +482,7 @@ export type Database = {
           whatsapp_comprador: string
         }
         Update: {
+          consideracoes_gerais?: string | null
           created_at?: string
           email_comprador?: string
           id?: string
@@ -211,6 +500,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_and_update_commissions: { Args: never; Returns: undefined }
+      check_user_not_suspended: { Args: never; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -218,13 +509,25 @@ export type Database = {
         }
         Returns: boolean
       }
-      is_executive: {
-        Args: { _user_id: string }
-        Returns: boolean
+      is_executive: { Args: { _user_id: string }; Returns: boolean }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      log_security_event: {
+        Args: {
+          p_action: string
+          p_details?: Json
+          p_record_id?: string
+          p_table_name: string
+        }
+        Returns: undefined
       }
+      process_withdrawal: {
+        Args: { p_user_id: string; p_withdrawal_amount: number }
+        Returns: undefined
+      }
+      recalculate_all_balances: { Args: never; Returns: undefined }
     }
     Enums: {
-      app_role: "seller" | "executive"
+      app_role: "seller" | "executive" | "super_admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -352,7 +655,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["seller", "executive"],
+      app_role: ["seller", "executive", "super_admin"],
     },
   },
 } as const
