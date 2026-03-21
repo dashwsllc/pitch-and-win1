@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
-import { useNavigate } from 'react-router-dom'
 
 interface AuthContextType {
   user: User | null
@@ -64,12 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (!error) {
-      setUser(null)
-      setSession(null)
-      // The auth state change will handle redirect automatically
-    }
+    await supabase.auth.signOut()
+    setUser(null)
+    setSession(null)
+    // onAuthStateChange will trigger and ProtectedRoute will redirect to /auth
   }
 
   return (

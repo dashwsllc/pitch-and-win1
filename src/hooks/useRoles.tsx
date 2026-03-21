@@ -4,13 +4,6 @@ import { useAuth } from './useAuth'
 
 export type UserRole = 'seller' | 'executive'
 
-interface UserRoleData {
-  id: string
-  user_id: string
-  role: UserRole
-  created_at: string
-}
-
 export function useRoles() {
   const { user } = useAuth()
   const [roles, setRoles] = useState<UserRole[]>([])
@@ -42,7 +35,7 @@ export function useRoles() {
         return
       }
 
-      const userRoles = data?.map(r => r.role) || ['seller']
+      const userRoles = data?.map(r => r.role as UserRole) || ['seller']
       setRoles(userRoles)
       setIsExecutive(userRoles.includes('executive'))
     } catch (error) {
@@ -69,13 +62,15 @@ export function useAllUsers() {
 
   const fetchAllUsers = async () => {
     try {
+      // Use left join (remove !inner) so users without roles are also returned
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select(`
           *,
-          user_roles!inner(role)
+          user_roles(role)
         `)
         .order('created_at', { ascending: false })
+        .limit(500)
 
       if (error) {
         console.error('Error fetching all users:', error)

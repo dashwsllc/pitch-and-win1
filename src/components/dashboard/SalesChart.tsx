@@ -1,21 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 
-const data = [
-  { name: "Jan", vendas: 4000, abordagens: 2400 },
-  { name: "Fev", vendas: 3000, abordagens: 1398 },
-  { name: "Mar", vendas: 2000, abordagens: 9800 },
-  { name: "Abr", vendas: 2780, abordagens: 3908 },
-  { name: "Mai", vendas: 1890, abordagens: 4800 },
-  { name: "Jun", vendas: 2390, abordagens: 3800 },
-]
+interface ChartDataItem {
+  month?: string
+  period?: string
+  vendas: number
+  abordagens: number
+  [key: string]: any
+}
 
 interface SalesChartProps {
-  data?: Array<{
-    month: string
-    vendas: number
-    abordagens: number
-  }>
+  data?: ChartDataItem[]
   loading?: boolean
 }
 
@@ -33,14 +28,21 @@ export function SalesChart({ data = [], loading = false }: SalesChartProps) {
     )
   }
   
-  const chartData = data.length > 0 ? data : [
-    { month: "Jan", vendas: 0, abordagens: 0 },
-    { month: "Fev", vendas: 0, abordagens: 0 },
-    { month: "Mar", vendas: 0, abordagens: 0 },
-    { month: "Abr", vendas: 0, abordagens: 0 },
-    { month: "Mai", vendas: 0, abordagens: 0 },
-    { month: "Jun", vendas: 0, abordagens: 0 }
-  ]
+  // Normalize data: accept both `month` and `period` as X-axis key
+  const chartData = data.length > 0 
+    ? data.map(item => ({
+        ...item,
+        label: item.month || item.period || ''
+      }))
+    : [
+        { label: "Jan", vendas: 0, abordagens: 0 },
+        { label: "Fev", vendas: 0, abordagens: 0 },
+        { label: "Mar", vendas: 0, abordagens: 0 },
+        { label: "Abr", vendas: 0, abordagens: 0 },
+        { label: "Mai", vendas: 0, abordagens: 0 },
+        { label: "Jun", vendas: 0, abordagens: 0 }
+      ]
+
   return (
     <Card className="border-border/50">
       <CardHeader>
@@ -52,7 +54,7 @@ export function SalesChart({ data = [], loading = false }: SalesChartProps) {
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis 
-                dataKey="month" 
+                dataKey="label" 
                 stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
               />

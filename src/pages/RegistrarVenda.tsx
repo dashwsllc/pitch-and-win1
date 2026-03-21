@@ -32,47 +32,87 @@ export default function RegistrarVenda() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [produtoSelecionado, setProdutoSelecionado] = useState('')
   const [valorSelecionado, setValorSelecionado] = useState('')
+  const [nomeComprador, setNomeComprador] = useState('')
+  const [whatsappComprador, setWhatsappComprador] = useState('')
+  const [emailComprador, setEmailComprador] = useState('')
+
+  const resetForm = () => {
+    setProdutoSelecionado('')
+    setValorSelecionado('')
+    setNomeComprador('')
+    setWhatsappComprador('')
+    setEmailComprador('')
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user) return
+    if (!user) {
+      toast({
+        title: 'Erro de autenticação',
+        description: 'Você precisa estar logado para registrar uma venda.',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    // Validate all fields before submitting
+    if (!produtoSelecionado) {
+      toast({ title: 'Campo obrigatório', description: 'Selecione o produto vendido.', variant: 'destructive' })
+      return
+    }
+    if (!valorSelecionado) {
+      toast({ title: 'Campo obrigatório', description: 'Selecione o valor da venda.', variant: 'destructive' })
+      return
+    }
+    if (!nomeComprador.trim()) {
+      toast({ title: 'Campo obrigatório', description: 'Informe o nome do comprador.', variant: 'destructive' })
+      return
+    }
+    if (!whatsappComprador.trim()) {
+      toast({ title: 'Campo obrigatório', description: 'Informe o WhatsApp do comprador.', variant: 'destructive' })
+      return
+    }
+    if (!emailComprador.trim()) {
+      toast({ title: 'Campo obrigatório', description: 'Informe o email do comprador.', variant: 'destructive' })
+      return
+    }
 
     setIsSubmitting(true)
 
-    const formData = new FormData(e.currentTarget)
-    
-    // Captura o produto selecionado do Select
-    const nomeProduto = formData.get('nome_produto') as string
-    
-    const data = {
-      user_id: user.id,
-      nome_produto: nomeProduto,
-      valor_venda: parseFloat(valorSelecionado),
-      nome_comprador: formData.get('nome_comprador') as string,
-      whatsapp_comprador: formData.get('whatsapp_comprador') as string,
-      email_comprador: formData.get('email_comprador') as string
-    }
+    try {
+      const { error } = await supabase
+        .from('vendas')
+        .insert([{
+          user_id: user.id,
+          nome_produto: produtoSelecionado,
+          valor_venda: parseFloat(valorSelecionado),
+          nome_comprador: nomeComprador.trim(),
+          whatsapp_comprador: whatsappComprador.trim(),
+          email_comprador: emailComprador.trim()
+        }])
 
-    const { error } = await supabase
-      .from('vendas')
-      .insert([data])
+      if (error) {
+        throw error
+      }
 
-    if (error) {
-      toast({
-        title: 'Erro ao registrar venda',
-        description: error.message,
-        variant: 'destructive'
-      })
-    } else {
       toast({
         title: 'Venda registrada com sucesso!',
-        description: `Venda de ${VALORES_VENDA.find(v => v.value === valorSelecionado)?.label} registrada`
+        description: `Venda de ${VALORES_VENDA.find(v => v.value === valorSelecionado)?.label} registrada.`
       })
+      resetForm()
       navigate('/')
+    } catch (error: any) {
+      console.error('Erro ao registrar venda:', error)
+      toast({
+        title: 'Erro ao registrar venda',
+        description: error?.message || 'Não foi possível registrar a venda. Tente novamente.',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setIsSubmitting(false)
   }
 
   return (
@@ -107,10 +147,10 @@ export default function RegistrarVenda() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="nome_produto">Nome Do Produto Vendido *</Label>
+                  <Label>Nome Do Produto Vendido *</Label>
                   <Select
-                    name="nome_produto"
-                    required
+                    value={produtoSelecionado}
+                    onValueChange={setProdutoSelecionado}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione o produto" />
@@ -126,12 +166,10 @@ export default function RegistrarVenda() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="valor_venda">Valor Da Venda *</Label>
+                  <Label>Valor Da Venda *</Label>
                   <Select
-                    name="valor_venda"
                     value={valorSelecionado}
                     onValueChange={setValorSelecionado}
-                    required
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione o valor" />
@@ -151,7 +189,8 @@ export default function RegistrarVenda() {
                 <Label htmlFor="nome_comprador">Nome Do Comprador *</Label>
                 <Input
                   id="nome_comprador"
-                  name="nome_comprador"
+                  value={nomeComprador}
+                  onChange={(e) => setNomeComprador(e.target.value)}
                   placeholder="Nome completo do cliente"
                   required
                   className="w-full"
@@ -163,7 +202,8 @@ export default function RegistrarVenda() {
                   <Label htmlFor="whatsapp_comprador">WhatsApp Do Comprador *</Label>
                   <Input
                     id="whatsapp_comprador"
-                    name="whatsapp_comprador"
+                    value={whatsappComprador}
+                    onChange={(e) => setWhatsappComprador(e.target.value)}
                     placeholder="(11) 99999-9999"
                     required
                     className="w-full"
@@ -174,7 +214,8 @@ export default function RegistrarVenda() {
                   <Label htmlFor="email_comprador">Email Do Comprador *</Label>
                   <Input
                     id="email_comprador"
-                    name="email_comprador"
+                    value={emailComprador}
+                    onChange={(e) => setEmailComprador(e.target.value)}
                     type="email"
                     placeholder="cliente@email.com"
                     required
@@ -194,7 +235,7 @@ export default function RegistrarVenda() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isSubmitting || !valorSelecionado}
+                  disabled={isSubmitting || !valorSelecionado || !produtoSelecionado}
                   className="flex-1 md:flex-none bg-gradient-success hover:opacity-90"
                 >
                   {isSubmitting ? 'Registrando...' : 'Registrar Venda'}
