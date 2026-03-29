@@ -9,6 +9,7 @@ export function useRoles() {
   const [roles, setRoles] = useState<UserRole[]>([])
   const [loading, setLoading] = useState(true)
   const [isExecutive, setIsExecutive] = useState(false)
+  const [hasCRMAccess, setHasCRMAccess] = useState(false)
 
   useEffect(() => {
     if (!user) {
