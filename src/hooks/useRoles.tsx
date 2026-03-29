@@ -53,6 +53,7 @@ export function useRoles() {
   return {
     roles,
     isExecutive,
+    hasCRMAccess,
     hasRole,
     loading,
     refetch: fetchUserRoles
