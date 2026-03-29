@@ -63,10 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
     setUser(null)
     setSession(null)
-    // onAuthStateChange will trigger and ProtectedRoute will redirect to /auth
+    await supabase.auth.signOut()
+    // onAuthStateChange + ProtectedRoute will redirect to /auth
   }
 
   return (
