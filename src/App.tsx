@@ -19,6 +19,7 @@ import Perfil from "./pages/Perfil";
 import Configuracoes from "./pages/Configuracoes";
 import Saques from "./pages/Saques";
 import CRM from "./pages/CRM";
+import MinhasVendas from "./pages/MinhasVendas";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -83,6 +84,11 @@ const App = () => (
               <Route path="/crm" element={
                 <ProtectedRoute>
                   <CRM />
+                </ProtectedRoute>
+              } />
+              <Route path="/minhas-vendas" element={
+                <ProtectedRoute>
+                  <MinhasVendas />
                 </ProtectedRoute>
               } />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

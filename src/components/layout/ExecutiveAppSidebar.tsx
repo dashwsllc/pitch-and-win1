@@ -9,7 +9,8 @@ import {
   Settings,
   Shield,
   Wallet,
-  Target
+  Target,
+  ShoppingBag
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
@@ -18,6 +19,7 @@ const menuItems = [
   { title: "Executive", url: "/executive", icon: Shield },
   { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
   { title: "Vendas", url: "/vendas", icon: DollarSign },
+  { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
   { title: "Ranking", url: "/ranking", icon: Trophy },
   { title: "Clientes", url: "/clientes", icon: Users },
   { title: "CRM", url: "/crm", icon: Target },
@@ -30,6 +32,7 @@ const sellerMenuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
   { title: "Vendas", url: "/vendas", icon: DollarSign },
+  { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
   { title: "Ranking", url: "/ranking", icon: Trophy },
   { title: "Clientes", url: "/clientes", icon: Users },
   { title: "CRM", url: "/crm", icon: Target },
