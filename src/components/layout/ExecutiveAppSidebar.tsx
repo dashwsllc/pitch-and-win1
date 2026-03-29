@@ -7,7 +7,9 @@ import {
   Users,
   User,
   Settings,
-  Shield
+  Shield,
+  Wallet,
+  Target
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
@@ -18,6 +20,8 @@ const menuItems = [
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Ranking", url: "/ranking", icon: Trophy },
   { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "CRM", url: "/crm", icon: Target },
+  { title: "Saques", url: "/saques", icon: Wallet },
   { title: "Perfil", url: "/perfil", icon: User },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ]
@@ -28,6 +32,8 @@ const sellerMenuItems = [
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Ranking", url: "/ranking", icon: Trophy },
   { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "CRM", url: "/crm", icon: Target },
+  { title: "Saques", url: "/saques", icon: Wallet },
   { title: "Perfil", url: "/perfil", icon: User },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ]
