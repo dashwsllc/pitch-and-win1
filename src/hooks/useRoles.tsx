@@ -15,6 +15,7 @@ export function useRoles() {
     if (!user) {
       setRoles([])
       setIsExecutive(false)
+      setHasCRMAccess(false)
       setLoading(false)
       return
     }
