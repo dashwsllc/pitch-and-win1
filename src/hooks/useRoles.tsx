@@ -29,7 +29,7 @@ export function useRoles() {
     try {
       const { data, error } = await supabase
         .from('user_roles')
-        .select('role')
+        .select('role, crm_access')
         .eq('user_id', user.id)
 
       if (error) {
