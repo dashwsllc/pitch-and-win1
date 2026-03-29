@@ -89,6 +89,158 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_activities: {
+        Row: {
+          activity_type: string
+          completed_at: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_completed: boolean
+          is_pinned: boolean
+          lead_id: string
+          outcome: string | null
+          scheduled_at: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_completed?: boolean
+          is_pinned?: boolean
+          lead_id: string
+          outcome?: string | null
+          scheduled_at?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_completed?: boolean
+          is_pinned?: boolean
+          lead_id?: string
+          outcome?: string | null
+          scheduled_at?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "crm_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_leads: {
+        Row: {
+          age: number | null
+          approach_count: number
+          approached: boolean
+          approached_at: string | null
+          assigned_to: string | null
+          company: string | null
+          conversion_probability: number | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          estimated_deal_value: number | null
+          expected_close_at: string | null
+          first_contact_at: string | null
+          id: string
+          job_title: string | null
+          last_contact_at: string | null
+          lead_source: string | null
+          linkedin_url: string | null
+          name: string
+          next_followup_at: string | null
+          observations: string | null
+          observations_updated_at: string | null
+          observations_updated_by: string | null
+          phone: string | null
+          pipeline_stage: string
+          priority: string
+          profile_photo_url: string | null
+          tags: string[] | null
+          temperature: string
+          updated_at: string | null
+        }
+        Insert: {
+          age?: number | null
+          approach_count?: number
+          approached?: boolean
+          approached_at?: string | null
+          assigned_to?: string | null
+          company?: string | null
+          conversion_probability?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          estimated_deal_value?: number | null
+          expected_close_at?: string | null
+          first_contact_at?: string | null
+          id?: string
+          job_title?: string | null
+          last_contact_at?: string | null
+          lead_source?: string | null
+          linkedin_url?: string | null
+          name: string
+          next_followup_at?: string | null
+          observations?: string | null
+          observations_updated_at?: string | null
+          observations_updated_by?: string | null
+          phone?: string | null
+          pipeline_stage?: string
+          priority?: string
+          profile_photo_url?: string | null
+          tags?: string[] | null
+          temperature?: string
+          updated_at?: string | null
+        }
+        Update: {
+          age?: number | null
+          approach_count?: number
+          approached?: boolean
+          approached_at?: string | null
+          assigned_to?: string | null
+          company?: string | null
+          conversion_probability?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          estimated_deal_value?: number | null
+          expected_close_at?: string | null
+          first_contact_at?: string | null
+          id?: string
+          job_title?: string | null
+          last_contact_at?: string | null
+          lead_source?: string | null
+          linkedin_url?: string | null
+          name?: string
+          next_followup_at?: string | null
+          observations?: string | null
+          observations_updated_at?: string | null
+          observations_updated_by?: string | null
+          phone?: string | null
+          pipeline_stage?: string
+          priority?: string
+          profile_photo_url?: string | null
+          tags?: string[] | null
+          temperature?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       custom_positions: {
         Row: {
           created_at: string
@@ -434,21 +586,33 @@ export type Database = {
       }
       user_roles: {
         Row: {
+          commission_rate: number
           created_at: string
+          crm_access: boolean
+          granted_at: string | null
+          granted_by: string | null
           id: string
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
           user_id: string
         }
         Insert: {
+          commission_rate?: number
           created_at?: string
+          crm_access?: boolean
+          granted_at?: string | null
+          granted_by?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
           user_id: string
         }
         Update: {
+          commission_rate?: number
           created_at?: string
+          crm_access?: boolean
+          granted_at?: string | null
+          granted_by?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
@@ -458,36 +622,51 @@ export type Database = {
       }
       vendas: {
         Row: {
+          approval_status: string
+          commission_amount: number | null
           consideracoes_gerais: string | null
           created_at: string
           email_comprador: string
           id: string
           nome_comprador: string
           nome_produto: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           updated_at: string
           user_id: string
           valor_venda: number
           whatsapp_comprador: string
         }
         Insert: {
+          approval_status?: string
+          commission_amount?: number | null
           consideracoes_gerais?: string | null
           created_at?: string
           email_comprador: string
           id?: string
           nome_comprador: string
           nome_produto: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           updated_at?: string
           user_id: string
           valor_venda: number
           whatsapp_comprador: string
         }
         Update: {
+          approval_status?: string
+          commission_amount?: number | null
           consideracoes_gerais?: string | null
           created_at?: string
           email_comprador?: string
           id?: string
           nome_comprador?: string
           nome_produto?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           updated_at?: string
           user_id?: string
           valor_venda?: number
@@ -502,6 +681,7 @@ export type Database = {
     Functions: {
       calculate_and_update_commissions: { Args: never; Returns: undefined }
       check_user_not_suspended: { Args: never; Returns: boolean }
+      get_available_balance: { Args: { p_seller_id: string }; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
