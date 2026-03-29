@@ -23,6 +23,7 @@ import { FilterTabs } from '@/components/dashboard/FilterTabs'
 import { ExecutiveUserManagement } from '@/components/executive/ExecutiveUserManagement'
 import { ExecutivePasswordRequests } from '@/components/executive/ExecutivePasswordRequests'
 import { ExecutiveSellerDetails } from '@/components/executive/ExecutiveSellerDetails'
+import { ExecutiveSalesApproval } from '@/components/executive/ExecutiveSalesApproval'
 
 export default function ExecutiveDashboard() {
   const [selectedFilter, setSelectedFilter] = useState('30dias')
