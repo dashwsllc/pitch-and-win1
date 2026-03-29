@@ -99,10 +99,9 @@ export default function RegistrarVenda() {
 
       toast({
         title: 'Venda registrada com sucesso!',
-        description: `Venda de ${VALORES_VENDA.find(v => v.value === valorSelecionado)?.label} registrada.`
+        description: 'Sua venda está aguardando aprovação do executive. O saldo será atualizado após a validação.'
       })
       resetForm()
-      navigate('/')
     } catch (error: any) {
       console.error('Erro ao registrar venda:', error)
       toast({

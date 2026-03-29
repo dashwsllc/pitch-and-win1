@@ -9,11 +9,13 @@ export function useRoles() {
   const [roles, setRoles] = useState<UserRole[]>([])
   const [loading, setLoading] = useState(true)
   const [isExecutive, setIsExecutive] = useState(false)
+  const [hasCRMAccess, setHasCRMAccess] = useState(false)
 
   useEffect(() => {
     if (!user) {
       setRoles([])
       setIsExecutive(false)
+      setHasCRMAccess(false)
       setLoading(false)
       return
     }
@@ -27,7 +29,7 @@ export function useRoles() {
     try {
       const { data, error } = await supabase
         .from('user_roles')
-        .select('role')
+        .select('role, crm_access')
         .eq('user_id', user.id)
 
       if (error) {
@@ -38,6 +40,7 @@ export function useRoles() {
       const userRoles = data?.map(r => r.role as UserRole) || ['seller']
       setRoles(userRoles)
       setIsExecutive(userRoles.includes('executive'))
+      setHasCRMAccess(data?.some(r => (r as any).crm_access === true) || userRoles.includes('executive'))
     } catch (error) {
       console.error('Error in fetchUserRoles:', error)
     } finally {
@@ -50,6 +53,7 @@ export function useRoles() {
   return {
     roles,
     isExecutive,
+    hasCRMAccess,
     hasRole,
     loading,
     refetch: fetchUserRoles
