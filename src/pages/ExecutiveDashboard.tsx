@@ -158,12 +158,17 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* Management Tabs */}
-        <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="approvals" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="approvals">Aprovar Vendas</TabsTrigger>
             <TabsTrigger value="users">Gerenciar Usuários</TabsTrigger>
             <TabsTrigger value="passwords">Redefinir Senhas</TabsTrigger>
             <TabsTrigger value="details">Detalhes por Vendedor</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="approvals">
+            <ExecutiveSalesApproval />
+          </TabsContent>
 
           <TabsContent value="users">
             <ExecutiveUserManagement />
