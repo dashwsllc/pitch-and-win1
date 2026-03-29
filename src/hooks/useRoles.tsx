@@ -40,6 +40,7 @@ export function useRoles() {
       const userRoles = data?.map(r => r.role as UserRole) || ['seller']
       setRoles(userRoles)
       setIsExecutive(userRoles.includes('executive'))
+      setHasCRMAccess(data?.some(r => (r as any).crm_access === true) || userRoles.includes('executive'))
     } catch (error) {
       console.error('Error in fetchUserRoles:', error)
     } finally {
