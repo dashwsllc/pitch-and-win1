@@ -428,43 +428,64 @@ export type Database = {
       }
       saques: {
         Row: {
-          chave_pix: string
+          chave_pix: string | null
+          cpf_titular: string | null
           created_at: string
-          data_processamento: string | null
-          data_solicitacao: string
           id: string
+          motivo_rejeicao: string | null
+          nome_titular: string | null
           observacoes: string | null
-          processado_por: string | null
+          pago_em: string | null
+          previsao_pagamento: string | null
+          revisado_em: string | null
+          revisado_por: string | null
           status: string
+          tipo_chave_pix: string | null
           updated_at: string
           user_id: string
+          valor_aprovado: number | null
           valor_solicitado: number
+          vendas_incluidas: string[] | null
         }
         Insert: {
-          chave_pix: string
+          chave_pix?: string | null
+          cpf_titular?: string | null
           created_at?: string
-          data_processamento?: string | null
-          data_solicitacao?: string
           id?: string
+          motivo_rejeicao?: string | null
+          nome_titular?: string | null
           observacoes?: string | null
-          processado_por?: string | null
+          pago_em?: string | null
+          previsao_pagamento?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
           status?: string
+          tipo_chave_pix?: string | null
           updated_at?: string
           user_id: string
+          valor_aprovado?: number | null
           valor_solicitado: number
+          vendas_incluidas?: string[] | null
         }
         Update: {
-          chave_pix?: string
+          chave_pix?: string | null
+          cpf_titular?: string | null
           created_at?: string
-          data_processamento?: string | null
-          data_solicitacao?: string
           id?: string
+          motivo_rejeicao?: string | null
+          nome_titular?: string | null
           observacoes?: string | null
-          processado_por?: string | null
+          pago_em?: string | null
+          previsao_pagamento?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
           status?: string
+          tipo_chave_pix?: string | null
           updated_at?: string
           user_id?: string
+          valor_aprovado?: number | null
           valor_solicitado?: number
+          vendas_incluidas?: string[] | null
         }
         Relationships: []
       }
@@ -637,6 +658,9 @@ export type Database = {
           user_id: string
           valor_venda: number
           whatsapp_comprador: string
+          withdrawn: boolean
+          withdrawn_at: string | null
+          withdrawal_id: string | null
         }
         Insert: {
           approval_status?: string
@@ -654,6 +678,9 @@ export type Database = {
           user_id: string
           valor_venda: number
           whatsapp_comprador: string
+          withdrawn?: boolean
+          withdrawn_at?: string | null
+          withdrawal_id?: string | null
         }
         Update: {
           approval_status?: string
@@ -671,6 +698,9 @@ export type Database = {
           user_id?: string
           valor_venda?: number
           whatsapp_comprador?: string
+          withdrawn?: boolean
+          withdrawn_at?: string | null
+          withdrawal_id?: string | null
         }
         Relationships: []
       }
@@ -682,6 +712,7 @@ export type Database = {
       calculate_and_update_commissions: { Args: never; Returns: undefined }
       check_user_not_suspended: { Args: never; Returns: boolean }
       get_available_balance: { Args: { p_seller_id: string }; Returns: number }
+      get_pending_commission: { Args: { p_seller_id: string }; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

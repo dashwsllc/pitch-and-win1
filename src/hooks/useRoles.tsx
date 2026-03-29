@@ -10,6 +10,7 @@ export function useRoles() {
   const [loading, setLoading] = useState(true)
   const [isExecutive, setIsExecutive] = useState(false)
   const [hasCRMAccess, setHasCRMAccess] = useState(false)
+  const [commissionRate, setCommissionRate] = useState<number>(10) // default 10%
 
   useEffect(() => {
     if (!user) {
@@ -29,7 +30,7 @@ export function useRoles() {
     try {
       const { data, error } = await supabase
         .from('user_roles')
-        .select('role, crm_access')
+        .select('role, crm_access, commission_rate')
         .eq('user_id', user.id)
 
       if (error) {
@@ -41,6 +42,9 @@ export function useRoles() {
       setRoles(userRoles)
       setIsExecutive(userRoles.includes('executive'))
       setHasCRMAccess(data?.some(r => (r as any).crm_access === true) || userRoles.includes('executive'))
+      // ✅ FIX: expor commission_rate para uso na aprovação e registro de vendas
+      const rate = data?.find(r => (r as any).commission_rate != null)
+      if (rate) setCommissionRate(Number((rate as any).commission_rate) || 10)
     } catch (error) {
       console.error('Error in fetchUserRoles:', error)
     } finally {
@@ -54,6 +58,7 @@ export function useRoles() {
     roles,
     isExecutive,
     hasCRMAccess,
+    commissionRate,
     hasRole,
     loading,
     refetch: fetchUserRoles

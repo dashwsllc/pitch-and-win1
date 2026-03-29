@@ -28,6 +28,7 @@ interface Sale {
   reviewed_at: string | null
   created_at: string
   seller_name?: string
+  seller_commission_rate?: number // ✅ FIX: taxa real do vendedor
 }
 
 export function ExecutiveSalesApproval() {
@@ -55,12 +56,21 @@ export function ExecutiveSalesApproval() {
         .from('profiles')
         .select('user_id, display_name')
 
+      // ✅ FIX: Buscar taxas de comissão reais de cada vendedor
+      const { data: rolesData } = await supabase
+        .from('user_roles')
+        .select('user_id, commission_rate')
+
       const profileMap = new Map<string, string>()
       profiles?.forEach(p => profileMap.set(p.user_id, p.display_name || 'Usuário'))
 
+      const commissionMap = new Map<string, number>()
+      rolesData?.forEach(r => commissionMap.set(r.user_id, Number((r as any).commission_rate) || 10))
+
       const enriched = (salesData || []).map(s => ({
         ...s,
-        seller_name: profileMap.get(s.user_id) || 'Vendedor'
+        seller_name: profileMap.get(s.user_id) || 'Vendedor',
+        seller_commission_rate: commissionMap.get(s.user_id) || 10
       })) as Sale[]
 
       setSales(enriched)
@@ -76,7 +86,9 @@ export function ExecutiveSalesApproval() {
   const approveSale = async (sale: Sale) => {
     setProcessing(sale.id)
     try {
-      const commissionAmount = Number(sale.valor_venda) * 0.10 // 10% commission
+      // ✅ FIX: Usa a taxa real do vendedor, não mais 10% fixo
+      const rate = sale.seller_commission_rate ?? 10
+      const commissionAmount = Number(sale.valor_venda) * (rate / 100)
 
       const { error } = await supabase
         .from('vendas')
@@ -90,7 +102,7 @@ export function ExecutiveSalesApproval() {
 
       if (error) throw error
 
-      toast({ title: 'Venda aprovada!', description: `Comissão de R$ ${commissionAmount.toFixed(2)} liberada.` })
+      toast({ title: 'Venda aprovada!', description: `Comissão de ${formatCurrency(commissionAmount)} (${rate}%) liberada para ${sale.seller_name}.` })
       fetchSales()
     } catch (err: any) {
       toast({ title: 'Erro ao aprovar', description: err.message, variant: 'destructive' })
@@ -181,7 +193,9 @@ export function ExecutiveSalesApproval() {
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold text-foreground">{formatCurrency(Number(sale.valor_venda))}</p>
-                      <p className="text-xs text-muted-foreground">Comissão: {formatCurrency(Number(sale.valor_venda) * 0.10)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Comissão ({sale.seller_commission_rate ?? 10}%): {formatCurrency(Number(sale.valor_venda) * ((sale.seller_commission_rate ?? 10) / 100))}
+                      </p>
                     </div>
                   </div>
                   <div className="flex gap-2 justify-end">

@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { useRoles } from '@/hooks/useRoles'
 import { useToast } from '@/hooks/use-toast'
-import { ShoppingCart, ArrowLeft } from 'lucide-react'
+import { ShoppingCart, ArrowLeft, Info, CheckCircle, Clock } from 'lucide-react'
 
 const PRODUTOS_MENTORIA = [
   { value: 'Mentoria Jogador De Elite', label: 'Mentoria Jogador De Elite' },
@@ -30,13 +32,19 @@ const VALORES_VENDA = [
 export default function RegistrarVenda() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { commissionRate, loading: rolesLoading } = useRoles()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [justRegistered, setJustRegistered] = useState(false)
   const [produtoSelecionado, setProdutoSelecionado] = useState('')
   const [valorSelecionado, setValorSelecionado] = useState('')
   const [nomeComprador, setNomeComprador] = useState('')
   const [whatsappComprador, setWhatsappComprador] = useState('')
   const [emailComprador, setEmailComprador] = useState('')
+
+  // Compute commission preview
+  const valorNumerico = parseFloat(valorSelecionado) || 0
+  const comissaoEstimada = valorNumerico * commissionRate / 100
 
   const resetForm = () => {
     setProdutoSelecionado('')
@@ -99,9 +107,11 @@ export default function RegistrarVenda() {
 
       toast({
         title: 'Venda registrada com sucesso!',
-        description: 'Sua venda está aguardando aprovação do executive. O saldo será atualizado após a validação.'
+        description: 'Aguardando aprovação do executive. O saldo será atualizado após a validação.'
       })
+      setJustRegistered(true)
       resetForm()
+      setTimeout(() => setJustRegistered(false), 8000)
     } catch (error: any) {
       console.error('Erro ao registrar venda:', error)
       toast({
@@ -184,6 +194,21 @@ export default function RegistrarVenda() {
                 </div>
               </div>
 
+              {/* Commission Info — somente leitura */}
+              {valorSelecionado && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+                  <Info className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Sua taxa de comissão: </span>
+                    <span className="font-semibold text-foreground">{commissionRate}%</span>
+                    <span className="text-muted-foreground ml-2">&mdash; Comissão desta venda: </span>
+                    <span className="font-bold text-green-400">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(comissaoEstimada)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="nome_comprador">Nome Do Comprador *</Label>
                 <Input
@@ -241,6 +266,20 @@ export default function RegistrarVenda() {
                 </Button>
               </div>
             </form>
+
+            {/* Banner de sucesso após registro */}
+            {justRegistered && (
+              <div className="mt-4 p-4 rounded-lg bg-yellow-500/5 border border-yellow-500/20 flex items-start gap-3 animate-fade-in">
+                <Clock className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-foreground">Venda registrada! Aguardando aprovação</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Sua venda foi enviada para validação do executive. Seu saldo será atualizado após a aprovação.
+                    Acompanhe o status em <a href="/minhas-vendas" className="text-primary underline">Minhas Vendas</a>.
+                  </p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

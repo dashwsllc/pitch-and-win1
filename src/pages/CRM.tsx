@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -21,12 +22,26 @@ import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { CRMLeadDetail } from '@/components/crm/CRMLeadDetail'
 import { CRMUserManagement } from '@/components/crm/CRMUserManagement'
+import { CRMPermissionsReport } from '@/components/crm/CRMPermissionsReport'
 
 export default function CRM() {
+  const navigate = useNavigate()
   const { user } = useAuth()
-  const { isExecutive } = useRoles()
+  const { isExecutive, hasCRMAccess, loading: rolesLoading } = useRoles()
   const { leads, loading, fetchLeads, createLead, updateLead, deleteLead } = useCRMLeads()
   const { toast } = useToast()
+
+  // ✅ FIX CRÍTICO: Guard de rota — redireciona usuários sem acesso ao CRM
+  useEffect(() => {
+    if (!rolesLoading && !hasCRMAccess && !isExecutive) {
+      toast({
+        title: 'Acesso restrito',
+        description: 'Solicite autorização a um executive para acessar o CRM.',
+        variant: 'destructive'
+      })
+      navigate('/')
+    }
+  }, [rolesLoading, hasCRMAccess, isExecutive])
 
   const [search, setSearch] = useState('')
   const [tempFilter, setTempFilter] = useState<string>('todos')
@@ -34,6 +49,9 @@ export default function CRM() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null)
   const [saving, setSaving] = useState(false)
+  // ✅ FIX MODERADO: estado para confirmação de deleção
+  const [deleteConfirmLead, setDeleteConfirmLead] = useState<CRMLead | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -145,12 +163,22 @@ export default function CRM() {
     }
   }
 
-  const handleDeleteLead = async (id: string) => {
+  const handleDeleteLead = async (lead: CRMLead) => {
+    // ✅ FIX: Abre modal de confirmação em vez de deletar direto
+    setDeleteConfirmLead(lead)
+  }
+
+  const confirmDeleteLead = async () => {
+    if (!deleteConfirmLead) return
+    setDeleting(true)
     try {
-      await deleteLead(id)
+      await deleteLead(deleteConfirmLead.id)
       toast({ title: 'Lead excluído' })
+      setDeleteConfirmLead(null)
     } catch {
       toast({ title: 'Erro ao excluir', variant: 'destructive' })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -262,6 +290,7 @@ export default function CRM() {
           <TabsList>
             <TabsTrigger value="leads">Leads</TabsTrigger>
             {isExecutive && <TabsTrigger value="users">Gerenciar Usuários</TabsTrigger>}
+            {isExecutive && <TabsTrigger value="report">Relatório de Permissões</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="leads" className="space-y-4">
@@ -378,7 +407,7 @@ export default function CRM() {
                                   <Edit className="w-3.5 h-3.5" />
                                 </Button>
                                 {isExecutive && (
-                                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleDeleteLead(lead.id)}>
+                                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleDeleteLead(lead)}>
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </Button>
                                 )}
@@ -399,7 +428,14 @@ export default function CRM() {
               <CRMUserManagement />
             </TabsContent>
           )}
+
+          {isExecutive && (
+            <TabsContent value="report">
+              <CRMPermissionsReport />
+            </TabsContent>
+          )}
         </Tabs>
+
 
         {/* Create Lead Modal */}
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
@@ -503,6 +539,28 @@ export default function CRM() {
             isExecutive={isExecutive}
           />
         )}
+
+        {/* ✅ FIX: Modal de confirmação de exclusão */}
+        <Dialog open={!!deleteConfirmLead} onOpenChange={() => setDeleteConfirmLead(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Excluir Lead</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja excluir o lead <strong>{deleteConfirmLead?.name}</strong>? Esta ação não pode ser desfeita.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteConfirmLead(null)}>Cancelar</Button>
+              <Button
+                onClick={confirmDeleteLead}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? 'Excluindo...' : 'Excluir Lead'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   )
