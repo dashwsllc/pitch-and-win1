@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useDashboardData } from "@/hooks/useDashboardData"
 import { useRankingDataWithMock } from "@/hooks/useRankingDataWithMock"
 import { useAuth } from "@/hooks/useAuth"
+import { useProfile } from "@/hooks/useProfile"
 import { 
   DollarSign, 
   ShoppingCart, 
