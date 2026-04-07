@@ -17,6 +17,20 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
+  // Force dark mode on auth page
+  useEffect(() => {
+    const root = document.documentElement
+    const hadLight = root.classList.contains('light')
+    root.classList.remove('light')
+    root.classList.add('dark')
+    return () => {
+      if (hadLight) {
+        root.classList.remove('dark')
+        root.classList.add('light')
+      }
+    }
+  }, [])
+
   // Redirect if already authenticated
   if (user && !loading) {
     return <Navigate to="/" replace />
@@ -84,7 +98,7 @@ export default function Auth() {
   }
 
   return (
-    <div className="dark min-h-screen bg-gradient-to-br from-[hsl(240,10%,3.9%)] via-[hsl(240,10%,3.9%)] to-[hsl(240,4.8%,15.9%)]/20 flex flex-col items-center justify-center p-4 text-[hsl(0,0%,98%)]">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
