@@ -50,7 +50,7 @@ export function CRMPermissionsReport() {
         if (p.display_name) profileMap[p.user_id] = p.display_name
       })
       setProfiles(profileMap)
-      setUsers((rolesData || []) as UserWithRole[])
+      setUsers((rolesData || []) as unknown as UserWithRole[])
     } catch (err: any) {
       console.error('Error fetching roles:', err)
     } finally {
