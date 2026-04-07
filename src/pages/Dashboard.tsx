@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useDashboardData } from "@/hooks/useDashboardData"
 import { useRankingDataWithMock } from "@/hooks/useRankingDataWithMock"
 import { useAuth } from "@/hooks/useAuth"
+import { useProfile } from "@/hooks/useProfile"
 import { 
   DollarSign, 
   ShoppingCart, 
@@ -23,8 +24,9 @@ export default function Dashboard() {
   const { user } = useAuth()
   const { metrics, loading, refetch } = useDashboardData(selectedFilter)
   const { ranking } = useRankingDataWithMock()
+  const { profile } = useProfile()
 
-  const userName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || "Usuário"
+  const userName = profile?.display_name || user?.user_metadata?.display_name || user?.email?.split('@')[0] || "Usuário"
   const userPosition = ranking.findIndex(r => r.isCurrentUser) + 1
 
   return (
