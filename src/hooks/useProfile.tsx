@@ -26,35 +26,42 @@ export function useProfile() {
   })
   const [loading, setLoading] = useState(true)
 
-useEffect(() => {
-  if (!user) {
-    setProfile(null)
-    setLoading(false)
-    return
+  const fetchProfile = async () => {
+    if (!user) return
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        throw error
+      }
+
+      setProfile(data)
+    } catch (error) {
+      console.error('Erro ao buscar perfil:', error)
+      toast.error('Erro ao carregar perfil')
+    } finally {
+      setLoading(false)
+    }
   }
 
-    const fetchProfile = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', user.id)
-          .single()
-
-        if (error && error.code !== 'PGRST116') {
-          throw error
-        }
-
-        setProfile(data)
-      } catch (error) {
-        console.error('Erro ao buscar perfil:', error)
-        toast.error('Erro ao carregar perfil')
-      } finally {
-        setLoading(false)
-      }
+  useEffect(() => {
+    if (!user) {
+      setProfile(null)
+      setLoading(false)
+      return
     }
-
     fetchProfile()
+  }, [user])
+
+  // Listen for profile updates from other hook instances
+  useEffect(() => {
+    const handler = () => fetchProfile()
+    window.addEventListener('profile-updated', handler)
+    return () => window.removeEventListener('profile-updated', handler)
   }, [user])
 
   const updateProfile = async (updates: Partial<Profile>) => {
