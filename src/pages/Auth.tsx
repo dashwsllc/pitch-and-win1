@@ -84,7 +84,7 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20 flex flex-col items-center justify-center p-4">
+    <div className="dark min-h-screen bg-gradient-to-br from-[hsl(240,10%,3.9%)] via-[hsl(240,10%,3.9%)] to-[hsl(240,4.8%,15.9%)]/20 flex flex-col items-center justify-center p-4 text-[hsl(0,0%,98%)]">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
