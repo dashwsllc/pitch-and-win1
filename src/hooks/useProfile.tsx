@@ -78,6 +78,7 @@ export function useProfile() {
       if (error) throw error
 
       setProfile(data)
+      window.dispatchEvent(new Event('profile-updated'))
       toast.success('Perfil atualizado com sucesso!')
       return data
     } catch (error) {
