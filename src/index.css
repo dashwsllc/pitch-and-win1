@@ -8,41 +8,51 @@ All colors MUST be HSL.
 
 @layer base {
 :root {
-    /* Dashboard comercial dark theme */
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    /* Zyron dark theme — permanent dark mode */
+    /* --bg-base: #09090E → 240 22% 4% */
+    /* --bg-surface: #111118 → 240 19% 8% */
+    /* --bg-elevated: #1A1A26 → 240 20% 12% */
+    /* --bg-hover: #1F1F2E → 240 20% 15% */
+    --background: 240 22% 4%;
+    --foreground: 213 31% 91%;
 
-    --card: 240 10% 5.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 240 19% 8%;
+    --card-foreground: 213 31% 91%;
 
-    --popover: 240 10% 5.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 240 19% 8%;
+    --popover-foreground: 213 31% 91%;
 
-    --primary: 262 83% 58%;
+    /* --primary: #6366F1 → 239 84% 67% */
+    --primary: 239 84% 67%;
     --primary-foreground: 0 0% 98%;
-    --primary-hover: 262 83% 65%;
+    /* --primary-hover: #4F46E5 → 239 76% 59% */
+    --primary-hover: 239 76% 59%;
 
-    --secondary: 240 4.8% 15.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 240 20% 15%;
+    --secondary-foreground: 213 31% 91%;
 
-    --muted: 240 5.9% 10%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted: 240 19% 8%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 240 4.8% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 240 20% 15%;
+    --accent-foreground: 213 31% 91%;
 
-    --success: 142 76% 36%;
+    /* --success: #10B981 → 160 84% 39% */
+    --success: 160 84% 39%;
     --success-foreground: 0 0% 98%;
 
-    --warning: 48 96% 53%;
-    --warning-foreground: 240 10% 3.9%;
+    /* --warning: #F59E0B → 38 92% 50% */
+    --warning: 38 92% 50%;
+    --warning-foreground: 240 22% 4%;
 
-    --destructive: 0 84.2% 60.2%;
+    /* --danger/destructive: #EF4444 → 0 84% 60% */
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 262 83% 58%;
+    /* --border: rgba(255,255,255,0.07) → 0 0% 100% / 0.07 */
+    --border: 240 5% 12%;
+    --input: 240 20% 12%;
+    --ring: 239 84% 67%;
 
     --radius: 0.75rem;
 
@@ -52,81 +62,38 @@ All colors MUST be HSL.
     --bronze: 25 95% 53%;
 
     /* Chart colors */
-    --chart-1: 262 83% 58%;
-    --chart-2: 262 83% 70%;
+    --chart-1: 239 84% 67%;
+    --chart-2: 239 84% 76%;
     --chart-3: 200 98% 39%;
-    --chart-4: 47 96% 53%;
-    --chart-5: 142 76% 36%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 160 84% 39%;
+
+    /* Role badge colors */
+    --role-admin: 239 84% 67%;
+    --role-closer: 174 60% 31%;
+    --role-sdr: 32 87% 44%;
+    --role-bdr: 9 72% 55%;
+    --role-traffic: 217 91% 60%;
+    --role-seller: 160 76% 32%;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(262 83% 58%) 0%, hsl(262 83% 70%) 100%);
-    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(142 76% 46%) 100%);
-    --gradient-card: linear-gradient(135deg, hsl(240 10% 5.9%) 0%, hsl(240 5.9% 10%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(239 84% 67%) 0%, hsl(239 84% 76%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(160 84% 39%) 0%, hsl(160 84% 49%) 100%);
+    --gradient-card: linear-gradient(135deg, hsl(240 19% 8%) 0%, hsl(240 19% 10%) 100%);
 
     /* Sidebar */
-    --sidebar-background: 240 10% 3.9%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 262 83% 58%;
+    --sidebar-background: 240 22% 4%;
+    --sidebar-foreground: 213 31% 91%;
+    --sidebar-primary: 239 84% 67%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 15.9%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 262 83% 58%;
+    --sidebar-accent: 240 20% 15%;
+    --sidebar-accent-foreground: 213 31% 91%;
+    --sidebar-border: 240 5% 12%;
+    --sidebar-ring: 239 84% 67%;
 
     /* Shadows */
-    --shadow-glow: 0 0 40px hsl(262 83% 58% / 0.3);
-    --shadow-card: 0 4px 6px -1px hsl(240 10% 3.9% / 0.1), 0 2px 4px -1px hsl(240 10% 3.9% / 0.06);
-  }
-
-  .light {
-    /* Light theme */
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-
-    --primary: 262 83% 58%;
-    --primary-foreground: 0 0% 98%;
-    --primary-hover: 262 83% 65%;
-
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 98%;
-
-    --warning: 48 96% 53%;
-    --warning-foreground: 240 10% 3.9%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 262 83% 58%;
-
-    /* Sidebar light theme */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.9% 10%;
-    --sidebar-primary: 262 83% 58%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 240 5.9% 90%;
-    --sidebar-ring: 262 83% 58%;
-
-    /* Gradients light theme */
-    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(240 4.8% 95.9%) 100%);
+    --shadow-glow: 0 0 40px hsl(239 84% 67% / 0.3);
+    --shadow-card: 0 4px 6px -1px hsl(240 22% 4% / 0.1), 0 2px 4px -1px hsl(240 22% 4% / 0.06);
   }
 }
 

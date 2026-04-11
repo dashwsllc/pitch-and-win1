@@ -59,6 +59,14 @@ export default {
         gold: "hsl(var(--gold))",
         silver: "hsl(var(--silver))",
         bronze: "hsl(var(--bronze))",
+        role: {
+          admin: "hsl(var(--role-admin))",
+          closer: "hsl(var(--role-closer))",
+          sdr: "hsl(var(--role-sdr))",
+          bdr: "hsl(var(--role-bdr))",
+          traffic: "hsl(var(--role-traffic))",
+          seller: "hsl(var(--role-seller))",
+        },
         chart: {
           1: "hsl(var(--chart-1))",
           2: "hsl(var(--chart-2))",
