@@ -1103,7 +1103,14 @@ export type Database = {
       recalculate_all_balances: { Args: never; Returns: undefined }
     }
     Enums: {
-      app_role: "seller" | "executive" | "super_admin"
+      app_role:
+        | "seller"
+        | "executive"
+        | "super_admin"
+        | "closer"
+        | "sdr"
+        | "bdr"
+        | "traffic_manager"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1231,7 +1238,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["seller", "executive", "super_admin"],
+      app_role: [
+        "seller",
+        "executive",
+        "super_admin",
+        "closer",
+        "sdr",
+        "bdr",
+        "traffic_manager",
+      ],
     },
   },
 } as const
