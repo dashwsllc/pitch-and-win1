@@ -50,6 +50,33 @@ export type Database = {
         }
         Relationships: []
       }
+      announcements: {
+        Row: {
+          content: string
+          created_at: string | null
+          created_by: string
+          id: string
+          pinned: boolean | null
+          title: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          created_by: string
+          id?: string
+          pinned?: boolean | null
+          title: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          pinned?: boolean | null
+          title?: string
+        }
+        Relationships: []
+      }
       assinaturas: {
         Row: {
           created_at: string
@@ -86,6 +113,96 @@ export type Database = {
           user_id?: string
           valor_assinatura?: string
           whatsapp_cliente?: string
+        }
+        Relationships: []
+      }
+      closing_forms: {
+        Row: {
+          closed_at: string | null
+          closer_id: string
+          created_at: string | null
+          how_closed: string | null
+          id: string
+          lead_name: string
+          lead_whatsapp: string | null
+          next_steps: string | null
+          objections_raised: string | null
+          product: string
+          status: string | null
+          value: number
+        }
+        Insert: {
+          closed_at?: string | null
+          closer_id: string
+          created_at?: string | null
+          how_closed?: string | null
+          id?: string
+          lead_name: string
+          lead_whatsapp?: string | null
+          next_steps?: string | null
+          objections_raised?: string | null
+          product: string
+          status?: string | null
+          value: number
+        }
+        Update: {
+          closed_at?: string | null
+          closer_id?: string
+          created_at?: string | null
+          how_closed?: string | null
+          id?: string
+          lead_name?: string
+          lead_whatsapp?: string | null
+          next_steps?: string | null
+          objections_raised?: string | null
+          product?: string
+          status?: string | null
+          value?: number
+        }
+        Relationships: []
+      }
+      company_goals: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          current: number | null
+          deadline: string | null
+          description: string | null
+          id: string
+          period: string
+          status: string | null
+          target: number | null
+          title: string
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          current?: number | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          period: string
+          status?: string | null
+          target?: number | null
+          title: string
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          current?: number | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          period?: string
+          status?: string | null
+          target?: number | null
+          title?: string
+          unit?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -302,6 +419,7 @@ export type Database = {
           link_url: string
           title: string
           updated_at: string
+          visible_to_roles: string[] | null
         }
         Insert: {
           category_id: string
@@ -312,6 +430,7 @@ export type Database = {
           link_url: string
           title: string
           updated_at?: string
+          visible_to_roles?: string[] | null
         }
         Update: {
           category_id?: string
@@ -322,6 +441,7 @@ export type Database = {
           link_url?: string
           title?: string
           updated_at?: string
+          visible_to_roles?: string[] | null
         }
         Relationships: [
           {
@@ -329,6 +449,38 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "document_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_reactions: {
+        Row: {
+          created_at: string | null
+          emoji: string
+          id: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          emoji: string
+          id?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "team_messages"
             referencedColumns: ["id"]
           },
         ]
@@ -360,6 +512,45 @@ export type Database = {
           requested_at?: string
           status?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      playbooks: {
+        Row: {
+          content: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          tags: string[] | null
+          target_roles: string[]
+          title: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          tags?: string[] | null
+          target_roles?: string[]
+          title: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          tags?: string[] | null
+          target_roles?: string[]
+          title?: string
+          type?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -614,8 +805,102 @@ export type Database = {
         }
         Relationships: []
       }
+      team_messages: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          file_name: string | null
+          file_type: string | null
+          file_url: string | null
+          id: string
+          link_title: string | null
+          link_url: string | null
+          user_id: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          file_name?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          link_title?: string | null
+          link_url?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          file_name?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          link_title?: string | null
+          link_url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      traffic_metrics: {
+        Row: {
+          ad_set_name: string | null
+          campaign_name: string
+          clicks: number | null
+          cpc: number | null
+          cpl: number | null
+          created_at: string | null
+          ctr: number | null
+          date: string
+          id: string
+          impressions: number | null
+          leads_generated: number | null
+          manager_id: string
+          notes: string | null
+          platform: string
+          spend: number
+          updated_at: string | null
+        }
+        Insert: {
+          ad_set_name?: string | null
+          campaign_name: string
+          clicks?: number | null
+          cpc?: number | null
+          cpl?: number | null
+          created_at?: string | null
+          ctr?: number | null
+          date: string
+          id?: string
+          impressions?: number | null
+          leads_generated?: number | null
+          manager_id: string
+          notes?: string | null
+          platform?: string
+          spend?: number
+          updated_at?: string | null
+        }
+        Update: {
+          ad_set_name?: string | null
+          campaign_name?: string
+          clicks?: number | null
+          cpc?: number | null
+          cpl?: number | null
+          created_at?: string | null
+          ctr?: number | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          leads_generated?: number | null
+          manager_id?: string
+          notes?: string | null
+          platform?: string
+          spend?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
+          can_view_sales: boolean | null
           commission_rate: number
           created_at: string
           crm_access: boolean
@@ -627,6 +912,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          can_view_sales?: boolean | null
           commission_rate?: number
           created_at?: string
           crm_access?: boolean
@@ -638,6 +924,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          can_view_sales?: boolean | null
           commission_rate?: number
           created_at?: string
           crm_access?: boolean
@@ -713,6 +1000,74 @@ export type Database = {
         }
         Relationships: []
       }
+      workboard_completions: {
+        Row: {
+          completed_at: string | null
+          id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          id?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workboard_completions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "workboard_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workboard_tasks: {
+        Row: {
+          assigned_to: string[] | null
+          created_at: string | null
+          created_by: string
+          deadline: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          priority: string | null
+          target_roles: string[] | null
+          title: string
+        }
+        Insert: {
+          assigned_to?: string[] | null
+          created_at?: string | null
+          created_by: string
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: string | null
+          target_roles?: string[] | null
+          title: string
+        }
+        Update: {
+          assigned_to?: string[] | null
+          created_at?: string | null
+          created_by?: string
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: string | null
+          target_roles?: string[] | null
+          title?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -722,6 +1077,7 @@ export type Database = {
       check_user_not_suspended: { Args: never; Returns: boolean }
       get_available_balance: { Args: { p_seller_id: string }; Returns: number }
       get_pending_commission: { Args: { p_seller_id: string }; Returns: number }
+      get_user_role: { Args: { uid: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
