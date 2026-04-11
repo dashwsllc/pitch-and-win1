@@ -2,7 +2,35 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from './useAuth'
 
-export type UserRole = 'seller' | 'executive'
+export type UserRole = 'seller' | 'executive' | 'super_admin' | 'closer' | 'sdr' | 'bdr' | 'traffic_manager'
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  super_admin: 'Super Admin',
+  executive: 'Executivo',
+  closer: 'Closer',
+  sdr: 'SDR',
+  bdr: 'BDR',
+  traffic_manager: 'Gestor de Tráfego',
+  seller: 'Vendedor',
+}
+
+export const ROLE_COLORS: Record<UserRole, string> = {
+  super_admin: 'bg-role-admin',
+  executive: 'bg-role-admin',
+  closer: 'bg-role-closer',
+  sdr: 'bg-role-sdr',
+  bdr: 'bg-role-bdr',
+  traffic_manager: 'bg-role-traffic',
+  seller: 'bg-role-seller',
+}
+
+export const ROLE_DEPARTMENTS: Record<string, UserRole[]> = {
+  'Administração': ['super_admin', 'executive'],
+  'Comercial': ['closer', 'sdr'],
+  'Prospecção': ['bdr'],
+  'Tráfego': ['traffic_manager'],
+  'Vendas': ['seller'],
+}
 
 export function useRoles() {
   const { user } = useAuth()
@@ -10,13 +38,15 @@ export function useRoles() {
   const [loading, setLoading] = useState(true)
   const [isExecutive, setIsExecutive] = useState(false)
   const [hasCRMAccess, setHasCRMAccess] = useState(false)
-  const [commissionRate, setCommissionRate] = useState<number>(10) // default 10%
+  const [canViewSales, setCanViewSales] = useState(false)
+  const [commissionRate, setCommissionRate] = useState<number>(10)
 
   useEffect(() => {
     if (!user) {
       setRoles([])
       setIsExecutive(false)
       setHasCRMAccess(false)
+      setCanViewSales(false)
       setLoading(false)
       return
     }
@@ -30,7 +60,7 @@ export function useRoles() {
     try {
       const { data, error } = await supabase
         .from('user_roles')
-        .select('role, crm_access, commission_rate')
+        .select('role, crm_access, commission_rate, can_view_sales')
         .eq('user_id', user.id)
 
       if (error) {
@@ -40,11 +70,22 @@ export function useRoles() {
 
       const userRoles = data?.map(r => r.role as UserRole) || ['seller']
       setRoles(userRoles)
-      setIsExecutive(userRoles.includes('executive'))
-      setHasCRMAccess(data?.some(r => (r as any).crm_access === true) || userRoles.includes('executive'))
-      // ✅ FIX: expor commission_rate para uso na aprovação e registro de vendas
-      const rate = data?.find(r => (r as any).commission_rate != null)
-      if (rate) setCommissionRate(Number((rate as any).commission_rate) || 10)
+      setIsExecutive(
+        userRoles.includes('executive') || userRoles.includes('super_admin')
+      )
+      setHasCRMAccess(
+        data?.some(r => r.crm_access === true) || 
+        userRoles.includes('executive') || 
+        userRoles.includes('super_admin') ||
+        userRoles.includes('bdr')
+      )
+      setCanViewSales(
+        data?.some(r => r.can_view_sales === true) ||
+        userRoles.includes('executive') ||
+        userRoles.includes('super_admin')
+      )
+      const rate = data?.find(r => r.commission_rate != null)
+      if (rate) setCommissionRate(Number(rate.commission_rate) || 10)
     } catch (error) {
       console.error('Error in fetchUserRoles:', error)
     } finally {
@@ -53,11 +94,14 @@ export function useRoles() {
   }
 
   const hasRole = (role: UserRole) => roles.includes(role)
+  const primaryRole = roles[0] || 'seller'
 
   return {
     roles,
+    primaryRole,
     isExecutive,
     hasCRMAccess,
+    canViewSales,
     commissionRate,
     hasRole,
     loading,
@@ -71,12 +115,11 @@ export function useAllUsers() {
 
   const fetchAllUsers = async () => {
     try {
-      // Use left join (remove !inner) so users without roles are also returned
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select(`
           *,
-          user_roles(role)
+          user_roles(role, can_view_sales, crm_access, commission_rate)
         `)
         .order('created_at', { ascending: false })
         .limit(500)
