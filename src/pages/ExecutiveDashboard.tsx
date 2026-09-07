@@ -14,7 +14,8 @@ import {
   UserCheck,
   UserX,
   Settings,
-  Shield
+  Shield,
+  Target
 } from 'lucide-react'
 import { useExecutiveDashboard } from '@/hooks/useExecutiveDashboard'
 import { MetricCard } from '@/components/dashboard/MetricCard'
@@ -24,6 +25,7 @@ import { ExecutiveUserManagement } from '@/components/executive/ExecutiveUserMan
 import { ExecutivePasswordRequests } from '@/components/executive/ExecutivePasswordRequests'
 import { ExecutiveSellerDetails } from '@/components/executive/ExecutiveSellerDetails'
 import { ExecutiveSalesApproval } from '@/components/executive/ExecutiveSalesApproval'
+import { ExecutiveGoalsManagement } from '@/components/executive/ExecutiveGoalsManagement'
 
 export default function ExecutiveDashboard() {
   const [selectedFilter, setSelectedFilter] = useState('30dias')
@@ -159,11 +161,12 @@ export default function ExecutiveDashboard() {
 
         {/* Management Tabs */}
         <Tabs defaultValue="approvals" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="approvals">Aprovar Vendas</TabsTrigger>
             <TabsTrigger value="users">Gerenciar Usuários</TabsTrigger>
             <TabsTrigger value="passwords">Redefinir Senhas</TabsTrigger>
             <TabsTrigger value="details">Detalhes por Vendedor</TabsTrigger>
+            <TabsTrigger value="goals">Definir Metas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="approvals">
@@ -180,6 +183,10 @@ export default function ExecutiveDashboard() {
 
           <TabsContent value="details">
             <ExecutiveSellerDetails />
+          </TabsContent>
+
+          <TabsContent value="goals">
+            <ExecutiveGoalsManagement />
           </TabsContent>
         </Tabs>
 

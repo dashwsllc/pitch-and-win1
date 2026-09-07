@@ -15,10 +15,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <ExecutiveAppSidebar isExecutive={isExecutive} />
       
       <div className="ml-16 min-h-screen flex flex-col">
-        <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
+        <header className="h-16 border-b border-border/40 bg-background/80 backdrop-blur-xl sticky top-0 z-30">
           <div className="flex items-center justify-between h-full px-6">
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold text-foreground">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-gradient-ember animate-pulse" />
+              <h1 className="text-lg font-semibold text-foreground tracking-tight">
                 Dashboard Comercial
               </h1>
             </div>

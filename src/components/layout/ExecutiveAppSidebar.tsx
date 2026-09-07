@@ -50,6 +50,9 @@ export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
   
   return (
     <aside className="w-16 min-h-screen bg-sidebar border-r border-sidebar-border flex flex-col fixed left-0 top-0 z-40">
+      {/* Subtle top accent line */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-ember" />
+      
       <div className="p-4">
         <div className="flex items-center justify-center">
           <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
@@ -58,16 +61,16 @@ export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
         </div>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-2 px-2">
+      <nav className="flex-1 flex flex-col gap-2 px-2 pt-4">
         {items.map((item) => (
           <NavLink
             key={item.title}
             to={item.url}
             className={({ isActive }) =>
-              `flex items-center justify-center w-12 h-12 rounded-lg transition-all ${
+              `flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-300 group ${
                 isActive
-                  ? "bg-sidebar-accent text-sidebar-primary border border-sidebar-primary/20"
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  ? "bg-ember/10 text-ember shadow-[inset_0_0_0_1px_rgba(255,142,93,0.2)]"
+                  : "text-sidebar-foreground/70 hover:bg-ember/5 hover:text-ember hover:shadow-[inset_0_0_0_1px_rgba(255,142,93,0.1)]"
               }`
             }
             title={item.title}
