@@ -205,9 +205,9 @@ export function ExecutiveUserManagement() {
                         <Button 
                           variant="outline" 
                           size="sm"
-                          disabled={updatingUser === user.id}
+                          disabled={updatingUser === user.user_id}
                         >
-                          {updatingUser === user.id ? (
+                          {updatingUser === user.user_id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             'Remover Executive'
@@ -225,7 +225,7 @@ export function ExecutiveUserManagement() {
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={() => demoteFromExecutive(user.id, user.display_name || user.user_id)}
+                            onClick={() => demoteFromExecutive(user.user_id, user.display_name || user.user_id)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
                             Remover Permissões
@@ -239,9 +239,9 @@ export function ExecutiveUserManagement() {
                         <Button 
                           size="sm"
                           className="bg-gradient-primary hover:opacity-90"
-                          disabled={updatingUser === user.id}
+                          disabled={updatingUser === user.user_id}
                         >
-                          {updatingUser === user.id ? (
+                          {updatingUser === user.user_id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <>
@@ -262,7 +262,7 @@ export function ExecutiveUserManagement() {
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={() => promoteToExecutive(user.id, user.display_name || user.user_id)}
+                            onClick={() => promoteToExecutive(user.user_id, user.display_name || user.user_id)}
                             className="bg-gradient-primary hover:opacity-90"
                           >
                             Promover a Executive
