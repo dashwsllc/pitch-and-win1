@@ -115,21 +115,34 @@ export function useAllUsers() {
 
   const fetchAllUsers = async () => {
     try {
-      const { data: profiles, error } = await supabase
+      // 1. Fetch profiles
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select(`
-          *,
-          user_roles(role, can_view_sales, crm_access, commission_rate)
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(500)
 
-      if (error) {
-        console.error('Error fetching all users:', error)
+      if (profilesError) {
+        console.error('Error fetching all users:', profilesError)
         return
       }
 
-      setUsers(profiles || [])
+      // 2. Fetch user roles
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('*')
+
+      if (rolesError) {
+        console.error('Error fetching roles:', rolesError)
+      }
+
+      // 3. Combine in JS
+      const combined = (profiles || []).map(p => ({
+        ...p,
+        user_roles: (roles || []).filter(r => r.user_id === p.user_id)
+      }))
+
+      setUsers(combined)
     } catch (error) {
       console.error('Error in fetchAllUsers:', error)
     } finally {
