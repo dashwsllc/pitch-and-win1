@@ -243,8 +243,8 @@ export function ExecutiveUserManagement() {
       <CardContent>
         <div className="space-y-4">
           {users.map((user) => {
-            const role = user.user_roles?.[0]?.role || 'seller'
-            const isExecutive = role === 'executive'
+            const isExecutive = user.user_roles?.some((r: any) => r.role === 'executive' || r.role === 'super_admin')
+            const role = isExecutive ? 'executive' : 'seller'
             
             return (
               <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
