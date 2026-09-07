@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { 
   Select, 
   SelectContent, 
@@ -22,11 +24,30 @@ import {
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog'
 import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { 
   Users, 
   Shield, 
   UserCheck, 
   Crown,
-  Loader2
+  Loader2,
+  MoreVertical,
+  Ban,
+  Edit2,
+  PlayCircle
 } from 'lucide-react'
 import { useAllUsers } from '@/hooks/useRoles'
 import { supabase } from '@/integrations/supabase/client'
@@ -36,6 +57,54 @@ export function ExecutiveUserManagement() {
   const { users, loading, refetch } = useAllUsers()
   const { toast } = useToast()
   const [updatingUser, setUpdatingUser] = useState<string | null>(null)
+  
+  // Edit Dialog State
+  const [editingUser, setEditingUser] = useState<any>(null)
+  const [editName, setEditName] = useState('')
+
+
+  const handleUpdateName = async () => {
+    if (!editingUser || !editName) return
+    setUpdatingUser(editingUser.id)
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ display_name: editName })
+        .eq('id', editingUser.id)
+
+      if (error) throw error
+      toast({ title: 'Nome atualizado com sucesso!' })
+      setEditingUser(null)
+      refetch()
+    } catch (err: any) {
+      toast({ title: 'Erro ao atualizar', description: err.message, variant: 'destructive' })
+    } finally {
+      setUpdatingUser(null)
+    }
+  }
+
+  const handleToggleStatus = async (user: any) => {
+    const newStatus = user.status === 'suspended' ? 'active' : 'suspended'
+    setUpdatingUser(user.id)
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: newStatus })
+        .eq('id', user.id)
+
+      if (error) throw error
+      toast({ 
+        title: newStatus === 'suspended' ? 'Usuário Suspenso' : 'Usuário Reativado',
+        description: newStatus === 'suspended' ? 'O usuário não poderá mais acessar o sistema.' : 'O acesso do usuário foi restaurado.',
+        variant: newStatus === 'suspended' ? 'destructive' : 'default'
+      })
+      refetch()
+    } catch (err: any) {
+      toast({ title: 'Erro ao alterar status', description: err.message, variant: 'destructive' })
+    } finally {
+      setUpdatingUser(null)
+    }
+  }
 
   const getInitials = (email: string) => {
     return email.substring(0, 2).toUpperCase()
@@ -199,6 +268,10 @@ export function ExecutiveUserManagement() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {user.status === 'suspended' && (
+                    <Badge variant="destructive" className="mr-2 animate-pulse">Suspenso</Badge>
+                  )}
+
                   {isExecutive ? (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -246,7 +319,7 @@ export function ExecutiveUserManagement() {
                           ) : (
                             <>
                               <Shield className="w-4 h-4 mr-2" />
-                              Promover a Executive
+                              Promover
                             </>
                           )}
                         </Button>
@@ -271,6 +344,29 @@ export function ExecutiveUserManagement() {
                       </AlertDialogContent>
                     </AlertDialog>
                   )}
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" disabled={updatingUser === user.id}>
+                        {updatingUser === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => { setEditingUser(user); setEditName(user.display_name || '') }}>
+                        <Edit2 className="w-4 h-4 mr-2" /> Editar Conta
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {user.status === 'suspended' ? (
+                        <DropdownMenuItem onClick={() => handleToggleStatus(user)} className="text-green-600 focus:text-green-600">
+                          <PlayCircle className="w-4 h-4 mr-2" /> Reativar Acesso
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onClick={() => handleToggleStatus(user)} className="text-destructive focus:text-destructive">
+                          <Ban className="w-4 h-4 mr-2" /> Suspender / Banir
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             )
@@ -283,6 +379,35 @@ export function ExecutiveUserManagement() {
           )}
         </div>
       </CardContent>
+
+      {/* Edit User Dialog */}
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+            <DialogDescription>
+              Modifique as informações básicas da conta.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Nome de Exibição</Label>
+              <Input 
+                value={editName} 
+                onChange={(e) => setEditName(e.target.value)} 
+                placeholder="Nome do usuário" 
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingUser(null)}>Cancelar</Button>
+            <Button onClick={handleUpdateName} disabled={updatingUser !== null} className="bg-gradient-primary">
+              {updatingUser !== null ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
