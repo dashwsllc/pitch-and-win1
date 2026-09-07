@@ -136,11 +136,25 @@ export function useAllUsers() {
         console.error('Error fetching roles:', rolesError)
       }
 
-      // 3. Combine in JS
-      const combined = (profiles || []).map(p => ({
-        ...p,
-        user_roles: (roles || []).filter(r => r.user_id === p.user_id)
-      }))
+      // 3. Fetch Auth Users (email, last login) via RPC
+      let authUsers: any[] = []
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('get_auth_users_for_executives')
+      
+      if (!rpcError && rpcData) {
+        authUsers = rpcData
+      }
+
+      // 4. Combine in JS
+      const combined = (profiles || []).map(p => {
+        const authData = authUsers.find(a => a.id === p.user_id)
+        return {
+          ...p,
+          user_roles: (roles || []).filter(r => r.user_id === p.user_id),
+          email: authData?.email || '',
+          last_sign_in_at: authData?.last_sign_in_at || null
+        }
+      })
 
       setUsers(combined)
     } catch (error) {
@@ -152,6 +166,21 @@ export function useAllUsers() {
 
   useEffect(() => {
     fetchAllUsers()
+
+    // Realtime subscription for new profiles
+    const channel = supabase.channel('public:profiles')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        () => {
+          fetchAllUsers()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   return {

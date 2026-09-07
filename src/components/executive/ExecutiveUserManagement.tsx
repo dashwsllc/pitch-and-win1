@@ -247,27 +247,32 @@ export function ExecutiveUserManagement() {
             const role = isExecutive ? 'executive' : 'seller'
             
             return (
-              <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+              <div key={user.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg gap-4">
                 <div className="flex items-center gap-4">
-                  <Avatar>
-                    <AvatarFallback className="bg-gradient-primary text-white">
-                      {getInitials(user.display_name || user.user_id)}
+                  <Avatar className="h-10 w-10 border border-border">
+                    <AvatarFallback className="bg-gradient-primary text-white font-medium">
+                      {getInitials(user.display_name || user.email || user.user_id)}
                     </AvatarFallback>
                   </Avatar>
-                  
                   <div>
-                    <p className="font-medium text-foreground">
-                      {user.display_name || 'Usuário'}
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-foreground">
+                        {user.display_name || 'Sem Nome'}
+                      </h4>
+                      {getRoleBadge(role)}
+                    </div>
+                    <p className="text-sm text-muted-foreground font-mono mt-0.5">
+                      {user.email || user.user_id.substring(0, 8) + '...'}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      ID: {user.user_id?.substring(0, 8)}...
-                    </p>
+                    {user.last_sign_in_at && (
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                        Último login: {new Date(user.last_sign_in_at).toLocaleString('pt-BR')}
+                      </p>
+                    )}
                   </div>
-                  
-                  {getRoleBadge(role)}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   {user.status === 'suspended' && (
                     <Badge variant="destructive" className="mr-2 animate-pulse">Suspenso</Badge>
                   )}
