@@ -9,11 +9,16 @@ export function useGSAP() {
   const lenisRef = useRef<Lenis | null>(null)
 
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return
+    }
+
     // Initialize Lenis smooth scroll
     const lenis = new Lenis({
-      duration: 1.2,
+      duration: 0.9,
       easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
+      wheelMultiplier: 0.9,
     })
 
     lenisRef.current = lenis
@@ -21,14 +26,17 @@ export function useGSAP() {
     // Connect Lenis to GSAP ScrollTrigger
     lenis.on('scroll', ScrollTrigger.update)
 
-    gsap.ticker.add((time) => {
+    const updateLenis = (time: number) => {
       lenis.raf(time * 1000)
-    })
-    gsap.ticker.lagSmoothing(0)
+    }
+
+    gsap.ticker.add(updateLenis)
 
     return () => {
+      gsap.ticker.remove(updateLenis)
+      lenis.off('scroll', ScrollTrigger.update)
       lenis.destroy()
-      ScrollTrigger.getAll().forEach(st => st.kill())
+      lenisRef.current = null
     }
   }, [])
 
@@ -37,29 +45,29 @@ export function useGSAP() {
 
 export function useScrollReveal(ref: React.RefObject<HTMLElement>, options?: { stagger?: number; delay?: number }) {
   useEffect(() => {
-    if (!ref.current) return
+    if (!ref.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
     const children = ref.current.children
-    
-    gsap.fromTo(children,
-      { opacity: 0, y: 30 },
-      {
-        opacity: 1,
-        y: 0,
-        duration: 0.5,
-        stagger: options?.stagger || 0.1,
-        delay: options?.delay || 0,
-        ease: 'power2.out',
-        scrollTrigger: {
-          trigger: ref.current,
-          start: 'top 85%',
-          toggleActions: 'play none none none',
-        }
-      }
-    )
 
-    return () => {
-      ScrollTrigger.getAll().forEach(st => st.kill())
-    }
+    const context = gsap.context(() => {
+      gsap.fromTo(children,
+        { opacity: 0, y: 24 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.55,
+          stagger: options?.stagger || 0.08,
+          delay: options?.delay || 0,
+          ease: 'power2.out',
+          scrollTrigger: {
+            trigger: ref.current,
+            start: 'top 88%',
+            once: true,
+          }
+        }
+      )
+    }, ref)
+
+    return () => context.revert()
   }, [ref, options?.stagger, options?.delay])
 }

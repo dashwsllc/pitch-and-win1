@@ -3,24 +3,25 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import EmailConfirmation from "./pages/EmailConfirmation";
-import ResetPassword from "./pages/ResetPassword";
-import ExecutiveDashboard from "./pages/ExecutiveDashboard";
-import Ranking from "./pages/Ranking";
-import NovaAbordagem from "./pages/NovaAbordagem";
-import RegistrarVenda from "./pages/RegistrarVenda";
-import Clientes from "./pages/Clientes";
-import Perfil from "./pages/Perfil";
-import Configuracoes from "./pages/Configuracoes";
-import Saques from "./pages/Saques";
-import CRM from "./pages/CRM";
-import MinhasVendas from "./pages/MinhasVendas";
-import NotFound from "./pages/NotFound";
+const Index = lazy(() => import("./pages/Index"));
+const Auth = lazy(() => import("./pages/Auth"));
+const EmailConfirmation = lazy(() => import("./pages/EmailConfirmation"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const ExecutiveDashboard = lazy(() => import("./pages/ExecutiveDashboard"));
+const Ranking = lazy(() => import("./pages/Ranking"));
+const NovaAbordagem = lazy(() => import("./pages/NovaAbordagem"));
+const RegistrarVenda = lazy(() => import("./pages/RegistrarVenda"));
+const Clientes = lazy(() => import("./pages/Clientes"));
+const Perfil = lazy(() => import("./pages/Perfil"));
+const Configuracoes = lazy(() => import("./pages/Configuracoes"));
+const Saques = lazy(() => import("./pages/Saques"));
+const CRM = lazy(() => import("./pages/CRM"));
+const MinhasVendas = lazy(() => import("./pages/MinhasVendas"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
@@ -32,7 +33,15 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <Routes>
+            <Suspense fallback={
+              <div className="flex min-h-screen items-center justify-center bg-[#0e0918]">
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-ember" />
+                  Preparando seu dashboard
+                </div>
+              </div>
+            }>
+              <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/email-confirmation" element={<EmailConfirmation />} />
               <Route path="/reset-password" element={<ResetPassword />} />
@@ -93,7 +102,8 @@ const App = () => (
               } />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
-            </Routes>
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </TooltipProvider>
       </AuthProvider>

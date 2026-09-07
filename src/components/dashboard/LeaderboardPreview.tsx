@@ -1,25 +1,19 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useRankingDataWithMock } from '@/hooks/useRankingDataWithMock'
 import { cn } from '@/lib/utils'
-import { Trophy, Crown, Medal, Award, ArrowRight, Flame } from 'lucide-react'
+import { Trophy, Crown, Medal, Award, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
-const positionColors = [
-  'from-amber-500 to-yellow-400',   // 1st - gold
-  'from-slate-300 to-slate-400',     // 2nd - silver
-  'from-amber-700 to-orange-600',    // 3rd - bronze
-]
-
 const avatarColors = [
-  'bg-gradient-to-br from-amber-500 to-orange-600',
-  'bg-gradient-to-br from-blue-500 to-indigo-600',
-  'bg-gradient-to-br from-purple-500 to-violet-600',
-  'bg-gradient-to-br from-emerald-500 to-teal-600',
-  'bg-gradient-to-br from-rose-500 to-pink-600',
+  'bg-amber-500/70',
+  'bg-blue-500/65',
+  'bg-violet-500/65',
+  'bg-emerald-500/65',
+  'bg-rose-500/65',
 ]
 
 export function LeaderboardPreview() {
@@ -41,13 +35,13 @@ export function LeaderboardPreview() {
 
   if (loading) {
     return (
-      <Card className="border-border/30">
+      <Card className="surface-panel rounded-2xl border-0">
         <CardHeader className="pb-3">
           <div className="h-6 bg-muted rounded w-40 animate-pulse" />
         </CardHeader>
         <CardContent className="space-y-3">
           {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-12 bg-muted rounded animate-pulse" />
+            <div key={i} className="h-12 animate-pulse rounded-lg bg-white/[0.025]" />
           ))}
         </CardContent>
       </Card>
@@ -55,21 +49,21 @@ export function LeaderboardPreview() {
   }
 
   return (
-    <Card className="border-border/30 relative overflow-hidden">
+    <Card className="surface-panel relative overflow-hidden rounded-2xl border-0">
       {/* Subtle ember glow at top */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-ember/40 to-transparent" />
       
-      <CardHeader className="pb-3">
+      <CardHeader className="border-b border-white/[0.05] px-5 py-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-amber-400" />
+          <CardTitle className="flex items-center gap-2 text-base font-medium tracking-[-0.015em] text-white">
+            <Trophy className="h-4 w-4 text-amber-400" strokeWidth={1.8} />
             Top Vendedores
           </CardTitle>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => navigate('/ranking')}
-            className="text-xs text-muted-foreground hover:text-foreground group"
+            className="group h-8 rounded-lg px-2 text-xs text-muted-foreground hover:bg-white/[0.04] hover:text-white"
           >
             Ver ranking
             <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-0.5 transition-transform" />
@@ -77,7 +71,7 @@ export function LeaderboardPreview() {
         </div>
       </CardHeader>
       
-      <CardContent ref={containerRef} className="space-y-2">
+      <CardContent ref={containerRef} className="space-y-1 p-3">
         {top5.map((seller, index) => {
           const barWidth = (seller.totalVendas / maxSales) * 100
           const isCurrentUser = seller.isCurrentUser
@@ -86,9 +80,9 @@ export function LeaderboardPreview() {
             <div
               key={seller.user_id}
               className={cn(
-                'flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 group',
+                'group flex items-center gap-3 rounded-lg p-2.5 transition-colors duration-200',
                 isCurrentUser 
-                  ? 'bg-ember/10 border border-ember/20' 
+                  ? 'bg-ember/[0.075] shadow-[rgba(255,95,31,0.18)_0_0_0_1px_inset]'
                   : 'hover:bg-white/[0.03]'
               )}
               style={{ animationDelay: `${index * 100}ms` }}
@@ -99,9 +93,9 @@ export function LeaderboardPreview() {
               </div>
               
               {/* Avatar */}
-              <Avatar className="w-8 h-8">
+              <Avatar className="h-8 w-8">
                 <AvatarFallback className={cn(
-                  'text-xs font-bold text-white',
+                  'text-xs font-medium text-white',
                   avatarColors[index % avatarColors.length]
                 )}>
                   {seller.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -144,7 +138,7 @@ export function LeaderboardPreview() {
               
               {/* Value */}
               <div className="text-right">
-                <span className="text-sm font-bold text-foreground tabular-nums">
+                <span className="text-sm font-medium text-white tabular-nums">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(seller.totalVendas)}
                 </span>
                 <p className="text-[10px] text-muted-foreground">

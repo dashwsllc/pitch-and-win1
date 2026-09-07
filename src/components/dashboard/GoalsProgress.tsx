@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useGoals } from '@/hooks/useGoals'
 import { AnimatedCounter } from './AnimatedCounter'
 import { cn } from '@/lib/utils'
-import { Flame, Target, TrendingUp, Trophy, Zap, CalendarDays, CalendarRange, Calendar } from 'lucide-react'
+import { Target, Trophy, CalendarDays, CalendarRange, Calendar } from 'lucide-react'
 
 function CircularProgress({ percent, size = 80, strokeWidth = 6, children, color }: {
   percent: number
@@ -27,7 +27,7 @@ function CircularProgress({ percent, size = 80, strokeWidth = 6, children, color
           r={radius}
           strokeWidth={strokeWidth}
           fill="none"
-          className="stroke-border/30"
+          className="stroke-white/[0.055]"
         />
         {/* Progress circle */}
         <circle
@@ -41,7 +41,7 @@ function CircularProgress({ percent, size = 80, strokeWidth = 6, children, color
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           className="transition-all ease-out"
-          style={{ transitionDuration: '1500ms', filter: `drop-shadow(0 0 6px ${color}40)` }}
+          style={{ transitionDuration: '1000ms', filter: `drop-shadow(0 0 4px ${color}28)` }}
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
@@ -65,14 +65,14 @@ export function GoalsProgress() {
     return (
       <div className="grid gap-4 md:grid-cols-3">
         {[1, 2, 3].map(i => (
-          <Card key={i} className="border-border/30 animate-pulse">
+          <Card key={i} className="surface-inset-glow animate-pulse rounded-2xl border-0">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full bg-muted" />
+                <div className="w-20 h-20 rounded-full bg-white/[0.035]" />
                 <div className="space-y-2 flex-1">
-                  <div className="h-4 bg-muted rounded w-24" />
-                  <div className="h-6 bg-muted rounded w-32" />
-                  <div className="h-3 bg-muted rounded w-20" />
+                  <div className="h-4 bg-white/[0.035] rounded w-24" />
+                  <div className="h-6 bg-white/[0.035] rounded w-32" />
+                  <div className="h-3 bg-white/[0.035] rounded w-20" />
                 </div>
               </div>
             </CardContent>
@@ -84,11 +84,13 @@ export function GoalsProgress() {
 
   if (goals.length === 0) {
     return (
-      <Card className="border-border/30 border-dashed">
-        <CardContent className="p-8 text-center">
-          <Target className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-muted-foreground text-sm">Nenhuma meta definida ainda</p>
-          <p className="text-muted-foreground/60 text-xs mt-1">O administrador pode definir metas no painel executivo</p>
+      <Card className="surface-inset-glow rounded-2xl border-0">
+        <CardContent className="p-8 text-center sm:p-10">
+          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white/[0.035] shadow-[rgba(255,255,255,0.07)_0_0_0_1px_inset]">
+            <Target className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
+          </div>
+          <p className="text-sm font-medium text-ash">Nenhuma meta definida ainda</p>
+          <p className="mt-1 text-xs text-muted-foreground">O administrador pode definir metas no painel executivo</p>
         </CardContent>
       </Card>
     )
@@ -105,12 +107,12 @@ export function GoalsProgress() {
           <Card 
             key={goal.id}
             className={cn(
-              'relative overflow-hidden border-border/30 transition-all duration-300 hover:scale-[1.02]',
-              isCompleted && 'animate-glow-ember'
+              'surface-inset-glow relative overflow-hidden rounded-2xl border-0 transition-colors duration-300 hover:bg-white/[0.04]',
+              isCompleted && 'shadow-[rgba(255,95,31,0.16)_0_0_0_1px_inset]'
             )}
           >
             {/* Subtle gradient background */}
-            <div className={cn('absolute inset-0 bg-gradient-to-br opacity-40', config.gradient)} />
+            <div className={cn('absolute inset-0 bg-gradient-to-br opacity-25', config.gradient)} />
             
             <CardContent className="p-6 relative">
               <div className="flex items-center gap-4">
@@ -121,7 +123,7 @@ export function GoalsProgress() {
                   strokeWidth={6}
                 >
                   <div className="text-center">
-                    <span className="text-lg font-bold text-foreground">
+                    <span className="text-lg font-medium tabular-nums text-white">
                       {Math.round(Math.min(goal.progress, 100))}%
                     </span>
                   </div>
@@ -135,12 +137,12 @@ export function GoalsProgress() {
                     </span>
                   </div>
                   
-                  <p className="text-sm font-semibold text-foreground truncate mb-1">
+                  <p className="mb-1 truncate text-sm font-medium text-ash">
                     {goal.title}
                   </p>
                   
                   <div className="flex items-baseline gap-1">
-                    <span className="text-xl font-bold text-foreground">
+                    <span className="text-xl font-medium tracking-[-0.025em] text-white">
                       <AnimatedCounter 
                         end={goal.current} 
                         isCurrency={goal.unit === 'currency' || goal.unit === 'BRL' || !goal.unit}
@@ -153,9 +155,9 @@ export function GoalsProgress() {
                   </div>
 
                   {isCompleted ? (
-                    <Badge className="mt-2 bg-gradient-ember text-white border-0 text-xs">
+                    <Badge className="mt-2 border-0 bg-gradient-ember text-xs text-white">
                       <Trophy className="w-3 h-3 mr-1" />
-                      Meta Atingida! 🎉
+                      Meta atingida
                     </Badge>
                   ) : (
                     <p className="text-xs text-muted-foreground mt-1">

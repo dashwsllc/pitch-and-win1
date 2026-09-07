@@ -49,33 +49,32 @@ export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
   const items = isExecutive ? menuItems : sellerMenuItems
   
   return (
-    <aside className="w-16 min-h-screen bg-sidebar border-r border-sidebar-border flex flex-col fixed left-0 top-0 z-40">
-      {/* Subtle top accent line */}
-      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-ember" />
+    <aside className="fixed left-0 top-0 z-40 flex min-h-screen w-16 flex-col border-r border-white/[0.055] bg-[#0c0715]/92 backdrop-blur-xl sm:w-[72px]">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ember/70 to-transparent" />
       
-      <div className="p-4">
+      <div className="p-4 sm:p-5">
         <div className="flex items-center justify-center">
-          <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-            <BarChart3 className="w-5 h-5 text-white" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-ember shadow-[rgba(255,142,93,0.28)_0_0_18px]">
+            <BarChart3 className="h-[18px] w-[18px] text-white" strokeWidth={2} />
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-2 px-2 pt-4">
+      <nav aria-label="Navegação principal" className="flex flex-1 flex-col items-center gap-1 px-2 pt-2">
         {items.map((item) => (
           <NavLink
             key={item.title}
             to={item.url}
             className={({ isActive }) =>
-              `flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-300 group ${
+              `relative flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 group ${
                 isActive
-                  ? "bg-ember/10 text-ember shadow-[inset_0_0_0_1px_rgba(255,142,93,0.2)]"
-                  : "text-sidebar-foreground/70 hover:bg-ember/5 hover:text-ember hover:shadow-[inset_0_0_0_1px_rgba(255,142,93,0.1)]"
+                  ? "bg-white/[0.07] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)] before:absolute before:-left-[11px] before:h-5 before:w-0.5 before:rounded-full before:bg-ember"
+                  : "text-sidebar-foreground/50 hover:bg-white/[0.045] hover:text-sidebar-foreground"
               }`
             }
             title={item.title}
           >
-            <item.icon className="w-5 h-5" />
+            <item.icon className="h-[19px] w-[19px] transition-transform duration-200 group-hover:scale-105" strokeWidth={1.8} />
           </NavLink>
         ))}
       </nav>

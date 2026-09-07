@@ -1,110 +1,56 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Trophy, Medal, Award } from "lucide-react"
+import { Boxes, Medal } from "lucide-react"
 
 interface ProductsRankingProps {
-  data?: Array<{
-    nome: string
-    quantidade: number
-    valor: number
-  }>
+  data?: Array<{ nome: string; quantidade: number; valor: number }>
   loading?: boolean
 }
 
+const medals = ["text-amber-400", "text-slate-300", "text-amber-700"]
+
 export function ProductsRanking({ data = [], loading = false }: ProductsRankingProps) {
-  if (loading) {
-    return (
-      <Card className="border-border/50">
-        <CardHeader>
-          <CardTitle className="text-foreground">Top Produtos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-80 bg-muted animate-pulse rounded"></div>
-        </CardContent>
-      </Card>
-    )
-  }
-  
-  const topProducts = data.length > 0 ? data.slice(0, 3) : []
-
-  const getMedalIcon = (position: number) => {
-    switch (position) {
-      case 0:
-        return <Trophy className="w-8 h-8 text-gold animate-bounce-medal" />
-      case 1:
-        return <Medal className="w-8 h-8 text-silver" />
-      case 2:
-        return <Award className="w-8 h-8 text-bronze" />
-      default:
-        return null
-    }
-  }
-
-  const getPositionStyle = (position: number) => {
-    switch (position) {
-      case 0:
-        return "border-gold/30 bg-gold/5"
-      case 1:
-        return "border-silver/30 bg-silver/5"
-      case 2:
-        return "border-bronze/30 bg-bronze/5"
-      default:
-        return "border-border/50"
-    }
-  }
-
-  const getInitials = (productName: string) => {
-    return productName
-      .split(' ')
-      .map(word => word.charAt(0))
-      .join('')
-      .toUpperCase()
-      .slice(0, 3)
-  }
+  const topProducts = data.slice(0, 3)
+  const maxValue = Math.max(...topProducts.map((product) => product.valor), 1)
 
   return (
-    <Card className="border-border/50">
-      <CardHeader>
-        <CardTitle className="text-foreground">Top Produtos</CardTitle>
+    <Card className="surface-panel overflow-hidden rounded-2xl border-0">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b border-white/[0.05] px-5 py-4 sm:px-6">
+        <div>
+          <CardTitle className="text-base font-medium tracking-[-0.015em] text-white">Produtos em destaque</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">Ranking por receita aprovada</p>
+        </div>
+        <Boxes className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
       </CardHeader>
-      <CardContent>
-        {topProducts.length === 0 ? (
-          <div className="h-80 flex items-center justify-center">
-            <p className="text-muted-foreground">Nenhum produto vendido ainda</p>
+      <CardContent className="p-3 sm:p-4">
+        {loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((item) => <div key={item} className="h-[74px] animate-pulse rounded-xl bg-white/[0.025]" />)}
+          </div>
+        ) : topProducts.length === 0 ? (
+          <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.035] shadow-[rgba(255,255,255,0.07)_0_0_0_1px_inset]">
+              <Boxes className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">Nenhum produto vendido no período</p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-3 h-80">
+          <div className="space-y-2">
             {topProducts.map((product, index) => (
-              <Card 
-                key={product.nome}
-                className={`${getPositionStyle(index)} transition-all hover:scale-105 flex flex-col justify-center`}
-              >
-                <CardContent className="text-center p-4 space-y-3">
-                  <div className="flex justify-center mb-3">
-                    {getMedalIcon(index)}
+              <div key={product.nome} className="group relative overflow-hidden rounded-xl bg-white/[0.025] p-4 shadow-[rgba(255,255,255,0.055)_0_0_0_1px_inset] transition-colors hover:bg-white/[0.04]">
+                <div aria-hidden="true" className="absolute inset-y-0 left-0 bg-gradient-to-r from-electric-violet/[0.08] to-transparent transition-[width] duration-700" style={{ width: `${Math.max((product.valor / maxValue) * 100, 8)}%` }} />
+                <div className="relative flex items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#100b19]/75">
+                    <Medal className={`h-4 w-4 ${medals[index]}`} strokeWidth={1.8} />
                   </div>
-                  
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                    <span className="text-lg font-bold text-primary">
-                      {getInitials(product.nome)}
-                    </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ash" title={product.nome}>{product.nome}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{product.quantidade} {product.quantidade === 1 ? "venda" : "vendas"}</p>
                   </div>
-                  
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-sm text-foreground truncate" title={product.nome}>
-                      {product.nome}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      {product.quantidade} vendas
-                    </p>
-                    <p className="text-sm font-bold text-foreground">
-                      {new Intl.NumberFormat('pt-BR', { 
-                        style: 'currency', 
-                        currency: 'BRL' 
-                      }).format(product.valor)}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+                  <p className="text-sm font-medium tabular-nums text-white">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(product.valor)}
+                  </p>
+                </div>
+              </div>
             ))}
           </div>
         )}
