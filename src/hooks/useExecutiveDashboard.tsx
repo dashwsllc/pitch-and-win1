@@ -97,10 +97,11 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       // Fetch total sellers count
       const totalSellers = profilesData?.length || 0
 
-      // Fetch sales in period
+      // Fetch sales in period (apenas aprovadas)
       const { data: salesData } = await supabase
         .from('vendas')
         .select('user_id, nome_produto, valor_venda, created_at')
+        .eq('approval_status', 'aprovada')
         .gte('created_at', start)
         .lte('created_at', end)
         .limit(1000)

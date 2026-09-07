@@ -64,11 +64,12 @@ export function useDashboardData(dateFilter: string = "30dias") {
 
       const { start, end } = getDateRange(dateFilter)
 
-      // Fetch only needed columns
+      // Fetch only needed columns (apenas aprovadas)
       const { data: vendas, error: vendasError } = await supabase
         .from('vendas')
         .select('nome_produto, valor_venda, created_at')
         .eq('user_id', user.id)
+        .eq('approval_status', 'aprovada')
         .gte('created_at', start.toISOString())
         .lt('created_at', end.toISOString())
         .limit(1000)
