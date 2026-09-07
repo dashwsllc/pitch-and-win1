@@ -13,9 +13,8 @@ import {
   RefreshCw,
   UserCheck,
   UserX,
-  Settings,
   Shield,
-  Target
+  History
 } from 'lucide-react'
 import { useExecutiveDashboard } from '@/hooks/useExecutiveDashboard'
 import { MetricCard } from '@/components/dashboard/MetricCard'
@@ -26,10 +25,13 @@ import { ExecutivePasswordRequests } from '@/components/executive/ExecutivePassw
 import { ExecutiveSellerDetails } from '@/components/executive/ExecutiveSellerDetails'
 import { ExecutiveSalesApproval } from '@/components/executive/ExecutiveSalesApproval'
 import { ExecutiveGoalsManagement } from '@/components/executive/ExecutiveGoalsManagement'
+import { ExecutiveAudit } from '@/components/executive/ExecutiveAudit'
+import { ExecutiveWithdrawals } from '@/components/executive/ExecutiveWithdrawals'
+import { exactDate } from '@/lib/sales'
 
 export default function ExecutiveDashboard() {
   const [selectedFilter, setSelectedFilter] = useState('30dias')
-  const { data, loading, refetch } = useExecutiveDashboard(selectedFilter)
+  const { data, loading, refetch, error } = useExecutiveDashboard(selectedFilter)
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -44,12 +46,13 @@ export default function ExecutiveDashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="mx-auto max-w-[1520px] space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="surface-panel flex flex-col justify-between gap-4 rounded-2xl p-6 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Dashboard Executive</h1>
-            <p className="text-muted-foreground">Visão geral completa do negócio</p>
+            <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-electric">Decisões, pessoas e performance</p>
+            <h1 className="text-3xl font-light tracking-tight text-white">Central executiva</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Visão da operação e controle de cada decisão comercial.</p>
           </div>
           <div className="flex items-center gap-3">
             <Button onClick={refetch} variant="outline" size="sm" disabled={loading}>
@@ -62,6 +65,8 @@ export default function ExecutiveDashboard() {
             </Badge>
           </div>
         </div>
+
+        {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
         {/* Filter Tabs */}
         <FilterTabs value={selectedFilter} onValueChange={setSelectedFilter} />
@@ -161,12 +166,14 @@ export default function ExecutiveDashboard() {
 
         {/* Management Tabs */}
         <Tabs defaultValue="approvals" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="approvals">Aprovar Vendas</TabsTrigger>
-            <TabsTrigger value="users">Gerenciar Usuários</TabsTrigger>
-            <TabsTrigger value="passwords">Redefinir Senhas</TabsTrigger>
-            <TabsTrigger value="details">Detalhes por Vendedor</TabsTrigger>
-            <TabsTrigger value="goals">Definir Metas</TabsTrigger>
+          <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-xl bg-white/[0.035] p-1.5">
+            <TabsTrigger className="px-4 py-2.5" value="approvals">Central de vendas</TabsTrigger>
+            <TabsTrigger className="px-4 py-2.5" value="users">Contas e acessos</TabsTrigger>
+            <TabsTrigger className="px-4 py-2.5" value="passwords">Solicitações de senha</TabsTrigger>
+            <TabsTrigger className="px-4 py-2.5" value="details">Vendedores</TabsTrigger>
+            <TabsTrigger className="px-4 py-2.5" value="goals">Metas</TabsTrigger>
+            <TabsTrigger className="px-4 py-2.5" value="withdrawals">Saques</TabsTrigger>
+            <TabsTrigger className="px-4 py-2.5" value="audit"><History className="mr-1.5 h-3.5 w-3.5" />Auditoria</TabsTrigger>
           </TabsList>
 
           <TabsContent value="approvals">
@@ -188,6 +195,8 @@ export default function ExecutiveDashboard() {
           <TabsContent value="goals">
             <ExecutiveGoalsManagement />
           </TabsContent>
+          <TabsContent value="audit"><ExecutiveAudit /></TabsContent>
+          <TabsContent value="withdrawals"><ExecutiveWithdrawals /></TabsContent>
         </Tabs>
 
         {/* Recent Activity */}
@@ -221,7 +230,7 @@ export default function ExecutiveDashboard() {
                       <p className="text-xs text-muted-foreground">{activity.details}</p>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {new Date(activity.created_at).toLocaleDateString('pt-BR')}
+                      <time dateTime={activity.created_at}>{exactDate(activity.created_at)} · BRT</time>
                     </div>
                   </div>
                 ))}

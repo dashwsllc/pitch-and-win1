@@ -183,6 +183,8 @@ export function useDashboardData(dateFilter: string = "30dias") {
     if (!userId || rolesLoading) return
 
     void fetchDashboardData()
+    const refresh = () => { void fetchDashboardData() }
+    window.addEventListener('dashboard-data-changed', refresh)
 
     // The executive channel must receive every seller change. The seller
     // channel stays scoped to its owner to avoid unnecessary refreshes.
@@ -204,6 +206,7 @@ export function useDashboardData(dateFilter: string = "30dias") {
       .subscribe()
 
     return () => {
+      window.removeEventListener('dashboard-data-changed', refresh)
       supabase.removeChannel(channel)
     }
   }, [fetchDashboardData, isExecutive, rolesLoading, userId])

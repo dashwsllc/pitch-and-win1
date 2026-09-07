@@ -17,7 +17,7 @@ const avatarColors = [
 ]
 
 export function LeaderboardPreview() {
-  const { ranking, loading } = useRankingDataWithMock()
+  const { ranking, loading, error } = useRankingDataWithMock()
   const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement>(null)
   
@@ -72,6 +72,8 @@ export function LeaderboardPreview() {
       </CardHeader>
       
       <CardContent ref={containerRef} className="space-y-1 p-3">
+        {error && <p role="alert" className="p-3 text-xs text-destructive">Não foi possível atualizar o ranking.</p>}
+        {!error && top5.length === 0 && <p className="p-5 text-center text-sm text-muted-foreground">Nenhum vendedor ativo no ranking.</p>}
         {top5.map((seller, index) => {
           const barWidth = (seller.totalVendas / maxSales) * 100
           const isCurrentUser = seller.isCurrentUser

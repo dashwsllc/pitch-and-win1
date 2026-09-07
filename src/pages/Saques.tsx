@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,8 @@ import {
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
+import { errorMessage } from '@/lib/sales'
+import type { Tables } from '@/integrations/supabase/types'
 
 export default function Saques() {
   const { user } = useAuth()
@@ -22,7 +24,8 @@ export default function Saques() {
   const [availableBalance, setAvailableBalance] = useState(0)
   const [pendingCommission, setPendingCommission] = useState(0)
   const [totalWithdrawn, setTotalWithdrawn] = useState(0)
-  const [withdrawals, setWithdrawals] = useState<any[]>([])
+  const [withdrawals, setWithdrawals] = useState<Tables<'saques'>[]>([])
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Form state
@@ -38,14 +41,15 @@ export default function Saques() {
   // Inline validation errors
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user) return
     setLoading(true)
+    setFetchError(null)
     try {
       // ✅ RPC retorna APENAS comissões aprovadas e não sacadas (withdrawn = false)
       const { data: balanceData, error: balanceError } = await supabase
         .rpc('get_available_balance', { p_seller_id: user.id })
-      if (balanceError) console.error('Erro ao buscar saldo disponível:', balanceError)
+      if (balanceError) throw balanceError
       const balance = Number(balanceData) || 0
 
       // ✅ Comissão pendente via RPC segura
@@ -74,7 +78,7 @@ export default function Saques() {
         .order('created_at', { ascending: false })
         .limit(100)
 
-      if (saquesError) console.error('Erro ao buscar saques:', saquesError)
+      if (saquesError) throw saquesError
 
       // ✅ Total sacado = apenas status 'pago' (enviado para conta)
       const withdrawn = (saquesData || [])
@@ -86,16 +90,19 @@ export default function Saques() {
       setWithdrawals(saquesData || [])
     } catch (err) {
       console.error('Error fetching balance:', err)
+      setFetchError(errorMessage(err))
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
-  useEffect(() => { fetchData() }, [user])
+  useEffect(() => { fetchData() }, [fetchData])
 
   // ✅ Realtime: atualiza saldo quando vendas ou saques mudam
   useEffect(() => {
     if (!user) return
+    const refresh = () => { void fetchData() }
+    window.addEventListener('dashboard-data-changed', refresh)
     const channel = supabase
       .channel(`saques-realtime-${user.id}`)
       .on('postgres_changes', {
@@ -107,8 +114,8 @@ export default function Saques() {
         filter: `user_id=eq.${user.id}`
       }, () => fetchData())
       .subscribe()
-    return () => { channel.unsubscribe() }
-  }, [user])
+    return () => { channel.unsubscribe(); window.removeEventListener('dashboard-data-changed', refresh) }
+  }, [user, fetchData])
 
   const formatCpf = (v: string) => {
     const digits = v.replace(/\D/g, '').slice(0, 11)
@@ -172,8 +179,8 @@ export default function Saques() {
       // Auto-fechar confirmação após 6 segundos
       setTimeout(() => setShowSuccess(false), 6000)
       fetchData()
-    } catch (err: any) {
-      toast({ title: 'Erro ao solicitar saque', description: err.message, variant: 'destructive' })
+    } catch (err) {
+      toast({ title: 'Erro ao solicitar saque', description: errorMessage(err), variant: 'destructive' })
     } finally {
       setSubmitting(false)
     }
@@ -200,13 +207,14 @@ export default function Saques() {
     }
   }
 
-  const isFormDisabled = submitting || showSuccess
+  const isFormDisabled = submitting || showSuccess || loading || !!fetchError
   const val = parseFloat(amount) || 0
   const isOverBalance = val > availableBalance
 
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+        {fetchError && <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">Não foi possível confirmar o saldo. {fetchError}</p>}
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>

@@ -23,7 +23,7 @@ const avatarColors = [
 ]
 
 export default function Ranking() {
-  const { ranking, loading } = useRankingDataWithMock()
+  const { ranking, loading, error } = useRankingDataWithMock()
   const [showFullRanking, setShowFullRanking] = useState(true)
   const podiumRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -93,6 +93,7 @@ export default function Ranking() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
+        {error && <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">Não foi possível atualizar o ranking. Tente novamente.</p>}
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl p-6 lg:p-8" style={{ background: 'linear-gradient(135deg, rgba(253, 137, 37, 0.06) 0%, rgba(107, 33, 239, 0.06) 100%)' }}>
           <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl" />
@@ -105,7 +106,7 @@ export default function Ranking() {
                 Ranking de <span className="font-semibold">Vendedores</span>
               </h1>
               <p className="text-muted-foreground mt-0.5">
-                Competição em tempo real — lute pelo topo! 🔥
+                Ranking acumulado do time · somente vendas aprovadas.
               </p>
             </div>
           </div>

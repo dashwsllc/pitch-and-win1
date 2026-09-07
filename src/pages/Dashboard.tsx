@@ -7,6 +7,8 @@ import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FilterTabs } from "@/components/dashboard/FilterTabs"
 import { GoalsProgress } from "@/components/dashboard/GoalsProgress"
 import { LeaderboardPreview } from "@/components/dashboard/LeaderboardPreview"
+import { RecentSales } from "@/components/dashboard/RecentSales"
+import { SalesBoard } from "@/components/sales/SalesBoard"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useDashboardData } from "@/hooks/useDashboardData"
@@ -173,6 +175,8 @@ export default function Dashboard() {
           </div>
         </section>
 
+        <section data-scroll-reveal><RecentSales /></section>
+
         <section data-scroll-reveal className="space-y-3">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -275,6 +279,8 @@ export default function Dashboard() {
           />
         </div>
         </section>
+
+        <section data-scroll-reveal><SalesBoard compact /></section>
 
         <section data-scroll-reveal className="grid gap-4 xl:grid-cols-3">
           <div className="space-y-4 xl:col-span-2">

@@ -7,6 +7,7 @@ import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { DataSync } from "@/components/DataSync";
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
 const EmailConfirmation = lazy(() => import("./pages/EmailConfirmation"));
@@ -21,6 +22,7 @@ const Configuracoes = lazy(() => import("./pages/Configuracoes"));
 const Saques = lazy(() => import("./pages/Saques"));
 const CRM = lazy(() => import("./pages/CRM"));
 const MinhasVendas = lazy(() => import("./pages/MinhasVendas"));
+const VendasTime = lazy(() => import("./pages/VendasTime"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -29,6 +31,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
+        <DataSync />
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -51,7 +54,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/executive" element={
-                <ProtectedRoute>
+                <ProtectedRoute executiveOnly>
                   <ExecutiveDashboard />
                 </ProtectedRoute>
               } />
@@ -100,6 +103,7 @@ const App = () => (
                   <MinhasVendas />
                 </ProtectedRoute>
               } />
+              <Route path="/vendas-time" element={<ProtectedRoute><VendasTime /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
               </Routes>

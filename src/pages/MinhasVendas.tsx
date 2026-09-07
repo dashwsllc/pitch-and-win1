@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { useToast } from '@/hooks/use-toast'
+import { errorMessage } from '@/lib/sales'
 
 interface Venda {
   id: string
@@ -37,11 +38,12 @@ export default function MinhasVendas() {
 
   const [vendas, setVendas] = useState<Venda[]>([])
   const [loading, setLoading] = useState(true)
+  const [availableBalance, setAvailableBalance] = useState(0)
   const [deleteConfirm, setDeleteConfirm] = useState<Venda | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [rejectionDetail, setRejectionDetail] = useState<Venda | null>(null)
 
-  const fetchVendas = async () => {
+  const fetchVendas = useCallback(async () => {
     if (!user) return
     setLoading(true)
     try {
@@ -53,20 +55,25 @@ export default function MinhasVendas() {
         .limit(200)
 
       if (error) throw error
+      const balance = await supabase.rpc('get_available_balance', { p_seller_id: user.id })
+      if (balance.error) throw balance.error
+      setAvailableBalance(Number(balance.data))
       setVendas((data || []) as Venda[])
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching vendas:', err)
-      toast({ title: 'Erro ao carregar vendas', description: err.message, variant: 'destructive' })
+      toast({ title: 'Erro ao carregar vendas', description: errorMessage(err), variant: 'destructive' })
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, toast])
 
-  useEffect(() => { fetchVendas() }, [user])
+  useEffect(() => { fetchVendas() }, [fetchVendas])
 
   // Realtime subscription
   useEffect(() => {
     if (!user) return
+    const refresh = () => { void fetchVendas() }
+    window.addEventListener('dashboard-data-changed', refresh)
     const channel = supabase
       .channel(`minhas-vendas-${user.id}`)
       .on('postgres_changes', {
@@ -74,8 +81,8 @@ export default function MinhasVendas() {
         filter: `user_id=eq.${user.id}`
       }, () => fetchVendas())
       .subscribe()
-    return () => { channel.unsubscribe() }
-  }, [user])
+    return () => { channel.unsubscribe(); window.removeEventListener('dashboard-data-changed', refresh) }
+  }, [user, fetchVendas])
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
@@ -87,13 +94,14 @@ export default function MinhasVendas() {
         .eq('id', deleteConfirm.id)
         .eq('user_id', user!.id)
         .eq('approval_status', 'pendente')
+        .select('id').single()
 
       if (error) throw error
       toast({ title: 'Venda excluída com sucesso' })
       setDeleteConfirm(null)
       fetchVendas()
-    } catch (err: any) {
-      toast({ title: 'Erro ao excluir', description: err.message, variant: 'destructive' })
+    } catch (err) {
+      toast({ title: 'Erro ao excluir', description: errorMessage(err), variant: 'destructive' })
     } finally {
       setDeleting(false)
     }
@@ -105,16 +113,14 @@ export default function MinhasVendas() {
     const volumeTotal = vendas.reduce((s, v) => s + Number(v.valor_venda), 0)
     const comissaoAprovada = vendas
       .filter(v => v.approval_status === 'aprovada')
-      .reduce((s, v) => s + (Number(v.commission_amount) || Number(v.valor_venda) * commissionRate / 100), 0)
-    const disponivelSaque = vendas
-      .filter(v => v.approval_status === 'aprovada' && !v.withdrawn)
-      .reduce((s, v) => s + (Number(v.commission_amount) || Number(v.valor_venda) * commissionRate / 100), 0)
+      .reduce((s, v) => s + Number(v.commission_amount ?? 0), 0)
+    const disponivelSaque = availableBalance
     const pendente = vendas
       .filter(v => v.approval_status === 'pendente')
       .reduce((s, v) => s + (Number(v.commission_amount) || Number(v.valor_venda) * commissionRate / 100), 0)
 
     return { total, volumeTotal, comissaoAprovada, disponivelSaque, pendente }
-  }, [vendas, commissionRate])
+  }, [vendas, commissionRate, availableBalance])
 
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
@@ -234,7 +240,8 @@ export default function MinhasVendas() {
                   </thead>
                   <tbody>
                     {vendas.map(v => {
-                      const commissionValue = Number(v.commission_amount) || Number(v.valor_venda) * commissionRate / 100
+                      const commissionValue = v.approval_status === 'pendente'
+                        ? Number(v.valor_venda) * commissionRate / 100 : Number(v.commission_amount ?? 0)
                       return (
                         <tr key={v.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                           <td className="p-3 text-muted-foreground text-xs">
@@ -256,7 +263,7 @@ export default function MinhasVendas() {
                             <p className={`font-medium ${v.approval_status === 'aprovada' ? 'text-green-400' : 'text-muted-foreground'}`}>
                               {formatCurrency(commissionValue)}
                             </p>
-                            <p className="text-xs text-muted-foreground">{commissionRate}%</p>
+                            <p className="text-xs text-muted-foreground">{v.approval_status === 'pendente' ? `${commissionRate}% estimado` : 'Valor registrado na revisão'}</p>
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-1.5">

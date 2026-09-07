@@ -30,44 +30,15 @@ export function useGoals() {
   const calculateProgress = useCallback(async (rawGoals: Goal[]) => {
     if (!user) return []
 
-    const now = new Date()
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    
-    // Get start of current week (Monday)
-    const weekStart = new Date(todayStart)
-    const dayOfWeek = weekStart.getDay()
-    const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-    weekStart.setDate(weekStart.getDate() - diff)
-    
-    // Get start of current month
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const tomorrow = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
-
-    // Fetch all approved sales for different periods
-    const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
-      supabase
-        .from('vendas')
-        .select('valor_venda')
-        .gte('created_at', todayStart.toISOString())
-        .lt('created_at', tomorrow.toISOString()),
-      supabase
-        .from('vendas')
-        .select('valor_venda')
-        .gte('created_at', weekStart.toISOString())
-        .lt('created_at', tomorrow.toISOString()),
-      supabase
-        .from('vendas')
-        .select('valor_venda')
-        .gte('created_at', monthStart.toISOString())
-        .lt('created_at', tomorrow.toISOString()),
-    ])
-
-    const dailyTotal = dailyRes.data?.reduce((sum, v) => sum + Number(v.valor_venda), 0) || 0
-    const dailyCount = dailyRes.data?.length || 0
-    const weeklyTotal = weeklyRes.data?.reduce((sum, v) => sum + Number(v.valor_venda), 0) || 0
-    const weeklyCount = weeklyRes.data?.length || 0
-    const monthlyTotal = monthlyRes.data?.reduce((sum, v) => sum + Number(v.valor_venda), 0) || 0
-    const monthlyCount = monthlyRes.data?.length || 0
+    const { data, error } = await supabase.rpc('get_company_goal_totals')
+    if (error) throw error
+    const totals = data as unknown as Record<Goal['period'], { count: number; amount: number }>
+    const dailyTotal = totals.daily.amount
+    const dailyCount = totals.daily.count
+    const weeklyTotal = totals.weekly.amount
+    const weeklyCount = totals.weekly.count
+    const monthlyTotal = totals.monthly.amount
+    const monthlyCount = totals.monthly.count
 
     return rawGoals.map(goal => {
       let current = 0
@@ -138,9 +109,11 @@ export function useGoals() {
   useEffect(() => {
     fetchGoals()
 
-    // Polling every 30 seconds for real-time updates
+    const refresh = () => { void fetchGoals() }
+    window.addEventListener('dashboard-data-changed', refresh)
+    // Refresh is also driven by the shared approval/deletion event.
     const interval = setInterval(fetchGoals, 30000)
-    return () => clearInterval(interval)
+    return () => { clearInterval(interval); window.removeEventListener('dashboard-data-changed', refresh) }
   }, [fetchGoals])
 
   return { goals, loading, error, refetch: fetchGoals }

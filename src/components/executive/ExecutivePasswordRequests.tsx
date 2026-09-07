@@ -43,6 +43,8 @@ import {
 import { supabase } from '@/integrations/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { useAllUsers } from '@/hooks/useRoles'
+import { errorMessage } from '@/lib/sales'
+import { Textarea } from '@/components/ui/textarea'
 
 interface PasswordRequest {
   id: string
@@ -60,6 +62,7 @@ export function ExecutivePasswordRequests() {
   const [showManualReset, setShowManualReset] = useState(false)
   const [selectedUser, setSelectedUser] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [resetReason, setResetReason] = useState('')
   const [resetting, setResetting] = useState(false)
   
   const { users } = useAllUsers()
@@ -108,8 +111,8 @@ export function ExecutivePasswordRequests() {
       toast({
         title: status === 'approved' ? 'Solicitação aprovada!' : 'Solicitação rejeitada!',
         description: status === 'approved' 
-          ? 'O usuário será notificado da aprovação.'
-          : 'O usuário será notificado da rejeição.'
+          ? 'Solicitação registrada. Redefina a senha pela edição de conta ou pelo botão de redefinição.'
+          : 'A rejeição foi registrada.'
       })
 
       fetchRequests()
@@ -126,10 +129,10 @@ export function ExecutivePasswordRequests() {
   }
 
   const resetUserPassword = async () => {
-    if (!selectedUser || !newPassword) {
+    if (!selectedUser || newPassword.length < 12 || resetReason.trim().length < 5) {
       toast({
         title: 'Campos obrigatórios',
-        description: 'Selecione um usuário e defina uma nova senha.',
+        description: 'Selecione uma conta, defina uma senha com pelo menos 12 caracteres e informe o motivo.',
         variant: 'destructive'
       })
       return
@@ -142,13 +145,19 @@ export function ExecutivePasswordRequests() {
       const { data, error } = await supabase.functions.invoke('reset-user-password', {
         body: {
           user_id: selectedUser,
-          new_password: newPassword
+          new_password: newPassword,
+          reason: resetReason
         }
       })
 
       if (error) {
+        if ('context' in error && error.context instanceof Response) {
+          const body = await error.context.json().catch(() => null)
+          if (body?.error) throw new Error(body.error)
+        }
         throw error
       }
+      if (!data?.success) throw new Error(data?.error || 'A alteração não foi confirmada.')
 
       toast({
         title: 'Senha redefinida!',
@@ -158,11 +167,13 @@ export function ExecutivePasswordRequests() {
       setShowManualReset(false)
       setSelectedUser('')
       setNewPassword('')
+      setResetReason('')
+      window.dispatchEvent(new Event('dashboard-data-changed'))
     } catch (error) {
       console.error('Error resetting password:', error)
       toast({
         title: 'Erro ao redefinir senha',
-        description: 'Não foi possível redefinir a senha. Tente novamente.',
+        description: errorMessage(error),
         variant: 'destructive'
       })
     } finally {
@@ -264,9 +275,15 @@ export function ExecutivePasswordRequests() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Digite a nova senha"
-                    minLength={6}
+                    minLength={12}
+                    maxLength={128}
+                    autoComplete="new-password"
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reset-reason">Motivo da redefinição</Label>
+                <Textarea id="reset-reason" value={resetReason} onChange={e => setResetReason(e.target.value)} minLength={5} maxLength={2000} placeholder="Esta justificativa ficará no histórico administrativo." />
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowManualReset(false)}>
@@ -274,7 +291,7 @@ export function ExecutivePasswordRequests() {
                 </Button>
                 <Button 
                   onClick={resetUserPassword}
-                  disabled={resetting || !selectedUser || !newPassword}
+                  disabled={resetting || !selectedUser || newPassword.length < 12 || resetReason.trim().length < 5}
                   className="bg-gradient-primary hover:opacity-90"
                 >
                   {resetting ? (

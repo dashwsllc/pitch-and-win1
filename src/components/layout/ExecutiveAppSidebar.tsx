@@ -10,13 +10,15 @@ import {
   Shield,
   Wallet,
   Target,
-  ShoppingBag
+  ShoppingBag,
+  ListChecks
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Executive", url: "/executive", icon: Shield },
+  { title: "Vendas do time", url: "/vendas-time", icon: ListChecks },
   { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
@@ -30,6 +32,7 @@ const menuItems = [
 
 const sellerMenuItems = [
   { title: "Dashboard", url: "/", icon: Home },
+  { title: "Vendas do time", url: "/vendas-time", icon: ListChecks },
   { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
@@ -49,7 +52,7 @@ export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
   const items = isExecutive ? menuItems : sellerMenuItems
   
   return (
-    <aside className="fixed left-0 top-0 z-40 flex min-h-screen w-16 flex-col border-r border-white/[0.055] bg-[#0c0715]/92 backdrop-blur-xl sm:w-[72px]">
+    <aside className="fixed left-0 top-0 z-40 flex h-dvh w-16 flex-col overflow-y-auto border-r border-white/[0.055] bg-[#0c0715]/92 backdrop-blur-xl sm:w-[72px]" data-lenis-prevent>
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ember/70 to-transparent" />
       
       <div className="p-4 sm:p-5">

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
+import type { Tables } from '@/integrations/supabase/types'
 import { useAuth } from './useAuth'
 
 export type UserRole = 'seller' | 'executive' | 'super_admin' | 'closer' | 'sdr' | 'bdr' | 'traffic_manager'
@@ -32,172 +33,75 @@ export const ROLE_DEPARTMENTS: Record<string, UserRole[]> = {
   'Vendas': ['seller'],
 }
 
+
 export function useRoles() {
   const { user } = useAuth()
-  const [roles, setRoles] = useState<UserRole[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isExecutive, setIsExecutive] = useState(false)
-  const [hasCRMAccess, setHasCRMAccess] = useState(false)
-  const [canViewSales, setCanViewSales] = useState(false)
-  const [commissionRate, setCommissionRate] = useState<number>(10)
-
-  useEffect(() => {
-    if (!user) {
-      setRoles([])
-      setIsExecutive(false)
-      setHasCRMAccess(false)
-      setCanViewSales(false)
-      setLoading(false)
-      return
-    }
-
-    fetchUserRoles()
-  }, [user])
-
-  const fetchUserRoles = async () => {
-    if (!user) return
-
-    try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role, crm_access, commission_rate, can_view_sales')
-        .eq('user_id', user.id)
-
-      if (error) {
-        console.error('Error fetching user roles:', error)
-        return
-      }
-
-      const userRoles = data?.map(r => r.role as UserRole) || ['seller']
-      setRoles(userRoles)
-      setIsExecutive(
-        userRoles.includes('executive') || userRoles.includes('super_admin')
-      )
-      setHasCRMAccess(
-        data?.some(r => r.crm_access === true) || 
-        userRoles.includes('executive') || 
-        userRoles.includes('super_admin') ||
-        userRoles.includes('bdr')
-      )
-      setCanViewSales(
-        data?.some(r => r.can_view_sales === true) ||
-        userRoles.includes('executive') ||
-        userRoles.includes('super_admin')
-      )
-      const rate = data?.find(r => r.commission_rate != null)
-      if (rate) setCommissionRate(Number(rate.commission_rate) || 10)
-    } catch (error) {
-      console.error('Error in fetchUserRoles:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const hasRole = (role: UserRole) => roles.includes(role)
-  const primaryRole = roles[0] || 'seller'
-
+  const query = useQuery({
+    queryKey: ['executive-users', 'my-roles', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('user_roles').select('role, crm_access, commission_rate, can_view_sales').eq('user_id', user!.id)
+      if (error) throw error
+      return data
+    },
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  })
+  const roles: UserRole[] = query.data?.map(row => row.role) ?? []
+  const isExecutive = roles.includes('executive') || roles.includes('super_admin')
   return {
     roles,
-    primaryRole,
+    primaryRole: roles[0] || 'seller',
     isExecutive,
-    hasCRMAccess,
-    canViewSales,
-    commissionRate,
-    hasRole,
-    loading,
-    refetch: fetchUserRoles
+    hasCRMAccess: isExecutive || roles.includes('bdr') || !!query.data?.some(r => r.crm_access),
+    canViewSales: isExecutive || !!query.data?.some(r => r.can_view_sales),
+    commissionRate: Number(query.data?.find(r => r.commission_rate != null)?.commission_rate ?? 10),
+    hasRole: (role: UserRole) => roles.includes(role),
+    loading: !!user && query.isPending,
+    error: query.error,
+    refetch: query.refetch,
   }
 }
 
+export interface ExecutiveUser {
+  id: string | null
+  user_id: string
+  display_name: string | null
+  avatar_url: string | null
+  suspended: boolean
+  email: string | null
+  phone: string | null
+  email_confirmed_at: string | null
+  phone_confirmed_at: string | null
+  created_at: string
+  updated_at: string | null
+  last_sign_in_at: string | null
+  account_revision: string
+  user_roles: Tables<'user_roles'>[]
+}
+
 export function useAllUsers() {
-  const [users, setUsers] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetchAllUsers = async () => {
-    try {
-      // 1. Fetch profiles
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500)
-
-      if (profilesError) {
-        console.error('Error fetching all users:', profilesError)
-        return
-      }
-
-      // 2. Fetch user roles
-      const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('*')
-
-      if (rolesError) {
-        console.error('Error fetching roles:', rolesError)
-      }
-
-      // 3. Fetch Auth Users (email, last login) via RPC
-      let authUsers: any[] = []
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('get_auth_users_for_executives')
-      
-      if (!rpcError && rpcData) {
-        authUsers = rpcData
-      }
-
-      // 4. Combine in JS
-      const combined = (profiles || []).map(p => {
-        const authData = authUsers.find(a => a.id === p.user_id)
-        return {
-          ...p,
-          user_roles: (roles || []).filter(r => r.user_id === p.user_id),
-          email: authData?.email || '',
-          last_sign_in_at: authData?.last_sign_in_at || null
-        }
-      })
-
-      setUsers(combined)
-    } catch (error) {
-      console.error('Error in fetchAllUsers:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchAllUsers()
-
-    // Inscrição Realtime para profiles
-    const profilesChannel = supabase.channel('public:profiles')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'profiles' },
-        () => {
-          fetchAllUsers()
-        }
-      )
-      .subscribe()
-      
-    // Inscrição Realtime para user_roles
-    const rolesChannel = supabase.channel('public:user_roles')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'user_roles' },
-        () => {
-          fetchAllUsers()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(profilesChannel)
-      supabase.removeChannel(rolesChannel)
-    }
-  }, [])
-
+  const { user } = useAuth()
+  const { isExecutive, loading: rolesLoading } = useRoles()
+  const query = useQuery({
+    queryKey: ['executive-users', 'directory', user?.id],
+    enabled: !!user && isExecutive,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('executive_list_users')
+      if (error) throw error
+      return data as unknown as { users: ExecutiveUser[]; fetched_at: string }
+    },
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  })
   return {
-    users,
-    loading,
-    refetch: fetchAllUsers
+    users: query.data?.users ?? [],
+    fetchedAt: query.data?.fetched_at ?? null,
+    loading: rolesLoading || (isExecutive && query.isPending),
+    error: query.error,
+    isFetching: query.isFetching,
+    refetch: query.refetch,
   }
 }

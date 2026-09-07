@@ -1,142 +1,45 @@
-import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
 
-interface Profile {
-  id: string
-  user_id: string
-  display_name: string | null
-  avatar_url: string | null
-  created_at: string
-  updated_at: string
-}
-
 export function useProfile() {
   const { user } = useAuth()
-  const [profile, setProfile] = useState<Profile | null>(() => {
-    if (typeof window === 'undefined') return null
-    if (!user) return null
-    try {
-      const cached = localStorage.getItem(`profile_${user.id}`)
-      return cached ? JSON.parse(cached) as Profile : null
-    } catch {
-      return null
-    }
-  })
-  const [loading, setLoading] = useState(true)
-
-  const fetchProfile = async () => {
-    if (!user) return
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-
-      if (error && error.code !== 'PGRST116') {
-        throw error
-      }
-
-      setProfile(data)
-    } catch (error) {
-      console.error('Erro ao buscar perfil:', error)
-      toast.error('Erro ao carregar perfil')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!user) {
-      setProfile(null)
-      setLoading(false)
-      return
-    }
-    fetchProfile()
-  }, [user])
-
-  // Listen for profile updates from other hook instances
-  useEffect(() => {
-    const handler = () => fetchProfile()
-    window.addEventListener('profile-updated', handler)
-    return () => window.removeEventListener('profile-updated', handler)
-  }, [user])
-
-  const updateProfile = async (updates: Partial<Profile>) => {
-    if (!user) return
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('user_id', user.id)
-        .select()
-        .single()
-
+  const queryClient = useQueryClient()
+  const key = ['profile', user?.id]
+  const query = useQuery({
+    queryKey: key,
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('*').eq('user_id', user!.id).single()
       if (error) throw error
-
-      setProfile(data)
-      window.dispatchEvent(new Event('profile-updated'))
-      toast.success('Perfil atualizado com sucesso!')
       return data
-    } catch (error) {
-      console.error('Erro ao atualizar perfil:', error)
-      toast.error('Erro ao atualizar perfil')
-      throw error
-    }
+    },
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    retry: 1,
+  })
+  const updateProfile = async (updates: { display_name?: string; avatar_url?: string }) => {
+    if (!user) return
+    const { data, error } = await supabase.from('profiles').update(updates).eq('user_id', user.id).select().single()
+    if (error) { toast.error('Erro ao atualizar perfil'); throw error }
+    queryClient.setQueryData(key, data)
+    toast.success('Perfil atualizado com sucesso!')
+    return data
   }
-
   const uploadAvatar = async (file: File) => {
     if (!user) return
-
-    try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${user.id}.${fileExt}`
-      const filePath = `${user.id}/${fileName}`
-
-      // Remove avatar anterior se existir
-      if (profile?.avatar_url) {
-        const oldPath = profile.avatar_url.split('/').slice(-2).join('/')
-        await supabase.storage.from('avatars').remove([oldPath])
-      }
-
-      // Upload novo avatar
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, { upsert: true })
-
-      if (uploadError) throw uploadError
-
-      // Obter URL pública
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath)
-
-      // Atualizar perfil com nova URL
-      await updateProfile({ avatar_url: publicUrl })
-
-      return publicUrl
-    } catch (error) {
-      console.error('Erro ao fazer upload do avatar:', error)
-      toast.error('Erro ao fazer upload da imagem')
-      throw error
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (!['png','jpg','jpeg','webp','gif'].includes(ext ?? '') || file.size > 2 * 1024 * 1024) {
+      throw new Error('Use uma imagem PNG, JPG, WEBP ou GIF de até 2 MB.')
     }
+    const filePath = `${user.id}/${crypto.randomUUID()}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(filePath, file, { upsert: false })
+    if (error) { toast.error('Erro ao enviar imagem'); throw error }
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath)
+    await updateProfile({ avatar_url: publicUrl })
+    return publicUrl
   }
-
-  useEffect(() => {
-    if (user?.id && profile) {
-      try {
-        localStorage.setItem(`profile_${user.id}`, JSON.stringify(profile))
-      } catch {}
-    }
-  }, [user?.id, profile])
-
-  return {
-    profile,
-    loading,
-    updateProfile,
-    uploadAvatar
-  }
+  return { profile: user ? query.data ?? null : null, loading: !!user && query.isPending,
+    error: query.error, refetch: query.refetch, updateProfile, uploadAvatar }
 }

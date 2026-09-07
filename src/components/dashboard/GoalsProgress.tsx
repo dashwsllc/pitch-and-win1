@@ -58,7 +58,7 @@ const periodConfig = {
 }
 
 export function GoalsProgress() {
-  const { goals, loading } = useGoals()
+  const { goals, loading, error } = useGoals()
   const containerRef = useRef<HTMLDivElement>(null)
 
   if (loading) {
@@ -81,6 +81,8 @@ export function GoalsProgress() {
       </div>
     )
   }
+
+  if (error) return <p role="alert" className="rounded-xl bg-destructive/10 p-5 text-sm text-destructive">{error}. Tente atualizar o dashboard.</p>
 
   if (goals.length === 0) {
     return (

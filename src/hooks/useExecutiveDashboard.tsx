@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from './useAuth'
 
@@ -75,7 +75,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
     return { start: start.toISOString(), end: now.toISOString() }
   }
 
-  const fetchExecutiveDashboard = async () => {
+  const fetchExecutiveDashboard = useCallback(async () => {
     if (!user) return
 
     setLoading(true)
@@ -85,9 +85,10 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       const { start, end } = getDateRange(dateFilter)
 
       // Fetch profiles for name resolution
-      const { data: profilesData } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('user_id, display_name')
+      if (profilesError) throw profilesError
 
       const profileMap = new Map<string, string>()
       profilesData?.forEach(p => {
@@ -95,30 +96,38 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       })
 
       // Fetch total sellers count
-      const totalSellers = profilesData?.length || 0
+      const { data: sellerRoles, error: sellerError } = await supabase.from('user_roles')
+        .select('user_id').in('role', ['seller','closer','sdr','bdr'])
+      if (sellerError) throw sellerError
+      const totalSellers = new Set(sellerRoles?.map(role => role.user_id)).size
 
       // Fetch sales in period (apenas aprovadas)
-      const { data: salesData } = await supabase
+      const { data: salesData, error: salesError } = await supabase
         .from('vendas')
         .select('user_id, nome_produto, valor_venda, created_at')
         .eq('approval_status', 'aprovada')
         .gte('created_at', start)
         .lte('created_at', end)
+        .order('created_at', { ascending: false })
         .limit(1000)
+      if (salesError) throw salesError
 
       // Fetch approaches in period
-      const { data: approachesData } = await supabase
+      const { data: approachesData, error: approachesError } = await supabase
         .from('abordagens')
         .select('user_id, nomes_abordados, created_at')
         .gte('created_at', start)
         .lte('created_at', end)
+        .order('created_at', { ascending: false })
         .limit(1000)
+      if (approachesError) throw approachesError
 
       // Fetch subscriptions
-      const { data: subscriptionsData } = await supabase
+      const { data: subscriptionsData, error: subscriptionsError } = await supabase
         .from('assinaturas')
         .select('status')
         .limit(1000)
+      if (subscriptionsError) throw subscriptionsError
 
       const totalSales = salesData?.length || 0
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.valor_venda), 0) || 0
@@ -230,10 +239,12 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, dateFilter])
 
   useEffect(() => {
     fetchExecutiveDashboard()
+    const refresh = () => { void fetchExecutiveDashboard() }
+    window.addEventListener('dashboard-data-changed', refresh)
 
     // Sincronização em Tempo Real (Dashboard Executivo)
     const channel = supabase.channel('executive-dashboard-changes')
@@ -250,9 +261,10 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       .subscribe()
 
     return () => {
+      window.removeEventListener('dashboard-data-changed', refresh)
       supabase.removeChannel(channel)
     }
-  }, [user, dateFilter])
+  }, [fetchExecutiveDashboard])
 
   return {
     data,

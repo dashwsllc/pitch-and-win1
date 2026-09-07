@@ -14,6 +14,18 @@ export type Database = {
   }
   public: {
     Tables: {
+      dashboard_events: {
+        Row: { topic: string; revision: number; updated_at: string }
+        Insert: { topic: string; revision?: number; updated_at?: string }
+        Update: { revision?: number; updated_at?: string }
+        Relationships: []
+      }
+      executive_audit_events: {
+        Row: { id: string; actor_id: string | null; actor_name: string; action: string; target_id: string; target_label: string; reason: string; before_data: Json | null; after_data: Json | null; created_at: string }
+        Insert: { id?: string; actor_id?: string | null; actor_name: string; action: string; target_id: string; target_label: string; reason: string; before_data?: Json | null; after_data?: Json | null; created_at?: string }
+        Update: { reason?: string }
+        Relationships: []
+      }
       abordagens: {
         Row: {
           created_at: string
@@ -1073,6 +1085,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      executive_review_sale: { Args: { p_sale_id: string; p_action: string; p_reason?: string; p_expected_status?: string }; Returns: Json }
+      get_sales_board: { Args: { p_status?: string; p_search?: string; p_page?: number; p_page_size?: number }; Returns: Json }
+      get_team_ranking: { Args: never; Returns: Json }
+      get_company_goal_totals: { Args: never; Returns: Json }
+      executive_cancel_withdrawal: { Args: { p_id: string; p_reason: string }; Returns: undefined }
+      executive_list_users: { Args: never; Returns: Json }
       approve_sale: {
         Args: { p_sale_id: string }
         Returns: {
