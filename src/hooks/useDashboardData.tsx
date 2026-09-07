@@ -169,6 +169,26 @@ export function useDashboardData(dateFilter: string = "30dias") {
 
   useEffect(() => {
     fetchDashboardData()
+    
+    if (!user) return
+
+    // Sincronização em Tempo Real (Dashboard do Vendedor)
+    const channel = supabase.channel(`dashboard-data-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vendas', filter: `user_id=eq.${user.id}` },
+        () => fetchDashboardData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'abordagens', filter: `user_id=eq.${user.id}` },
+        () => fetchDashboardData()
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [user, dateFilter])
 
   return { metrics, loading, error, refetch: fetchDashboardData }
