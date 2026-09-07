@@ -31,7 +31,7 @@ import gsap from 'gsap'
 export default function Dashboard() {
   const [selectedFilter, setSelectedFilter] = useState("hoje")
   const { user } = useAuth()
-  const { metrics, loading, refetch } = useDashboardData(selectedFilter)
+  const { metrics, loading, error, refetch } = useDashboardData(selectedFilter)
   const { ranking } = useRankingDataWithMock()
   const { profile } = useProfile()
   const metricsRef = useRef<HTMLDivElement>(null)
@@ -143,6 +143,15 @@ export default function Dashboard() {
           value={selectedFilter} 
           onValueChange={setSelectedFilter} 
         />
+
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            {error}. Tente atualizar novamente.
+          </div>
+        )}
 
         {/* Métricas principais */}
         <div ref={metricsRef} className="grid gap-4 md:gap-6 grid-cols-2 lg:grid-cols-3">

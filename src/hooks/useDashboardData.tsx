@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { useRoles } from '@/hooks/useRoles'
 
 interface DashboardMetrics {
   totalVendas: number
@@ -22,6 +23,8 @@ interface DashboardMetrics {
 
 export function useDashboardData(dateFilter: string = "30dias") {
   const { user } = useAuth()
+  const { isExecutive, loading: rolesLoading } = useRoles()
+  const userId = user?.id
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     totalVendas: 0,
     quantidadeVendas: 0,
@@ -55,8 +58,8 @@ export function useDashboardData(dateFilter: string = "30dias") {
     }
   }
 
-  const fetchDashboardData = async () => {
-    if (!user) return
+  const fetchDashboardData = useCallback(async () => {
+    if (!userId || rolesLoading) return
 
     try {
       setLoading(true)
@@ -64,25 +67,34 @@ export function useDashboardData(dateFilter: string = "30dias") {
 
       const { start, end } = getDateRange(dateFilter)
 
-      // Fetch only needed columns (apenas aprovadas)
-      const { data: vendas, error: vendasError } = await supabase
+      // Executives see the consolidated commercial operation. Sellers see only
+      // their own data. RLS remains the final source of authorization.
+      let vendasQuery = supabase
         .from('vendas')
         .select('nome_produto, valor_venda, created_at')
-        .eq('user_id', user.id)
         .eq('approval_status', 'aprovada')
         .gte('created_at', start.toISOString())
         .lt('created_at', end.toISOString())
         .limit(1000)
 
-      if (vendasError) throw vendasError
-
-      const { data: abordagens, error: abordagensError } = await supabase
+      let abordagensQuery = supabase
         .from('abordagens')
         .select('created_at')
-        .eq('user_id', user.id)
         .gte('created_at', start.toISOString())
         .lt('created_at', end.toISOString())
         .limit(1000)
+
+      if (!isExecutive) {
+        vendasQuery = vendasQuery.eq('user_id', userId)
+        abordagensQuery = abordagensQuery.eq('user_id', userId)
+      }
+
+      const [
+        { data: vendas, error: vendasError },
+        { data: abordagens, error: abordagensError }
+      ] = await Promise.all([vendasQuery, abordagensQuery])
+
+      if (vendasError) throw vendasError
 
       if (abordagensError) throw abordagensError
 
@@ -165,31 +177,36 @@ export function useDashboardData(dateFilter: string = "30dias") {
     } finally {
       setLoading(false)
     }
-  }
+  }, [dateFilter, isExecutive, rolesLoading, userId])
 
   useEffect(() => {
-    fetchDashboardData()
-    
-    if (!user) return
+    if (!userId || rolesLoading) return
 
-    // Sincronização em Tempo Real (Dashboard do Vendedor)
-    const channel = supabase.channel(`dashboard-data-${user.id}`)
+    void fetchDashboardData()
+
+    // The executive channel must receive every seller change. The seller
+    // channel stays scoped to its owner to avoid unnecessary refreshes.
+    const realtimeScope = isExecutive
+      ? {}
+      : { filter: `user_id=eq.${userId}` }
+
+    const channel = supabase.channel(`dashboard-data-${isExecutive ? 'all' : userId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'vendas', filter: `user_id=eq.${user.id}` },
-        () => fetchDashboardData()
+        { event: '*', schema: 'public', table: 'vendas', ...realtimeScope },
+        () => { void fetchDashboardData() }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'abordagens', filter: `user_id=eq.${user.id}` },
-        () => fetchDashboardData()
+        { event: '*', schema: 'public', table: 'abordagens', ...realtimeScope },
+        () => { void fetchDashboardData() }
       )
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [user, dateFilter])
+  }, [fetchDashboardData, isExecutive, rolesLoading, userId])
 
   return { metrics, loading, error, refetch: fetchDashboardData }
 }

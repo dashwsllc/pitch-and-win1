@@ -1073,10 +1073,61 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_sale: {
+        Args: { p_sale_id: string }
+        Returns: {
+          approval_status: string
+          commission_amount: number | null
+          consideracoes_gerais: string | null
+          created_at: string
+          email_comprador: string
+          id: string
+          nome_comprador: string
+          nome_produto: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+          user_id: string
+          valor_venda: number
+          whatsapp_comprador: string
+          withdrawal_id: string | null
+          withdrawn: boolean
+          withdrawn_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vendas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       calculate_and_update_commissions: { Args: never; Returns: undefined }
       check_user_not_suspended: { Args: never; Returns: boolean }
+      get_auth_users_for_executives: {
+        Args: never
+        Returns: {
+          email: string
+          id: string
+          last_sign_in_at: string
+        }[]
+      }
       get_available_balance: { Args: { p_seller_id: string }; Returns: number }
       get_pending_commission: { Args: { p_seller_id: string }; Returns: number }
+      get_user_details: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          created_at: string
+          display_name: string
+          email: string
+          id: string
+          last_seen: string
+          last_sign_in_at: string
+          suspended: boolean
+          user_id: string
+        }[]
+      }
       get_user_role: { Args: { uid: string }; Returns: string }
       has_role: {
         Args: {
