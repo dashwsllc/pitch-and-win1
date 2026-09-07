@@ -234,6 +234,24 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
 
   useEffect(() => {
     fetchExecutiveDashboard()
+
+    // Sincronização em Tempo Real (Dashboard Executivo)
+    const channel = supabase.channel('executive-dashboard-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vendas' },
+        () => fetchExecutiveDashboard()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'abordagens' },
+        () => fetchExecutiveDashboard()
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [user, dateFilter])
 
   return {

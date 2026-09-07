@@ -86,23 +86,14 @@ export function ExecutiveSalesApproval() {
   const approveSale = async (sale: Sale) => {
     setProcessing(sale.id)
     try {
-      // ✅ FIX: Usa a taxa real do vendedor, não mais 10% fixo
-      const rate = sale.seller_commission_rate ?? 10
-      const commissionAmount = Number(sale.valor_venda) * (rate / 100)
-
-      const { error } = await supabase
-        .from('vendas')
-        .update({
-          approval_status: 'aprovada',
-          reviewed_by: user?.id,
-          reviewed_at: new Date().toISOString(),
-          commission_amount: commissionAmount
-        } as any)
-        .eq('id', sale.id)
+      // ✅ Usar a RPC como instruído
+      const { data, error } = await supabase.rpc('approve_sale', {
+        p_sale_id: sale.id
+      })
 
       if (error) throw error
 
-      toast({ title: 'Venda aprovada!', description: `Comissão de ${formatCurrency(commissionAmount)} (${rate}%) liberada para ${sale.seller_name}.` })
+      toast({ title: 'Venda aprovada!', description: `Venda liberada para ${sale.seller_name}. A comissão foi calculada automaticamente.` })
       fetchSales()
     } catch (err: any) {
       toast({ title: 'Erro ao aprovar', description: err.message, variant: 'destructive' })
