@@ -178,6 +178,11 @@ export default {
           from: { width: "0%" },
           to: { width: "var(--progress-width, 100%)" },
         },
+        "shake": {
+          "0%, 100%": { transform: "translateX(0)" },
+          "10%, 30%, 50%, 70%, 90%": { transform: "translateX(-5px)" },
+          "20%, 40%, 60%, 80%": { transform: "translateX(5px)" },
+        }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -191,6 +196,7 @@ export default {
         "rank-slide": "rank-slide 0.5s ease-out forwards",
         "float": "float 3s ease-in-out infinite",
         "progress-fill": "progress-fill 1.5s ease-out forwards",
+        "shake": "shake 0.5s cubic-bezier(.36,.07,.19,.97) both",
       },
     },
   },
