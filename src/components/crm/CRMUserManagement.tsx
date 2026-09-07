@@ -70,8 +70,8 @@ export function CRMUserManagement() {
       <CardContent>
         <div className="space-y-3">
           {users.map(u => {
-            const role = u.user_roles?.[0]?.role || 'seller'
-            const hasCRM = u.user_roles?.[0]?.crm_access || false
+            const hasCRM = u.user_roles?.some((r: any) => r.crm_access === true) || false
+            const role = u.user_roles?.find((r: any) => ['executive', 'super_admin'].includes(r.role))?.role || u.user_roles?.[0]?.role || 'seller'
             const name = u.display_name || u.user_id
 
             return (
