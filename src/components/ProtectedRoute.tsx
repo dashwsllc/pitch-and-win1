@@ -23,7 +23,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // Check if suspended
-  if (profile && (profile as any).status === 'suspended') {
+  if (profile && (profile as any).suspended) {
     signOut()
     return <Navigate to="/auth?suspended=true" replace />
   }

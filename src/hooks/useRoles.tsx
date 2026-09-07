@@ -167,8 +167,8 @@ export function useAllUsers() {
   useEffect(() => {
     fetchAllUsers()
 
-    // Realtime subscription for new profiles
-    const channel = supabase.channel('public:profiles')
+    // Inscrição Realtime para profiles
+    const profilesChannel = supabase.channel('public:profiles')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'profiles' },
@@ -177,9 +177,21 @@ export function useAllUsers() {
         }
       )
       .subscribe()
+      
+    // Inscrição Realtime para user_roles
+    const rolesChannel = supabase.channel('public:user_roles')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_roles' },
+        () => {
+          fetchAllUsers()
+        }
+      )
+      .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      supabase.removeChannel(profilesChannel)
+      supabase.removeChannel(rolesChannel)
     }
   }, [])
 

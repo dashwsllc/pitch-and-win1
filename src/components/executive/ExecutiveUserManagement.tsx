@@ -65,12 +65,12 @@ export function ExecutiveUserManagement() {
 
   const handleUpdateName = async () => {
     if (!editingUser || !editName) return
-    setUpdatingUser(editingUser.id)
+    setUpdatingUser(editingUser.user_id)
     try {
       const { error } = await supabase
         .from('profiles')
         .update({ display_name: editName })
-        .eq('id', editingUser.id)
+        .eq('user_id', editingUser.user_id)
 
       if (error) throw error
       toast({ title: 'Nome atualizado com sucesso!' })
@@ -84,19 +84,19 @@ export function ExecutiveUserManagement() {
   }
 
   const handleToggleStatus = async (user: any) => {
-    const newStatus = user.status === 'suspended' ? 'active' : 'suspended'
-    setUpdatingUser(user.id)
+    const newStatus = !user.suspended
+    setUpdatingUser(user.user_id)
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ status: newStatus })
-        .eq('id', user.id)
+        .update({ suspended: newStatus })
+        .eq('user_id', user.user_id)
 
       if (error) throw error
       toast({ 
-        title: newStatus === 'suspended' ? 'Usuário Suspenso' : 'Usuário Reativado',
-        description: newStatus === 'suspended' ? 'O usuário não poderá mais acessar o sistema.' : 'O acesso do usuário foi restaurado.',
-        variant: newStatus === 'suspended' ? 'destructive' : 'default'
+        title: newStatus ? 'Usuário Suspenso' : 'Usuário Reativado',
+        description: newStatus ? 'O usuário não poderá mais acessar o sistema.' : 'O acesso do usuário foi restaurado.',
+        variant: newStatus ? 'destructive' : 'default'
       })
       refetch()
     } catch (err: any) {
@@ -273,7 +273,7 @@ export function ExecutiveUserManagement() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  {user.status === 'suspended' && (
+                  {user.suspended && (
                     <Badge variant="destructive" className="mr-2 animate-pulse">Suspenso</Badge>
                   )}
 
@@ -352,8 +352,8 @@ export function ExecutiveUserManagement() {
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" disabled={updatingUser === user.id}>
-                        {updatingUser === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
+                      <Button variant="ghost" size="icon" disabled={updatingUser === user.user_id}>
+                        {updatingUser === user.user_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -361,7 +361,7 @@ export function ExecutiveUserManagement() {
                         <Edit2 className="w-4 h-4 mr-2" /> Editar Conta
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      {user.status === 'suspended' ? (
+                      {user.suspended ? (
                         <DropdownMenuItem onClick={() => handleToggleStatus(user)} className="text-green-600 focus:text-green-600">
                           <PlayCircle className="w-4 h-4 mr-2" /> Reativar Acesso
                         </DropdownMenuItem>
