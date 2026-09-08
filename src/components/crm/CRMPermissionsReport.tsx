@@ -36,7 +36,7 @@ export function CRMPermissionsReport() {
     try {
       const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
-        .select('*')
+        .select('user_id, role, crm_access, granted_by, granted_at, commission_rate')
         .order('created_at', { ascending: true })
 
       if (rolesError) throw rolesError
@@ -63,10 +63,11 @@ export function CRMPermissionsReport() {
   const revokeCRMAccess = async (userId: string, userName: string) => {
     setRevoking(userId)
     try {
-      const { error } = await supabase
-        .from('user_roles')
-        .update({ crm_access: false } as any)
-        .eq('user_id', userId)
+      const { error } = await supabase.rpc('executive_set_crm_access', {
+        p_user_id: userId,
+        p_enabled: false,
+        p_reason: `Acesso ao CRM revogado para ${userName}`,
+      })
 
       if (error) throw error
       toast({ title: 'Acesso revogado', description: `${userName} não tem mais acesso ao CRM.` })

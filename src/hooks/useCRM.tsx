@@ -88,7 +88,7 @@ export function useCRMLeads() {
     try {
       const { data, error } = await supabase
         .from('crm_leads')
-        .select('*')
+        .select('id, name, age, email, phone, company, job_title, linkedin_url, profile_photo_url, temperature, priority, conversion_probability, estimated_deal_value, pipeline_stage, lead_source, approached, approached_at, approach_count, first_contact_at, last_contact_at, next_followup_at, expected_close_at, assigned_to, observations, observations_updated_at, observations_updated_by, tags, created_by, created_at, updated_at')
         .order('created_at', { ascending: false })
         .limit(500)
 
@@ -144,7 +144,7 @@ export function useCRMActivities(leadId: string | null) {
     try {
       const { data, error } = await supabase
         .from('crm_activities')
-        .select('*')
+        .select('id, lead_id, user_id, activity_type, title, description, outcome, scheduled_at, completed_at, is_completed, is_pinned, created_at')
         .eq('lead_id', leadId)
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })

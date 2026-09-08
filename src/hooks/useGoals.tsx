@@ -77,7 +77,7 @@ export function useGoals() {
 
       const { data, error: fetchError } = await supabase
         .from('company_goals')
-        .select('*')
+        .select('id, title, description, target, period, unit, status, deadline, created_by')
         .or('status.eq.active,status.is.null')
         .order('created_at', { ascending: false })
 

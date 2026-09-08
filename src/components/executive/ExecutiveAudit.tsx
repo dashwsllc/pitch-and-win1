@@ -16,7 +16,7 @@ export function ExecutiveAudit() {
     queryKey: ['executive-audit',user?.id,page],
     queryFn: async () => {
       const { data,error,count } = await supabase.from('executive_audit_events')
-        .select('*',{count:'exact'}).order('created_at',{ascending:false}).range(page*15,page*15+14)
+        .select('id, action, target_label, actor_name, reason, before_data, after_data, created_at',{count:'exact'}).order('created_at',{ascending:false}).range(page*15,page*15+14)
       if (error) throw error
       return { items:data,total:count ?? 0 }
     },

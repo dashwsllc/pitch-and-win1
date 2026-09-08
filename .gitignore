@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Local configuration and secrets. Commit only the documented template.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

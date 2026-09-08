@@ -22,7 +22,7 @@ export function ExecutiveWithdrawals() {
   const [page,setPage] = useState(0)
   const query = useQuery({ queryKey:['executive-withdrawals',user?.id,page], enabled:!!user, refetchInterval:30_000,
     queryFn:async () => {
-      const { data,error,count } = await supabase.from('saques').select('*',{count:'exact'}).in('status',['pendente','processando','aprovado']).order('created_at',{ascending:true}).range(page*15,page*15+14)
+      const { data,error,count } = await supabase.from('saques').select('id, user_id, valor_solicitado, valor_aprovado, nome_titular, status, created_at',{count:'exact'}).in('status',['pendente','processando','aprovado']).order('created_at',{ascending:true}).range(page*15,page*15+14)
       if (error) throw error
       return { items:data,total:count ?? 0 }
     },

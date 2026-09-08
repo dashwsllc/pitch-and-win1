@@ -49,7 +49,7 @@ export default function MinhasVendas() {
     try {
       const { data, error } = await supabase
         .from('vendas')
-        .select('*')
+        .select('id, nome_produto, valor_venda, nome_comprador, email_comprador, whatsapp_comprador, approval_status, commission_amount, rejection_reason, reviewed_at, created_at, withdrawn')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(200)

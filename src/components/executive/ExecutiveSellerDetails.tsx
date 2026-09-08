@@ -60,21 +60,21 @@ export function ExecutiveSellerDetails() {
       // Buscar vendas do seller
       const { data: sales } = await supabase
         .from('vendas')
-        .select('*')
+        .select('id, nome_produto, valor_venda, created_at')
         .eq('user_id', sellerId)
         .order('created_at', { ascending: false })
 
       // Buscar abordagens do seller
       const { data: approaches } = await supabase
         .from('abordagens')
-        .select('*')
+        .select('id, nomes_abordados, mostrou_ia, tempo_medio_abordagem, created_at')
         .eq('user_id', sellerId)
         .order('created_at', { ascending: false })
 
       // Buscar assinaturas do seller
       const { data: subscriptions } = await supabase
         .from('assinaturas')
-        .select('*')
+        .select('id, status')
         .eq('user_id', sellerId)
 
       const totalSales = sales?.length || 0

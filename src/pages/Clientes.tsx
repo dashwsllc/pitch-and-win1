@@ -55,7 +55,7 @@ export default function Clientes() {
     try {
       const { data, error } = await supabase
         .from('assinaturas')
-        .select('*')
+        .select('id, nome_produto, valor_assinatura, nome_cliente, whatsapp_cliente, email_cliente, status, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 

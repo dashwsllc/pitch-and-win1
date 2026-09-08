@@ -72,7 +72,7 @@ export function ExecutivePasswordRequests() {
     try {
       const { data, error } = await supabase
         .from('password_reset_requests')
-        .select('*')
+        .select('id, user_id, email, status, requested_at, processed_at')
         .order('requested_at', { ascending: false })
 
       if (error) {

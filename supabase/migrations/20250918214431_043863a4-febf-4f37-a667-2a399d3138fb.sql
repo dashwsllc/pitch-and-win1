@@ -1,0 +1,2 @@
+-- Security: elevated roles are never assigned to a fixed email from a
+-- migration. Provision them using an authenticated, audited admin flow.

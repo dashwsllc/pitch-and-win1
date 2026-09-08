@@ -22,16 +22,11 @@ export function CRMUserManagement() {
   const toggleCRMAccess = async (userId: string, userName: string, grantAccess: boolean) => {
     setUpdatingUser(userId)
     try {
-      const updateData: any = { crm_access: grantAccess }
-      if (grantAccess) {
-        updateData.granted_by = user?.id
-        updateData.granted_at = new Date().toISOString()
-      }
-
-      const { error } = await supabase
-        .from('user_roles')
-        .update(updateData)
-        .eq('user_id', userId)
+      const { error } = await supabase.rpc('executive_set_crm_access', {
+        p_user_id: userId,
+        p_enabled: grantAccess,
+        p_reason: `${grantAccess ? 'Acesso concedido' : 'Acesso revogado'} para ${userName}`,
+      })
 
       if (error) throw error
 

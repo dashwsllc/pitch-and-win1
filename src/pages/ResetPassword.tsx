@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label'
 import { BarChart3, Eye, EyeOff, Lock } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { Turnstile, captchaRequired } from '@/components/security/Turnstile'
+import { emailSchema, firstIssue, publicAuthError, strongPasswordSchema } from '@/lib/auth-security'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
@@ -16,26 +18,33 @@ export default function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [requestSent, setRequestSent] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
 
-  const isResetMode = searchParams.has('access_token')
+  const isResetMode = searchParams.has('access_token') || searchParams.has('code') || searchParams.get('type') === 'recovery'
 
   const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
 
     const formData = new FormData(e.currentTarget)
-    const email = (formData.get('email') as string).trim()
+    const emailResult = emailSchema.safeParse(formData.get('email'))
 
-    if (!email) {
-      toast({ title: 'Email obrigatório', description: 'Informe seu email.', variant: 'destructive' })
+    if (!emailResult.success) {
+      toast({ title: 'Confira o e-mail', description: firstIssue(emailResult.error), variant: 'destructive' })
+      setIsLoading(false)
+      return
+    }
+    if (captchaRequired && !captchaToken) {
+      toast({ title: 'Verificação necessária', description: 'Conclua a verificação anti-bot.', variant: 'destructive' })
       setIsLoading(false)
       return
     }
 
     try {
       // Send password reset email via Supabase Auth
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
+      const { error } = await supabase.auth.resetPasswordForEmail(emailResult.data, {
+        redirectTo: `${window.location.origin}/reset-password`,
+        captchaToken: captchaToken ?? undefined,
       })
 
       if (error) {
@@ -57,10 +66,15 @@ export default function ResetPassword() {
     setIsLoading(true)
 
     const formData = new FormData(e.currentTarget)
-    const password = formData.get('password') as string
+    const passwordResult = strongPasswordSchema.safeParse(formData.get('password'))
     const confirmPassword = formData.get('confirmPassword') as string
 
-    if (password !== confirmPassword) {
+    if (!passwordResult.success) {
+      toast({ title: 'Senha fraca', description: firstIssue(passwordResult.error), variant: 'destructive' })
+      setIsLoading(false)
+      return
+    }
+    if (passwordResult.data !== confirmPassword) {
       toast({
         title: 'Senhas não coincidem',
         description: 'Por favor, confirme sua senha corretamente',
@@ -71,12 +85,12 @@ export default function ResetPassword() {
     }
 
     try {
-      const { error } = await supabase.auth.updateUser({ password })
+      const { error } = await supabase.auth.updateUser({ password: passwordResult.data })
 
       if (error) {
         toast({
           title: 'Erro ao redefinir senha',
-          description: error.message,
+          description: publicAuthError(error),
           variant: 'destructive'
         })
       } else {
@@ -86,10 +100,10 @@ export default function ResetPassword() {
         })
         setTimeout(() => navigate('/auth'), 2000)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Erro inesperado',
-        description: error?.message || 'Tente novamente.',
+        description: publicAuthError(error),
         variant: 'destructive'
       })
     } finally {
@@ -210,7 +224,7 @@ export default function ResetPassword() {
                       className="w-full"
                     />
                   </div>
-                  
+                  <Turnstile onToken={setCaptchaToken} />
                   <Button
                     type="submit"
                     className="w-full bg-gradient-primary hover:opacity-90"

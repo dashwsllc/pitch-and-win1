@@ -11,6 +11,7 @@ import { useProfile } from "@/hooks/useProfile"
 import { supabase } from "@/integrations/supabase/client"
 import { toast } from "sonner"
 import { User, Mail, Camera, Lock, Save, Clock } from "lucide-react"
+import { displayNameSchema, firstIssue, publicAuthError, strongPasswordSchema } from "@/lib/auth-security"
 
 export default function Perfil() {
   const { user } = useAuth()
@@ -34,8 +35,8 @@ export default function Perfil() {
     if (!file) return
 
     // Validar tipo de arquivo
-    if (!file.type.startsWith('image/')) {
-      toast.error('Por favor, selecione uma imagem')
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      toast.error('Use uma imagem PNG, JPG ou WEBP')
       return
     }
 
@@ -56,14 +57,15 @@ export default function Perfil() {
   }
 
   const handleUpdateProfile = async () => {
-    if (!displayName.trim()) {
-      toast.error('Nome de exibição é obrigatório')
+    const nameResult = displayNameSchema.safeParse(displayName)
+    if (!nameResult.success) {
+      toast.error(firstIssue(nameResult.error))
       return
     }
 
     try {
       setUpdating(true)
-      await updateProfile({ display_name: displayName.trim() })
+      await updateProfile({ display_name: nameResult.data })
     } catch (error) {
       console.error('Erro ao atualizar perfil:', error)
     } finally {
@@ -82,14 +84,16 @@ export default function Perfil() {
       return
     }
 
-    if (newPassword.length < 6) {
-      toast.error('A nova senha deve ter pelo menos 6 caracteres')
+    const passwordResult = strongPasswordSchema.safeParse(newPassword)
+    if (!passwordResult.success) {
+      toast.error(firstIssue(passwordResult.error))
       return
     }
 
     try {
       const { error } = await supabase.auth.updateUser({
-        password: newPassword
+        password: passwordResult.data,
+        current_password: currentPassword,
       })
 
       if (error) throw error
@@ -98,9 +102,9 @@ export default function Perfil() {
       setCurrentPassword("")
       setNewPassword("")
       setConfirmPassword("")
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao atualizar senha:', error)
-      toast.error(error.message || 'Erro ao atualizar senha')
+      toast.error(publicAuthError(error))
     }
   }
 
