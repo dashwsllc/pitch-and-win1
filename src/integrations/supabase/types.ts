@@ -14,6 +14,18 @@ export type Database = {
   }
   public: {
     Tables: {
+      products: {
+        Row: { id: string; name: string; description: string | null; active: boolean; created_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; name: string; description?: string | null; active?: boolean; created_by?: string | null; created_at?: string; updated_at?: string }
+        Update: { name?: string; description?: string | null; active?: boolean; updated_at?: string }
+        Relationships: []
+      }
+      product_tickets: {
+        Row: { id: string; product_id: string; name: string; price: number; active: boolean; created_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; product_id: string; name: string; price: number; active?: boolean; created_by?: string | null; created_at?: string; updated_at?: string }
+        Update: { name?: string; price?: number; active?: boolean; updated_at?: string }
+        Relationships: [{ foreignKeyName: "product_tickets_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] }]
+      }
       dashboard_events: {
         Row: { topic: string; revision: number; updated_at: string }
         Insert: { topic: string; revision?: number; updated_at?: string }
@@ -951,6 +963,9 @@ export type Database = {
       }
       vendas: {
         Row: {
+          product_id: string | null
+          ticket_id: string | null
+          ticket_name: string | null
           approval_status: string
           commission_amount: number | null
           consideracoes_gerais: string | null
@@ -971,6 +986,9 @@ export type Database = {
           withdrawn_at: string | null
         }
         Insert: {
+          product_id?: string | null
+          ticket_id?: string | null
+          ticket_name?: string | null
           approval_status?: string
           commission_amount?: number | null
           consideracoes_gerais?: string | null
@@ -991,6 +1009,9 @@ export type Database = {
           withdrawn_at?: string | null
         }
         Update: {
+          product_id?: string | null
+          ticket_id?: string | null
+          ticket_name?: string | null
           approval_status?: string
           commission_amount?: number | null
           consideracoes_gerais?: string | null
@@ -1085,6 +1106,9 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      executive_create_product: { Args: { p_name: string; p_description: string | null; p_ticket_name: string; p_ticket_price: number; p_active?: boolean }; Returns: Database["public"]["Tables"]["products"]["Row"] }
+      executive_save_product: { Args: { p_product_id: string | null; p_name: string; p_description?: string | null; p_active?: boolean; p_expected_updated_at?: string | null }; Returns: Database["public"]["Tables"]["products"]["Row"] }
+      executive_save_product_ticket: { Args: { p_ticket_id: string | null; p_product_id: string; p_name: string; p_price: number; p_active?: boolean; p_expected_updated_at?: string | null }; Returns: Database["public"]["Tables"]["product_tickets"]["Row"] }
       executive_review_sale: { Args: { p_sale_id: string; p_action: string; p_reason?: string; p_expected_status?: string }; Returns: Json }
       get_sales_board: { Args: { p_status?: string; p_search?: string; p_page?: number; p_page_size?: number }; Returns: Json }
       get_team_ranking: { Args: never; Returns: Json }

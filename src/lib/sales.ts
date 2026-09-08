@@ -24,6 +24,7 @@ export interface TeamSale {
   seller_name: string
   seller_avatar: string | null
   nome_produto: string
+  ticket_name?: string | null
   valor_venda: number
   approval_status: keyof typeof saleStatus
   created_at: string

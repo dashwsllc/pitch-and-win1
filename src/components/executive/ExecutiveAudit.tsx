@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { exactDate } from '@/lib/sales'
 
-const labels: Record<string,string> = { 'sale.approve': 'Venda aprovada', 'sale.reject': 'Venda rejeitada', 'sale.delete': 'Venda excluída', 'sale.cancel': 'Solicitação cancelada', 'account.update': 'Conta alterada', 'permissions.update': 'Permissões alteradas', 'withdrawal.reject': 'Saque regularizado' }
+const labels: Record<string,string> = { 'sale.approve': 'Venda aprovada', 'sale.reject': 'Venda rejeitada', 'sale.delete': 'Venda excluída', 'sale.cancel': 'Solicitação cancelada', 'account.update': 'Conta alterada', 'permissions.update': 'Permissões alteradas', 'withdrawal.reject': 'Saque regularizado', 'product.create': 'Produto criado', 'product.update': 'Produto atualizado', 'ticket.create': 'Ticket criado', 'ticket.update': 'Ticket atualizado' }
 
 export function ExecutiveAudit() {
   const { user } = useAuth()

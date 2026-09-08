@@ -73,7 +73,7 @@ export default function Saques() {
       // ✅ Histórico de saques — usando schema correto da tabela saques
       const { data: saquesData, error: saquesError } = await supabase
         .from('saques')
-        .select('id, user_id, valor_solicitado, valor_aprovado, chave_pix, tipo_chave_pix, nome_titular, cpf_titular, status, created_at, processed_at, rejection_reason')
+        .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(100)

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,9 +28,12 @@ import { ExecutiveSalesApproval } from '@/components/executive/ExecutiveSalesApp
 import { ExecutiveGoalsManagement } from '@/components/executive/ExecutiveGoalsManagement'
 import { ExecutiveAudit } from '@/components/executive/ExecutiveAudit'
 import { ExecutiveWithdrawals } from '@/components/executive/ExecutiveWithdrawals'
+import { ExecutiveProducts } from '@/components/executive/ExecutiveProducts'
 import { exactDate } from '@/lib/sales'
 
 export default function ExecutiveDashboard() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedTab = searchParams.get('tab') || 'approvals'
   const [selectedFilter, setSelectedFilter] = useState('30dias')
   const { data, loading, refetch, error } = useExecutiveDashboard(selectedFilter)
 
@@ -165,9 +169,10 @@ export default function ExecutiveDashboard() {
         </div>
 
         {/* Management Tabs */}
-        <Tabs defaultValue="approvals" className="space-y-6">
+        <Tabs value={selectedTab} onValueChange={tab => setSearchParams(previous => { previous.set('tab', tab); return previous }, { replace: true })} className="space-y-6">
           <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-xl bg-white/[0.035] p-1.5">
             <TabsTrigger className="px-4 py-2.5" value="approvals">Central de vendas</TabsTrigger>
+            <TabsTrigger className="px-4 py-2.5" value="products">Produtos e tickets</TabsTrigger>
             <TabsTrigger className="px-4 py-2.5" value="users">Contas e acessos</TabsTrigger>
             <TabsTrigger className="px-4 py-2.5" value="passwords">Solicitações de senha</TabsTrigger>
             <TabsTrigger className="px-4 py-2.5" value="details">Vendedores</TabsTrigger>
@@ -179,6 +184,7 @@ export default function ExecutiveDashboard() {
           <TabsContent value="approvals">
             <ExecutiveSalesApproval />
           </TabsContent>
+          <TabsContent value="products"><ExecutiveProducts /></TabsContent>
 
           <TabsContent value="users">
             <ExecutiveUserManagement />

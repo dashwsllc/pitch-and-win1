@@ -1,0 +1,10 @@
+.git
+.vercel
+node_modules
+dist
+.verification.local
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+*.log

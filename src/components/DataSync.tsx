@@ -23,6 +23,7 @@ export function DataSync() {
         void queryClient.invalidateQueries({ queryKey: ['executive-audit'] })
         void queryClient.invalidateQueries({ queryKey: ['executive-withdrawals'] })
         void queryClient.invalidateQueries({ queryKey: ['profile'] })
+        void queryClient.invalidateQueries({ queryKey: ['products'] })
         window.dispatchEvent(new Event('dashboard-data-changed'))
       }, 180)
     }

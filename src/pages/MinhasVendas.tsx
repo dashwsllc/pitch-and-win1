@@ -19,6 +19,7 @@ import { errorMessage } from '@/lib/sales'
 interface Venda {
   id: string
   nome_produto: string
+  ticket_name: string | null
   valor_venda: number
   nome_comprador: string
   email_comprador: string
@@ -49,7 +50,7 @@ export default function MinhasVendas() {
     try {
       const { data, error } = await supabase
         .from('vendas')
-        .select('id, nome_produto, valor_venda, nome_comprador, email_comprador, whatsapp_comprador, approval_status, commission_amount, rejection_reason, reviewed_at, created_at, withdrawn')
+        .select('id, nome_produto, ticket_name, valor_venda, nome_comprador, email_comprador, whatsapp_comprador, approval_status, commission_amount, rejection_reason, reviewed_at, created_at, withdrawn')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(200)
@@ -255,6 +256,7 @@ export default function MinhasVendas() {
                           </td>
                           <td className="p-3 hidden md:table-cell text-muted-foreground">
                             {v.nome_produto}
+                            {v.ticket_name && <p className="mt-1 text-xs">{v.ticket_name}</p>}
                           </td>
                           <td className="p-3 font-semibold text-foreground">
                             {formatCurrency(Number(v.valor_venda))}

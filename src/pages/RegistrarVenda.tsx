@@ -1,54 +1,61 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { useToast } from '@/hooks/use-toast'
-import { ShoppingCart, ArrowLeft, Info, CheckCircle, Clock } from 'lucide-react'
-
-const PRODUTOS_MENTORIA = [
-  { value: 'Mentoria Jogador De Elite', label: 'Mentoria Jogador De Elite' },
-  { value: 'Mentoria Jogador Milionário', label: 'Mentoria Jogador Milionário' }
-]
-
-const VALORES_VENDA = [
-  { value: '2997', label: 'R$ 2.997,00' },
-  { value: '1497', label: 'R$ 1.497,00' },
-  { value: '1247', label: 'R$ 1.247,00' },
-  { value: '987', label: 'R$ 987,00' },
-  { value: '847', label: 'R$ 847,00' },
-  { value: '500', label: 'R$ 500,00' },
-  { value: '275', label: 'R$ 275,00' },
-  { value: '250', label: 'R$ 250,00' }
-]
+import { ShoppingCart, ArrowLeft, Info, Clock, Package } from 'lucide-react'
+import { useProducts } from '@/hooks/useProducts'
+import { errorMessage, money } from '@/lib/sales'
 
 export default function RegistrarVenda() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { commissionRate, loading: rolesLoading } = useRoles()
+  const { commissionRate, loading: rolesLoading, isExecutive } = useRoles()
+  const catalog = useProducts()
+  const queryClient = useQueryClient()
+  const submitting = useRef(false)
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [justRegistered, setJustRegistered] = useState(false)
   const [produtoSelecionado, setProdutoSelecionado] = useState('')
   const [valorSelecionado, setValorSelecionado] = useState('')
+  const [selectedPrice, setSelectedPrice] = useState<number | null>(null)
   const [nomeComprador, setNomeComprador] = useState('')
   const [whatsappComprador, setWhatsappComprador] = useState('')
   const [emailComprador, setEmailComprador] = useState('')
 
-  // Compute commission preview
-  const valorNumerico = parseFloat(valorSelecionado) || 0
+  const products = (catalog.data ?? []).filter(product => product.active && product.product_tickets.some(ticket => ticket.active))
+  const product = products.find(item => item.id === produtoSelecionado)
+  const tickets = (product?.product_tickets ?? []).filter(ticket => ticket.active).sort((a, b) => a.price - b.price)
+  const ticket = tickets.find(item => item.id === valorSelecionado)
+  const valorNumerico = ticket?.price ?? 0
   const comissaoEstimada = valorNumerico * commissionRate / 100
+
+  useEffect(() => {
+    if (!catalog.data || !produtoSelecionado) return
+    if (!product || (valorSelecionado && !ticket)) {
+      if (!product) setProdutoSelecionado('')
+      setValorSelecionado('')
+      setSelectedPrice(null)
+      toast({ title: 'Catálogo atualizado', description: 'O produto ou ticket selecionado foi desativado. Escolha uma opção disponível.' })
+    } else if (ticket && selectedPrice !== null && selectedPrice !== ticket.price) {
+      setSelectedPrice(ticket.price)
+      toast({ title: 'Preço do ticket atualizado', description: `Confira o novo valor de ${money(ticket.price)} antes de registrar a venda.` })
+    }
+  }, [catalog.data, produtoSelecionado, valorSelecionado, product, ticket, selectedPrice, toast])
 
   const resetForm = () => {
     setProdutoSelecionado('')
     setValorSelecionado('')
+    setSelectedPrice(null)
     setNomeComprador('')
     setWhatsappComprador('')
     setEmailComprador('')
@@ -56,6 +63,7 @@ export default function RegistrarVenda() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (submitting.current) return
     if (!user) {
       toast({
         title: 'Erro de autenticação',
@@ -66,12 +74,16 @@ export default function RegistrarVenda() {
     }
 
     // Validate all fields before submitting
-    if (!produtoSelecionado) {
+    if (catalog.isError || catalog.isPending) {
+      toast({ title: 'Catálogo indisponível', description: 'Atualize o catálogo antes de registrar a venda.', variant: 'destructive' })
+      return
+    }
+    if (!product) {
       toast({ title: 'Campo obrigatório', description: 'Selecione o produto vendido.', variant: 'destructive' })
       return
     }
-    if (!valorSelecionado) {
-      toast({ title: 'Campo obrigatório', description: 'Selecione o valor da venda.', variant: 'destructive' })
+    if (!ticket) {
+      toast({ title: 'Campo obrigatório', description: 'Selecione um ticket ativo para este produto.', variant: 'destructive' })
       return
     }
     if (!nomeComprador.trim()) {
@@ -87,6 +99,7 @@ export default function RegistrarVenda() {
       return
     }
 
+    submitting.current = true
     setIsSubmitting(true)
 
     try {
@@ -94,8 +107,10 @@ export default function RegistrarVenda() {
         .from('vendas')
         .insert([{
           user_id: user.id,
-          nome_produto: produtoSelecionado,
-          valor_venda: parseFloat(valorSelecionado),
+          product_id: product.id,
+          ticket_id: ticket.id,
+          nome_produto: product.name,
+          valor_venda: ticket.price,
           nome_comprador: nomeComprador.trim(),
           whatsapp_comprador: whatsappComprador.trim(),
           email_comprador: emailComprador.trim()
@@ -110,16 +125,20 @@ export default function RegistrarVenda() {
         description: 'Aguardando aprovação do executive. O saldo será atualizado após a validação.'
       })
       setJustRegistered(true)
+      void queryClient.invalidateQueries({ queryKey: ['sales-board'] })
+      window.dispatchEvent(new Event('dashboard-data-changed'))
       resetForm()
       setTimeout(() => setJustRegistered(false), 8000)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao registrar venda:', error)
       toast({
         title: 'Erro ao registrar venda',
-        description: error?.message || 'Não foi possível registrar a venda. Tente novamente.',
+        description: errorMessage(error),
         variant: 'destructive'
       })
+      void catalog.refetch()
     } finally {
+      submitting.current = false
       setIsSubmitting(false)
     }
   }
@@ -148,45 +167,52 @@ export default function RegistrarVenda() {
           </div>
         </div>
 
+        {isExecutive && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"><p className="text-sm text-muted-foreground">Gerencie os produtos e valores disponíveis para sua equipe.</p><Button variant="outline" onClick={() => navigate('/executive?tab=products')}><Package className="mr-2 h-4 w-4" />Produtos e tickets</Button></div>}
         <Card className="border-border/50">
           <CardHeader>
             <CardTitle className="text-foreground">Dados da Venda</CardTitle>
           </CardHeader>
           <CardContent>
+            {catalog.isPending && <p role="status" className="mb-4 text-sm text-muted-foreground">Carregando produtos e tickets...</p>}
+            {catalog.isError && <div role="alert" className="mb-4 rounded-lg bg-destructive/10 p-4"><p className="text-sm text-destructive">Não foi possível carregar o catálogo. Tente novamente antes de registrar a venda.</p><Button type="button" variant="outline" className="mt-3" disabled={catalog.isFetching} onClick={() => catalog.refetch()}>Atualizar catálogo</Button></div>}
+            {!catalog.isPending && !catalog.isError && products.length === 0 && <p className="mb-4 rounded-lg border p-4 text-sm text-muted-foreground">Nenhum produto com ticket ativo disponível. {isExecutive ? 'Cadastre um produto e ticket pelo botão acima.' : 'Aguarde o executive disponibilizar produtos e tickets para venda.'}</p>}
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Nome Do Produto Vendido *</Label>
+                  <Label htmlFor="sale-product">Nome Do Produto Vendido *</Label>
                   <Select
                     value={produtoSelecionado}
-                    onValueChange={setProdutoSelecionado}
+                    onValueChange={value => { setProdutoSelecionado(value); setValorSelecionado(''); setSelectedPrice(null) }}
+                    disabled={isSubmitting || catalog.isPending || catalog.isError || !products.length}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger id="sale-product" className="w-full">
                       <SelectValue placeholder="Selecione o produto" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PRODUTOS_MENTORIA.map((produto) => (
-                        <SelectItem key={produto.value} value={produto.value}>
-                          {produto.label}
+                      {products.map((produto) => (
+                        <SelectItem key={produto.id} value={produto.id}>
+                          {produto.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {product?.description && <p className="text-xs text-muted-foreground">{product.description}</p>}
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Valor Da Venda *</Label>
+                  <Label htmlFor="sale-ticket">Ticket e valor da venda *</Label>
                   <Select
                     value={valorSelecionado}
-                    onValueChange={setValorSelecionado}
+                    onValueChange={value => { setValorSelecionado(value); setSelectedPrice(tickets.find(item => item.id === value)?.price ?? null) }}
+                    disabled={isSubmitting || !product || catalog.isError}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione o valor" />
+                    <SelectTrigger id="sale-ticket" className="w-full">
+                      <SelectValue placeholder={product ? 'Selecione o ticket' : 'Selecione primeiro o produto'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {VALORES_VENDA.map((valor) => (
-                        <SelectItem key={valor.value} value={valor.value}>
-                          {valor.label}
+                      {tickets.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name} — {money(item.price)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -195,7 +221,7 @@ export default function RegistrarVenda() {
               </div>
 
               {/* Commission Info — somente leitura */}
-              {valorSelecionado && (
+              {ticket && !rolesLoading && (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
                   <Info className="w-4 h-4 text-green-400 flex-shrink-0" />
                   <div className="text-sm">
@@ -259,7 +285,7 @@ export default function RegistrarVenda() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isSubmitting || !valorSelecionado || !produtoSelecionado}
+                  disabled={isSubmitting || rolesLoading || catalog.isPending || catalog.isError || !ticket || !product}
                   className="flex-1 md:flex-none bg-gradient-success hover:opacity-90"
                 >
                   {isSubmitting ? 'Registrando...' : 'Registrar Venda'}

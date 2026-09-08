@@ -91,10 +91,12 @@ export default function Perfil() {
     }
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      // This Auth API field is not declared by the installed client version.
+      const attributes: Parameters<typeof supabase.auth.updateUser>[0] & { current_password: string } = {
         password: passwordResult.data,
         current_password: currentPassword,
-      })
+      }
+      const { error } = await supabase.auth.updateUser(attributes)
 
       if (error) throw error
 
