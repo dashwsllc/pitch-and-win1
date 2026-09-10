@@ -74,8 +74,11 @@ DO $$ DECLARE l public.crm_leads; old_version bigint; a public.crm_activities; B
   IF l.pipeline_stage<>'repassado_closer' OR l.next_followup_at IS NULL THEN RAISE EXCEPTION 'FAIL followup outcome'; END IF;
   l:=public.crm_transition(l.id,'return',l.version,'{"note":"Retomar qualificação"}');
   IF l.pipeline_stage<>'em_qualificacao' OR l.closer_id IS NOT NULL THEN RAISE EXCEPTION 'FAIL return'; END IF;
-  l:=public.crm_transition(l.id,'handoff',l.version,jsonb_build_object('closer_id',auth.uid()));
+  l:=public.crm_transition(l.id,'handoff',l.version);
+  IF l.closer_id IS NOT NULL THEN RAISE EXCEPTION 'FAIL expected shared queue before scheduling'; END IF;
   a:=public.schedule_closer_call(l.id,'fechamento_closer',now()+interval '1 day',auth.uid(),'Contexto fechamento');
+  SELECT * INTO l FROM public.crm_leads WHERE id=l.id;
+  IF l.closer_id<>auth.uid() THEN RAISE EXCEPTION 'FAIL scheduling did not claim shared lead'; END IF;
   a:=public.reschedule_crm_call(a.id,now()+interval '2 days',a.updated_at);
   SELECT * INTO l FROM public.crm_leads WHERE id=l.id;
   l:=public.crm_transition(l.id,'close',l.version,'{"outcome":"venda_concluida","note":"Venda ganha QA"}');

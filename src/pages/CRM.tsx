@@ -237,7 +237,7 @@ export default function CRM() {
       call={openCalls.get(lead.id)}
       names={names}
       sale={saleMap.get(lead.id)}
-      emphasizeCall={tab === "closer" && queue !== "closed"}
+      emphasizeCall={lead.pipeline_stage === "repassado_closer"}
       busy={busy}
       onRead={() => setReadId(lead.id)}
       onEdit={() => setEditor(lead)}

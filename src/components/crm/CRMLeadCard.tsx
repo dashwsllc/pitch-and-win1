@@ -75,9 +75,18 @@ export function CRMLeadCard({
     lead.pipeline_stage,
   );
   const handed = lead.pipeline_stage === "repassado_closer";
-  const own = capabilities.admin || lead.closer_id === user?.id;
+  const own = lead.closer_id === user?.id;
+  const canManage = capabilities.admin || own;
   const canOperate =
-    !closed && (handed ? capabilities.closer && own : capabilities.sdr);
+    !closed &&
+    (handed
+      ? capabilities.closer && !!lead.closer_id && canManage
+      : capabilities.sdr);
+  const canSchedule =
+    !closed &&
+    (handed
+      ? capabilities.closer && (!lead.closer_id || canManage)
+      : capabilities.sdr);
   const next = [lead.next_followup_at, call?.scheduled_at]
     .filter(Boolean)
     .sort()[0];
@@ -303,7 +312,7 @@ export function CRMLeadCard({
             Assumir lead
           </Button>
         )}
-        {handed && capabilities.closer && own && (
+        {handed && capabilities.closer && !!lead.closer_id && canManage && (
           <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onAction("close")}>
             Registrar fechamento
           </Button>
@@ -323,6 +332,10 @@ export function CRMLeadCard({
                 <DropdownMenuItem onSelect={() => onAction("followup")}>
                   <CalendarPlus className="mr-2 h-4 w-4" /> Agendar retorno
                 </DropdownMenuItem>
+              </>
+            )}
+            {canSchedule && (
+              <>
                 <DropdownMenuItem onSelect={onSchedule}>
                   <PhoneCall className="mr-2 h-4 w-4" /> {call ? "Reagendar call" : "Agendar call"}
                 </DropdownMenuItem>
@@ -341,12 +354,20 @@ export function CRMLeadCard({
                 </DropdownMenuItem>
               </>
             )}
-            {handed && capabilities.closer && own && (
+            {handed && capabilities.closer && !!lead.closer_id && canManage && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => onAction("return")}>
                   <Undo2 className="mr-2 h-4 w-4" /> Devolver ao SDR
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onAction("assign")}>
+                  <UserCog className="mr-2 h-4 w-4" /> Atribuir lead
+                </DropdownMenuItem>
+              </>
+            )}
+            {handed && capabilities.closer && !lead.closer_id && capabilities.admin && (
+              <>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => onAction("assign")}>
                   <UserCog className="mr-2 h-4 w-4" /> Atribuir lead
                 </DropdownMenuItem>
@@ -385,7 +406,7 @@ export function CRMLeadCard({
                 </Button>
               )
             : capabilities.sales &&
-              own && (
+              canManage && (
                 <Button
                   size="sm"
                   className="h-8 whitespace-normal px-2 text-xs"

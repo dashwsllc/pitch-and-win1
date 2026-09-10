@@ -6,6 +6,7 @@ import {
   useCRMAssignees,
 } from "@/hooks/useCRM";
 import { useAuth } from "@/hooks/useAuth";
+import { useRoles } from "@/hooks/useRoles";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { errorMessage } from "@/lib/sales";
@@ -32,6 +33,7 @@ export function CRMCallScheduler({
   onClose: () => void;
 }) {
   const { user } = useAuth();
+  const { capabilities } = useRoles();
   const assignees = useCRMAssignees();
   const client = useQueryClient();
   const { toast } = useToast();
@@ -67,7 +69,15 @@ export function CRMCallScheduler({
         "super_admin",
       ].includes(a.role),
     )
-    .filter((a, i, all) => all.findIndex((b) => b.user_id === a.user_id) === i);
+    .filter((a, i, all) => all.findIndex((b) => b.user_id === a.user_id) === i)
+    .filter(
+      (a) =>
+        type !== "fechamento_closer" ||
+        !!lead.closer_id ||
+        capabilities.admin ||
+        a.user_id === user?.id,
+    );
+  const assignedName = candidates.find((a) => a.user_id === assigned)?.display_name;
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -130,7 +140,7 @@ export function CRMCallScheduler({
                 <Label className="text-xs" htmlFor="call-assignee">Responsável</Label>
                 <select
                   id="call-assignee"
-                  disabled={type === "fechamento_closer"}
+                  disabled={type === "fechamento_closer" && !!lead.closer_id}
                   required
                   className="h-9 w-full rounded border bg-background px-3 text-sm"
                   value={assigned}
@@ -143,6 +153,11 @@ export function CRMCallScheduler({
                     </option>
                   ))}
                 </select>
+                {type === "fechamento_closer" && !lead.closer_id && assigned && (
+                  <p className="text-[11px] leading-4 text-muted-foreground">
+                    Ao agendar, {assignedName || "o responsável selecionado"} será definido como Closer deste lead.
+                  </p>
+                )}
                 {assignees.isError && (
                   <p role="alert">Não foi possível carregar os responsáveis.</p>
                 )}

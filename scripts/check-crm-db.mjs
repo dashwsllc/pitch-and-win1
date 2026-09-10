@@ -5,9 +5,15 @@ import { resolve } from 'node:path'
 const root = resolve(import.meta.dirname, '..')
 const tests = readFileSync(resolve(root, 'supabase/tests/crm_shared_workflow.sql'), 'utf8')
 const migration = readFileSync(resolve(root, 'supabase/migrations/20260910010000_crm_shared_workflow.sql'), 'utf8')
+const schedulingPatch = readFileSync(resolve(root, 'supabase/migrations/20260910030000_crm_claim_on_call_schedule.sql'), 'utf8')
 const directory = resolve(root, '.verification.local')
 mkdirSync(directory, { recursive: true })
-const query = process.argv.includes('--deployed') ? 'BEGIN;' : migration.replace(/COMMIT;\s*$/, '')
+const patchBody = schedulingPatch.replace(/^BEGIN;\s*/, '').replace(/COMMIT;\s*$/, '')
+const query = process.argv.includes('--deployed')
+  ? 'BEGIN;'
+  : process.argv.includes('--patch')
+    ? 'BEGIN;\n' + patchBody
+    : migration.replace(/COMMIT;\s*$/, '') + '\n' + patchBody
 writeFileSync(
   resolve(directory, 'crm-query.sql'),
   query.replace('BEGIN;', "BEGIN;\nSET LOCAL lock_timeout='3s';\nSET LOCAL statement_timeout='30s';") +
