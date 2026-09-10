@@ -24,11 +24,11 @@ Os códigos existentes `fechado_ganho` e `fechado_perdido` são preservados. For
 
 ## Banco e publicação
 
-A migração desta entrega é `supabase/migrations/20260909200000_sdr_closer_crm.sql`. Ela **ainda não foi gravada em produção**. A verificação a executou no projeto `mbzwchnxtskysqplqiyy` dentro de uma transação encerrada com `ROLLBACK`.
+A migração desta entrega é `supabase/migrations/20260909200000_sdr_closer_crm.sql`. Ela foi aplicada em 09/09/2026 ao projeto de produção `mbzwchnxtskysqplqiyy` e validada em seguida com a bateria completa dentro de uma transação encerrada com `ROLLBACK`.
 
-Não usar `supabase db push` geral: o histórico remoto diverge do local, conforme `PRODUCTS_CATALOG.md`. Antes de publicar este frontend:
+Não usar `supabase db push` geral: o histórico remoto diverge do local, conforme `PRODUCTS_CATALOG.md`. Para conferir ou repetir a publicação em outro ambiente:
 
-1. Conferir se esta migração específica ainda não foi aplicada. Ela é para execução única, com `BEGIN`/`COMMIT`, e não deve ser repetida sobre uma versão já instalada.
+1. Conferir se esta migração específica ainda não foi aplicada naquele ambiente. Ela é para execução única, com `BEGIN`/`COMMIT`, e não deve ser repetida sobre uma versão já instalada.
 2. Executar seu conteúdo inteiro no SQL Editor do projeto, preservando a transação. Se falhar, corrigir a causa antes de repetir; não executar fragmentos isolados.
 3. Confirmar colunas, constraints, políticas e funções — a presença de duas funções sozinha não valida a migração. A interface usa `schedule_closer_call`, `resolve_closer_call`, `reschedule_crm_call` e `crm_call_assignees`.
 4. Executar `node scripts/check-crm-db.mjs --deployed` para testar a estrutura instalada com fixtures isoladas e `ROLLBACK`.
