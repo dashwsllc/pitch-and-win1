@@ -14,6 +14,7 @@ import {
   ListChecks
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
+import { useRoles } from '@/hooks/useRoles'
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
@@ -49,7 +50,8 @@ interface AppSidebarProps {
 }
 
 export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
-  const items = isExecutive ? menuItems : sellerMenuItems
+  const { capabilities } = useRoles()
+  const items = (isExecutive ? menuItems : sellerMenuItems).filter(item => (item.url !== '/crm' || capabilities.leads) && (item.url !== '/vendas' || capabilities.sales))
   
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-dvh w-16 flex-col overflow-y-auto border-r border-white/[0.055] bg-[#0c0715]/92 backdrop-blur-xl sm:w-[72px]" data-lenis-prevent>

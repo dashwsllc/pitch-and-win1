@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { useToast } from '@/hooks/use-toast'
 import { errorMessage } from '@/lib/sales'
+import { CRMLinkedSale } from '@/components/crm/CRMLinkedSale'
 
 interface Venda {
   id: string
@@ -141,6 +142,7 @@ export default function MinhasVendas() {
 
   return (
     <DashboardLayout>
+      <CRMLinkedSale />
       <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
         {/* Header */}
         <div className="flex items-center justify-between">

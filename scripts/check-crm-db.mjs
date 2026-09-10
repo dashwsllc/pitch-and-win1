@@ -3,8 +3,8 @@ import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
-const tests = readFileSync(resolve(root, 'supabase/tests/sdr_closer_crm.sql'), 'utf8')
-const migration = readFileSync(resolve(root, 'supabase/migrations/20260909200000_sdr_closer_crm.sql'), 'utf8')
+const tests = readFileSync(resolve(root, 'supabase/tests/crm_shared_workflow.sql'), 'utf8')
+const migration = readFileSync(resolve(root, 'supabase/migrations/20260910010000_crm_shared_workflow.sql'), 'utf8')
 const directory = resolve(root, '.verification.local')
 mkdirSync(directory, { recursive: true })
 const query = process.argv.includes('--deployed') ? 'BEGIN;' : migration.replace(/COMMIT;\s*$/, '')

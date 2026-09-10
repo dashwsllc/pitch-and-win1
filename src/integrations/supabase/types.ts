@@ -232,6 +232,8 @@ export type Database = {
       }
       crm_activities: {
         Row: {
+          previous_state: Json | null
+          new_state: Json | null
           call_type: string | null
           assigned_to: string | null
           author_name: string | null
@@ -250,6 +252,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          previous_state?: Json | null
+          new_state?: Json | null
           call_type?: string | null
           assigned_to?: string | null
           author_name?: string | null
@@ -268,6 +272,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          previous_state?: Json | null
+          new_state?: Json | null
           call_type?: string | null
           assigned_to?: string | null
           author_name?: string | null
@@ -297,6 +303,13 @@ export type Database = {
       }
       crm_leads: {
         Row: {
+          approach_stage: string
+          sdr_id: string | null
+          closer_id: string | null
+          handed_off_at: string | null
+          closed_at: string | null
+          closed_by: string | null
+          version: number
           city_state: string | null
           athlete_name: string | null
           athlete_birth_date: string | null
@@ -329,13 +342,20 @@ export type Database = {
           observations_updated_by: string | null
           phone: string | null
           pipeline_stage: string
-          priority: string
+          priority: string | null
           profile_photo_url: string | null
           tags: string[] | null
           temperature: string
           updated_at: string | null
         }
         Insert: {
+          approach_stage?: string
+          sdr_id?: string | null
+          closer_id?: string | null
+          handed_off_at?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          version?: number
           city_state?: string | null
           athlete_name?: string | null
           athlete_birth_date?: string | null
@@ -368,13 +388,20 @@ export type Database = {
           observations_updated_by?: string | null
           phone?: string | null
           pipeline_stage?: string
-          priority?: string
+          priority?: string | null
           profile_photo_url?: string | null
           tags?: string[] | null
           temperature?: string
           updated_at?: string | null
         }
         Update: {
+          approach_stage?: string
+          sdr_id?: string | null
+          closer_id?: string | null
+          handed_off_at?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          version?: number
           city_state?: string | null
           athlete_name?: string | null
           athlete_birth_date?: string | null
@@ -407,7 +434,7 @@ export type Database = {
           observations_updated_by?: string | null
           phone?: string | null
           pipeline_stage?: string
-          priority?: string
+          priority?: string | null
           profile_photo_url?: string | null
           tags?: string[] | null
           temperature?: string
@@ -1143,6 +1170,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      crm_can: { Args: { p_capability: string }; Returns: boolean }
+      crm_transition: { Args: { p_lead_id: string; p_action: string; p_expected_version: number; p_data?: Json }; Returns: Database['public']['Tables']['crm_leads']['Row'] }
+      crm_sale_links: { Args: Record<PropertyKey, never>; Returns: { lead_id: string; sale_id: string | null; can_open: boolean }[] }
+
       crm_has_access: { Args: Record<PropertyKey, never>; Returns: boolean }
       crm_call_assignees: { Args: Record<PropertyKey, never>; Returns: { user_id: string; display_name: string; role: string }[] }
       schedule_closer_call: {

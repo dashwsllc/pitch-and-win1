@@ -1,307 +1,222 @@
-// UI contract tests with intercepted API responses. No remote mutations or real login.
-// Database permissions are tested separately by check-crm-db.mjs.
+// Full browser + signed JWT/PostgREST + Realtime test. Always removes fixtures in finally.
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
-import {
-  chromium,
-  expect as baseExpect
-} from '../.verification.local/node_modules/@playwright/test/index.mjs'
+import { createClient } from '@supabase/supabase-js'
+import { chromium, expect as baseExpect } from '../.verification.local/node_modules/@playwright/test/index.mjs'
+import { realFixtures, checked, project, url } from './crm-real-fixtures.mjs'
 
-const expect = baseExpect.configure({ timeout: 12000 })
+const expect = baseExpect.configure({ timeout: 15000 })
 const origin = process.env.CRM_TEST_ORIGIN || 'http://127.0.0.1:5198'
-if (!['localhost', '127.0.0.1'].includes(new URL(origin).hostname))
-  throw Error('UI contract tests require a local origin.')
-const project = 'mbzwchnxtskysqplqiyy'
-const sdr = randomUUID(),
-  closer = randomUUID(),
-  product = randomUUID(),
-  ticket = randomUUID()
-const leads = [],
-  activities = [],
-  sales = [],
-  requests = [],
-  errors = []
-const now = () => new Date().toISOString()
-const browser = await chromium.launch({ channel: 'chromium', headless: true })
-mkdirSync('.verification.local', { recursive: true })
-let page
-async function session(actor, role, viewport = { width: 1440, height: 1080 }) {
-  const context = await browser.newContext({ viewport })
-  await context.routeWebSocket('**/realtime/**', (socket) => socket.close())
-  const user = {
-    id: actor,
-    email: `${role}@example.invalid`,
-    aud: 'authenticated',
-    role: 'authenticated',
-    created_at: now(),
-    user_metadata: { display_name: `QA ${role}` },
-    app_metadata: { provider: 'email' }
-  }
-  const token = [
-    { alg: 'HS256', typ: 'JWT' },
-    { sub: actor, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 },
-    'test'
-  ]
-    .map((x) => Buffer.from(typeof x === 'string' ? x : JSON.stringify(x)).toString('base64url'))
-    .join('.')
-  await context.addInitScript(
-    ({ project, token, user }) =>
-      sessionStorage.setItem(
-        `sb-${project}-auth-token`,
-        JSON.stringify({
-          access_token: token,
-          refresh_token: 'test-only',
-          token_type: 'bearer',
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          expires_in: 3600,
-          user
-        })
-      ),
-    { project, token, user }
-  )
-  await context.route('https://*.supabase.co/**', async (route) => {
-    const req = route.request(),
-      url = new URL(req.url()),
-      name = url.pathname.split('/').at(-1),
-      method = req.method()
-    const body = req.postDataJSON()
-    const json = (data) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(data) })
-    if (url.pathname.startsWith('/auth/')) return json(user)
-    if (!url.pathname.startsWith('/rest/')) return route.abort()
-    const single = req.headers().accept?.includes('vnd.pgrst.object')
-    const filter = (rows) =>
-      rows.filter((r) =>
-        ['id', 'lead_id'].every(
-          (k) => !url.searchParams.has(k) || r[k] === url.searchParams.get(k).replace('eq.', '')
-        )
-      )
-    const result = (rows) => json(single ? rows[0] : rows)
-    if (method !== 'GET') requests.push({ name, body })
-    if (name === 'profiles')
-      return json({
-        id: actor,
-        user_id: actor,
-        display_name: `QA ${role}`,
-        suspended: false,
-        avatar_url: null,
-        created_at: now(),
-        updated_at: now()
-      })
-    if (name === 'user_roles')
-      return json([{ role, crm_access: true, can_view_sales: true, commission_rate: 10 }])
-    if (name === 'crm_call_assignees')
-      return json([
-        { user_id: sdr, display_name: 'Ismael QA', role: 'sdr' },
-        { user_id: closer, display_name: 'David QA', role: 'closer' }
-      ])
-    if (name === 'crm_leads') {
-      if (method === 'POST')
-        leads.unshift({
-          ...body,
-          id: randomUUID(),
-          temperature: body.temperature || 'frio',
-          priority: 'normal',
-          pipeline_stage: 'novo',
-          approach_count: 0,
-          created_at: now(),
-          updated_at: now()
-        })
-      if (method === 'PATCH') filter(leads).forEach((l) => Object.assign(l, body))
-      return result(method === 'POST' ? [leads[0]] : filter(leads))
-    }
-    if (name === 'crm_activities') {
-      if (method === 'POST')
-        activities.unshift({
-          ...body,
-          id: randomUUID(),
-          author_name: `QA ${role}`,
-          created_at: now(),
-          updated_at: now(),
-          call_type: null
-        })
-      return result(filter(activities).filter((a) => !url.searchParams.has('call_type') || a.call_type))
-    }
-    if (name === 'schedule_closer_call') {
-      const call = {
-        id: randomUUID(),
-        lead_id: body.p_lead_id,
-        user_id: actor,
-        activity_type: 'reuniao',
-        title: body.p_call_type === 'qualificacao' ? 'Qualificação' : 'Fechamento com Closer',
-        call_type: body.p_call_type,
-        assigned_to: body.p_assigned_to,
-        scheduled_at: body.p_scheduled_at,
-        description: body.p_context,
-        is_completed: false,
-        outcome: null,
-        completed_at: null,
-        created_at: now(),
-        updated_at: now()
-      }
-      activities.unshift(call)
-      leads.find((l) => l.id === call.lead_id).pipeline_stage =
-        call.call_type === 'qualificacao' ? 'em_qualificacao' : 'repassado_closer'
-      return json(call)
-    }
-    if (name === 'reschedule_crm_call') {
-      const call = activities.find((a) => a.id === body.p_activity_id)
-      assert.equal(body.p_expected_revision, call.updated_at)
-      Object.assign(call, { scheduled_at: body.p_scheduled_at, updated_at: now() })
-      return json(call)
-    }
-    if (name === 'resolve_closer_call') {
-      const call = activities.find((a) => a.id === body.p_activity_id)
-      assert.equal(body.p_expected_revision, call.updated_at)
-      Object.assign(call, {
-        is_completed: true,
-        outcome: body.p_outcome,
-        completed_at: now(),
-        updated_at: now()
-      })
-      leads.find((l) => l.id === call.lead_id).pipeline_stage =
-        body.p_outcome === 'venda_concluida'
-          ? 'fechado_ganho'
-          : body.p_outcome === 'venda_perdida'
-            ? 'fechado_perdido'
-            : 'em_qualificacao'
-      return json(call)
-    }
-    if (name === 'products')
-      return json([
-        {
-          id: product,
-          name: 'Avaliação de performance',
-          description: null,
-          active: true,
-          updated_at: now(),
-          product_tickets: [
-            {
-              id: ticket,
-              product_id: product,
-              name: 'Completo',
-              price: 1497,
-              active: true,
-              updated_at: now()
-            }
-          ]
-        }
-      ])
-    if (name === 'vendas' && method === 'POST') {
-      sales.push(...(Array.isArray(body) ? body : [body]))
-      return json(null)
-    }
-    return json([])
-  })
-  const tab = await context.newPage()
-  tab.on('pageerror', (error) => errors.push(error.message))
-  await tab.goto(`${origin}/crm`)
-  return tab
-}
-const localFuture = (days) => {
+if (!['127.0.0.1', 'localhost', 'wsltda.site'].includes(new URL(origin).hostname)) throw Error('Unapproved test origin')
+const future = days => {
   const date = new Date(Date.now() + days * 86400000)
   return new Date(+date - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 }
-try {
-  page = await session(sdr, 'sdr')
-  await expect(page.getByRole('tab', { name: 'SDR', exact: true })).toBeVisible()
-  assert.equal(await page.getByRole('tab', { name: "Closer's", exact: true }).count(), 0)
-  await page.getByRole('button', { name: 'Novo Lead', exact: true }).click()
-  const form = page.getByRole('dialog', { name: 'Novo Lead', exact: true })
-  await expect(form.getByText('Cargo', { exact: true })).toHaveCount(0)
-  await form.getByRole('button', { name: 'Criar Lead', exact: true }).click()
-  assert.equal(leads.length, 0)
-  await form.getByLabel('Nome do responsável *', { exact: true }).fill('Mariana Silva')
-  await form.getByLabel('WhatsApp *', { exact: true }).fill('11999999999')
-  await form.getByLabel('E-mail *', { exact: true }).fill('mariana@example.invalid')
-  await form.getByLabel('Nome do atleta *', { exact: true }).fill('Lucas Silva')
-  await form.getByLabel('Data de nascimento *', { exact: true }).fill('2012-06-15')
-  await form.getByLabel('Posição em campo *', { exact: true }).selectOption('Meia')
-  await form.getByRole('button', { name: 'Criar Lead', exact: true }).click()
-  await expect(form).toHaveCount(0)
-  assert.equal(leads[0].athlete_height_cm, null)
-  assert.equal(leads[0].athlete_weight_kg, null)
-  await page.getByRole('tab', { name: 'SDR', exact: true }).click()
-  await page.getByLabel('Temperatura de Mariana Silva').selectOption('quente')
-  await page.getByRole('button', { name: 'Abrir ficha / agendar', exact: true }).click()
-  await page
-    .getByLabel('Nova anotação', { exact: true })
-    .fill('Família busca avaliação técnica; pai participará da call.')
-  await page.getByRole('button', { name: 'Adicionar contexto', exact: true }).click()
-  await expect(
-    page.getByText('Família busca avaliação técnica; pai participará da call.', { exact: true })
-  ).toBeVisible()
-  await page.getByRole('button', { name: 'Agendar call', exact: true }).click()
-  let scheduler = page.getByRole('dialog', { name: 'Agendar call', exact: true })
-  await scheduler.getByLabel('Data e hora (horário local)', { exact: true }).fill(localFuture(1))
-  await scheduler.getByRole('button', { name: 'Agendar', exact: true }).click()
-  await expect(scheduler).toHaveCount(0)
-  await page.getByRole('button', { name: 'Avançou', exact: true }).click()
-  await page.getByRole('button', { name: 'Confirmar resultado', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: 'Confirmar resultado', exact: true })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Agendar call', exact: true }).click()
-  scheduler = page.getByRole('dialog', { name: 'Agendar call', exact: true })
-  await scheduler.getByLabel('Tipo da call', { exact: true }).selectOption('fechamento_closer')
-  await scheduler.getByLabel('Responsável', { exact: true }).selectOption(closer)
-  await scheduler.getByLabel('Data e hora (horário local)', { exact: true }).fill(localFuture(2))
-  await scheduler
-    .getByLabel('Contexto da reunião', { exact: true })
-    .fill('Participantes: Mariana e pai do Lucas')
-  await scheduler.getByRole('button', { name: 'Agendar', exact: true }).click()
-  await expect(scheduler).toHaveCount(0)
-  const closing = activities.find((a) => a.call_type === 'fechamento_closer'),
-    closingId = closing.id
-  await page.getByRole('button', { name: 'Reagendar', exact: true }).click()
-  scheduler = page.getByRole('dialog', { name: 'Reagendar call', exact: true })
-  await scheduler.getByLabel('Data e hora (horário local)', { exact: true }).fill(localFuture(3))
-  await scheduler.getByRole('button', { name: 'Salvar horário', exact: true }).click()
-  await expect(scheduler).toHaveCount(0)
-  assert.equal(closing.id, closingId)
-  assert.equal(activities.filter((a) => a.call_type === 'fechamento_closer').length, 1)
-  assert.equal(await page.getByRole('button', { name: 'Venda concluída', exact: true }).count(), 0)
-  await page.screenshot({ path: '.verification.local/crm-sdr-detail.png', animations: 'disabled' })
+await realFixtures(async ({ clients, sessions, users, anon, name, productId, ticketId }) => {
+  const browser = await chromium.launch({ channel: 'chromium', headless: true })
+  const errors = [], unexpected = []
+  let page
+  const actor = role => users.find(u => u.fixtureRole === role).id
+  const leadBy = async id => checked(clients.seller.from('crm_leads').select('*').eq('id', id).single())
+  const act = (role, lead, action, data = {}) => checked(clients[role].rpc('crm_transition', { p_lead_id: lead.id, p_action: action, p_expected_version: lead.version, p_data: data }))
+  const session = async (role, viewport = { width: 1440, height: 1080 }) => {
+    const context = await browser.newContext({ viewport })
+    if (role === 'second') await context.addInitScript(() => {
+      // Disable only polling intervals; keep React Query notification timers and socket heartbeats.
+      const interval = window.setInterval.bind(window)
+      window.setInterval = (callback, delay, ...args) => interval(callback, delay === 15000 || delay === 30000 ? 3600000 : delay, ...args)
+    })
+    await context.addInitScript(({ project, session }) => {
+      if (!sessionStorage.getItem(`sb-${project}-auth-token`)) sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
+    }, { project, session: sessions[role] })
+    const tab = await context.newPage()
+    tab.on('pageerror', error => errors.push(error.message))
+    tab.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+    tab.on('response', response => { if (response.status() >= 400) unexpected.push(`${response.status()} ${new URL(response.url()).pathname}`) })
+    await tab.goto(`${origin}/crm`)
+    return tab
+  }
+  try {
+    for (const [role, expected] of Object.entries({ seller: [true,true,true,false], second: [true,true,true,false], executive: [true,true,true,true], sdr: [true,true,false,false], closer: [true,false,true,false], blocked: [false,false,false,false], suspended: [false,false,false,false] })) {
+      for (const [i, capability] of ['leads', 'sdr', 'closer', 'admin'].entries()) assert.equal(await checked(clients[role].rpc('crm_can', { p_capability: capability })), expected[i], `${role} ${capability}`)
+    }
+    assert.ok((await clients.seller.rpc('executive_list_users')).error, 'seller user-directory access')
+    assert.ok(await checked(clients.executive.rpc('executive_list_users')))
+    const anonymous = createClient(url, anon, { auth: { persistSession: false } })
+    assert.ok((await anonymous.rpc('crm_transition', { p_lead_id: actor('seller'), p_action: 'claim', p_expected_version: 1 })).error, 'anonymous RPC')
+    const anonLeads = await anonymous.from('crm_leads').select('id').limit(1)
+    assert.ok(anonLeads.error || anonLeads.data.length === 0, 'anonymous RLS disclosed leads')
 
-  page = await session(closer, 'closer')
-  assert.equal(await page.getByRole('tab', { name: 'SDR', exact: true }).count(), 0)
-  await page.getByRole('tab', { name: "Closer's", exact: true }).click()
-  await expect(page.getByText('Participantes: Mariana e pai do Lucas', { exact: true })).toBeVisible()
-  await page.screenshot({ path: '.verification.local/crm-closer-desktop.png', animations: 'disabled' })
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({
-    path: '.verification.local/crm-closer-mobile.png',
-    animations: 'disabled',
-    fullPage: true
-  })
-  assert.equal(
-    await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
-    false,
-    'Mobile overflow'
-  )
-  await page.getByRole('button', { name: 'Venda concluída', exact: true }).click()
-  await page.getByRole('button', { name: 'Confirmar resultado', exact: true }).click()
-  await expect(
-    page.getByText('Fechou. Bola pra frente, a próxima venda é sempre a melhor.', { exact: true })
-  ).toBeVisible()
-  assert.equal(sales.length, 0, 'CRM must not create revenue automatically')
-  await page.getByRole('button', { name: 'Registrar venda de Mariana Silva', exact: true }).click()
-  await expect(page.getByLabel('Nome Do Comprador *', { exact: true })).toHaveValue('Mariana Silva')
-  await expect(page.getByLabel('WhatsApp Do Comprador *', { exact: true })).toHaveValue('11999999999')
-  await page.getByRole('combobox', { name: 'Nome Do Produto Vendido *', exact: true }).click()
-  await page.getByRole('option', { name: 'Avaliação de performance', exact: true }).click()
-  await page.getByRole('combobox', { name: 'Ticket e valor da venda *', exact: true }).click()
-  await page.getByRole('option', { name: /Completo/ }).click()
-  await page.getByRole('button', { name: 'Registrar Venda', exact: true }).click()
-  await expect.poll(() => sales.length).toBe(1)
-  assert.equal(sales[0].crm_lead_id, leads[0].id)
-  assert.equal(sales[0].valor_venda, 1497)
-  assert.equal(errors.length, 0, errors.join('\n'))
-  console.log(
-    'PASS: desktop/mobile UI, role tabs, validation, context log, qualification, handoff, reschedule, closing and manual sale linkage. API responses mocked; no remote mutations.'
-  )
-} catch (error) {
-  if (page) await page.screenshot({ path: '.verification.local/crm-ui-failure.png', fullPage: true })
-  throw error
-} finally {
-  await browser.close()
-}
+    page = await session('seller')
+    await expect(page.getByRole('tab', { name: 'SDR', exact: true })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Closer', exact: true })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Gerenciar Usuários', exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Novo Lead', exact: true }).click()
+    let dialog = page.getByRole('dialog', { name: 'Novo Lead', exact: true })
+    await dialog.getByLabel('Nome do responsável *', { exact: true }).fill(name)
+    await dialog.getByLabel('Nome do atleta *', { exact: true }).fill(`${name} Atleta`)
+    await dialog.getByLabel('WhatsApp *', { exact: true }).fill('11999999999')
+    await dialog.getByRole('button', { name: 'Criar Lead', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await page.getByLabel('Buscar leads', { exact: true }).fill(name)
+    let card = page.getByRole('article', { name: `Lead ${name}`, exact: true })
+    await expect(card).toBeVisible()
+    let lead = (await checked(clients.seller.from('crm_leads').select('*').eq('created_by', actor('seller')).eq('name', name)))[0]
+    assert.ok(lead)
+    assert.equal(lead.email, null); assert.equal(lead.athlete_birth_date, null); assert.equal(lead.athlete_position, null)
+    assert.equal(lead.pipeline_stage, 'novo')
+    const leadId = lead.id
+    await card.getByRole('button', { name: `Editar ${name}`, exact: true }).click()
+    dialog = page.getByRole('dialog', { name: 'Editar lead', exact: true })
+    await expect(dialog.getByLabel('Nome do responsável *', { exact: true })).toHaveValue(name)
+    await dialog.getByLabel('Cidade / UF', { exact: true }).fill('São Paulo / SP')
+    await dialog.getByRole('button', { name: 'Salvar cadastro', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    assert.equal((await leadBy(leadId)).city_state, 'São Paulo / SP')
+    await card.getByRole('button', { name: `Abrir ficha de ${name}`, exact: true }).click()
+    const sheet = page.getByRole('dialog', { name: `Ficha de ${name}`, exact: true })
+    await expect(sheet.getByText('São Paulo / SP', { exact: true })).toBeVisible()
+    await expect(sheet.getByRole('heading', { name: 'Histórico do lead', exact: true })).toBeVisible()
+    await sheet.getByRole('button', { name: 'Close', exact: true }).click()
+    await page.getByRole('tab', { name: 'SDR', exact: true }).click()
+    await page.getByLabel(`Aquecimento de ${name}`, { exact: true }).selectOption('quente')
+    await expect.poll(async () => (await leadBy(leadId)).temperature).toBe('quente')
+    for (const stage of ['em_abordagem', 'abordado', 'reabordado', 'nao_abordado', 'abordado']) {
+      await page.getByLabel(`Abordagem de ${name}`, { exact: true }).selectOption(stage)
+      await expect.poll(async () => (await leadBy(leadId)).approach_stage).toBe(stage)
+      await expect(card.getByRole('button', { name: 'Enviar para Closer', exact: true })).toBeEnabled()
+    }
+    lead = await leadBy(leadId)
+    assert.equal(lead.pipeline_stage, 'pronto_closer')
+    assert.ok((await clients.seller.from('crm_leads').update({ pipeline_stage: 'novo' }).eq('id', leadId)).error, 'direct pipeline accepted')
+    await card.getByRole('button', { name: 'Registrar contato/anotação', exact: true }).click()
+    dialog = page.getByRole('dialog', { name: 'Registrar contato/anotação', exact: true })
+    await dialog.getByLabel('Anotação', { exact: true }).fill('QA: contato estabelecido; repasse sem agendamento obrigatório.')
+    await dialog.getByRole('button', { name: 'Confirmar', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    const second = await session('second')
+    await second.getByRole('tab', { name: 'Closer', exact: true }).click()
+    await second.getByLabel('Buscar leads', { exact: true }).fill(name)
+    const secondCard = second.getByRole('article', { name: `Lead ${name}`, exact: true })
+    await expect(secondCard).toHaveCount(0)
+    let realtimeEvent
+    const realtime = clients.second.channel(`crm-qa-${leadId}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'crm_leads', filter: `id=eq.${leadId}` }, payload => { realtimeEvent = payload.new })
+    await clients.second.realtime.setAuth(sessions.second.access_token)
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(Error('Realtime subscription timeout')), 15000)
+      realtime.subscribe(status => { if (status === 'SUBSCRIBED') { clearTimeout(timer); resolve() } else if (status === 'CHANNEL_ERROR') { clearTimeout(timer); reject(Error('Realtime subscription failed')) } })
+    })
+    // This session has polling disabled, so cross-session UI update proves Realtime.
+    await card.getByRole('button', { name: 'Enviar para Closer', exact: true }).click()
+    dialog = page.getByRole('dialog', { name: 'Enviar para Closer', exact: true })
+    await expect(dialog.getByLabel('Responsável Closer', { exact: true })).toHaveValue('')
+    await dialog.getByRole('button', { name: 'Confirmar', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect.poll(() => realtimeEvent?.pipeline_stage).toBe('repassado_closer')
+    await expect(secondCard).toBeVisible()
+    assert.equal((await leadBy(leadId)).id, leadId)
+    assert.equal((await checked(clients.seller.from('crm_activities').select('id').eq('lead_id', leadId).not('call_type', 'is', null))).length, 0)
+    await secondCard.getByRole('button', { name: 'Assumir lead', exact: true }).click()
+    await expect(secondCard.getByRole('button', { name: 'Registrar fechamento', exact: true })).toBeVisible()
+    lead = await leadBy(leadId)
+    assert.equal(lead.closer_id, actor('second'))
+    assert.ok((await clients.seller.rpc('crm_transition', { p_lead_id: leadId, p_action: 'close', p_expected_version: lead.version, p_data: { outcome: 'venda_concluida' } })).error, 'non-owner closing')
+    await secondCard.getByRole('button', { name: 'Agendar call', exact: true }).click()
+    dialog = second.getByRole('dialog', { name: 'Agendar call', exact: true })
+    await dialog.getByLabel('Data e hora (horário local)', { exact: true }).fill(future(1))
+    await dialog.getByRole('button', { name: 'Agendar', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await secondCard.getByRole('button', { name: 'Reagendar call', exact: true }).click()
+    dialog = second.getByRole('dialog', { name: 'Reagendar call', exact: true })
+    await dialog.getByLabel('Data e hora (horário local)', { exact: true }).fill(future(2))
+    await dialog.getByRole('button', { name: 'Salvar horário', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await second.screenshot({ path: '.verification.local/crm-real-desktop.png', fullPage: true })
+    await second.setViewportSize({ width: 390, height: 844 })
+    await second.screenshot({ path: '.verification.local/crm-real-mobile.png', fullPage: true })
+    assert.equal(await second.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, '390px horizontal overflow')
+    await secondCard.getByRole('button', { name: 'Registrar fechamento', exact: true }).click()
+    dialog = second.getByRole('dialog', { name: 'Registrar fechamento', exact: true })
+    await dialog.getByLabel('Resultado *', { exact: true }).selectOption('followup')
+    await expect(dialog.getByLabel('Próxima data e hora *', { exact: true })).toBeVisible()
+    await dialog.getByLabel('Próxima data e hora *', { exact: true }).fill(future(3))
+    await dialog.getByLabel('Observações da call', { exact: true }).fill('QA: família pediu acompanhamento.')
+    await dialog.getByRole('button', { name: 'Confirmar', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    assert.equal((await leadBy(leadId)).pipeline_stage, 'repassado_closer')
+    await secondCard.getByRole('button', { name: 'Registrar fechamento', exact: true }).click()
+    dialog = second.getByRole('dialog', { name: 'Registrar fechamento', exact: true })
+    await dialog.getByLabel('Resultado *', { exact: true }).selectOption('venda_concluida')
+    await dialog.getByRole('button', { name: 'Confirmar', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await second.getByRole('tab', { name: /Fechamentos realizados/ }).click()
+    await expect(secondCard.getByText('Venda pendente de cadastro', { exact: true })).toBeVisible()
+    assert.equal((await checked(clients.second.from('vendas').select('id').eq('crm_lead_id', leadId))).length, 0)
+    await second.reload()
+    await second.getByRole('tab', { name: /Fechamentos realizados/ }).click()
+    await second.getByLabel('Buscar leads', { exact: true }).fill(name)
+    await expect(secondCard.getByText('Venda pendente de cadastro', { exact: true })).toBeVisible()
+    await secondCard.getByRole('button', { name: 'Cadastrar venda no módulo Vendas', exact: true }).click()
+    await expect(second.getByLabel('Nome Do Comprador *', { exact: true })).toHaveValue(name)
+    await expect(second.getByLabel('WhatsApp Do Comprador *', { exact: true })).toHaveValue('11999999999')
+    await expect(second.getByLabel('Email Do Comprador *', { exact: true })).toHaveValue('')
+    await second.getByLabel('Email Do Comprador *', { exact: true }).fill('qa-buyer@example.invalid')
+    await second.getByRole('combobox', { name: 'Nome Do Produto Vendido *', exact: true }).click()
+    await second.getByRole('option', { name: `${name} Produto`, exact: true }).click()
+    await second.getByRole('combobox', { name: 'Ticket e valor da venda *', exact: true }).click()
+    await second.getByRole('option', { name: /QA Ticket/ }).click()
+    await second.getByRole('button', { name: 'Registrar Venda', exact: true }).click()
+    await expect(second.getByText('Venda registrada! Aguardando aprovação', { exact: true })).toBeVisible()
+    const sale = (await checked(clients.second.from('vendas').select('*').eq('crm_lead_id', leadId)))[0]
+    assert.equal(sale.user_id, actor('second')); assert.equal(sale.product_id, productId); assert.equal(sale.ticket_id, ticketId)
+    await second.goto(`${origin}/crm?tab=closer`)
+    await second.getByRole('tab', { name: /Fechamentos realizados/ }).click()
+    await second.getByLabel('Buscar leads', { exact: true }).fill(name)
+    await expect(secondCard.getByText('Venda cadastrada', { exact: true })).toBeVisible()
+    await secondCard.getByRole('button', { name: 'Abrir venda cadastrada', exact: true }).click()
+    await expect(second.getByRole('dialog', { name: 'Venda cadastrada', exact: true }).getByText(name, { exact: true })).toBeVisible()
+    await clients.second.removeChannel(realtime)
+
+    // Real API race: one action wins; the other gets a clear version conflict.
+    let race = await checked(clients.seller.from('crm_leads').insert({ name: `${name} Race`, athlete_name: 'QA Race Atleta', phone: '11999999999' }).select().single())
+    const results = await Promise.all(['morno','quente'].map(temperature => clients.seller.rpc('crm_transition', { p_lead_id: race.id, p_action: 'classify', p_expected_version: race.version, p_data: { temperature } })))
+    assert.equal(results.filter(r => !r.error).length, 1); assert.equal(results.filter(r => r.error?.code === 'PT409').length, 1)
+    race = await leadBy(race.id)
+    race = await act('seller', race, 'handoff', { closer_id: actor('second') })
+    race = await act('second', race, 'return', { note: 'QA devolução ao SDR' })
+    assert.equal(race.pipeline_stage, 'em_qualificacao')
+    race = await act('seller', race, 'handoff', { closer_id: actor('second') })
+    race = await act('second', race, 'close', { outcome: 'venda_perdida' })
+    assert.equal(race.pipeline_stage, 'fechado_perdido')
+    for (const role of ['blocked', 'suspended']) {
+      assert.equal((await checked(clients[role].from('crm_leads').select('id').eq('id', leadId))).length, 0)
+      assert.ok((await clients[role].rpc('crm_transition', { p_lead_id: leadId, p_action: 'claim', p_expected_version: 1 })).error)
+    }
+    for (const role of ['sdr','closer','executive']) {
+      const tab = await session(role)
+      await expect(tab.getByRole('tab', { name: role === 'closer' ? 'Closer' : 'SDR', exact: true })).toBeVisible()
+      if (role !== 'executive') await expect(tab.getByRole('tab', { name: role === 'closer' ? 'SDR' : 'Closer', exact: true })).toHaveCount(0)
+      else {
+        await tab.getByRole('tab', { name: 'Relatório de Permissões', exact: true }).click()
+        await expect(tab.getByLabel('Buscar usuário no relatório', { exact: true })).toBeVisible()
+        await tab.getByRole('tab', { name: 'Gerenciar Usuários', exact: true }).click()
+        await expect(tab.getByPlaceholder(/Buscar/).first()).toBeVisible()
+      }
+      await tab.context().close()
+    }
+    await page.goto(`${origin}/crm?tab=users`)
+    await expect(page.getByText('Sua função não permite acessar esta área.', { exact: false })).toBeVisible()
+    const suspended = await session('suspended')
+    await expect(suspended).toHaveURL(/\/auth/)
+    await suspended.context().close()
+    const publicTab = await browser.newPage()
+    await publicTab.goto(`${origin}/crm`)
+    await expect(publicTab).toHaveURL(/\/auth/)
+    await publicTab.close()
+    assert.deepEqual(unexpected, [], `Unexpected HTTP failures: ${unexpected.join('; ')}`)
+    assert.deepEqual(errors, [], `Browser errors: ${errors.join('; ')}`)
+    console.log('PASS: real JWT/PostgREST permissions, minimal create/edit, four approach states, pipeline, immutable history, explicit handoff without call, Realtime across sessions without timers/reload, claim, scheduling/rescheduling, follow-up, win/loss/return, persistent CTA, catalog/manual sale ownership and linkage, concurrency, admin guards, 1440/390px and browser console/HTTP checks.')
+  } catch (error) {
+    if (page && !page.isClosed()) await page.screenshot({ path: '.verification.local/crm-real-failure.png', fullPage: true })
+    throw error
+  } finally { await browser.close() }
+})
