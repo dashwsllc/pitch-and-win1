@@ -2,11 +2,27 @@
 INSERT INTO auth.users(id,email,raw_user_meta_data,raw_app_meta_data,created_at,updated_at)
 VALUES ('aa000000-0000-4000-8000-000000000001','executive-check@example.invalid','{"display_name":"QA Executive"}','{}',now(),now()),
 ('aa000000-0000-4000-8000-000000000002','seller-check@example.invalid','{"display_name":"QA Seller"}','{}',now(),now());
-INSERT INTO public.user_roles(user_id,role) VALUES ('aa000000-0000-4000-8000-000000000001','executive');
+-- The seller role is explicit: registering a sale requires the 'sales' capability
+-- and the frozen commission comes from this row.
+INSERT INTO public.user_roles(user_id,role) VALUES ('aa000000-0000-4000-8000-000000000001','executive'),
+('aa000000-0000-4000-8000-000000000002','seller') ON CONFLICT(user_id,role) DO NOTHING;
 UPDATE public.user_roles SET commission_rate=20 WHERE user_id='aa000000-0000-4000-8000-000000000002';
+-- Registering a sale requires an active product/ticket whose price matches the catalog.
+CREATE TEMP TABLE executive_qa_catalog(label text PRIMARY KEY, product_id uuid, ticket_id uuid);
+GRANT ALL ON executive_qa_catalog TO authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"aa000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+DO $$
+DECLARE p public.products;
+BEGIN
+  p := public.executive_create_product('QA Product','QA fixture','Ticket QA',1000,true);
+  INSERT INTO executive_qa_catalog VALUES('sale',p.id,(SELECT id FROM public.product_tickets WHERE product_id=p.id));
+  p := public.executive_create_product('QA Cancel','QA fixture','Ticket QA',100,true);
+  INSERT INTO executive_qa_catalog VALUES('cancel',p.id,(SELECT id FROM public.product_tickets WHERE product_id=p.id));
+END; $$;
 SELECT set_config('request.jwt.claims','{"sub":"aa000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
-INSERT INTO public.vendas(id,user_id,nome_produto,valor_venda,nome_comprador,email_comprador,whatsapp_comprador)
-VALUES ('bb000000-0000-4000-8000-000000000001','aa000000-0000-4000-8000-000000000002','QA Product',1000,'Private buyer','private@example.invalid','private');
+INSERT INTO public.vendas(id,user_id,product_id,ticket_id,nome_produto,valor_venda,nome_comprador,email_comprador,whatsapp_comprador)
+SELECT 'bb000000-0000-4000-8000-000000000001','aa000000-0000-4000-8000-000000000002',c.product_id,c.ticket_id,'QA Product',1000,'Private buyer','private@example.invalid','11988887777'
+FROM executive_qa_catalog c WHERE c.label='sale';
 SET LOCAL ROLE authenticated;
 DO $$
 DECLARE r jsonb;
@@ -50,13 +66,19 @@ DO $$
 BEGIN
   IF EXISTS(SELECT 1 FROM public.vendas WHERE id='bb000000-0000-4000-8000-000000000001') THEN RAISE EXCEPTION 'FAIL: approved sale not deleted'; END IF;
   IF public.get_available_balance('aa000000-0000-4000-8000-000000000002') <> 0 THEN RAISE EXCEPTION 'FAIL: deleted balance'; END IF;
-  IF NOT EXISTS(SELECT 1 FROM public.executive_audit_events WHERE target_id='bb000000-0000-4000-8000-000000000001' AND action='sale.delete' AND before_data->>'nome_comprador'='Private buyer') THEN RAISE EXCEPTION 'FAIL: deletion snapshot missing'; END IF;
+  -- The snapshot is preserved, but buyer PII is redacted by security_redact_audit_payload.
+  IF NOT EXISTS(SELECT 1 FROM public.executive_audit_events WHERE target_id='bb000000-0000-4000-8000-000000000001' AND action='sale.delete'
+    AND before_data->>'nome_produto'='QA Product' AND (before_data->>'valor_venda')::numeric=1000
+    AND (before_data->>'commission_amount')::numeric=200 AND before_data->>'approval_status'='aprovada') THEN RAISE EXCEPTION 'FAIL: deletion snapshot missing'; END IF;
+  IF EXISTS(SELECT 1 FROM public.executive_audit_events WHERE target_id='bb000000-0000-4000-8000-000000000001' AND action='sale.delete'
+    AND (before_data ? 'nome_comprador' OR before_data ? 'email_comprador' OR before_data ? 'whatsapp_comprador')) THEN RAISE EXCEPTION 'FAIL: buyer data kept in audit'; END IF;
   IF public.get_sales_board('aprovada','QA Product')->>'total' <> '0' THEN RAISE EXCEPTION 'FAIL: deleted sale still in feed'; END IF;
 END; $$;
 -- Sellers retain cancellation of their own unreviewed requests.
 SELECT set_config('request.jwt.claims','{"sub":"aa000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
-INSERT INTO public.vendas(id,user_id,nome_produto,valor_venda,nome_comprador,email_comprador,whatsapp_comprador)
-VALUES ('bb000000-0000-4000-8000-000000000002','aa000000-0000-4000-8000-000000000002','QA Cancel',100,'Buyer','private@example.invalid','private');
+INSERT INTO public.vendas(id,user_id,product_id,ticket_id,nome_produto,valor_venda,nome_comprador,email_comprador,whatsapp_comprador)
+SELECT 'bb000000-0000-4000-8000-000000000002','aa000000-0000-4000-8000-000000000002',c.product_id,c.ticket_id,'QA Cancel',100,'Buyer QA','private@example.invalid','11988886666'
+FROM executive_qa_catalog c WHERE c.label='cancel';
 DELETE FROM public.vendas WHERE id='bb000000-0000-4000-8000-000000000002';
 DO $$ BEGIN
   IF public.get_sales_board('pendente','QA Cancel')->>'total'<>'0' THEN RAISE EXCEPTION 'FAIL: own pending cancellation'; END IF;
