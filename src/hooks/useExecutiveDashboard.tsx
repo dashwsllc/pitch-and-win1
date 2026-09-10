@@ -16,6 +16,7 @@ interface ExecutiveDashboardData {
     abordagens: number
   }>
   topSellers: Array<{
+    user_id: string
     seller_name: string
     total_sales: number
     total_revenue: number
@@ -209,9 +210,10 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
         stats.approaches += 1
       })
 
-      const topSellers = Array.from(sellerStats.values())
-        .map(stats => ({
+      const topSellers = Array.from(sellerStats.entries())
+        .map(([user_id, stats]) => ({
           ...stats,
+          user_id,
           conversion_rate: stats.approaches > 0 ? (stats.total_sales / stats.approaches) * 100 : 0
         }))
         .sort((a, b) => b.total_revenue - a.total_revenue)

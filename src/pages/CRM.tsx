@@ -281,8 +281,8 @@ export default function CRM() {
     rolesLoading ||
     crm.loading ||
     callsQuery.loading ||
-    assignees.isPending ||
-    sales.isPending;
+    assignees.isLoading ||
+    sales.isLoading;
   const permittedTab =
     tab === "leads" ||
     (tab === "sdr" && capabilities.sdr) ||

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
@@ -79,9 +79,13 @@ export function ExecutiveSellerDetails() {
     salesByDay: []
   })
   const [loading, setLoading] = useState(false)
+  // Trocar de vendedor rapido dispara consultas concorrentes; so a ultima
+  // pode escrever no estado.
+  const latestRequest = useRef(0)
 
   const fetchSellerStats = async (sellerId: string) => {
     if (!sellerId) return
+    const requestId = ++latestRequest.current
 
     setLoading(true)
     
@@ -138,6 +142,8 @@ export function ExecutiveSellerDetails() {
         })
       }
 
+      if (requestId !== latestRequest.current) return
+
       setStats({
         totalSales,
         totalRevenue,
@@ -153,7 +159,7 @@ export function ExecutiveSellerDetails() {
     } catch (error) {
       console.error('Error fetching seller stats:', error)
     } finally {
-      setLoading(false)
+      if (requestId === latestRequest.current) setLoading(false)
     }
   }
 
@@ -195,7 +201,7 @@ export function ExecutiveSellerDetails() {
                 </SelectTrigger>
                 <SelectContent>
                   {users.map((user) => (
-                    <SelectItem key={user.id} value={user.user_id}>
+                    <SelectItem key={user.user_id} value={user.user_id}>
                       {user.display_name || user.user_id}
                     </SelectItem>
                   ))}

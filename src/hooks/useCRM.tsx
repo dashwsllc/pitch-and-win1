@@ -182,7 +182,9 @@ export function useCRMLeads() {
   };
   return {
     leads: hasCRMAccess ? (query.data ?? []) : [],
-    loading: query.isPending,
+    // isPending fica sempre verdadeiro numa consulta desabilitada; isLoading
+    // significa "primeira carga em andamento", que e o que a tela quer saber.
+    loading: query.isLoading,
     error: query.error,
     fetchLeads: refresh,
     createLead,
@@ -225,7 +227,7 @@ export function useCRMActivities(leadId: string | null, callsOnly = false) {
   };
   return {
     activities: hasCRMAccess ? (query.data ?? []) : [],
-    loading: query.isPending,
+    loading: query.isLoading,
     error: query.error,
     fetchActivities: refresh,
     createActivity,

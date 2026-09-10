@@ -145,7 +145,7 @@ export default function ExecutiveDashboard() {
               ) : (
                 <div className="space-y-4">
                   {data.topSellers.map((seller, index) => (
-                    <div key={seller.seller_name} className="flex items-center justify-between p-3 rounded-lg border">
+                    <div key={seller.user_id} className="flex items-center justify-between p-3 rounded-lg border">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-gradient-primary text-white text-sm font-semibold flex items-center justify-center">
                           {index + 1}
