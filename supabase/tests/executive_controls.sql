@@ -29,6 +29,9 @@ DECLARE r jsonb;
 BEGIN
   r := public.get_sales_board('pendente','QA Product');
   IF r->>'total' <> '1' OR r->'items'->0 ? 'email_comprador' THEN RAISE EXCEPTION 'FAIL: pending shared feed privacy'; END IF;
+  -- Pendente estima a comissao pela taxa vigente, mas nao gera saldo sacavel.
+  IF public.get_pending_commission('aa000000-0000-4000-8000-000000000002') <> 200 THEN RAISE EXCEPTION 'FAIL: pending commission estimate'; END IF;
+  IF public.get_available_balance('aa000000-0000-4000-8000-000000000002') <> 0 THEN RAISE EXCEPTION 'FAIL: pending must not create balance'; END IF;
   BEGIN PERFORM public.executive_review_sale('bb000000-0000-4000-8000-000000000001','approve');
     RAISE EXCEPTION 'FAIL: seller could approve'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   BEGIN UPDATE public.vendas SET approval_status='aprovada' WHERE id='bb000000-0000-4000-8000-000000000001';
