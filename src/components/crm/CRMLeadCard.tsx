@@ -47,6 +47,7 @@ export function CRMLeadCard({
   names,
   busy,
   sale,
+  emphasizeCall = false,
   onRead,
   onEdit,
   onAction,
@@ -59,6 +60,7 @@ export function CRMLeadCard({
   names: Record<string, string>;
   busy: boolean;
   sale?: { sale_id: string | null; can_open: boolean };
+  emphasizeCall?: boolean;
   onRead: () => void;
   onEdit: () => void;
   onAction: (action: string) => void;
@@ -79,6 +81,22 @@ export function CRMLeadCard({
   const next = [lead.next_followup_at, call?.scheduled_at]
     .filter(Boolean)
     .sort()[0];
+  const callMoment = call?.scheduled_at ? new Date(call.scheduled_at) : null;
+  const callDay = callMoment?.toLocaleDateString("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const callTime = callMoment?.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const showFollowup =
+    !!lead.next_followup_at &&
+    (!callMoment ||
+      Math.abs(new Date(lead.next_followup_at).getTime() - callMoment.getTime()) >
+        60_000);
   const overdue = !closed && !!next && new Date(next) < new Date();
   const incomplete =
     !lead.name?.trim() || !lead.athlete_name?.trim() || !lead.phone?.trim();
@@ -184,13 +202,55 @@ export function CRMLeadCard({
                 ? "Fila compartilhada"
                 : "Sem responsável")}
         </p>
-        <p className="flex min-w-0 items-center gap-1 truncate">
-          <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-          {next
-            ? `${call ? "Próxima call/ação" : "Próximo retorno"}: ${callDate(next)}`
-            : "Sem próxima ação agendada"}
-        </p>
+        {!emphasizeCall && (
+          <p className="flex min-w-0 items-center gap-1 truncate">
+            <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+            {next
+              ? `${call ? "Próxima call/ação" : "Próximo retorno"}: ${callDate(next)}`
+              : "Sem próxima ação agendada"}
+          </p>
+        )}
+        {emphasizeCall && showFollowup && (
+          <p className="truncate">Próximo retorno: {callDate(lead.next_followup_at)}</p>
+        )}
       </div>
+      {emphasizeCall && (
+        <div
+          role="status"
+          aria-label={
+            callMoment
+              ? `Call agendada para ${callDay} às ${callTime}`
+              : "Call ainda não agendada"
+          }
+          className={`rounded-md border px-2.5 py-2 ${
+            callMoment
+              ? callMoment < new Date()
+                ? "border-amber-500/60 bg-amber-500/10"
+                : "border-primary/40 bg-primary/10"
+              : "border-border/70 bg-muted/30"
+          }`}
+        >
+          {callMoment ? (
+            <>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {callMoment < new Date() ? "Call atrasada" : "Call agendada"}
+              </p>
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
+                <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
+                <span>Data: {callDay}</span>
+                <span className="rounded bg-background/80 px-1.5 py-0.5 text-primary">
+                  Horário: {callTime}
+                </span>
+              </p>
+            </>
+          ) : (
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground" />
+              Call ainda não agendada
+            </p>
+          )}
+        </div>
+      )}
       {lead.pipeline_stage === "pronto_closer" && (
         <p className="text-[11px] leading-4 text-orange-400">Pronto para repasse ao Closer.</p>
       )}
