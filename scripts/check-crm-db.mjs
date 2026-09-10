@@ -6,14 +6,18 @@ const root = resolve(import.meta.dirname, '..')
 const tests = readFileSync(resolve(root, 'supabase/tests/crm_shared_workflow.sql'), 'utf8')
 const migration = readFileSync(resolve(root, 'supabase/migrations/20260910010000_crm_shared_workflow.sql'), 'utf8')
 const schedulingPatch = readFileSync(resolve(root, 'supabase/migrations/20260910030000_crm_claim_on_call_schedule.sql'), 'utf8')
+const sellerCloserPatch = readFileSync(resolve(root, 'supabase/migrations/20260910120000_seller_closer_access.sql'), 'utf8')
+const callSyncPatch = readFileSync(resolve(root, 'supabase/migrations/20260910160000_sdr_closer_call_sync.sql'), 'utf8')
 const directory = resolve(root, '.verification.local')
 mkdirSync(directory, { recursive: true })
 const patchBody = schedulingPatch.replace(/^BEGIN;\s*/, '').replace(/COMMIT;\s*$/, '')
+const sellerCloserPatchBody = sellerCloserPatch.replace(/^BEGIN;\s*/, '').replace(/COMMIT;\s*$/, '')
+const callSyncPatchBody = callSyncPatch.replace(/^BEGIN;\s*/, '').replace(/COMMIT;\s*$/, '')
 const query = process.argv.includes('--deployed')
   ? 'BEGIN;'
   : process.argv.includes('--patch')
-    ? 'BEGIN;\n' + patchBody
-    : migration.replace(/COMMIT;\s*$/, '') + '\n' + patchBody
+    ? 'BEGIN;\n' + patchBody + '\n' + sellerCloserPatchBody + '\n' + callSyncPatchBody
+    : migration.replace(/COMMIT;\s*$/, '') + '\n' + patchBody + '\n' + sellerCloserPatchBody + '\n' + callSyncPatchBody
 writeFileSync(
   resolve(directory, 'crm-query.sql'),
   query.replace('BEGIN;', "BEGIN;\nSET LOCAL lock_timeout='3s';\nSET LOCAL statement_timeout='30s';") +

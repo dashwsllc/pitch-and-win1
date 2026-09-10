@@ -303,8 +303,8 @@ export function CRMLeadCard({
       )}
       <div className="flex items-center gap-1.5 border-t border-border/40 pt-2">
         {!closed && !handed && capabilities.sdr && (
-          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onAction("handoff")}>
-            Enviar para Closer
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={onSchedule}>
+            Agendar call e enviar
           </Button>
         )}
         {handed && capabilities.closer && !lead.closer_id && (
@@ -337,7 +337,7 @@ export function CRMLeadCard({
             {canSchedule && (
               <>
                 <DropdownMenuItem onSelect={onSchedule}>
-                  <PhoneCall className="mr-2 h-4 w-4" /> {call ? "Reagendar call" : "Agendar call"}
+                  <PhoneCall className="mr-2 h-4 w-4" /> {call ? "Reagendar call" : handed ? "Agendar call" : "Agendar call e enviar ao Closer"}
                 </DropdownMenuItem>
               </>
             )}

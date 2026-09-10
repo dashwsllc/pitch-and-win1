@@ -24,6 +24,8 @@ const password = `Verify-${randomUUID()}!`
 const newPassword = `Updated-${randomUUID()}!`
 const users = []
 const sales = []
+const products = []
+const tickets = []
 const clients = [admin,executive,seller]
 let checkpoint = 'setup'
 const must = response => { if (response.error) throw new Error(response.error.message); return response.data }
@@ -99,7 +101,13 @@ try {
     const timeout = setTimeout(() => reject(new Error('Realtime subscription timeout')),15000)
     channel.subscribe(status => { if(status==='SUBSCRIBED'){clearTimeout(timeout);resolve()} else if(status==='CHANNEL_ERROR'){clearTimeout(timeout);reject(new Error('Realtime subscription rejected'))} })
   })
-  const sale = must(await seller.from('vendas').insert({user_id:target.id,nome_produto:`Verificação temporária ${suffix}`,valor_venda:1,nome_comprador:'Comprador temporário',email_comprador:'qa-buyer@example.invalid',whatsapp_comprador:'00000000000'}).select('id').single())
+  const product = must(await executive.rpc('executive_create_product', {
+    p_name:`Verificação temporária ${suffix}`,p_description:'Produto isolado de QA',p_ticket_name:'Ticket QA',p_ticket_price:1,p_active:true,
+  }))
+  products.push(product.id)
+  const ticket = must(await executive.from('product_tickets').select('id').eq('product_id',product.id).single())
+  tickets.push(ticket.id)
+  const sale = must(await seller.from('vendas').insert({user_id:target.id,product_id:product.id,ticket_id:ticket.id,nome_produto:product.name,valor_venda:1,nome_comprador:'Comprador temporário',email_comprador:'qa-buyer@example.invalid',whatsapp_comprador:'00000000000'}).select('id').single())
   sales.push(sale.id)
   let signalTimeout
   const signaled = await Promise.race([signal,new Promise(resolve => { signalTimeout=setTimeout(() => resolve(false),15000) })])
@@ -132,7 +140,15 @@ try {
     const response=await admin.from('vendas').delete().eq('id',id)
     if(response.error) cleanupErrors.push('temporary sale')
   }
-  const ids=[...users.map(u => u.id),...sales]
+  for(const id of tickets) {
+    const response=await admin.from('product_tickets').delete().eq('id',id)
+    if(response.error) cleanupErrors.push('temporary ticket')
+  }
+  for(const id of products) {
+    const response=await admin.from('products').delete().eq('id',id)
+    if(response.error) cleanupErrors.push('temporary product')
+  }
+  const ids=[...users.map(u => u.id),...sales,...products,...tickets]
   if(ids.length) {
     const response=await admin.from('executive_audit_events').delete().in('target_id',ids)
     if(response.error) cleanupErrors.push('temporary audit')

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ import { useRoles } from '@/hooks/useRoles'
 import { useToast } from '@/hooks/use-toast'
 import { errorMessage } from '@/lib/sales'
 import { CRMLinkedSale } from '@/components/crm/CRMLinkedSale'
+import { fetchAllPages } from '@/lib/supabase-pages'
 
 interface Venda {
   id: string
@@ -44,28 +45,33 @@ export default function MinhasVendas() {
   const [deleteConfirm, setDeleteConfirm] = useState<Venda | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [rejectionDetail, setRejectionDetail] = useState<Venda | null>(null)
+  const latestFetch = useRef(0)
 
   const fetchVendas = useCallback(async () => {
     if (!user) return
+    const requestId = ++latestFetch.current
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('vendas')
-        .select('id, nome_produto, ticket_name, valor_venda, nome_comprador, email_comprador, whatsapp_comprador, approval_status, commission_amount, rejection_reason, reviewed_at, created_at, withdrawn')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(200)
-
-      if (error) throw error
-      const balance = await supabase.rpc('get_available_balance', { p_seller_id: user.id })
+      const [data, balance] = await Promise.all([
+        fetchAllPages((from, to) => supabase
+          .from('vendas')
+          .select('id, nome_produto, ticket_name, valor_venda, nome_comprador, email_comprador, whatsapp_comprador, approval_status, commission_amount, rejection_reason, reviewed_at, created_at, withdrawn')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to)),
+        supabase.rpc('get_available_balance', { p_seller_id: user.id }),
+      ])
       if (balance.error) throw balance.error
+      if (requestId !== latestFetch.current) return
       setAvailableBalance(Number(balance.data))
-      setVendas((data || []) as Venda[])
+      setVendas(data as Venda[])
     } catch (err) {
+      if (requestId !== latestFetch.current) return
       console.error('Error fetching vendas:', err)
       toast({ title: 'Erro ao carregar vendas', description: errorMessage(err), variant: 'destructive' })
     } finally {
-      setLoading(false)
+      if (requestId === latestFetch.current) setLoading(false)
     }
   }, [user, toast])
 
@@ -101,7 +107,7 @@ export default function MinhasVendas() {
       if (error) throw error
       toast({ title: 'Venda excluída com sucesso' })
       setDeleteConfirm(null)
-      fetchVendas()
+      void fetchVendas()
     } catch (err) {
       toast({ title: 'Erro ao excluir', description: errorMessage(err), variant: 'destructive' })
     } finally {

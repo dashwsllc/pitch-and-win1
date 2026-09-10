@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from './useAuth'
+import { fetchAllPages } from '@/lib/supabase-pages'
 
 interface ExecutiveDashboardData {
   totalSellers: number
@@ -69,14 +70,17 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
         now.setHours(23, 59, 59, 999)
         break
       case '7dias':
-        start.setDate(now.getDate() - 7)
+        start.setDate(now.getDate() - 6)
+        start.setHours(0, 0, 0, 0)
         break
       case '14dias':
-        start.setDate(now.getDate() - 14)
+        start.setDate(now.getDate() - 13)
+        start.setHours(0, 0, 0, 0)
         break
       case '30dias':
       default:
-        start.setDate(now.getDate() - 30)
+        start.setDate(now.getDate() - 29)
+        start.setHours(0, 0, 0, 0)
         break
     }
     
@@ -93,10 +97,11 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       const { start, end } = getDateRange(dateFilter)
 
       // Fetch profiles for name resolution
-      const { data: profilesData, error: profilesError } = await supabase
+      const profilesData = await fetchAllPages((from, to) => supabase
         .from('profiles')
         .select('user_id, display_name, suspended')
-      if (profilesError) throw profilesError
+        .order('user_id')
+        .range(from, to))
 
       const profileMap = new Map<string, string>()
       const activeProfiles = new Set<string>()
@@ -106,9 +111,10 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       })
 
       // Fetch total sellers count
-      const { data: sellerRoles, error: sellerError } = await supabase.from('user_roles')
-        .select('user_id').in('role', ['seller','closer','sdr','bdr'])
-      if (sellerError) throw sellerError
+      const sellerRoles = await fetchAllPages((from, to) => supabase.from('user_roles')
+        .select('id, user_id').in('role', ['seller','closer','sdr','bdr'])
+        .order('id')
+        .range(from, to))
       // user_roles nao tem chave estrangeira para auth.users e mantem linhas de
       // contas ja removidas. Conta apenas quem ainda tem perfil ativo, como em
       // get_team_ranking.
@@ -117,32 +123,32 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       ).size
 
       // Fetch sales in period (apenas aprovadas)
-      const { data: salesData, error: salesError } = await supabase
+      const salesData = await fetchAllPages((from, to) => supabase
         .from('vendas')
-        .select('user_id, nome_produto, valor_venda, created_at')
+        .select('id, user_id, nome_produto, valor_venda, created_at')
         .eq('approval_status', 'aprovada')
         .gte('created_at', start)
         .lte('created_at', end)
         .order('created_at', { ascending: false })
-        .limit(1000)
-      if (salesError) throw salesError
+        .order('id')
+        .range(from, to))
 
       // Fetch approaches in period
-      const { data: approachesData, error: approachesError } = await supabase
+      const approachesData = await fetchAllPages((from, to) => supabase
         .from('abordagens')
-        .select('user_id, nomes_abordados, created_at')
+        .select('id, user_id, nomes_abordados, created_at')
         .gte('created_at', start)
         .lte('created_at', end)
         .order('created_at', { ascending: false })
-        .limit(1000)
-      if (approachesError) throw approachesError
+        .order('id')
+        .range(from, to))
 
       // Fetch subscriptions
-      const { data: subscriptionsData, error: subscriptionsError } = await supabase
+      const subscriptionsData = await fetchAllPages((from, to) => supabase
         .from('assinaturas')
-        .select('status')
-        .limit(1000)
-      if (subscriptionsError) throw subscriptionsError
+        .select('id, status')
+        .order('id')
+        .range(from, to))
 
       const totalSales = salesData?.length || 0
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.valor_venda), 0) || 0

@@ -10,7 +10,7 @@ O livro abre cadastro e timeline em leitura. O lápis abre edição com os valor
 
 1. O cadastro inicia em `novo`. Iniciar abordagem leva à qualificação.
 2. Quente + abordado/reabordado sinaliza `pronto_closer`; nunca repassa automaticamente.
-3. **Enviar para Closer** atualiza o mesmo `crm_leads.id`, com responsável escolhido ou fila compartilhada. Não exige call nem duplica lead.
+3. No SDR, **Agendar call e enviar** só repassa o mesmo `crm_leads.id` depois que responsável, horário e contexto da call forem salvos com sucesso. O repasse e a agenda são atômicos e não duplicam o lead.
 4. A fila Closer mostra `repassado_closer`, com filtros de não assumidos, meus leads, calls por prazo e fechamentos. **Assumir lead** atribui ao operador logado.
 5. O responsável agenda/reagenda e registra resultado: venda concluída, venda perdida, follow-up com próxima data obrigatória ou devolução ao SDR. Calls pendentes, pipeline, autor, horário e histórico são atualizados na mesma transação.
 6. Venda concluída não gera faturamento. O card continua mostrando **Venda pendente de cadastro**, inclusive após reload, até o envio manual em `/vendas?lead=<id>`.
@@ -25,13 +25,13 @@ Mudanças de aquecimento/abordagem preservam repasse e fechamento. Devolver ao S
 | Papéis ativos | Leads | SDR | Closer | Registrar venda | Administração |
 | --- | --- | --- | --- | --- | --- |
 | executive / super_admin | Sim | Sim | Sim | Sim | Sim |
-| sdr (inclusive seller + sdr) | Sim | Sim | Não | Não | Não |
+| sdr sem seller | Sim | Sim | Não | Não | Não |
 | closer (inclusive seller + closer) | Sim | Não | Sim | Sim | Não |
-| seller sem sdr/closer | Sim | Sim | Sim | Sim | Não |
+| seller | Sim | Conforme papéis acumulados* | Sim | Sim | Não |
 | Cargo externo + crm_access | Sim | Não | Não | Não | Não |
 | Suspenso ou sem acesso | Não | Não | Não | Não | Não |
 
-A capacidade de registrar venda acompanha Closer para completar o fluxo solicitado. Quem tiver ambos os papéis específicos acessa ambas as áreas. `crm_access` não bloqueia papéis comerciais. Contas suspensas ficam bloqueadas. Gerenciamento usa a central executiva existente, com revisão de conta, funções e auditoria; o relatório apresenta capacidades efetivas. Nenhuma conta pessoal foi reclassificada.
+A capacidade de registrar venda acompanha Closer para completar o fluxo solicitado. Todo `seller` ativo acessa Closer e Vendas, inclusive quando também possui `sdr`; o acesso SDR continua vindo do papel `sdr` ou do fallback do seller sem papel comercial específico. Quem tiver ambos os papéis específicos acessa ambas as áreas. `crm_access` não bloqueia papéis comerciais. Contas suspensas ficam bloqueadas. Gerenciamento usa a central executiva existente, com revisão de conta, funções e auditoria; o relatório apresenta capacidades efetivas. Nenhuma conta pessoal foi reclassificada.
 
 ## Banco, concorrência e sincronização
 
@@ -40,8 +40,8 @@ Migration forward-only **`20260910010000_crm_shared_workflow.sql`**, aplicada em
 - `approach_stage`, `sdr_id`, `closer_id`, `handed_off_at`, `closed_at`, `closed_by` e `version` no lead. Estado compartilhado/não assumido é derivado da etapa e da atribuição, sem estado duplicado.
 - Backfill usa o booleano e contagem anteriores para abordagem e apenas referências/timestamps de registros existentes para responsabilidade/repasse/fechamento. Etapas e dados pessoais históricos permanecem.
 - `crm_transition` centraliza edição, classificação, abordagem, contatos, retornos, repasse, atribuição, assumir, resultado e devolução. Usa `FOR UPDATE` no lead e exige versão atual. Cliques duplicados ou revisão antiga retornam HTTP 409.
-- RPCs antigas de agendamento/reagendamento/resultado continuam protegidas, com a nova matriz de capacidades; agendar fechamento exige repasse explícito.
-- Ao agendar uma call de fechamento para um lead já repassado e ainda na fila compartilhada, o responsável escolhido assume o lead atomicamente no mesmo salvamento.
+- `handoff_and_schedule_closer_call` centraliza o agendamento do SDR: valida a versão do lead, cria a call e só então conclui o repasse ao Closer na mesma transação.
+- As RPCs de agendamento/reagendamento/resultado continuam protegidas. Reagendar mantém `crm_activities.scheduled_at` e `crm_leads.next_followup_at` sincronizados.
 - Trigger impede updates diretos do workflow e preserva autoria/histórico. A timeline registra autor, horário e estados anteriores/novos da classificação, abordagem, pipeline, atribuição e retorno.
 - `crm_sale_links` compartilha apenas o status de venda; ID/acesso ao registro só é retornado a quem pode ler a venda. A RLS financeira não foi ampliada. Nova segunda venda para o mesmo fechamento é bloqueada; vendas históricas não são removidas.
 - Realtime de leads, atividades/calls, vendas e sinal administrativo invalida as consultas. Há fallback a cada 15 segundos e no foco, com indicador quando a conexão Realtime falha. Paginação percorre todas as páginas de leads, atividades, responsáveis e vínculos; não há corte silencioso de registros.

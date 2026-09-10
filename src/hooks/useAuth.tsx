@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client'
 interface AuthContextType {
   user: User | null
   session: Session | null
-  signUp: (email: string, password: string, displayName?: string, captchaToken?: string) => Promise<{ error: unknown }>
+  signUp: (email: string, password: string, displayName?: string, captchaToken?: string) => Promise<{ error: unknown; session: Session | null }>
   signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error: unknown }>
   signOut: () => Promise<void>
   loading: boolean
@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string, displayName?: string, captchaToken?: string) => {
     const redirectUrl = `${window.location.origin}/`
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -52,7 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     })
-    return { error }
+
+    // Do not depend only on onAuthStateChange here. The sign-up response is the
+    // authoritative result and already contains a session when email
+    // confirmation is disabled. Applying it immediately also prevents the auth
+    // screen from getting stuck while the listener is still being dispatched.
+    if (!error && data.session) {
+      setSession(data.session)
+      setUser(data.session.user)
+    }
+
+    return { error, session: data.session }
   }
 
   const signIn = async (email: string, password: string, captchaToken?: string) => {

@@ -98,7 +98,7 @@ export default function Auth() {
     }
     setIsLoading(true)
 
-    const { error } = await signUp(parsedEmail.data, parsedPassword.data, parsedName.data, signUpCaptcha)
+    const { error, session } = await signUp(parsedEmail.data, parsedPassword.data, parsedName.data, signUpCaptcha)
 
     if (error) {
       toast({
@@ -106,11 +106,18 @@ export default function Auth() {
         description: publicAuthError(error),
         variant: 'destructive'
       })
+    } else if (!session) {
+      toast({
+        title: 'Conta criada, mas o login não foi concluído',
+        description: 'Entre com o email e a senha cadastrados para continuar.',
+        variant: 'destructive'
+      })
     } else {
       toast({
-        title: 'Conta criada com sucesso!',
-        description: 'Verifique seu email para confirmar a conta'
+        title: 'Conta criada e autenticada!',
+        description: 'Bem-vindo ao WS LTDA'
       })
+      navigate('/', { replace: true })
     }
 
     setIsLoading(false)

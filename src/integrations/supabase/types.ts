@@ -1176,6 +1176,10 @@ export type Database = {
 
       crm_has_access: { Args: Record<PropertyKey, never>; Returns: boolean }
       crm_call_assignees: { Args: Record<PropertyKey, never>; Returns: { user_id: string; display_name: string; role: string }[] }
+      handoff_and_schedule_closer_call: {
+        Args: { p_lead_id: string; p_expected_version: number; p_scheduled_at: string; p_assigned_to: string; p_context?: string }
+        Returns: Database["public"]["Tables"]["crm_activities"]["Row"]
+      }
       schedule_closer_call: {
         Args: { p_lead_id: string; p_call_type: string; p_scheduled_at: string; p_assigned_to: string; p_context?: string }
         Returns: Database["public"]["Tables"]["crm_activities"]["Row"]

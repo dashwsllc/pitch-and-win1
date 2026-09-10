@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { crmCapabilities } from '../src/lib/crm-capabilities.ts'
 import { emptyContact, validateContact, contactPayload } from '../src/lib/crm.ts'
 const minimal = { ...emptyContact, name: 'Responsável QA', athlete_name: 'Atleta QA', phone: '11999999999' }
@@ -8,10 +9,17 @@ for (const field of ['name','athlete_name','phone']) assert.ok(validateContact({
 assert.ok(validateContact({ ...minimal, email: 'invalid' }))
 assert.ok(validateContact({ ...minimal, athlete_height_cm: '999' }))
 assert.deepEqual(crmCapabilities(['seller']), { admin: false, leads: true, sdr: true, closer: true, sales: true })
-assert.equal(crmCapabilities(['seller','sdr']).closer, false)
+assert.equal(crmCapabilities(['seller','sdr']).closer, true)
+assert.equal(crmCapabilities(['seller','sdr']).sales, true)
 assert.equal(crmCapabilities(['seller','closer']).sdr, false)
 assert.equal(crmCapabilities(['bdr'], false).leads, false)
 assert.equal(crmCapabilities(['bdr'], true).leads, true)
 assert.equal(crmCapabilities(['seller'], true, false).leads, false)
 assert.ok(Object.values(crmCapabilities(['executive'])).every(Boolean))
-console.log('PASS: contact validation/null payload and frontend capability matrix.')
+const callsSource = readFileSync(new URL('../src/components/crm/CRMCalls.tsx', import.meta.url), 'utf8')
+const cardSource = readFileSync(new URL('../src/components/crm/CRMLeadCard.tsx', import.meta.url), 'utf8')
+assert.match(callsSource, /isSdrHandoff[\s\S]*handoff_and_schedule_closer_call/)
+assert.match(callsSource, /O lead só será enviado ao Closer depois que o agendamento for/)
+assert.match(cardSource, /Agendar call e enviar/)
+assert.doesNotMatch(cardSource, /onAction\("handoff"\)/)
+console.log('PASS: contact validation, capability matrix and schedule-before-handoff wiring.')

@@ -1,4 +1,4 @@
-// Mirrors crm_user_can in 20260910010000_crm_shared_workflow.sql.
+// Mirrors crm_user_can in 20260910120000_seller_closer_access.sql.
 // Closer includes sale registration to complete the explicit CRM → Vendas flow.
 export function crmCapabilities(
   roles: readonly string[],
@@ -18,7 +18,11 @@ export function crmCapabilities(
         crmAccess ||
         roles.some((role) => ["seller", "sdr", "closer"].includes(role))),
     sdr: active && (admin || generalSeller || roles.includes("sdr")),
-    closer: active && (admin || generalSeller || roles.includes("closer")),
-    sales: active && (admin || generalSeller || roles.includes("closer")),
+    closer:
+      active &&
+      (admin || roles.some((role) => ["seller", "closer"].includes(role))),
+    sales:
+      active &&
+      (admin || roles.some((role) => ["seller", "closer"].includes(role))),
   };
 }

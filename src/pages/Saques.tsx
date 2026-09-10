@@ -12,14 +12,18 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { useRoles } from '@/hooks/useRoles'
 import { useToast } from '@/hooks/use-toast'
 import { errorMessage } from '@/lib/sales'
+import { fetchAllPages } from '@/lib/supabase-pages'
 import type { Tables } from '@/integrations/supabase/types'
 
 export default function Saques() {
   const { user } = useAuth()
+  const { commissionRate } = useRoles()
   const { toast } = useToast()
   const historyRef = useRef<HTMLDivElement>(null)
+  const latestFetch = useRef(0)
 
   const [availableBalance, setAvailableBalance] = useState(0)
   const [pendingCommission, setPendingCommission] = useState(0)
@@ -43,59 +47,68 @@ export default function Saques() {
 
   const fetchData = useCallback(async () => {
     if (!user) return
+    const requestId = ++latestFetch.current
     setLoading(true)
     setFetchError(null)
     try {
       // ✅ RPC retorna APENAS comissões aprovadas e não sacadas (withdrawn = false)
-      const { data: balanceData, error: balanceError } = await supabase
-        .rpc('get_available_balance', { p_seller_id: user.id })
+      const [
+        { data: balanceData, error: balanceError },
+        { data: pendingData, error: pendingError },
+        saquesData,
+      ] = await Promise.all([
+        supabase.rpc('get_available_balance', { p_seller_id: user.id }),
+        supabase.rpc('get_pending_commission', { p_seller_id: user.id }),
+        fetchAllPages((from, to) => supabase
+          .from('saques')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to)),
+      ])
       if (balanceError) throw balanceError
       const balance = Number(balanceData) || 0
 
       // ✅ Comissão pendente via RPC segura
-      const { data: pendingData, error: pendingError } = await supabase
-        .rpc('get_pending_commission', { p_seller_id: user.id })
+      let pendingCommissionValue: number
       if (pendingError) {
-        // Fallback: calcular manualmente
-        const { data: pendingVendas } = await supabase
+        // Registros pendentes guardam comissão zero; a estimativa usa a taxa
+        // atual exibida na tela de Vendas.
+        const pendingVendas = await fetchAllPages((from, to) => supabase
           .from('vendas')
-          .select('commission_amount, valor_venda')
+          .select('id, valor_venda')
           .eq('user_id', user.id)
           .eq('approval_status', 'pendente')
-        const pending = (pendingVendas || []).reduce((s, v) => {
-          return s + (Number(v.commission_amount) || 0)
-        }, 0)
-        setPendingCommission(pending)
+          .order('id')
+          .range(from, to))
+        pendingCommissionValue = pendingVendas.reduce(
+          (sum, sale) => sum + Number(sale.valor_venda) * commissionRate / 100,
+          0,
+        )
       } else {
-        setPendingCommission(Number(pendingData) || 0)
+        pendingCommissionValue = Number(pendingData) || 0
       }
-
-      // ✅ Histórico de saques — usando schema correto da tabela saques
-      const { data: saquesData, error: saquesError } = await supabase
-        .from('saques')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(100)
-
-      if (saquesError) throw saquesError
 
       // Total sacado = apenas status 'pago'. O razao (dashboard_refresh_balance)
       // usa valor_aprovado quando o executivo aprova valor diferente do pedido.
-      const withdrawn = (saquesData || [])
+      const withdrawn = saquesData
         .filter(s => s.status === 'pago')
         .reduce((s, w) => s + Number(w.valor_aprovado ?? w.valor_solicitado ?? 0), 0)
 
+      if (requestId !== latestFetch.current) return
       setAvailableBalance(balance)
+      setPendingCommission(pendingCommissionValue)
       setTotalWithdrawn(withdrawn)
-      setWithdrawals(saquesData || [])
+      setWithdrawals(saquesData)
     } catch (err) {
+      if (requestId !== latestFetch.current) return
       console.error('Error fetching balance:', err)
       setFetchError(errorMessage(err))
     } finally {
-      setLoading(false)
+      if (requestId === latestFetch.current) setLoading(false)
     }
-  }, [user])
+  }, [commissionRate, user])
 
   useEffect(() => { fetchData() }, [fetchData])
 

@@ -22,6 +22,8 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAllUsers } from '@/hooks/useRoles'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { SalesChart } from '@/components/dashboard/SalesChart'
+import { errorMessage } from '@/lib/sales'
+import { fetchAllPages } from '@/lib/supabase-pages'
 
 // Chave de dia no fuso local. created_at e UTC, entao comparar com
 // toISOString joga registros do fim da tarde para o dia seguinte.
@@ -79,6 +81,7 @@ export function ExecutiveSellerDetails() {
     salesByDay: []
   })
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   // Trocar de vendedor rapido dispara consultas concorrentes; so a ultima
   // pode escrever no estado.
   const latestRequest = useRef(0)
@@ -88,35 +91,40 @@ export function ExecutiveSellerDetails() {
     const requestId = ++latestRequest.current
 
     setLoading(true)
+    setError(null)
     
     try {
       // Buscar vendas do seller. Somente vendas aprovadas compoem faturamento,
       // conversao e ranking no restante do sistema.
-      const { data: sales } = await supabase
-        .from('vendas')
-        .select('id, nome_produto, valor_venda, created_at')
-        .eq('user_id', sellerId)
-        .eq('approval_status', 'aprovada')
-        .order('created_at', { ascending: false })
+      const [sales, approaches, subscriptions] = await Promise.all([
+        fetchAllPages((from, to) => supabase
+          .from('vendas')
+          .select('id, nome_produto, valor_venda, created_at')
+          .eq('user_id', sellerId)
+          .eq('approval_status', 'aprovada')
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to)),
+        fetchAllPages((from, to) => supabase
+          .from('abordagens')
+          .select('id, nomes_abordados, mostrou_ia, tempo_medio_abordagem, created_at')
+          .eq('user_id', sellerId)
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to)),
+        fetchAllPages((from, to) => supabase
+          .from('assinaturas')
+          .select('id, status')
+          .eq('user_id', sellerId)
+          .order('id')
+          .range(from, to)),
+      ])
 
-      // Buscar abordagens do seller
-      const { data: approaches } = await supabase
-        .from('abordagens')
-        .select('id, nomes_abordados, mostrou_ia, tempo_medio_abordagem, created_at')
-        .eq('user_id', sellerId)
-        .order('created_at', { ascending: false })
-
-      // Buscar assinaturas do seller
-      const { data: subscriptions } = await supabase
-        .from('assinaturas')
-        .select('id, status')
-        .eq('user_id', sellerId)
-
-      const totalSales = sales?.length || 0
-      const totalRevenue = sales?.reduce((sum, sale) => sum + Number(sale.valor_venda), 0) || 0
-      const totalApproaches = approaches?.length || 0
-      const totalSubscriptions = subscriptions?.length || 0
-      const activeSubscriptions = subscriptions?.filter(sub => sub.status === 'ativa').length || 0
+      const totalSales = sales.length
+      const totalRevenue = sales.reduce((sum, sale) => sum + Number(sale.valor_venda), 0)
+      const totalApproaches = approaches.length
+      const totalSubscriptions = subscriptions.length
+      const activeSubscriptions = subscriptions.filter(sub => sub.status === 'ativa').length
       const conversionRate = totalApproaches > 0 ? (totalSales / totalApproaches) * 100 : 0
 
       // Vendas dos últimos 7 dias
@@ -126,13 +134,13 @@ export function ExecutiveSellerDetails() {
         date.setDate(date.getDate() - i)
         const dateStr = chaveDia(date)
 
-        const daySales = sales?.filter(sale =>
+        const daySales = sales.filter(sale =>
           chaveDia(sale.created_at) === dateStr
-        ) || []
+        )
 
-        const dayApproaches = approaches?.filter(approach =>
+        const dayApproaches = approaches.filter(approach =>
           chaveDia(approach.created_at) === dateStr
-        ) || []
+        )
         
         salesByDay.push({
           period: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
@@ -151,13 +159,14 @@ export function ExecutiveSellerDetails() {
         totalSubscriptions,
         activeSubscriptions,
         conversionRate,
-        recentSales: sales?.slice(0, 5) || [],
-        recentApproaches: approaches?.slice(0, 5) || [],
+        recentSales: sales.slice(0, 5),
+        recentApproaches: approaches.slice(0, 5),
         salesByDay
       })
 
     } catch (error) {
       console.error('Error fetching seller stats:', error)
+      if (requestId === latestRequest.current) setError(errorMessage(error))
     } finally {
       if (requestId === latestRequest.current) setLoading(false)
     }
@@ -222,6 +231,12 @@ export function ExecutiveSellerDetails() {
           </div>
         </CardContent>
       </Card>
+
+      {error && (
+        <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          Não foi possível carregar os indicadores deste vendedor: {error}
+        </p>
+      )}
 
       {selectedSeller && (
         <>
@@ -356,7 +371,7 @@ export function ExecutiveSellerDetails() {
                     stats.recentApproaches.map((approach, index) => (
                       <div key={index} className="flex items-center justify-between p-3 border rounded">
                         <div>
-                          <p className="font-medium text-sm">{approach.nomes_abordados} pessoas abordadas</p>
+                          <p className="font-medium text-sm">Abordados: {approach.nomes_abordados}</p>
                           <p className="text-xs text-muted-foreground">
                             {new Date(approach.created_at).toLocaleDateString('pt-BR')}
                           </p>

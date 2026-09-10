@@ -21,8 +21,8 @@ DO $$ DECLARE n int; u uuid; BEGIN
     u:=('ce100000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
     IF public.crm_user_can(u,'leads') IS DISTINCT FROM (n NOT IN (7,8)) THEN RAISE EXCEPTION 'FAIL leads capability %',n; END IF;
     IF public.crm_user_can(u,'sdr') IS DISTINCT FROM (n IN (1,2,3,5)) THEN RAISE EXCEPTION 'FAIL SDR capability %',n; END IF;
-    IF public.crm_user_can(u,'closer') IS DISTINCT FROM (n IN (1,2,4,6)) THEN RAISE EXCEPTION 'FAIL Closer capability %',n; END IF;
-    IF public.crm_user_can(u,'sales') IS DISTINCT FROM (n IN (1,2,4,6)) THEN RAISE EXCEPTION 'FAIL sales capability %',n; END IF;
+    IF public.crm_user_can(u,'closer') IS DISTINCT FROM (n IN (1,2,4,5,6)) THEN RAISE EXCEPTION 'FAIL Closer capability %',n; END IF;
+    IF public.crm_user_can(u,'sales') IS DISTINCT FROM (n IN (1,2,4,5,6)) THEN RAISE EXCEPTION 'FAIL sales capability %',n; END IF;
     IF public.crm_user_can(u,'admin') IS DISTINCT FROM (n=2) THEN RAISE EXCEPTION 'FAIL admin capability %',n; END IF;
   END LOOP;
 END; $$;
@@ -59,6 +59,8 @@ DO $$ DECLARE l public.crm_leads; old_version bigint; a public.crm_activities; B
   SELECT * INTO l FROM public.crm_leads WHERE id=l.id;
   BEGIN PERFORM public.reschedule_crm_call(a.id,now()+interval '3 days',a.updated_at-interval '1 second'); RAISE EXCEPTION 'FAIL stale reschedule'; EXCEPTION WHEN SQLSTATE 'PT409' THEN NULL; END;
   a:=public.reschedule_crm_call(a.id,now()+interval '3 days',a.updated_at);
+  SELECT * INTO l FROM public.crm_leads WHERE id=l.id;
+  IF l.next_followup_at IS DISTINCT FROM a.scheduled_at THEN RAISE EXCEPTION 'FAIL reschedule not synchronized with lead'; END IF;
   a:=public.resolve_closer_call(a.id,'avancou',a.updated_at);
   SELECT * INTO l FROM public.crm_leads WHERE id=l.id;
   l:=public.crm_transition(l.id,'handoff',l.version,'{"note":"Repasse sem call de fechamento"}');
@@ -89,6 +91,36 @@ DO $$ DECLARE l public.crm_leads; old_version bigint; a public.crm_activities; B
   IF l.pipeline_stage<>'fechado_ganho' THEN RAISE EXCEPTION 'FAIL closed stage overwritten'; END IF;
   BEGIN UPDATE public.crm_activities SET description='Tampering' WHERE lead_id=l.id; RAISE EXCEPTION 'FAIL mutable history'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   IF EXISTS(SELECT 1 FROM public.crm_activities WHERE lead_id=l.id AND (user_id<>auth.uid() OR author_name<>'CRM Shared QA 1')) THEN RAISE EXCEPTION 'FAIL author'; END IF;
+END; $$;
+
+-- A dedicated SDR can hand off, assign and schedule in one atomic action. The
+-- Closer receives the exact same timestamp/context that the SDR entered.
+SELECT set_config('request.jwt.claims','{"sub":"ce100000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+DO $$ DECLARE l public.crm_leads; a public.crm_activities; BEGIN
+  INSERT INTO public.crm_leads(name,athlete_name,phone)
+    VALUES('QA Repasse sincronizado','QA Atleta','11999999999') RETURNING * INTO l;
+  a:=public.handoff_and_schedule_closer_call(
+    l.id,l.version,now()+interval '4 days',
+    'ce100000-0000-4000-8000-000000000004','Contexto repassado sem retrabalho'
+  );
+  SELECT * INTO l FROM public.crm_leads WHERE id=l.id;
+  IF l.pipeline_stage<>'repassado_closer'
+     OR l.closer_id<>'ce100000-0000-4000-8000-000000000004'
+     OR l.handed_off_at IS NULL
+     OR l.next_followup_at IS DISTINCT FROM a.scheduled_at
+     OR a.assigned_to IS DISTINCT FROM l.closer_id
+     OR a.user_id IS DISTINCT FROM auth.uid()
+     OR a.call_type<>'fechamento_closer'
+     OR a.description<>'Contexto repassado sem retrabalho' THEN
+    RAISE EXCEPTION 'FAIL atomic SDR to Closer call synchronization';
+  END IF;
+  BEGIN
+    PERFORM public.handoff_and_schedule_closer_call(
+      l.id,l.version,now()+interval '5 days',
+      'ce100000-0000-4000-8000-000000000004',NULL
+    );
+    RAISE EXCEPTION 'FAIL duplicate synchronized handoff';
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN NULL; END;
 END; $$;
 
 SELECT set_config('request.jwt.claims','{"sub":"ce100000-0000-4000-8000-000000000002","role":"authenticated"}',true);
@@ -125,6 +157,7 @@ SELECT set_config('request.jwt.claims','{"sub":"ce100000-0000-4000-8000-00000000
 DO $$ DECLARE s record; BEGIN SELECT * INTO s FROM crm_shared_state;
   IF public.crm_has_access() OR EXISTS(SELECT 1 FROM public.crm_leads WHERE id=s.lead_id) OR EXISTS(SELECT 1 FROM public.crm_activities WHERE lead_id=s.lead_id) THEN RAISE EXCEPTION 'FAIL no-access RLS'; END IF;
   BEGIN PERFORM public.crm_transition(s.lead_id,'claim',1); RAISE EXCEPTION 'FAIL no-access RPC'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN PERFORM public.handoff_and_schedule_closer_call(s.lead_id,1,now()+interval '1 day','ce100000-0000-4000-8000-000000000004',NULL); RAISE EXCEPTION 'FAIL no-access synchronized handoff'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END; $$;
 SELECT set_config('request.jwt.claims','{"sub":"ce100000-0000-4000-8000-000000000008","role":"authenticated"}',true);
 DO $$ DECLARE s record; BEGIN SELECT * INTO s FROM crm_shared_state;

@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/dialog";
 
 const actionTitles: Record<string, string> = {
-  handoff: "Enviar para Closer",
   assign: "Atribuir lead",
   contact: "Registrar contato/anotação",
   note: "Registrar anotação",
@@ -40,9 +39,7 @@ export function CRMActionDialog({
   onSave: (data: Json) => Promise<boolean>;
 }) {
   const [note, setNote] = useState("");
-  const [assigned, setAssigned] = useState(
-    action === "assign" ? lead.closer_id || "" : "",
-  );
+  const [assigned, setAssigned] = useState(lead.closer_id || "");
   const [outcome, setOutcome] = useState("");
   const [when, setWhen] = useState("");
   const [failure, setFailure] = useState("");
@@ -94,7 +91,7 @@ export function CRMActionDialog({
         </DialogHeader>
         <form onSubmit={save} className="space-y-3">
           <fieldset disabled={busy} className="space-y-3">
-            {["handoff", "assign"].includes(action) && (
+            {action === "assign" && (
               <div className="space-y-1">
                 <Label className="text-xs" htmlFor="handoff-closer">Responsável Closer</Label>
                 <select
@@ -111,8 +108,7 @@ export function CRMActionDialog({
                   ))}
                 </select>
                 <p className="text-xs text-muted-foreground">
-                  O mesmo lead entrará na fila do Closer. Agendar call é
-                  opcional.
+                  A call pendente também acompanhará o novo responsável.
                 </p>
               </div>
             )}

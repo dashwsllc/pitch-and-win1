@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
+import { fetchAllPages } from '@/lib/supabase-pages'
 
 interface DashboardMetrics {
   totalVendas: number
@@ -49,12 +50,12 @@ export function useDashboardData(dateFilter: string = "30dias") {
         return { start: yesterday, end: today }
       }
       case "7dias":
-        return { start: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+        return { start: new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
       case "14dias":
-        return { start: new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+        return { start: new Date(today.getTime() - 13 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
       case "30dias":
       default:
-        return { start: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+        return { start: new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
     }
   }
 
@@ -69,34 +70,31 @@ export function useDashboardData(dateFilter: string = "30dias") {
 
       // Executives see the consolidated commercial operation. Sellers see only
       // their own data. RLS remains the final source of authorization.
-      let vendasQuery = supabase
-        .from('vendas')
-        .select('nome_produto, valor_venda, created_at')
-        .eq('approval_status', 'aprovada')
-        .gte('created_at', start.toISOString())
-        .lt('created_at', end.toISOString())
-        .limit(1000)
-
-      let abordagensQuery = supabase
-        .from('abordagens')
-        .select('created_at')
-        .gte('created_at', start.toISOString())
-        .lt('created_at', end.toISOString())
-        .limit(1000)
-
-      if (!isExecutive) {
-        vendasQuery = vendasQuery.eq('user_id', userId)
-        abordagensQuery = abordagensQuery.eq('user_id', userId)
-      }
-
-      const [
-        { data: vendas, error: vendasError },
-        { data: abordagens, error: abordagensError }
-      ] = await Promise.all([vendasQuery, abordagensQuery])
-
-      if (vendasError) throw vendasError
-
-      if (abordagensError) throw abordagensError
+      const [vendas, abordagens] = await Promise.all([
+        fetchAllPages((from, to) => {
+          let request = supabase
+            .from('vendas')
+            .select('id, nome_produto, valor_venda, created_at')
+            .eq('approval_status', 'aprovada')
+            .gte('created_at', start.toISOString())
+            .lt('created_at', end.toISOString())
+            .order('created_at')
+            .order('id')
+          if (!isExecutive) request = request.eq('user_id', userId)
+          return request.range(from, to)
+        }),
+        fetchAllPages((from, to) => {
+          let request = supabase
+            .from('abordagens')
+            .select('id, created_at')
+            .gte('created_at', start.toISOString())
+            .lt('created_at', end.toISOString())
+            .order('created_at')
+            .order('id')
+          if (!isExecutive) request = request.eq('user_id', userId)
+          return request.range(from, to)
+        }),
+      ])
 
       // Calculate metrics
       const totalVendas = vendas?.reduce((sum, venda) => sum + Number(venda.valor_venda), 0) || 0

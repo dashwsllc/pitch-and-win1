@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/hooks/useAuth"
 import { toast } from "sonner"
 import { Users, UserPlus, Check, X, Plus } from "lucide-react"
+import { fetchAllPages } from "@/lib/supabase-pages"
 
 interface Assinatura {
   id: string
@@ -49,29 +50,29 @@ export default function Clientes() {
   ]
 
   // Carregar assinaturas
-  const fetchAssinaturas = async () => {
+  const fetchAssinaturas = useCallback(async () => {
     if (!user) return
 
     try {
-      const { data, error } = await supabase
+      const data = await fetchAllPages((from, to) => supabase
         .from('assinaturas')
         .select('id, nome_produto, valor_assinatura, nome_cliente, whatsapp_cliente, email_cliente, status, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setAssinaturas((data || []) as Assinatura[])
+        .order('id')
+        .range(from, to))
+      setAssinaturas(data as Assinatura[])
     } catch (error) {
       console.error('Erro ao carregar assinaturas:', error)
       toast.error('Erro ao carregar clientes')
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   useEffect(() => {
-    fetchAssinaturas()
-  }, [user])
+    void fetchAssinaturas()
+  }, [fetchAssinaturas])
 
   // Cadastrar nova assinatura
   const handleSubmit = async (e: React.FormEvent) => {
@@ -109,7 +110,7 @@ export default function Clientes() {
       setEmailCliente("")
       
       // Recarregar lista
-      fetchAssinaturas()
+      void fetchAssinaturas()
     } catch (error) {
       console.error('Erro ao cadastrar cliente:', error)
       toast.error('Erro ao cadastrar cliente')
@@ -125,11 +126,12 @@ export default function Clientes() {
         .from('assinaturas')
         .update({ status: novoStatus })
         .eq('id', id)
+        .eq('user_id', user!.id)
 
       if (error) throw error
 
       toast.success(`Assinatura ${novoStatus === 'ativa' ? 'ativada' : 'desativada'} com sucesso!`)
-      fetchAssinaturas()
+      void fetchAssinaturas()
     } catch (error) {
       console.error('Erro ao alterar status:', error)
       toast.error('Erro ao alterar status da assinatura')

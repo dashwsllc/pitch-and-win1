@@ -37,18 +37,24 @@ export function CRMCallScheduler({
   const assignees = useCRMAssignees();
   const client = useQueryClient();
   const { toast } = useToast();
+  const isSdrHandoff =
+    !call &&
+    lead.pipeline_stage !== "repassado_closer" &&
+    capabilities.sdr;
   const [type] = useState(
     call?.call_type ||
-      (lead.pipeline_stage === "repassado_closer"
+      (isSdrHandoff || lead.pipeline_stage === "repassado_closer"
         ? "fechamento_closer"
         : "qualificacao"),
   );
   const [assigned, setAssigned] = useState(
     call?.assigned_to ||
-      (lead.pipeline_stage === "repassado_closer"
+      (isSdrHandoff
         ? lead.closer_id
-        : lead.sdr_id) ||
-      user?.id ||
+        : lead.pipeline_stage === "repassado_closer"
+          ? lead.closer_id
+          : lead.sdr_id) ||
+      (isSdrHandoff ? "" : user?.id) ||
       "",
   );
   const [when, setWhen] = useState(() => {
@@ -72,6 +78,7 @@ export function CRMCallScheduler({
     .filter((a, i, all) => all.findIndex((b) => b.user_id === a.user_id) === i)
     .filter(
       (a) =>
+        isSdrHandoff ||
         type !== "fechamento_closer" ||
         !!lead.closer_id ||
         capabilities.admin ||
@@ -92,22 +99,37 @@ export function CRMCallScheduler({
     setSaving(true);
     setFailure("");
     try {
+      const scheduledAt = new Date(when).toISOString();
       const { error } = call
         ? await supabase.rpc("reschedule_crm_call", {
             p_activity_id: call.id,
-            p_scheduled_at: new Date(when).toISOString(),
+            p_scheduled_at: scheduledAt,
             p_expected_revision: call.updated_at,
           })
-        : await supabase.rpc("schedule_closer_call", {
-            p_lead_id: lead.id,
-            p_call_type: type,
-            p_assigned_to: assigned,
-            p_scheduled_at: new Date(when).toISOString(),
-            p_context: context,
-          });
+        : isSdrHandoff
+          ? await supabase.rpc("handoff_and_schedule_closer_call", {
+              p_lead_id: lead.id,
+              p_expected_version: lead.version,
+              p_assigned_to: assigned,
+              p_scheduled_at: scheduledAt,
+              p_context: context,
+            })
+          : await supabase.rpc("schedule_closer_call", {
+              p_lead_id: lead.id,
+              p_call_type: type,
+              p_assigned_to: assigned,
+              p_scheduled_at: scheduledAt,
+              p_context: context,
+            });
       if (error) throw error;
       await client.invalidateQueries({ queryKey: ["crm"] });
-      toast({ title: call ? "Call reagendada" : "Call agendada" });
+      toast({
+        title: call
+          ? "Call reagendada"
+          : isSdrHandoff
+            ? "Call agendada e lead enviado ao Closer"
+            : "Call agendada",
+      });
       onClose();
     } catch (error) {
       setFailure(errorMessage(error));
@@ -128,9 +150,21 @@ export function CRMCallScheduler({
         data-lenis-prevent
       >
         <DialogHeader>
-          <DialogTitle>{call ? "Reagendar call" : "Agendar call"}</DialogTitle>
+          <DialogTitle>
+            {call
+              ? "Reagendar call"
+              : isSdrHandoff
+                ? "Agendar call e enviar ao Closer"
+                : "Agendar call"}
+          </DialogTitle>
           <DialogDescription>
             {lead.athlete_name || "Atleta não informado"} · {lead.name}
+            {isSdrHandoff && (
+              <span className="mt-1 block">
+                O lead só será enviado ao Closer depois que o agendamento for
+                salvo com sucesso.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="space-y-3">
@@ -153,7 +187,13 @@ export function CRMCallScheduler({
                     </option>
                   ))}
                 </select>
-                {type === "fechamento_closer" && !lead.closer_id && assigned && (
+                {isSdrHandoff && assigned && (
+                  <p className="text-[11px] leading-4 text-muted-foreground">
+                    Após agendar, {assignedName || "o responsável selecionado"}
+                    receberá o lead, o horário e o contexto automaticamente.
+                  </p>
+                )}
+                {!isSdrHandoff && type === "fechamento_closer" && !lead.closer_id && assigned && (
                   <p className="text-[11px] leading-4 text-muted-foreground">
                     Ao agendar, {assignedName || "o responsável selecionado"} será definido como Closer deste lead.
                   </p>
@@ -220,7 +260,13 @@ export function CRMCallScheduler({
                     !candidates.some((a) => a.user_id === assigned)))
               }
             >
-              {saving ? "Salvando..." : call ? "Salvar horário" : "Agendar"}
+              {saving
+                ? "Salvando..."
+                : call
+                  ? "Salvar horário"
+                  : isSdrHandoff
+                    ? "Agendar e enviar"
+                    : "Agendar"}
             </Button>
           </DialogFooter>
         </form>
