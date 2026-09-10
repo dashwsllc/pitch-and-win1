@@ -4,7 +4,7 @@ Correção sobre `ff874e3`. Produção: https://wsltda.site. Supabase: `mbzwchnx
 
 ## Cadastro e operação
 
-Somente nome do responsável, nome do atleta e WhatsApp são obrigatórios. E-mail, nascimento, posição, cidade/UF, métricas, relatório, origem, valor, prioridade e observações são opcionais. Valores vazios são enviados como `null`; dados opcionais preenchidos continuam sujeitos à validação de formato. Cadastros históricos incompletos permanecem visíveis com indicador, sem dados pessoais inventados.
+Somente nome do responsável, nome do atleta e WhatsApp são obrigatórios. O formulário identifica o campo como **E-mail (opcional)**; nascimento, posição, cidade/UF, métricas, relatório, origem, valor, prioridade e observações também são opcionais. Valores vazios são enviados como `null`; dados opcionais preenchidos continuam sujeitos à validação de formato. Cadastros históricos incompletos permanecem visíveis com indicador, sem dados pessoais inventados.
 
 O livro abre cadastro e timeline em leitura. O lápis abre edição com os valores atuais. Aquecimento (`frio`, `morno`, `quente`) e abordagem (`nao_abordado`, `em_abordagem`, `abordado`, `reabordado`) são independentes e aparecem em cada card. Busca, filtros combináveis, ordenação, agrupamentos de aquecimento/abordagem/esteira e atraso estão disponíveis em Leads e SDR.
 

@@ -51,7 +51,7 @@ export function CRMContactFields({
       <div className="grid gap-4 sm:grid-cols-2">
         {field("name", "Nome do responsável", "text", true)}
         {field("phone", "WhatsApp", "tel", true)}
-        {field("email", "E-mail", "email")}
+        {field("email", "E-mail (opcional)", "email")}
         {field("city_state", "Cidade / UF")}
       </div>
       <p className="font-semibold text-sm">Dados do atleta</p>

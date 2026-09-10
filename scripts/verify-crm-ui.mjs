@@ -52,6 +52,7 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
     await expect(page.getByRole('tab', { name: 'Gerenciar Usuários', exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: 'Novo Lead', exact: true }).click()
     let dialog = page.getByRole('dialog', { name: 'Novo Lead', exact: true })
+    await expect(dialog.getByLabel('E-mail (opcional)', { exact: true })).not.toHaveAttribute('required', '')
     await dialog.getByLabel('Nome do responsável *', { exact: true }).fill(name)
     await dialog.getByLabel('Nome do atleta *', { exact: true }).fill(`${name} Atleta`)
     await dialog.getByLabel('WhatsApp *', { exact: true }).fill('11999999999')
