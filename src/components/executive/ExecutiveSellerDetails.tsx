@@ -23,6 +23,13 @@ import { useAllUsers } from '@/hooks/useRoles'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { SalesChart } from '@/components/dashboard/SalesChart'
 
+// Chave de dia no fuso local. created_at e UTC, entao comparar com
+// toISOString joga registros do fim da tarde para o dia seguinte.
+const chaveDia = (value: Date | string) => {
+  const date = value instanceof Date ? value : new Date(value)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 interface SellerSale {
   id: string
   nome_produto: string
@@ -113,14 +120,14 @@ export function ExecutiveSellerDetails() {
       for (let i = 6; i >= 0; i--) {
         const date = new Date()
         date.setDate(date.getDate() - i)
-        const dateStr = date.toISOString().split('T')[0]
-        
-        const daySales = sales?.filter(sale => 
-          sale.created_at.startsWith(dateStr)
+        const dateStr = chaveDia(date)
+
+        const daySales = sales?.filter(sale =>
+          chaveDia(sale.created_at) === dateStr
         ) || []
-        
-        const dayApproaches = approaches?.filter(approach => 
-          approach.created_at.startsWith(dateStr)
+
+        const dayApproaches = approaches?.filter(approach =>
+          chaveDia(approach.created_at) === dateStr
         ) || []
         
         salesByDay.push({

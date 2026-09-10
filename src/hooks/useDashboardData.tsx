@@ -109,11 +109,14 @@ export function useDashboardData(dateFilter: string = "30dias") {
       const vendasPorMes = new Map<string, number>()
       const abordagensPorMes = new Map<string, number>()
       
-      const ultimos6Meses = Array.from({ length: 6 }, (_, i) => {
-        const date = new Date()
-        date.setMonth(date.getMonth() - i)
-        return date.toISOString().slice(0, 7)
-      }).reverse()
+      // Meses no fuso local. Usar setMonth sobre a data de hoje pula ou repete
+      // meses quando o dia atual nao existe no mes anterior (dia 29 a 31).
+      const hoje = new Date()
+      const chaveMes = (date: Date) =>
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      const ultimos6Meses = Array.from({ length: 6 }, (_, i) =>
+        chaveMes(new Date(hoje.getFullYear(), hoje.getMonth() - i, 1))
+      ).reverse()
 
       ultimos6Meses.forEach(mes => {
         vendasPorMes.set(mes, 0)
@@ -121,21 +124,23 @@ export function useDashboardData(dateFilter: string = "30dias") {
       })
 
       vendas?.forEach(venda => {
-        const mes = new Date(venda.created_at).toISOString().slice(0, 7)
+        const mes = chaveMes(new Date(venda.created_at))
         if (vendasPorMes.has(mes)) {
           vendasPorMes.set(mes, vendasPorMes.get(mes)! + Number(venda.valor_venda))
         }
       })
 
       abordagens?.forEach(abordagem => {
-        const mes = new Date(abordagem.created_at).toISOString().slice(0, 7)
+        const mes = chaveMes(new Date(abordagem.created_at))
         if (abordagensPorMes.has(mes)) {
           abordagensPorMes.set(mes, abordagensPorMes.get(mes)! + 1)
         }
       })
 
       const vendasMes = ultimos6Meses.map(mes => ({
-        month: new Date(mes + '-01').toLocaleDateString('pt-BR', { month: 'short' }),
+        // new Date('2026-09-01') e meia-noite UTC e cai no mes anterior em UTC-3.
+        month: new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 1)
+          .toLocaleDateString('pt-BR', { month: 'short' }),
         vendas: vendasPorMes.get(mes) || 0,
         abordagens: abordagensPorMes.get(mes) || 0
       }))

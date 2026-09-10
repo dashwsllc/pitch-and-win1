@@ -29,6 +29,13 @@ interface ExecutiveDashboardData {
   }>
 }
 
+// Chave de dia no fuso local. created_at e UTC, entao comparar com
+// toISOString joga registros do fim da tarde para o dia seguinte.
+const chaveDia = (value: Date | string) => {
+  const date = value instanceof Date ? value : new Date(value)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 export function useExecutiveDashboard(dateFilter: string = '30dias') {
   const { user } = useAuth()
   const [data, setData] = useState<ExecutiveDashboardData>({
@@ -148,14 +155,14 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       for (let i = 6; i >= 0; i--) {
         const date = new Date()
         date.setDate(date.getDate() - i)
-        const dateStr = date.toISOString().split('T')[0]
-        
-        const daySales = salesData?.filter(sale => 
-          sale.created_at.startsWith(dateStr)
+        const dateStr = chaveDia(date)
+
+        const daySales = salesData?.filter(sale =>
+          chaveDia(sale.created_at) === dateStr
         ) || []
-        
-        const dayApproaches = approachesData?.filter(approach => 
-          approach.created_at.startsWith(dateStr)
+
+        const dayApproaches = approachesData?.filter(approach =>
+          chaveDia(approach.created_at) === dateStr
         ) || []
         
         salesByPeriod.push({
