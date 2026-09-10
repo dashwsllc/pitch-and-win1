@@ -79,11 +79,13 @@ export function ExecutiveSellerDetails() {
     setLoading(true)
     
     try {
-      // Buscar vendas do seller
+      // Buscar vendas do seller. Somente vendas aprovadas compoem faturamento,
+      // conversao e ranking no restante do sistema.
       const { data: sales } = await supabase
         .from('vendas')
         .select('id, nome_produto, valor_venda, created_at')
         .eq('user_id', sellerId)
+        .eq('approval_status', 'aprovada')
         .order('created_at', { ascending: false })
 
       // Buscar abordagens do seller

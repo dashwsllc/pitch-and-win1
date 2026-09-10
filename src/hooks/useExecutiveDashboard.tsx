@@ -87,19 +87,26 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       // Fetch profiles for name resolution
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, display_name')
+        .select('user_id, display_name, suspended')
       if (profilesError) throw profilesError
 
       const profileMap = new Map<string, string>()
+      const activeProfiles = new Set<string>()
       profilesData?.forEach(p => {
         profileMap.set(p.user_id, p.display_name || 'Usuário')
+        if (!p.suspended) activeProfiles.add(p.user_id)
       })
 
       // Fetch total sellers count
       const { data: sellerRoles, error: sellerError } = await supabase.from('user_roles')
         .select('user_id').in('role', ['seller','closer','sdr','bdr'])
       if (sellerError) throw sellerError
-      const totalSellers = new Set(sellerRoles?.map(role => role.user_id)).size
+      // user_roles nao tem chave estrangeira para auth.users e mantem linhas de
+      // contas ja removidas. Conta apenas quem ainda tem perfil ativo, como em
+      // get_team_ranking.
+      const totalSellers = new Set(
+        (sellerRoles ?? []).map(role => role.user_id).filter(id => activeProfiles.has(id))
+      ).size
 
       // Fetch sales in period (apenas aprovadas)
       const { data: salesData, error: salesError } = await supabase
