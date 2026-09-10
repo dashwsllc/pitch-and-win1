@@ -66,7 +66,7 @@ const sdrGroups = [
   { value: "encerrados", label: "Encerrados" },
 ];
 const selectClass =
-  "h-10 min-w-0 w-full rounded-md border border-input bg-background px-3 text-sm";
+  "h-9 min-w-0 w-full rounded-md border border-input bg-background px-2 text-xs";
 
 export default function CRM() {
   const { user } = useAuth();
@@ -295,7 +295,7 @@ export default function CRM() {
   return (
     <DashboardLayout>
       {realtimeUnavailable && <p role="status" className="mb-4 rounded-lg border p-3 text-sm text-muted-foreground">Conexão em tempo real indisponível. Atualização automática a cada 15 segundos e ao voltar à janela.</p>}
-      <div className="min-w-0 space-y-6">
+      <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">CRM</h1>
@@ -342,10 +342,12 @@ export default function CRM() {
             },
           ].map((item) => (
             <Card key={item.label} className="border-border/50">
-              <CardContent className="p-4">
-                <item.icon className="h-4 w-4 text-muted-foreground mb-2" />
-                <p className="text-2xl font-bold">{item.value}</p>
-                <p className="text-xs text-muted-foreground">{item.label}</p>
+              <CardContent className="flex items-center gap-2.5 p-3">
+                <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-lg font-bold leading-5">{item.value}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">{item.label}</p>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -461,14 +463,15 @@ export default function CRM() {
                     </TabsList>
                   </Tabs>
                 )}
-                <div className="rounded-xl border bg-card p-4 space-y-3">
+                <div className="rounded-lg border bg-card/80 p-2.5">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1.8fr)_repeat(5,minmax(120px,1fr))]">
                   <Input
                     aria-label="Buscar leads"
                     placeholder="Buscar responsável, atleta, WhatsApp ou e-mail"
+                    className="h-9 text-sm"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
-                  <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-2">
                     <select
                       className={selectClass}
                       aria-label="Filtrar aquecimento"
@@ -533,8 +536,8 @@ export default function CRM() {
                       <option value="hot">Mais quentes</option>
                     </select>
                   </div>
-                  <div className="flex flex-wrap justify-between gap-3 text-xs text-muted-foreground">
-                    <label className="flex gap-2 items-center">
+                  <div className="mt-2 flex flex-wrap justify-between gap-2 px-0.5 text-[11px] leading-4 text-muted-foreground">
+                    <label className="flex items-center gap-1.5">
                       <input
                         type="checkbox"
                         checked={overdueOnly}
@@ -551,8 +554,8 @@ export default function CRM() {
                 <div
                   className={
                     groups.length > 1
-                      ? "grid gap-4 xl:grid-cols-3"
-                      : "space-y-4"
+                      ? "grid gap-3 xl:grid-cols-3"
+                      : "space-y-3"
                   }
                 >
                   {groups.map((group) => {
@@ -560,7 +563,7 @@ export default function CRM() {
                       (l) => groupFor(l) === group.value,
                     );
                     return (
-                      <section key={group.value} className="min-w-0 space-y-3">
+                      <section key={group.value} className="min-w-0 space-y-2">
                         {groups.length > 1 && (
                           <h2 className="flex gap-2 items-center text-sm font-semibold">
                             {group.label}
@@ -571,14 +574,14 @@ export default function CRM() {
                           <div
                             className={
                               groups.length > 1
-                                ? "space-y-3"
-                                : "grid gap-4 lg:grid-cols-2 2xl:grid-cols-3"
+                                ? "space-y-2"
+                                : "grid gap-3 lg:grid-cols-2 2xl:grid-cols-3"
                             }
                           >
                             {rows.map(renderLead)}
                           </div>
                         ) : (
-                          <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+                          <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                             Nenhum lead nesta visualização.
                           </div>
                         )}

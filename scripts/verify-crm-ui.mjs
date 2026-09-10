@@ -18,6 +18,10 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
   const actor = role => users.find(u => u.fixtureRole === role).id
   const leadBy = async id => checked(clients.seller.from('crm_leads').select('*').eq('id', id).single())
   const act = (role, lead, action, data = {}) => checked(clients[role].rpc('crm_transition', { p_lead_id: lead.id, p_action: action, p_expected_version: lead.version, p_data: data }))
+  const openCardAction = async (tab, card, name) => {
+    await card.getByRole('button', { name: /^Ações de / }).click()
+    await tab.getByRole('menuitem', { name, exact: true }).click()
+  }
   const session = async (role, viewport = { width: 1440, height: 1080 }) => {
     const context = await browser.newContext({ viewport })
     if (role === 'second') await context.addInitScript(() => {
@@ -89,7 +93,7 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
     lead = await leadBy(leadId)
     assert.equal(lead.pipeline_stage, 'pronto_closer')
     assert.ok((await clients.seller.from('crm_leads').update({ pipeline_stage: 'novo' }).eq('id', leadId)).error, 'direct pipeline accepted')
-    await card.getByRole('button', { name: 'Registrar contato/anotação', exact: true }).click()
+    await openCardAction(page, card, 'Registrar contato/anotação')
     dialog = page.getByRole('dialog', { name: 'Registrar contato/anotação', exact: true })
     await dialog.getByLabel('Anotação', { exact: true }).fill('QA: contato estabelecido; repasse sem agendamento obrigatório.')
     await dialog.getByRole('button', { name: 'Confirmar', exact: true }).click()
@@ -121,12 +125,12 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
     lead = await leadBy(leadId)
     assert.equal(lead.closer_id, actor('second'))
     assert.ok((await clients.seller.rpc('crm_transition', { p_lead_id: leadId, p_action: 'close', p_expected_version: lead.version, p_data: { outcome: 'venda_concluida' } })).error, 'non-owner closing')
-    await secondCard.getByRole('button', { name: 'Agendar call', exact: true }).click()
+    await openCardAction(second, secondCard, 'Agendar call')
     dialog = second.getByRole('dialog', { name: 'Agendar call', exact: true })
     await dialog.getByLabel('Data e hora (horário local)', { exact: true }).fill(future(1))
     await dialog.getByRole('button', { name: 'Agendar', exact: true }).click()
     await expect(dialog).toHaveCount(0)
-    await secondCard.getByRole('button', { name: 'Reagendar call', exact: true }).click()
+    await openCardAction(second, secondCard, 'Reagendar call')
     dialog = second.getByRole('dialog', { name: 'Reagendar call', exact: true })
     await dialog.getByLabel('Data e hora (horário local)', { exact: true }).fill(future(2))
     await dialog.getByRole('button', { name: 'Salvar horário', exact: true }).click()
