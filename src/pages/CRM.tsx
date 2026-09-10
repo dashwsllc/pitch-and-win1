@@ -17,11 +17,15 @@ import {
   DollarSign, TrendingUp, Trash2, Edit, RefreshCw, Phone, Mail,
   Snowflake, Thermometer, Zap, ArrowRight, LayoutList, LayoutGrid
 } from 'lucide-react'
-import { useCRMLeads, CRMLead, PIPELINE_STAGES, LEAD_SOURCES } from '@/hooks/useCRM'
+import { useCRMLeads, useCRMRealtime, CRMLead, PIPELINE_STAGES, LEAD_SOURCES } from '@/hooks/useCRM'
 import { useRoles } from '@/hooks/useRoles'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { CRMLeadDetail } from '@/components/crm/CRMLeadDetail'
+import { CRMContactFields } from '@/components/crm/CRMContactFields'
+import { emptyContact, contactPayload, validateContact } from '@/lib/crm'
+import { CRMDepartment } from '@/components/crm/CRMCalls'
+import { errorMessage } from '@/lib/sales'
 import { CRMUserManagement } from '@/components/crm/CRMUserManagement'
 import { CRMPermissionsReport } from '@/components/crm/CRMPermissionsReport'
 
@@ -38,22 +42,22 @@ function TemperatureSelector({
       key: 'frio',
       label: 'Frio',
       icon: Snowflake,
-      active: 'bg-blue-500/20 border-blue-500 text-blue-400 ring-2 ring-blue-500/30',
-      hover: 'hover:bg-blue-500/10 hover:border-blue-500/50 hover:text-blue-400',
+      active: 'bg-slate-500/20 border-slate-500 text-slate-300 ring-2 ring-slate-500/30',
+      hover: 'hover:bg-slate-500/10 hover:border-slate-500/50 hover:text-slate-300',
     },
     {
       key: 'morno',
       label: 'Morno',
       icon: Thermometer,
-      active: 'bg-orange-500/20 border-orange-500 text-orange-400 ring-2 ring-orange-500/30',
-      hover: 'hover:bg-orange-500/10 hover:border-orange-500/50 hover:text-orange-400',
+      active: 'bg-yellow-600/20 border-yellow-600 text-yellow-500 ring-2 ring-yellow-600/30',
+      hover: 'hover:bg-yellow-600/10 hover:border-yellow-600/50 hover:text-yellow-500',
     },
     {
       key: 'quente',
       label: 'Quente',
       icon: Flame,
-      active: 'bg-red-500/20 border-red-500 text-red-400 ring-2 ring-red-500/30',
-      hover: 'hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400',
+      active: 'bg-orange-600/20 border-orange-600 text-orange-400 ring-2 ring-orange-600/30',
+      hover: 'hover:bg-orange-600/10 hover:border-orange-600/50 hover:text-orange-400',
     },
   ]
 
@@ -100,22 +104,22 @@ function LeadCard({
 }) {
   const tempConfig = {
     quente: {
-      border: 'border-l-red-500',
-      badge: 'bg-red-500/15 text-red-400 border-red-500/30',
+      border: 'border-l-orange-600',
+      badge: 'bg-orange-600/15 text-orange-400 border-orange-600/30',
       glow: 'shadow-[0_0_20px_hsl(0_84%_60%/0.1)]',
       label: '🔥 Quente',
       icon: Flame,
     },
     morno: {
-      border: 'border-l-orange-500',
-      badge: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+      border: 'border-l-yellow-600',
+      badge: 'bg-yellow-600/15 text-yellow-500 border-yellow-600/30',
       glow: '',
       label: '🌡️ Morno',
       icon: Thermometer,
     },
     frio: {
-      border: 'border-l-blue-500',
-      badge: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+      border: 'border-l-slate-500',
+      badge: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
       glow: '',
       label: '❄️ Frio',
       icon: Snowflake,
@@ -131,9 +135,9 @@ function LeadCard({
     .toUpperCase()
 
   const avatarColors: Record<string, string> = {
-    quente: 'from-red-500/80 to-orange-500/80',
-    morno: 'from-orange-500/80 to-yellow-500/80',
-    frio: 'from-blue-500/80 to-cyan-500/80',
+    quente: 'from-orange-600/80 to-yellow-600/80',
+    morno: 'from-yellow-600/80 to-yellow-500/80',
+    frio: 'from-slate-500/80 to-cyan-500/80',
   }
 
   const formatCurrency = (v: number) =>
@@ -162,24 +166,9 @@ function LeadCard({
               >
                 {lead.name}
               </button>
-              {lead.age && (
-                <span className="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded-md">
-                  {lead.age} anos
-                </span>
-              )}
-              {lead.temperature === 'quente' && (
-                <Badge className="bg-green-500/15 text-green-400 border-green-500/30 text-xs flex items-center gap-1">
-                  <Zap className="w-3 h-3" /> Pronto p/ Closer
-                </Badge>
-              )}
             </div>
 
-            {lead.company && (
-              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                {lead.job_title ? `${lead.job_title} • ` : ''}
-                {lead.company}
-              </p>
-            )}
+<p className="text-xs text-muted-foreground mt-0.5">Atleta: {lead.athlete_name || 'Não informado'}</p>
 
             <div className="flex flex-wrap items-center gap-3 mt-2">
               {lead.email && (
@@ -266,9 +255,10 @@ function LeadCard({
 export default function CRM() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { isExecutive, hasCRMAccess, loading: rolesLoading } = useRoles()
-  const { leads, loading, fetchLeads, createLead, updateLead, deleteLead } = useCRMLeads()
+  const { isExecutive, roles, hasCRMAccess, loading: rolesLoading } = useRoles()
+  const { leads, loading, error, fetchLeads, createLead, updateLead, deleteLead } = useCRMLeads()
   const { toast } = useToast()
+  useCRMRealtime()
 
   useEffect(() => {
     if (!rolesLoading && !hasCRMAccess && !isExecutive) {
@@ -279,20 +269,21 @@ export default function CRM() {
       })
       navigate('/')
     }
-  }, [rolesLoading, hasCRMAccess, isExecutive])
+  }, [rolesLoading, hasCRMAccess, isExecutive, navigate, toast])
 
   const [search, setSearch] = useState('')
   const [tempFilter, setTempFilter] = useState<string>('todos')
   const [pipelineFilter, setPipelineFilter] = useState<string>('todos')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null)
+  const [selectedLeadSnapshot, setSelectedLead] = useState<CRMLead | null>(null)
+  const selectedLead = leads.find(lead => lead.id === selectedLeadSnapshot?.id)
   const [saving, setSaving] = useState(false)
   const [deleteConfirmLead, setDeleteConfirmLead] = useState<CRMLead | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   const [formData, setFormData] = useState({
-    name: '', age: '', email: '', phone: '', company: '', job_title: '',
+    ...emptyContact,
     temperature: 'frio', priority: 'normal', pipeline_stage: 'novo',
     lead_source: '', estimated_deal_value: '', observations: '',
     conversion_probability: '0',
@@ -300,7 +291,7 @@ export default function CRM() {
 
   const resetForm = () => {
     setFormData({
-      name: '', age: '', email: '', phone: '', company: '', job_title: '',
+      ...emptyContact,
       temperature: 'frio', priority: 'normal', pipeline_stage: 'novo',
       lead_source: '', estimated_deal_value: '', observations: '',
       conversion_probability: '0',
@@ -308,7 +299,7 @@ export default function CRM() {
   }
 
   const filteredLeads = useMemo(() => {
-    let result = leads
+    let result = [...leads]
 
     if (search) {
       const s = search.toLowerCase()
@@ -316,7 +307,7 @@ export default function CRM() {
         (l) =>
           l.name?.toLowerCase().includes(s) ||
           l.email?.toLowerCase().includes(s) ||
-          l.company?.toLowerCase().includes(s) ||
+          l.athlete_name?.toLowerCase().includes(s) ||
           l.phone?.includes(s)
       )
     }
@@ -353,11 +344,11 @@ export default function CRM() {
       if (!l.next_followup_at) return false
       return (
         new Date(l.next_followup_at) < new Date() &&
-        !['fechado_ganho', 'fechado_perdido'].includes(l.pipeline_stage)
+        !['fechado_ganho', 'fechado_perdido', 'lead_perdido'].includes(l.pipeline_stage)
       )
     }).length
     const pipelineTotal = leads
-      .filter((l) => !['fechado_ganho', 'fechado_perdido'].includes(l.pipeline_stage))
+      .filter((l) => !['fechado_ganho', 'fechado_perdido', 'lead_perdido'].includes(l.pipeline_stage))
       .reduce((s, l) => s + (Number(l.estimated_deal_value) || 0), 0)
     const ganhos = leads.filter((l) => l.pipeline_stage === 'fechado_ganho').length
     const conversionRate = total > 0 ? (ganhos / total) * 100 : 0
@@ -366,21 +357,17 @@ export default function CRM() {
   }, [leads])
 
   const handleCreateLead = async () => {
-    if (!formData.name.trim()) {
-      toast({ title: 'Nome obrigatório', variant: 'destructive' })
+    const invalid = validateContact(formData)
+    if (invalid) {
+      toast({ title: invalid, variant: 'destructive' })
       return
     }
     setSaving(true)
     try {
       await createLead({
-        name: formData.name.trim(),
-        age: formData.age ? parseInt(formData.age) : null,
-        email: formData.email || null,
-        phone: formData.phone || null,
-        company: formData.company || null,
-        job_title: formData.job_title || null,
-        temperature: formData.temperature as any,
-        priority: formData.priority as any,
+        ...contactPayload(formData),
+        temperature: formData.temperature,
+        priority: formData.priority,
         pipeline_stage: formData.pipeline_stage,
         lead_source: formData.lead_source || null,
         estimated_deal_value: formData.estimated_deal_value
@@ -390,12 +377,12 @@ export default function CRM() {
         conversion_probability: parseInt(formData.conversion_probability) || 0,
         created_by: user?.id,
         assigned_to: user?.id,
-      } as any)
+      })
       toast({ title: 'Lead criado com sucesso! 🎯' })
       setShowCreateModal(false)
       resetForm()
-    } catch (err: any) {
-      toast({ title: 'Erro ao criar lead', description: err.message, variant: 'destructive' })
+    } catch (err: unknown) {
+      toast({ title: 'Erro ao criar lead', description: errorMessage(err), variant: 'destructive' })
     } finally {
       setSaving(false)
     }
@@ -420,8 +407,8 @@ export default function CRM() {
   const handleToggleTemperature = async (lead: CRMLead) => {
     const cycle: Record<string, string> = { frio: 'morno', morno: 'quente', quente: 'frio' }
     try {
-      await updateLead(lead.id, { temperature: cycle[lead.temperature] as any })
-    } catch { /* silent */ }
+      await updateLead(lead.id, { temperature: cycle[lead.temperature] })
+    } catch (error) { toast({ title: 'Erro ao atualizar lead', description: errorMessage(error), variant: 'destructive' }) }
   }
 
   const handleToggleApproached = async (lead: CRMLead) => {
@@ -430,15 +417,15 @@ export default function CRM() {
         approached: !lead.approached,
         approached_at: !lead.approached ? new Date().toISOString() : null,
         approach_count: lead.approach_count + (!lead.approached ? 1 : 0),
-      } as any)
-    } catch { /* silent */ }
+      })
+    } catch (error) { toast({ title: 'Erro ao atualizar lead', description: errorMessage(error), variant: 'destructive' }) }
   }
 
   const getTemperatureBadge = (temp: string) => {
     switch (temp) {
-      case 'quente': return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">🔥 Quente</Badge>
-      case 'morno': return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">🌡️ Morno</Badge>
-      default: return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">❄️ Frio</Badge>
+      case 'quente': return <Badge className="bg-orange-600/20 text-orange-400 border-orange-600/30">🔥 Quente</Badge>
+      case 'morno': return <Badge className="bg-yellow-600/20 text-yellow-500 border-yellow-600/30">🌡️ Morno</Badge>
+      default: return <Badge className="bg-slate-500/20 text-slate-300 border-slate-500/30">❄️ Frio</Badge>
     }
   }
 
@@ -450,6 +437,8 @@ export default function CRM() {
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 
+  if (rolesLoading || !hasCRMAccess) return <DashboardLayout><p role="status">Verificando acesso ao CRM...</p></DashboardLayout>
+
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
@@ -460,7 +449,7 @@ export default function CRM() {
             <p className="text-muted-foreground">Gestão de leads e pipeline de vendas</p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={fetchLeads} variant="outline" size="sm" disabled={loading}>
+            <Button onClick={() => { void fetchLeads() }} variant="outline" size="sm" disabled={loading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
             </Button>
@@ -481,30 +470,30 @@ export default function CRM() {
             </CardContent>
           </Card>
 
-          <Card className="border-red-500/20 bg-red-500/5">
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="flex items-center gap-2 text-red-400 text-xs mb-1">
-                <Flame className="w-3.5 h-3.5" /> Quentes
-              </div>
-              <p className="text-2xl font-bold text-red-400">{kpis.quentes}</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-orange-500/20 bg-orange-500/5">
+          <Card className="border-orange-600/20 bg-orange-600/5">
             <CardContent className="pt-4 pb-3 px-4">
               <div className="flex items-center gap-2 text-orange-400 text-xs mb-1">
-                <Thermometer className="w-3.5 h-3.5" /> Mornos
+                <Flame className="w-3.5 h-3.5" /> Quentes
               </div>
-              <p className="text-2xl font-bold text-orange-400">{kpis.mornos}</p>
+              <p className="text-2xl font-bold text-orange-400">{kpis.quentes}</p>
             </CardContent>
           </Card>
 
-          <Card className="border-blue-500/20 bg-blue-500/5">
+          <Card className="border-yellow-600/20 bg-yellow-600/5">
             <CardContent className="pt-4 pb-3 px-4">
-              <div className="flex items-center gap-2 text-blue-400 text-xs mb-1">
+              <div className="flex items-center gap-2 text-yellow-500 text-xs mb-1">
+                <Thermometer className="w-3.5 h-3.5" /> Mornos
+              </div>
+              <p className="text-2xl font-bold text-yellow-500">{kpis.mornos}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-500/20 bg-slate-500/5">
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 text-slate-300 text-xs mb-1">
                 <Snowflake className="w-3.5 h-3.5" /> Frios
               </div>
-              <p className="text-2xl font-bold text-blue-400">{kpis.frios}</p>
+              <p className="text-2xl font-bold text-slate-300">{kpis.frios}</p>
             </CardContent>
           </Card>
 
@@ -536,10 +525,14 @@ export default function CRM() {
           </Card>
         </div>
 
+        {error && <div role="alert" className="rounded border border-destructive/50 p-4">Não foi possível carregar os leads. {errorMessage(error)}</div>}
         {/* Main Content */}
         <Tabs defaultValue="leads">
-          <TabsList>
+          <TabsList className="h-auto flex-wrap justify-start">
             <TabsTrigger value="leads">Leads</TabsTrigger>
+            {(isExecutive || roles.includes('sdr')) && <TabsTrigger value="sdr">SDR</TabsTrigger>}
+            {(isExecutive || roles.includes('closer')) && <TabsTrigger value="closer">Closer's</TabsTrigger>}
+            <Button variant="ghost" size="sm" onClick={() => navigate('/vendas')}>Vendas</Button>
             {isExecutive && <TabsTrigger value="users">Gerenciar Usuários</TabsTrigger>}
             {isExecutive && <TabsTrigger value="report">Relatório de Permissões</TabsTrigger>}
           </TabsList>
@@ -550,7 +543,7 @@ export default function CRM() {
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por nome, email, empresa..."
+                  placeholder="Buscar responsável, atleta, e-mail ou telefone..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-10"
@@ -631,12 +624,12 @@ export default function CRM() {
                 {filteredLeads.filter((l) => l.temperature === 'quente').length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Flame className="w-4 h-4 text-red-400" />
-                      <h3 className="text-sm font-semibold text-red-400 uppercase tracking-wide">
-                        Quentes — Prontos para o Closer
+                      <Flame className="w-4 h-4 text-orange-400" />
+                      <h3 className="text-sm font-semibold text-orange-400 uppercase tracking-wide">
+                        Quentes — Prioridade de contato
                       </h3>
-                      <div className="flex-1 h-px bg-red-500/20" />
-                      <Badge className="bg-red-500/15 text-red-400 border-red-500/30">
+                      <div className="flex-1 h-px bg-orange-600/20" />
+                      <Badge className="bg-orange-600/15 text-orange-400 border-orange-600/30">
                         {filteredLeads.filter((l) => l.temperature === 'quente').length}
                       </Badge>
                     </div>
@@ -662,12 +655,12 @@ export default function CRM() {
                 {filteredLeads.filter((l) => l.temperature === 'morno').length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Thermometer className="w-4 h-4 text-orange-400" />
-                      <h3 className="text-sm font-semibold text-orange-400 uppercase tracking-wide">
+                      <Thermometer className="w-4 h-4 text-yellow-500" />
+                      <h3 className="text-sm font-semibold text-yellow-500 uppercase tracking-wide">
                         Mornos — Em Aquecimento
                       </h3>
-                      <div className="flex-1 h-px bg-orange-500/20" />
-                      <Badge className="bg-orange-500/15 text-orange-400 border-orange-500/30">
+                      <div className="flex-1 h-px bg-yellow-600/20" />
+                      <Badge className="bg-yellow-600/15 text-yellow-500 border-yellow-600/30">
                         {filteredLeads.filter((l) => l.temperature === 'morno').length}
                       </Badge>
                     </div>
@@ -693,12 +686,12 @@ export default function CRM() {
                 {filteredLeads.filter((l) => l.temperature === 'frio').length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Snowflake className="w-4 h-4 text-blue-400" />
-                      <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wide">
+                      <Snowflake className="w-4 h-4 text-slate-300" />
+                      <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
                         Frios — Aguardando Abordagem
                       </h3>
-                      <div className="flex-1 h-px bg-blue-500/20" />
-                      <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30">
+                      <div className="flex-1 h-px bg-slate-500/20" />
+                      <Badge className="bg-slate-500/15 text-slate-300 border-slate-500/30">
                         {filteredLeads.filter((l) => l.temperature === 'frio').length}
                       </Badge>
                     </div>
@@ -730,7 +723,7 @@ export default function CRM() {
                         <tr className="border-b border-border text-muted-foreground">
                           <th className="text-left p-3 font-medium">Temp.</th>
                           <th className="text-left p-3 font-medium">Nome</th>
-                          <th className="text-left p-3 font-medium hidden sm:table-cell">Idade</th>
+                          <th className="text-left p-3 font-medium hidden sm:table-cell">Posição</th>
                           <th className="text-left p-3 font-medium hidden md:table-cell">Contato</th>
                           <th className="text-left p-3 font-medium hidden lg:table-cell">Pipeline</th>
                           <th className="text-left p-3 font-medium hidden lg:table-cell">Valor</th>
@@ -749,21 +742,12 @@ export default function CRM() {
                             <td className="p-3">
                               <button onClick={() => setSelectedLead(lead)} className="text-left hover:underline">
                                 <p className="font-medium text-foreground">{lead.name}</p>
-                                {lead.company && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {lead.job_title ? `${lead.job_title} • ` : ''}
-                                    {lead.company}
-                                  </p>
-                                )}
-                                {lead.temperature === 'quente' && (
-                                  <Badge className="bg-green-500/15 text-green-400 border-green-500/30 text-[10px] mt-0.5">
-                                    <Zap className="w-2.5 h-2.5 mr-1" /> Closer
-                                  </Badge>
-                                )}
+<p className="text-xs text-muted-foreground">Atleta: {lead.athlete_name || 'Não informado'}</p>
+
                               </button>
                             </td>
                             <td className="p-3 hidden sm:table-cell text-muted-foreground">
-                              {lead.age ? `${lead.age} anos` : '—'}
+                              {lead.athlete_position || '—'}
                             </td>
                             <td className="p-3 hidden md:table-cell">
                               <div className="flex flex-col gap-0.5">
@@ -819,6 +803,8 @@ export default function CRM() {
             )}
           </TabsContent>
 
+          {(isExecutive || roles.includes('sdr')) && <TabsContent value="sdr"><CRMDepartment mode="sdr" leads={leads} onOpenLead={setSelectedLead} onTemperature={(lead, temperature) => { void updateLead(lead.id, {temperature}).catch(error => toast({title:'Erro ao atualizar temperatura',description:errorMessage(error),variant:'destructive'})) }}/></TabsContent>}
+          {(isExecutive || roles.includes('closer')) && <TabsContent value="closer"><CRMDepartment mode="closer" leads={leads} onOpenLead={setSelectedLead} onTemperature={() => {}}/></TabsContent>}
           {isExecutive && (
             <TabsContent value="users">
               <CRMUserManagement />
@@ -850,7 +836,7 @@ export default function CRM() {
                 />
                 <p className="text-xs text-muted-foreground">
                   {formData.temperature === 'quente'
-                    ? '🔥 Lead pronto para ser enviado ao closer!'
+                    ? 'Lead quente: priorize o contato e confirme a qualificação.'
                     : formData.temperature === 'morno'
                     ? '🌡️ Lead em aquecimento, continue o processo.'
                     : '❄️ Lead frio, requer mais abordagens.'}
@@ -859,64 +845,8 @@ export default function CRM() {
 
               <div className="h-px bg-border" />
 
-              {/* Dados pessoais */}
+              <CRMContactFields value={formData} onChange={contact => setFormData(f => ({...f,...contact}))} prefix="new-lead"/>
               <div className="grid gap-4 grid-cols-2">
-                <div className="space-y-2 col-span-2">
-                  <Label>Nome *</Label>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="Nome completo do lead"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Idade</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={formData.age}
-                    onChange={(e) => setFormData((f) => ({ ...f, age: e.target.value }))}
-                    placeholder="Ex: 32"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Telefone / WhatsApp</Label>
-                  <Input
-                    value={formData.phone}
-                    onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))}
-                    placeholder="(11) 99999-9999"
-                  />
-                </div>
-
-                <div className="space-y-2 col-span-2">
-                  <Label>Email</Label>
-                  <Input
-                    value={formData.email}
-                    onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))}
-                    type="email"
-                    placeholder="email@exemplo.com"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Empresa</Label>
-                  <Input
-                    value={formData.company}
-                    onChange={(e) => setFormData((f) => ({ ...f, company: e.target.value }))}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Cargo</Label>
-                  <Input
-                    value={formData.job_title}
-                    onChange={(e) => setFormData((f) => ({ ...f, job_title: e.target.value }))}
-                  />
-                </div>
-
                 <div className="space-y-2">
                   <Label>Prioridade</Label>
                   <Select value={formData.priority} onValueChange={(v) => setFormData((f) => ({ ...f, priority: v }))}>
@@ -930,17 +860,7 @@ export default function CRM() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Estágio Pipeline</Label>
-                  <Select value={formData.pipeline_stage} onValueChange={(v) => setFormData((f) => ({ ...f, pipeline_stage: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PIPELINE_STAGES.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+
 
                 <div className="space-y-2">
                   <Label>Origem</Label>
@@ -987,12 +907,12 @@ export default function CRM() {
         {/* Lead Detail Panel */}
         {selectedLead && (
           <CRMLeadDetail
+            key={selectedLead.id}
             lead={selectedLead}
             onClose={() => setSelectedLead(null)}
             onUpdate={async (updates) => {
               await updateLead(selectedLead.id, updates)
-              const updated = { ...selectedLead, ...updates }
-              setSelectedLead(updated as CRMLead)
+
             }}
             isExecutive={isExecutive}
           />

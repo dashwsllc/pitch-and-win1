@@ -53,7 +53,7 @@ export function useRoles() {
     roles,
     primaryRole: roles[0] || 'seller',
     isExecutive,
-    hasCRMAccess: isExecutive || roles.includes('bdr') || !!query.data?.some(r => r.crm_access),
+    hasCRMAccess: isExecutive || !!query.data?.some(r => r.crm_access),
     canViewSales: isExecutive || !!query.data?.some(r => r.can_view_sales),
     commissionRate: Number(query.data?.find(r => r.commission_rate != null)?.commission_rate ?? 10),
     hasRole: (role: UserRole) => roles.includes(role),

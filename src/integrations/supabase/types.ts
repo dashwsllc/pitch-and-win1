@@ -232,6 +232,10 @@ export type Database = {
       }
       crm_activities: {
         Row: {
+          call_type: string | null
+          assigned_to: string | null
+          author_name: string | null
+          updated_at: string
           activity_type: string
           completed_at: string | null
           created_at: string | null
@@ -246,6 +250,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          call_type?: string | null
+          assigned_to?: string | null
+          author_name?: string | null
+          updated_at?: string
           activity_type: string
           completed_at?: string | null
           created_at?: string | null
@@ -260,6 +268,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          call_type?: string | null
+          assigned_to?: string | null
+          author_name?: string | null
+          updated_at?: string
           activity_type?: string
           completed_at?: string | null
           created_at?: string | null
@@ -285,6 +297,13 @@ export type Database = {
       }
       crm_leads: {
         Row: {
+          city_state: string | null
+          athlete_name: string | null
+          athlete_birth_date: string | null
+          athlete_position: string | null
+          athlete_height_cm: number | null
+          athlete_weight_kg: number | null
+          performance_report_url: string | null
           age: number | null
           approach_count: number
           approached: boolean
@@ -317,6 +336,13 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          city_state?: string | null
+          athlete_name?: string | null
+          athlete_birth_date?: string | null
+          athlete_position?: string | null
+          athlete_height_cm?: number | null
+          athlete_weight_kg?: number | null
+          performance_report_url?: string | null
           age?: number | null
           approach_count?: number
           approached?: boolean
@@ -349,6 +375,13 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          city_state?: string | null
+          athlete_name?: string | null
+          athlete_birth_date?: string | null
+          athlete_position?: string | null
+          athlete_height_cm?: number | null
+          athlete_weight_kg?: number | null
+          performance_report_url?: string | null
           age?: number | null
           approach_count?: number
           approached?: boolean
@@ -963,6 +996,7 @@ export type Database = {
       }
       vendas: {
         Row: {
+          crm_lead_id: string | null
           product_id: string | null
           ticket_id: string | null
           ticket_name: string | null
@@ -986,6 +1020,7 @@ export type Database = {
           withdrawn_at: string | null
         }
         Insert: {
+          crm_lead_id?: string | null
           product_id?: string | null
           ticket_id?: string | null
           ticket_name?: string | null
@@ -1009,6 +1044,7 @@ export type Database = {
           withdrawn_at?: string | null
         }
         Update: {
+          crm_lead_id?: string | null
           product_id?: string | null
           ticket_id?: string | null
           ticket_name?: string | null
@@ -1031,7 +1067,8 @@ export type Database = {
           withdrawn?: boolean
           withdrawn_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          { foreignKeyName: "vendas_crm_lead_id_fkey"; columns: ["crm_lead_id"]; isOneToOne: false; referencedRelation: "crm_leads"; referencedColumns: ["id"] },]
       }
       workboard_completions: {
         Row: {
@@ -1106,6 +1143,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      crm_has_access: { Args: Record<PropertyKey, never>; Returns: boolean }
+      crm_call_assignees: { Args: Record<PropertyKey, never>; Returns: { user_id: string; display_name: string; role: string }[] }
+      schedule_closer_call: {
+        Args: { p_lead_id: string; p_call_type: string; p_scheduled_at: string; p_assigned_to: string; p_context?: string }
+        Returns: Database["public"]["Tables"]["crm_activities"]["Row"]
+      }
+      resolve_closer_call: {
+        Args: { p_activity_id: string; p_outcome: string; p_expected_revision: string }
+        Returns: Database["public"]["Tables"]["crm_activities"]["Row"]
+      }
+      reschedule_crm_call: {
+        Args: { p_activity_id: string; p_scheduled_at: string; p_expected_revision: string }
+        Returns: Database["public"]["Tables"]["crm_activities"]["Row"]
+      }
       executive_create_product: { Args: { p_name: string; p_description: string | null; p_ticket_name: string; p_ticket_price: number; p_active?: boolean }; Returns: Database["public"]["Tables"]["products"]["Row"] }
       executive_save_product: { Args: { p_product_id: string | null; p_name: string; p_description?: string | null; p_active?: boolean; p_expected_updated_at?: string | null }; Returns: Database["public"]["Tables"]["products"]["Row"] }
       executive_save_product_ticket: { Args: { p_ticket_id: string | null; p_product_id: string; p_name: string; p_price: number; p_active?: boolean; p_expected_updated_at?: string | null }; Returns: Database["public"]["Tables"]["product_tickets"]["Row"] }

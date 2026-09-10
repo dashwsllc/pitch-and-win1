@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,11 @@ import { errorMessage, money } from '@/lib/sales'
 
 export default function RegistrarVenda() {
   const navigate = useNavigate()
+  const [searchParams,setSearchParams] = useSearchParams()
+  const leadId = searchParams.get('lead')
+  const [leadLoading,setLeadLoading] = useState(!!leadId)
+  const [leadError,setLeadError] = useState('')
+  const [linkedLead,setLinkedLead] = useState<{id:string;name:string}|null>(null)
   const { user } = useAuth()
   const { commissionRate, loading: rolesLoading, isExecutive } = useRoles()
   const catalog = useProducts()
@@ -31,6 +36,21 @@ export default function RegistrarVenda() {
   const [nomeComprador, setNomeComprador] = useState('')
   const [whatsappComprador, setWhatsappComprador] = useState('')
   const [emailComprador, setEmailComprador] = useState('')
+
+
+  useEffect(() => {
+    let active=true
+    setLinkedLead(null);setLeadError('');setLeadLoading(!!leadId)
+    if(!leadId) return
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(leadId)) {setLeadError('Lead inválido. Abra a venda pela ficha do CRM.');setLeadLoading(false);return}
+    void supabase.from('crm_leads').select('id,name,email,phone,pipeline_stage').eq('id',leadId).single().then(({data,error})=>{
+      if(!active) return
+      setLeadLoading(false)
+      if(error||!data||data.pipeline_stage!=='fechado_ganho') {setLeadError('Não foi possível vincular o lead. Confirme o acesso e a venda concluída no CRM.');return}
+      setLinkedLead(data);setNomeComprador(data.name);setWhatsappComprador(data.phone||'');setEmailComprador(data.email||'')
+    })
+    return()=>{active=false}
+  },[leadId])
 
   const products = (catalog.data ?? []).filter(product => product.active && product.product_tickets.some(ticket => ticket.active))
   const product = products.find(item => item.id === produtoSelecionado)
@@ -73,6 +93,10 @@ export default function RegistrarVenda() {
       return
     }
 
+    if(leadId && (leadLoading || leadError || linkedLead?.id!==leadId)) {
+      toast({title:'Vínculo com lead indisponível',description:'Confira o lead no CRM antes de registrar.',variant:'destructive'});return
+    }
+
     // Validate all fields before submitting
     if (catalog.isError || catalog.isPending) {
       toast({ title: 'Catálogo indisponível', description: 'Atualize o catálogo antes de registrar a venda.', variant: 'destructive' })
@@ -107,6 +131,7 @@ export default function RegistrarVenda() {
         .from('vendas')
         .insert([{
           user_id: user.id,
+          ...(linkedLead ? {crm_lead_id:linkedLead.id} : {}),
           product_id: product.id,
           ticket_id: ticket.id,
           nome_produto: product.name,
@@ -128,6 +153,8 @@ export default function RegistrarVenda() {
       void queryClient.invalidateQueries({ queryKey: ['sales-board'] })
       window.dispatchEvent(new Event('dashboard-data-changed'))
       resetForm()
+      setLinkedLead(null)
+      setSearchParams(params=>{params.delete('lead');return params},{replace:true})
       setTimeout(() => setJustRegistered(false), 8000)
     } catch (error: unknown) {
       console.error('Erro ao registrar venda:', error)
@@ -168,6 +195,9 @@ export default function RegistrarVenda() {
         </div>
 
         {isExecutive && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"><p className="text-sm text-muted-foreground">Gerencie os produtos e valores disponíveis para sua equipe.</p><Button variant="outline" onClick={() => navigate('/executive?tab=products')}><Package className="mr-2 h-4 w-4" />Produtos e tickets</Button></div>}
+        {leadLoading && <p role="status" className="mb-4">Carregando lead...</p>}
+        {leadError && <p role="alert" className="mb-4 text-destructive">{leadError}</p>}
+        {linkedLead && <div className="mb-4 rounded border p-4 text-sm">Venda vinculada ao lead: <strong>{linkedLead.name}</strong>. Confira os dados e selecione produto e ticket.</div>}
         <Card className="border-border/50">
           <CardHeader>
             <CardTitle className="text-foreground">Dados da Venda</CardTitle>
@@ -285,7 +315,7 @@ export default function RegistrarVenda() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isSubmitting || rolesLoading || catalog.isPending || catalog.isError || !ticket || !product}
+                  disabled={isSubmitting || rolesLoading || catalog.isPending || catalog.isError || !ticket || !product || leadLoading || !!leadError || (!!leadId && linkedLead?.id !== leadId)}
                   className="flex-1 md:flex-none bg-gradient-success hover:opacity-90"
                 >
                   {isSubmitting ? 'Registrando...' : 'Registrar Venda'}
