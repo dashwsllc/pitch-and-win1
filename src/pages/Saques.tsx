@@ -80,10 +80,11 @@ export default function Saques() {
 
       if (saquesError) throw saquesError
 
-      // ✅ Total sacado = apenas status 'pago' (enviado para conta)
+      // Total sacado = apenas status 'pago'. O razao (dashboard_refresh_balance)
+      // usa valor_aprovado quando o executivo aprova valor diferente do pedido.
       const withdrawn = (saquesData || [])
         .filter(s => s.status === 'pago')
-        .reduce((s, w) => s + Number(w.valor_solicitado || 0), 0)
+        .reduce((s, w) => s + Number(w.valor_aprovado ?? w.valor_solicitado ?? 0), 0)
 
       setAvailableBalance(balance)
       setTotalWithdrawn(withdrawn)

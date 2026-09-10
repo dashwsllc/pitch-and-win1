@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { Plus, Target, Trash2, Edit2, Calendar, DollarSign, Hash, CheckCircle2, XCircle, CalendarDays, CalendarRange, Loader2 } from 'lucide-react'
 
 export function ExecutiveGoalsManagement() {
-  const { goals, loading, refetch } = useGoals()
+  const { goals, loading, refetch } = useGoals(true)
   const { createGoal, updateGoal, deleteGoal, saving } = useGoalsManagement()
   const { toast } = useToast()
   const [isCreateOpen, setIsCreateOpen] = useState(false)

@@ -51,7 +51,7 @@ export function useRoles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_roles")
-        .select("role, crm_access, commission_rate, can_view_sales")
+        .select("role, crm_access, commission_rate, can_view_sales, updated_at, id")
         .eq("user_id", user!.id);
       if (error) throw error;
       return data;
@@ -73,8 +73,15 @@ export function useRoles() {
     capabilities,
     hasCRMAccess: capabilities.leads,
     canViewSales: isExecutive || !!query.data?.some((r) => r.can_view_sales),
+    // executive_review_sale congela a taxa da linha escolhida por
+    // ORDER BY updated_at DESC, id LIMIT 1. Sem a mesma ordenacao aqui, a taxa
+    // exibida ao vendedor depende da ordem que o PostgREST devolver.
     commissionRate: Number(
-      query.data?.find((r) => r.commission_rate != null)?.commission_rate ?? 10,
+      [...(query.data ?? [])].sort(
+        (a, b) =>
+          String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")) ||
+          String(a.id ?? "").localeCompare(String(b.id ?? "")),
+      )[0]?.commission_rate ?? 10,
     ),
     hasRole: (role: UserRole) => roles.includes(role),
     loading: !!user && (query.isPending || profileLoading),

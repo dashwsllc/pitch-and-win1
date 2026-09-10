@@ -21,7 +21,7 @@ export interface GoalWithProgress extends Goal {
   remaining: number
 }
 
-export function useGoals() {
+export function useGoals(includeInactive = false) {
   const { user } = useAuth()
   const [goals, setGoals] = useState<GoalWithProgress[]>([])
   const [loading, setLoading] = useState(true)
@@ -75,11 +75,12 @@ export function useGoals() {
       setLoading(true)
       setError(null)
 
-      const { data, error: fetchError } = await supabase
+      // O painel executivo precisa listar metas inativas para reativa-las.
+      let request = supabase
         .from('company_goals')
         .select('id, title, description, target, current, period, unit, status, deadline, created_by')
-        .or('status.eq.active,status.is.null')
-        .order('created_at', { ascending: false })
+      if (!includeInactive) request = request.or('status.eq.active,status.is.null')
+      const { data, error: fetchError } = await request.order('created_at', { ascending: false })
 
       if (fetchError) throw fetchError
 
@@ -104,7 +105,7 @@ export function useGoals() {
     } finally {
       setLoading(false)
     }
-  }, [calculateProgress])
+  }, [calculateProgress, includeInactive])
 
   useEffect(() => {
     fetchGoals()
