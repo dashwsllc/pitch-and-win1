@@ -23,6 +23,28 @@ import { useAllUsers } from '@/hooks/useRoles'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { SalesChart } from '@/components/dashboard/SalesChart'
 
+interface SellerSale {
+  id: string
+  nome_produto: string
+  valor_venda: number
+  created_at: string
+}
+
+interface SellerApproach {
+  id: string
+  nomes_abordados: string
+  mostrou_ia: boolean
+  tempo_medio_abordagem: number
+  created_at: string
+}
+
+type SellerDay = {
+  period: string
+  vendas: number
+  abordagens: number
+  valor: number
+};
+
 interface SellerStats {
   totalSales: number
   totalRevenue: number
@@ -30,9 +52,9 @@ interface SellerStats {
   totalSubscriptions: number
   activeSubscriptions: number
   conversionRate: number
-  recentSales: any[]
-  recentApproaches: any[]
-  salesByDay: any[]
+  recentSales: SellerSale[]
+  recentApproaches: SellerApproach[]
+  salesByDay: SellerDay[]
 }
 
 export function ExecutiveSellerDetails() {

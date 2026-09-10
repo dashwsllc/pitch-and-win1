@@ -15,7 +15,7 @@ export function staggerReveal(selector: string | Element[], container?: string |
       stagger: 0.1, 
       ease: 'power2.out',
       scrollTrigger: container ? {
-        trigger: container as any,
+        trigger: container,
         start: 'top 85%',
         toggleActions: 'play none none none'
       } : undefined
