@@ -114,7 +114,7 @@ export function CRMCallScheduler({
       }}
     >
       <DialogContent
-        className="max-h-[90dvh] overflow-y-auto"
+        className="max-h-[92dvh] gap-3 overflow-y-auto p-4 sm:max-w-[480px]"
         data-lenis-prevent
       >
         <DialogHeader>
@@ -123,16 +123,16 @@ export function CRMCallScheduler({
             {lead.athlete_name || "Atleta não informado"} · {lead.name}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="space-y-3">
           {!call && (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="call-assignee">Responsável</Label>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="call-assignee">Responsável</Label>
                 <select
                   id="call-assignee"
                   disabled={type === "fechamento_closer"}
                   required
-                  className="w-full h-10 rounded border bg-background px-3"
+                  className="h-9 w-full rounded border bg-background px-3 text-sm"
                   value={assigned}
                   onChange={(e) => setAssigned(e.target.value)}
                 >
@@ -156,9 +156,10 @@ export function CRMCallScheduler({
               </div>
             </>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="call-when">Data e hora (horário local)</Label>
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="call-when">Data e hora (horário local)</Label>
             <Input
+              className="h-9"
               id="call-when"
               type="datetime-local"
               value={when}
@@ -167,10 +168,11 @@ export function CRMCallScheduler({
             />
           </div>
           {!call && (
-            <div className="space-y-2">
-              <Label htmlFor="call-context">Contexto da reunião</Label>
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="call-context">Contexto da reunião</Label>
               <Textarea
                 id="call-context"
+                className="min-h-20"
                 maxLength={10000}
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
@@ -183,8 +185,9 @@ export function CRMCallScheduler({
               {failure}
             </p>
           )}
-          <DialogFooter>
+          <DialogFooter className="gap-1 sm:space-x-0">
             <Button
+              className="h-9"
               type="button"
               variant="outline"
               onClick={onClose}
@@ -193,6 +196,7 @@ export function CRMCallScheduler({
               Cancelar
             </Button>
             <Button
+              className="h-9"
               disabled={
                 saving ||
                 (!call &&

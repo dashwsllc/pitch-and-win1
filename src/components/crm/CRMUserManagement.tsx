@@ -6,5 +6,5 @@ export function CRMUserManagement() {
   if (loading) return <p role="status">Verificando acesso...</p>;
   if (!isExecutive)
     return <p role="alert">Acesso restrito a executive e super_admin.</p>;
-  return <ExecutiveUserManagement />;
+  return <ExecutiveUserManagement compact />;
 }

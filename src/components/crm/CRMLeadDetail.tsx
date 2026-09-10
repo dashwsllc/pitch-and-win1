@@ -82,31 +82,31 @@ export function CRMLeadDetail({
       }}
     >
       <SheetContent
-        className="w-full sm:max-w-[620px] overflow-y-auto"
+        className="w-full overflow-y-auto p-4 sm:max-w-[680px]"
         data-lenis-prevent
       >
-        <SheetHeader>
-          <SheetTitle>Ficha de {lead.name}</SheetTitle>
-          <SheetDescription>
+        <SheetHeader className="space-y-1">
+          <SheetTitle className="text-base">Ficha de {lead.name}</SheetTitle>
+          <SheetDescription className="text-xs">
             Cadastro e histórico completo · leitura
           </SheetDescription>
         </SheetHeader>
-        <div className="mt-6 space-y-6 break-words">
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{lead.temperature}</Badge>
-            <Badge variant="outline">
+        <div className="mt-4 space-y-4 break-words">
+          <div className="flex flex-wrap gap-1">
+            <Badge className="h-5 px-2 text-[10px]" variant="outline">{lead.temperature}</Badge>
+            <Badge className="h-5 px-2 text-[10px]" variant="outline">
               {APPROACH_LABELS[lead.approach_stage]}
             </Badge>
-            <Badge variant="secondary">
+            <Badge className="h-5 px-2 text-[10px]" variant="secondary">
               {PIPELINE_STAGES.find((s) => s.value === lead.pipeline_stage)
                 ?.label || lead.pipeline_stage}
             </Badge>
           </div>
-          <dl className="grid gap-4 sm:grid-cols-2">
+          <dl className="grid gap-x-3 gap-y-2 sm:grid-cols-3">
             {fields.map(([label, value]) => (
               <div key={label} className="min-w-0">
                 <dt className="text-xs text-muted-foreground">{label}</dt>
-                <dd className="text-sm whitespace-pre-wrap break-words">
+                <dd className="text-xs leading-4 whitespace-pre-wrap break-words">
                   {value ?? "Não informado"}
                 </dd>
               </div>
@@ -123,8 +123,8 @@ export function CRMLeadDetail({
                 Abrir relatório de performance
               </a>
             )}
-          <section className="space-y-3 border-t pt-4">
-            <h2 className="font-semibold">Histórico do lead</h2>
+          <section className="space-y-2 border-t pt-3">
+            <h2 className="text-sm font-semibold">Histórico do lead</h2>
             {loading && <p role="status">Carregando histórico...</p>}
             {error && (
               <div role="alert">
@@ -153,14 +153,14 @@ export function CRMLeadDetail({
                   ? a.new_state
                   : {};
               return (
-                <article key={a.id} className="rounded-lg border p-3 space-y-2">
-                  <p className="font-medium text-sm">{a.title}</p>
+                <article key={a.id} className="rounded-md border p-2 space-y-1">
+                  <p className="font-medium text-xs">{a.title}</p>
                   <p className="text-xs text-muted-foreground">
                     {a.author_name || names[a.user_id] || a.user_id} ·{" "}
                     {callDate(a.created_at)}
                   </p>
                   {a.description && (
-                    <p className="text-sm whitespace-pre-wrap">
+                    <p className="text-xs leading-4 whitespace-pre-wrap">
                       {a.description}
                     </p>
                   )}
@@ -177,13 +177,13 @@ export function CRMLeadDetail({
                       </p>
                     ))}
                   {a.scheduled_at && (
-                    <p className="text-sm">
+                    <p className="text-xs">
                       Call: {callDate(a.scheduled_at)} ·{" "}
                       {names[a.assigned_to || ""] || "Sem responsável"}
                     </p>
                   )}
                   {a.outcome && (
-                    <Badge variant="outline">
+                    <Badge className="h-5 px-2 text-[10px]" variant="outline">
                       {{
                         venda_concluida: "Venda concluída",
                         venda_perdida: "Venda perdida",

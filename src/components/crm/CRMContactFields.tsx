@@ -19,8 +19,8 @@ export function CRMContactFields({
     min?: string,
     max?: string,
   ) => (
-    <div className="space-y-2" key={key}>
-      <Label htmlFor={`${prefix}-${key}`}>
+    <div className="space-y-1" key={key}>
+      <Label className="text-xs" htmlFor={`${prefix}-${key}`}>
         {label}
         {required ? " *" : ""}
       </Label>
@@ -41,21 +41,22 @@ export function CRMContactFields({
                 : 160
         }
         value={value[key]}
+        className="h-9 text-sm"
         onChange={(e) => onChange({ ...value, [key]: e.target.value })}
       />
     </div>
   );
   return (
-    <div className="space-y-4">
-      <p className="font-semibold text-sm">Dados do responsável</p>
-      <div className="grid gap-4 sm:grid-cols-2">
+    <div className="space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dados do responsável</p>
+      <div className="grid gap-2.5 sm:grid-cols-2">
         {field("name", "Nome do responsável", "text", true)}
         {field("phone", "WhatsApp", "tel", true)}
         {field("email", "E-mail (opcional)", "email")}
         {field("city_state", "Cidade / UF")}
       </div>
-      <p className="font-semibold text-sm">Dados do atleta</p>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dados do atleta</p>
+      <div className="grid gap-2.5 sm:grid-cols-2">
         {field("athlete_name", "Nome do atleta", "text", true)}
         {field(
           "athlete_birth_date",
@@ -64,15 +65,15 @@ export function CRMContactFields({
           false,
           "1900-01-01",
         )}
-        <div className="space-y-2">
-          <Label htmlFor={`${prefix}-position`}>Posição em campo</Label>
+        <div className="space-y-1">
+          <Label className="text-xs" htmlFor={`${prefix}-position`}>Posição em campo</Label>
           <select
             id={`${prefix}-position`}
             value={value.athlete_position}
             onChange={(e) =>
               onChange({ ...value, athlete_position: e.target.value })
             }
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
           >
             <option value="">Selecionar</option>
             {ATHLETE_POSITIONS.map((p) => (
@@ -95,7 +96,7 @@ export function CRMContactFields({
         "Link do relatório de performance",
         "url",
       )}
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[11px] leading-4 text-muted-foreground">
         Somente responsável, atleta e WhatsApp são obrigatórios. Complete os
         demais dados quando estiverem disponíveis.
       </p>

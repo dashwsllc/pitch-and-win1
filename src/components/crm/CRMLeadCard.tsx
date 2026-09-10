@@ -113,7 +113,7 @@ export function CRMLeadCard({
   return (
     <article
       aria-label={`Lead ${lead.name}`}
-      className={`min-w-0 rounded-lg border border-l-4 bg-card p-3 space-y-2 ${color} ${overdue ? "border-amber-600/60" : "border-border/60"}`}
+      className={`min-w-0 self-start rounded-lg border border-l-4 bg-card p-3 space-y-2 ${color} ${overdue ? "border-amber-600/60" : "border-border/60"}`}
     >
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
@@ -365,10 +365,10 @@ export function CRMLeadCard({
       </div>
       {lead.pipeline_stage === "fechado_ganho" && (
         <div
-          className="border border-primary/30 bg-primary/5 rounded-md p-2 space-y-1.5"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/5 p-2"
           role="status"
         >
-          <p className="text-sm font-medium">
+          <p className="text-xs font-medium">
             {sale ? "Venda cadastrada" : "Venda pendente de cadastro"}
           </p>
           {sale
@@ -376,7 +376,7 @@ export function CRMLeadCard({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-auto whitespace-normal"
+                  className="h-8 whitespace-normal px-2 text-xs"
                   onClick={() =>
                     navigate(`/minhas-vendas?sale=${sale.sale_id}`)
                   }
@@ -388,7 +388,7 @@ export function CRMLeadCard({
               own && (
                 <Button
                   size="sm"
-                  className="h-auto whitespace-normal py-2"
+                  className="h-8 whitespace-normal px-2 text-xs"
                   onClick={() => navigate(`/vendas?lead=${lead.id}`)}
                 >
                   Cadastrar venda no módulo Vendas

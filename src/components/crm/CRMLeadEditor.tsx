@@ -75,7 +75,7 @@ export function CRMLeadEditor({
       }}
     >
       <DialogContent
-        className="max-h-[90dvh] overflow-y-auto sm:max-w-[680px]"
+        className="max-h-[92dvh] gap-3 overflow-y-auto p-4 sm:max-w-[720px]"
         data-lenis-prevent
       >
         <DialogHeader>
@@ -86,17 +86,18 @@ export function CRMLeadEditor({
               : "Comece com responsável, atleta e WhatsApp. O lead entra na etapa Novo."}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={save} className="space-y-5">
-          <fieldset disabled={busy} className="space-y-5">
+        <form onSubmit={save} className="space-y-3">
+          <fieldset disabled={busy} className="space-y-3">
             <CRMContactFields
               value={contact}
               onChange={setContact}
               prefix="lead-editor"
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="lead-source">Origem</Label>
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="lead-source">Origem</Label>
                 <Input
+                  className="h-9"
                   id="lead-source"
                   maxLength={160}
                   value={extra.lead_source}
@@ -105,9 +106,10 @@ export function CRMLeadEditor({
                   }
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="lead-value">Valor estimado (R$)</Label>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="lead-value">Valor estimado (R$)</Label>
                 <Input
+                  className="h-9"
                   id="lead-value"
                   type="number"
                   min="0"
@@ -119,11 +121,11 @@ export function CRMLeadEditor({
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="lead-priority">Prioridade</Label>
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="lead-priority">Prioridade</Label>
               <select
                 id="lead-priority"
-                className="h-10 w-full rounded-md border bg-background px-3"
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                 value={extra.priority}
                 onChange={(e) =>
                   setExtra({ ...extra, priority: e.target.value })
@@ -136,10 +138,11 @@ export function CRMLeadEditor({
                 <option value="urgente">Urgente</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="lead-observations">Observações</Label>
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="lead-observations">Observações</Label>
               <Textarea
                 id="lead-observations"
+                className="min-h-16"
                 maxLength={10000}
                 value={extra.observations}
                 onChange={(e) =>
@@ -152,11 +155,11 @@ export function CRMLeadEditor({
                 {failure}
               </p>
             )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
+            <DialogFooter className="gap-1 sm:space-x-0">
+              <Button className="h-9" type="button" variant="outline" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="submit">
+              <Button className="h-9" type="submit">
                 {busy ? "Salvando..." : lead ? "Salvar cadastro" : "Criar Lead"}
               </Button>
             </DialogFooter>

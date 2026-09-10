@@ -61,7 +61,7 @@ O teste SQL usa fixtures isoladas e `ROLLBACK`; valida campos, matriz completa, 
 
 O navegador usa Auth, JWT assinado, PostgREST e Realtime reais. Contas temporárias são criadas sem envio de e-mail; catálogo, leads, atividades, vendas e contas são removidos em `finally`. A segunda sessão tem apenas os intervalos de polling desativados para comprovar Realtime sem reload. Verifica desktop 1440 px, celular 390 px, ciclo completo até venda, CTA persistente, seleção do catálogo, corrida de revisões, áreas executivas e ausência de erros inesperados HTTP/console.
 
-Preparação do teste real: CLI Supabase autenticada; salvar as API keys via `supabase projects api-keys --project-ref mbzwchnxtskysqplqiyy --output json` em `.verification.local/api-keys.json` (ignorado pelo Git e deploy); instalar Playwright no prefixo `.verification.local`; iniciar Vite na porta 5198. O teste não imprime tokens. Ledger local registra somente IDs de fixtures e confirmação da limpeza. Para testar o domínio final, definir `CRM_TEST_ORIGIN=https://wsltda.site`.
+O teste com fixtures reais é permitido somente em um projeto Supabase de staging separado. Defina `CRM_TEST_PROJECT_REF`, salve as chaves desse projeto em `.verification.local/api-keys.json` e execute a interface apenas em `localhost`. O gerador recusa explicitamente o projeto de produção `mbzwchnxtskysqplqiyy`, e o teste de interface recusa domínios públicos. Produção deve receber apenas verificações sem escrita.
 
 ## Publicação
 

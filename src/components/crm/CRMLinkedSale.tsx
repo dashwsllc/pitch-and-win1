@@ -50,10 +50,10 @@ export function CRMLinkedSale() {
           );
       }}
     >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Venda cadastrada</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="gap-3 p-4 sm:max-w-md">
+        <DialogHeader className="space-y-1">
+          <DialogTitle className="text-base">Venda cadastrada</DialogTitle>
+          <DialogDescription className="text-xs">
             Registro vinculado ao fechamento do CRM.
           </DialogDescription>
         </DialogHeader>
@@ -67,7 +67,7 @@ export function CRMLinkedSale() {
           </div>
         )}
         {query.data && (
-          <div className="space-y-2 text-sm break-words">
+          <div className="grid gap-x-3 gap-y-1.5 text-xs break-words sm:grid-cols-2">
             <p className="font-medium">{query.data.nome_comprador}</p>
             <p>{query.data.whatsapp_comprador}</p>
             <p>{query.data.email_comprador}</p>

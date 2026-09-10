@@ -31,7 +31,7 @@ interface AccountForm {
   reason: string
 }
 
-export function ExecutiveUserManagement() {
+export function ExecutiveUserManagement({ compact = false }: { compact?: boolean } = {}) {
   const { users, loading, refetch, fetchedAt, error, isFetching } = useAllUsers()
   const { hasRole } = useRoles()
   const { user: actor } = useAuth()
@@ -93,21 +93,21 @@ export function ExecutiveUserManagement() {
 
   const filtered = users.filter(account => (account.display_name + ' ' + account.email).toLowerCase().includes(search.toLowerCase()))
   return (
-    <section className="surface-panel overflow-hidden rounded-2xl">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] p-6">
+    <section className={`surface-panel overflow-hidden ${compact ? 'rounded-xl' : 'rounded-2xl'}`}>
+      <div className={`flex flex-wrap items-center justify-between border-b border-white/[0.06] ${compact ? 'gap-2 p-4' : 'gap-3 p-6'}`}>
         <div><h2 className="flex items-center gap-2 text-lg font-medium text-white"><Users className="h-5 w-5 text-electric" /> Contas e permissões <span className="text-sm text-muted-foreground">{users.length}</span></h2><p className="mt-1 text-xs text-muted-foreground">Identidade, acesso e autenticação do seu time.</p></div>
         <Button variant="outline" size="sm" disabled={isFetching} onClick={() => refetch()}><RefreshCw className={`mr-2 h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />Atualizar</Button>
       </div>
-      <div className="space-y-4 p-4 sm:p-6">
+      <div className={compact ? 'space-y-3 p-4' : 'space-y-4 p-4 sm:p-6'}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="relative w-full sm:w-72"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="h-9 pl-9 text-xs" aria-label="Buscar conta por nome ou e-mail" placeholder="Buscar nome ou e-mail" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Clock3 className="h-3 w-3" />{fetchedAt ? `Consulta: ${exactDate(fetchedAt)} · Brasília` : 'Consultando autenticação…'}</p>
         </div>
-        <div className="rounded-xl bg-electric-violet/[0.07] px-4 py-3 text-xs leading-relaxed text-muted-foreground">Último login = última autenticação registrada pelo Supabase Auth, com segundos e fuso de Brasília. Atualização a cada 15 segundos, ao retornar à tela e quando o servidor informa uma mudança. Reabrir a página não conta como novo login.</div>
+        <div className={`bg-electric-violet/[0.07] text-xs leading-relaxed text-muted-foreground ${compact ? 'rounded-lg px-3 py-2' : 'rounded-xl px-4 py-3'}`}>Último login = última autenticação registrada pelo Supabase Auth, com segundos e fuso de Brasília. Atualização a cada 15 segundos, ao retornar à tela e quando o servidor informa uma mudança. Reabrir a página não conta como novo login.</div>
         {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">Não foi possível consultar as contas. {errorMessage(error)} Os horários abaixo, se presentes, são da última consulta bem-sucedida.</p>}
         {loading ? [1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-white/[0.03]" />) : filtered.map(account => {
           const protectedAccount = account.user_roles.some(r => r.role==='super_admin') && !hasRole('super_admin')
-          return <article key={account.user_id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-white/[0.025] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]">
+          return <article key={account.user_id} className={`flex flex-wrap items-center justify-between bg-white/[0.025] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)] ${compact ? 'gap-3 rounded-lg p-3' : 'gap-4 rounded-xl p-4'}`}>
             <div className="flex min-w-0 items-start gap-3">
               <Avatar className="h-10 w-10 rounded-xl"><AvatarImage src={account.avatar_url ?? ''} /><AvatarFallback className="rounded-xl bg-electric-violet/15 text-violet-200">{(account.display_name || account.email || '?').slice(0,2).toUpperCase()}</AvatarFallback></Avatar>
               <div className="min-w-0"><p className="break-words text-sm font-medium text-ash">{account.display_name || 'Sem nome'}{account.user_id===actor?.id && <span className="ml-2 text-[10px] text-ember">VOCÊ</span>}</p><p className="mt-1 break-all text-xs text-muted-foreground">{account.email || 'E-mail não registrado'}</p><div className="mt-2 flex flex-wrap gap-1">{account.user_roles.map(r => <Badge key={r.role} className="border-0 bg-white/[0.06] text-[10px] font-normal text-muted-foreground">{ROLE_LABELS[r.role]}</Badge>)}{account.suspended && <Badge variant="destructive" className="text-[10px]">Suspenso</Badge>}</div></div>
@@ -118,9 +118,9 @@ export function ExecutiveUserManagement() {
         {!loading && filtered.length===0 && !error && <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma conta encontrada.</p>}
       </div>
       <Dialog open={!!editing} onOpenChange={open => { if (!open) close() }}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" data-lenis-prevent>
+        <DialogContent className={`max-h-[92vh] overflow-y-auto sm:max-w-2xl ${compact ? 'gap-3 p-4' : ''}`} data-lenis-prevent>
           <DialogHeader><DialogTitle>Editar conta</DialogTitle><DialogDescription>{editing?.display_name || editing?.email} · Alterações sensíveis ficam registradas na auditoria.</DialogDescription></DialogHeader>
-          {form && editing && <form onSubmit={submit} className="space-y-6">
+          {form && editing && <form onSubmit={submit} className={compact ? 'space-y-4' : 'space-y-6'}>
             <fieldset disabled={saving} className="space-y-4"><legend className="mb-3 text-xs font-medium uppercase tracking-wider text-electric">Identidade e contato</legend>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2"><Label htmlFor="account-name">Nome de exibição</Label><Input id="account-name" value={form.display_name} onChange={e => change('display_name',e.target.value)} required maxLength={120} /></div>

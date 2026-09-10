@@ -6,7 +6,7 @@ import { realFixtures, checked, project, url } from './crm-real-fixtures.mjs'
 
 const expect = baseExpect.configure({ timeout: 15000 })
 const origin = process.env.CRM_TEST_ORIGIN || 'http://127.0.0.1:5198'
-if (!['127.0.0.1', 'localhost', 'wsltda.site'].includes(new URL(origin).hostname)) throw Error('Unapproved test origin')
+if (!['127.0.0.1', 'localhost'].includes(new URL(origin).hostname)) throw Error('CRM fixture UI tests may run only against a local frontend connected to staging')
 const future = days => {
   const date = new Date(Date.now() + days * 86400000)
   return new Date(+date - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)

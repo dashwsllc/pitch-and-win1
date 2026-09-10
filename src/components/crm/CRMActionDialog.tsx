@@ -83,7 +83,7 @@ export function CRMActionDialog({
       }}
     >
       <DialogContent
-        className="max-h-[90dvh] overflow-y-auto"
+        className="max-h-[92dvh] gap-3 overflow-y-auto p-4 sm:max-w-[480px]"
         data-lenis-prevent
       >
         <DialogHeader>
@@ -92,14 +92,14 @@ export function CRMActionDialog({
             {lead.name} · {lead.athlete_name || "Atleta não informado"}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={save} className="space-y-4">
-          <fieldset disabled={busy} className="space-y-4">
+        <form onSubmit={save} className="space-y-3">
+          <fieldset disabled={busy} className="space-y-3">
             {["handoff", "assign"].includes(action) && (
-              <div className="space-y-2">
-                <Label htmlFor="handoff-closer">Responsável Closer</Label>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="handoff-closer">Responsável Closer</Label>
                 <select
                   id="handoff-closer"
-                  className="h-10 w-full rounded border bg-background px-3"
+                  className="h-9 w-full rounded border bg-background px-3 text-sm"
                   value={assigned}
                   onChange={(e) => setAssigned(e.target.value)}
                 >
@@ -117,12 +117,12 @@ export function CRMActionDialog({
               </div>
             )}
             {action === "close" && (
-              <div className="space-y-2">
-                <Label htmlFor="close-outcome">Resultado *</Label>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="close-outcome">Resultado *</Label>
                 <select
                   id="close-outcome"
                   required
-                  className="h-10 w-full rounded border bg-background px-3"
+                  className="h-9 w-full rounded border bg-background px-3 text-sm"
                   value={outcome}
                   onChange={(e) => setOutcome(e.target.value)}
                 >
@@ -135,9 +135,10 @@ export function CRMActionDialog({
               </div>
             )}
             {needsDate && (
-              <div className="space-y-2">
-                <Label htmlFor="next-at">Próxima data e hora *</Label>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="next-at">Próxima data e hora *</Label>
                 <Input
+                  className="h-9"
                   id="next-at"
                   type="datetime-local"
                   required
@@ -146,12 +147,13 @@ export function CRMActionDialog({
                 />
               </div>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="action-note">
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="action-note">
                 {action === "close" ? "Observações da call" : "Anotação"}
               </Label>
               <Textarea
                 id="action-note"
+                className="min-h-20"
                 maxLength={10000}
                 required={["contact", "note"].includes(action)}
                 value={note}
@@ -169,11 +171,11 @@ export function CRMActionDialog({
                 {failure}
               </p>
             )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
+            <DialogFooter className="gap-1 sm:space-x-0">
+              <Button className="h-9" type="button" variant="outline" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="submit">
+              <Button className="h-9" type="submit">
                 {busy ? "Salvando..." : "Confirmar"}
               </Button>
             </DialogFooter>

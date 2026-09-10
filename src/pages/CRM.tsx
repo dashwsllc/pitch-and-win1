@@ -313,7 +313,7 @@ export default function CRM() {
             >
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Button onClick={() => setEditor("new")} disabled={loading || busy}>
+            <Button className="h-9" onClick={() => setEditor("new")} disabled={loading || busy}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Lead
             </Button>
@@ -361,15 +361,15 @@ export default function CRM() {
           }}
         >
           <TabsList className="h-auto flex flex-wrap justify-start gap-1 w-fit max-w-full">
-            <TabsTrigger value="leads">Leads</TabsTrigger>
-            {capabilities.sdr && <TabsTrigger value="sdr">SDR</TabsTrigger>}
+            <TabsTrigger className="h-8 px-3 text-xs" value="leads">Leads</TabsTrigger>
+            {capabilities.sdr && <TabsTrigger className="h-8 px-3 text-xs" value="sdr">SDR</TabsTrigger>}
             {capabilities.closer && (
-              <TabsTrigger value="closer">Closer</TabsTrigger>
+              <TabsTrigger className="h-8 px-3 text-xs" value="closer">Closer</TabsTrigger>
             )}
             {capabilities.admin && (
               <>
-                <TabsTrigger value="users">Gerenciar Usuários</TabsTrigger>
-                <TabsTrigger value="permissions">
+                <TabsTrigger className="h-8 px-3 text-xs" value="users">Gerenciar Usuários</TabsTrigger>
+                <TabsTrigger className="h-8 px-3 text-xs" value="permissions">
                   Relatório de Permissões
                 </TabsTrigger>
               </>
@@ -406,7 +406,7 @@ export default function CRM() {
             {!loading && !failure && (
               <>
                 {pendingSales > 0 && capabilities.closer && (
-                  <div className="flex flex-wrap gap-3 justify-between items-center rounded-lg border border-primary/30 bg-primary/5 p-4">
+                  <div className="flex flex-wrap gap-2 justify-between items-center rounded-lg border border-primary/30 bg-primary/5 p-2.5">
                     <p className="text-sm">
                       {pendingSales}{" "}
                       {pendingSales === 1
@@ -436,7 +436,7 @@ export default function CRM() {
                   <Tabs value={queue} onValueChange={setQueue}>
                     <TabsList className="h-auto flex flex-wrap justify-start gap-1">
                       {queues.map((q) => (
-                        <TabsTrigger value={q.value} key={q.value}>
+                        <TabsTrigger className="h-8 px-3 text-xs" value={q.value} key={q.value}>
                           {q.label}{" "}
                           <span className="ml-1 text-xs">
                             {
@@ -457,7 +457,7 @@ export default function CRM() {
                         { value: "approach", label: "Abordagem" },
                         { value: "pipeline", label: "Esteira SDR" },
                       ].map((v) => (
-                        <TabsTrigger value={v.value} key={v.value}>
+                        <TabsTrigger className="h-8 px-3 text-xs" value={v.value} key={v.value}>
                           {v.label}
                         </TabsTrigger>
                       ))}
@@ -555,7 +555,7 @@ export default function CRM() {
                 <div
                   className={
                     groups.length > 1
-                      ? "grid gap-3 xl:grid-cols-3"
+                      ? "grid items-start gap-3 xl:grid-cols-3"
                       : "space-y-3"
                   }
                 >
@@ -576,7 +576,7 @@ export default function CRM() {
                             className={
                               groups.length > 1
                                 ? "space-y-2"
-                                : "grid gap-3 lg:grid-cols-2 2xl:grid-cols-3"
+                                : "grid items-start gap-3 lg:grid-cols-2 2xl:grid-cols-3"
                             }
                           >
                             {rows.map(renderLead)}

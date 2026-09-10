@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process'
 import { randomUUID, randomBytes } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
-export const project = 'mbzwchnxtskysqplqiyy'
+const productionProject = 'mbzwchnxtskysqplqiyy'
+export const project = process.env.CRM_TEST_PROJECT_REF || productionProject
 export const url = `https://${project}.supabase.co`
 const uuid = value => {
   if (!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value)) throw Error('Invalid fixture UUID')
@@ -24,6 +25,9 @@ export const checked = async promise => {
   return data
 }
 export async function realFixtures(run) {
+  if (project === productionProject) {
+    throw new Error('Refusing to create CRM QA fixtures in production. Set CRM_TEST_PROJECT_REF to a separate staging project.')
+  }
   const bytes = readFileSync('.verification.local/api-keys.json')
   const keys = JSON.parse(bytes.toString(bytes[0] === 255 ? 'utf16le' : 'utf8').replace(/^\uFEFF/, ''))
   const service = keys.find(key => key.name === 'service_role')?.api_key
