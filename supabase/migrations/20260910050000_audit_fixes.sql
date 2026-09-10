@@ -1,7 +1,7 @@
 -- Correções da auditoria de 10/09/2026.
 --
 -- ATENÇÃO: esta migração ainda NÃO foi aplicada ao projeto mbzwchnxtskysqplqiyy.
--- Aplique com o comando da seção "Como aplicar" em docs/AUDITORIA_BANCO.md.
+-- Aplique com o comando da seção 1 de docs/AUDITORIA_BANCO.md.
 -- Não use `supabase db push` geral: o histórico remoto diverge do local.
 --
 -- As três partes são independentes. A parte 3 apaga linhas; leia o aviso dela
