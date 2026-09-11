@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
 import { errorMessage, exactDate } from '@/lib/sales'
+import { AUTO_REFRESH_INTERVAL_LABEL } from '@/lib/sync'
 
 interface AccountForm {
   display_name: string
@@ -103,7 +104,7 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
           <div className="relative w-full sm:w-72"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="h-9 pl-9 text-xs" aria-label="Buscar conta por nome ou e-mail" placeholder="Buscar nome ou e-mail" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Clock3 className="h-3 w-3" />{fetchedAt ? `Consulta: ${exactDate(fetchedAt)} · Brasília` : 'Consultando autenticação…'}</p>
         </div>
-        <div className={`bg-electric-violet/[0.07] text-xs leading-relaxed text-muted-foreground ${compact ? 'rounded-lg px-3 py-2' : 'rounded-xl px-4 py-3'}`}>Último login = última autenticação registrada pelo Supabase Auth, com segundos e fuso de Brasília. Atualização a cada 15 segundos, ao retornar à tela e quando o servidor informa uma mudança. Reabrir a página não conta como novo login.</div>
+        <div className={`bg-electric-violet/[0.07] text-xs leading-relaxed text-muted-foreground ${compact ? 'rounded-lg px-3 py-2' : 'rounded-xl px-4 py-3'}`}>Último login = última autenticação registrada pelo Supabase Auth, com segundos e fuso de Brasília. Atualização a cada {AUTO_REFRESH_INTERVAL_LABEL}, ao retornar à tela e quando o servidor informa uma mudança. Reabrir a página não conta como novo login.</div>
         {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">Não foi possível consultar as contas. {errorMessage(error)} Os horários abaixo, se presentes, são da última consulta bem-sucedida.</p>}
         {loading ? [1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-white/[0.03]" />) : filtered.map(account => {
           const protectedAccount = account.user_roles.some(r => r.role==='super_admin') && !hasRole('super_admin')

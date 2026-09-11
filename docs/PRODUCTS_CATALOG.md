@@ -4,7 +4,7 @@
 
 - **Executive → Produtos e tickets** (`/executive?tab=products`): criar produto com primeiro ticket, editar nome/descrição, adicionar tickets e definir seus preços em reais. Produtos e tickets podem ser desativados e reativados.
 - **Vendas → Produtos e tickets**: atalho para o catálogo, disponível somente para executivos. Sellers selecionam um produto ativo e um dos tickets ativos associados no registro da venda.
-- O catálogo é compartilhado com todos os sellers. Alterações chegam por Realtime; consultas também são revalidadas no foco da janela e a cada 30 segundos como proteção contra desconexão.
+- O catálogo é compartilhado com todos os sellers. Alterações chegam por Realtime; consultas também são revalidadas no foco da janela e a cada 50 segundos como proteção contra desconexão.
 - Produtos desativados e produtos sem tickets ativos ficam indisponíveis para novas vendas. Desativar não apaga históricos.
 - O banco valida a relação produto/ticket e o preço. Um valor diferente do catálogo é rejeitado. Se o preço mudar no formulário aberto, a interface mostra o novo valor e um aviso. Se mudar durante o envio, a operação falha e o seller precisa conferir o valor e enviar novamente.
 - Nome do produto, nome do ticket e preço são preservados na venda. Edições posteriores no catálogo não alteram vendas pendentes/aprovadas, comissões ou saldos anteriores. O nome do ticket aparece em Minhas Vendas e no quadro de vendas.
