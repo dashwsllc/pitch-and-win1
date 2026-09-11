@@ -13,6 +13,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { brasiliaLocalInputToIso } from "@/lib/brasilia-time";
 
 const actionTitles: Record<string, string> = {
   assign: "Atribuir lead",
@@ -48,11 +49,10 @@ export function CRMActionDialog({
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (busy) return;
+    const nextAt = needsDate ? brasiliaLocalInputToIso(when) : null;
     if (
       needsDate &&
-      (!when ||
-        !Number.isFinite(+new Date(when)) ||
-        new Date(when) <= new Date())
+      (!nextAt || Date.parse(nextAt) <= Date.now())
     ) {
       setFailure("Escolha uma próxima data futura.");
       return;
@@ -63,7 +63,7 @@ export function CRMActionDialog({
         note,
         closer_id: assigned || null,
         outcome,
-        next_at: needsDate ? new Date(when).toISOString() : null,
+        next_at: nextAt,
       })
     )
       onClose();
@@ -132,7 +132,7 @@ export function CRMActionDialog({
             )}
             {needsDate && (
               <div className="space-y-1">
-                <Label className="text-xs" htmlFor="next-at">Próxima data e hora *</Label>
+                <Label className="text-xs" htmlFor="next-at">Próxima data e hora · Brasília *</Label>
                 <Input
                   className="h-9"
                   id="next-at"

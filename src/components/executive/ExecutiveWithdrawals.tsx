@@ -10,6 +10,7 @@ import { useAllUsers } from '@/hooks/useRoles'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { money, exactDate, errorMessage } from '@/lib/sales'
+import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 export function ExecutiveWithdrawals() {
   const { user } = useAuth()
@@ -20,7 +21,7 @@ export function ExecutiveWithdrawals() {
   const [reason,setReason] = useState('')
   const [saving,setSaving] = useState(false)
   const [page,setPage] = useState(0)
-  const query = useQuery({ queryKey:['executive-withdrawals',user?.id,page], enabled:!!user, refetchInterval:30_000,
+  const query = useQuery({ queryKey:['executive-withdrawals',user?.id,page], enabled:!!user, refetchInterval:AUTO_REFRESH_INTERVAL_MS,
     queryFn:async () => {
       const { data,error,count } = await supabase.from('saques').select('id, user_id, valor_solicitado, valor_aprovado, nome_titular, status, created_at',{count:'exact'}).in('status',['pendente','processando','aprovado']).order('created_at',{ascending:true}).range(page*15,page*15+14)
       if (error) throw error

@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { crmCapabilities } from '../src/lib/crm-capabilities.ts'
-import { emptyContact, validateContact, contactPayload } from '../src/lib/crm.ts'
+import { registerHooks } from 'node:module'
+registerHooks({ resolve(specifier, context, nextResolve) {
+  if (specifier === '@/lib/brasilia-time') return nextResolve(new URL('../src/lib/brasilia-time.ts', import.meta.url).href, context)
+  return nextResolve(specifier, context)
+} })
+const { emptyContact, validateContact, contactPayload } = await import('../src/lib/crm.ts')
 const minimal = { ...emptyContact, name: 'Responsável QA', athlete_name: 'Atleta QA', phone: '11999999999' }
 assert.equal(validateContact(minimal), null)
 for (const field of ['email','athlete_birth_date','athlete_position','athlete_height_cm','athlete_weight_kg','performance_report_url','city_state']) assert.equal(contactPayload(minimal)[field], null)

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
@@ -7,6 +7,7 @@ import {
   Flame,
   CalendarClock,
   ArrowRight,
+  ListFilter,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,12 +15,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   useCRMLeads,
   useCRMRealtime,
   useCRMActivities,
   useCRMAssignees,
   useCRMSaleLinks,
+  useCRMContextSummary,
   CRMLead,
   CRMActivity,
   PIPELINE_STAGES,
@@ -38,11 +42,19 @@ import { CRMActionDialog } from "@/components/crm/CRMActionDialog";
 import { CRMCallScheduler } from "@/components/crm/CRMCalls";
 import { CRMUserManagement } from "@/components/crm/CRMUserManagement";
 import { CRMPermissionsReport } from "@/components/crm/CRMPermissionsReport";
+import { brasiliaDateKey } from "@/lib/brasilia-time";
+import { compareLeadUrgency, nextLeadSchedule } from "@/lib/crm-order";
+import { AUTO_REFRESH_INTERVAL_LABEL } from "@/lib/sync";
 
 const temperatures = [
   { value: "frio", label: "Frios" },
   { value: "morno", label: "Mornos" },
   { value: "quente", label: "Quentes" },
+];
+const approachFilters = [
+  { value: "nao_abordado", label: "Não abordado" },
+  { value: "em_abordagem", label: "Em abordagem" },
+  { value: "abordado", label: "Abordado" },
 ];
 const closedStages = ["fechado_ganho", "fechado_perdido", "lead_perdido"];
 const sdrGroup = (lead: CRMLead) =>
@@ -68,6 +80,44 @@ const sdrGroups = [
 const selectClass =
   "h-9 min-w-0 w-full rounded-md border border-input bg-background px-2 text-xs";
 
+function MultiSelectFilter({
+  label,
+  allLabel,
+  options,
+  values,
+  onChange,
+}: {
+  label: string;
+  allLabel: string;
+  options: { value: string; label: string }[];
+  values: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const toggle = (value: string) =>
+    onChange(values.includes(value) ? values.filter((item) => item !== value) : [...values, value]);
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className={`${selectClass} justify-start font-normal`} aria-label={`Filtrar por ${label}`}>
+          <ListFilter className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{values.length ? `${label}: ${values.length}` : allLabel}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 space-y-1 p-2">
+        {options.map((option) => (
+          <label key={option.value} className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-accent">
+            <Checkbox checked={values.includes(option.value)} onCheckedChange={() => toggle(option.value)} />
+            {option.label}
+          </label>
+        ))}
+        {values.length > 0 && (
+          <Button variant="ghost" size="sm" className="mt-1 h-7 w-full text-xs" onClick={() => onChange([])}>Limpar seleção</Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function CRM() {
   const { user } = useAuth();
   const {
@@ -80,16 +130,17 @@ export default function CRM() {
   const callsQuery = useCRMActivities(null, true);
   const assignees = useCRMAssignees();
   const sales = useCRMSaleLinks();
+  const contextSummary = useCRMContextSummary();
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") || "leads";
   const [search, setSearch] = useState("");
-  const [temperature, setTemperature] = useState("all");
-  const [approach, setApproach] = useState("all");
+  const [temperature, setTemperature] = useState<string[]>([]);
+  const [approach, setApproach] = useState<string[]>([]);
   const [pipeline, setPipeline] = useState("all");
   const [owner, setOwner] = useState("all");
   const [overdueOnly, setOverdueOnly] = useState(false);
-  const [order, setOrder] = useState("newest");
+  const [order, setOrder] = useState("automatic");
   const [view, setView] = useState("list");
   const [queue, setQueue] = useState("queue");
   const [readId, setReadId] = useState<string | null>(null);
@@ -102,25 +153,31 @@ export default function CRM() {
     call?: CRMActivity;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const lock = useRef(false);
   const { realtimeUnavailable } = useCRMRealtime();
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const names = Object.fromEntries(
     (assignees.data || []).map((a) => [a.user_id, a.display_name]),
   );
   const candidates = (assignees.data || []).filter((a) => a.role === "closer");
-  const openCalls = new Map(
-    callsQuery.activities
-      .filter((a) => !a.is_completed)
-      .map((a) => [a.lead_id, a]),
-  );
+  const openCalls = new Map<string, CRMActivity>();
+  callsQuery.activities
+    .filter((activity) => !activity.is_completed)
+    .forEach((activity) => {
+      const existing = openCalls.get(activity.lead_id);
+      if (!existing || Date.parse(activity.scheduled_at || '') < Date.parse(existing.scheduled_at || '')) {
+        openCalls.set(activity.lead_id, activity);
+      }
+    });
   const saleMap = new Map(
     (sales.data || []).map((sale) => [sale.lead_id, sale]),
   );
-  const now = new Date();
   const next = (lead: CRMLead) =>
-    [lead.next_followup_at, openCalls.get(lead.id)?.scheduled_at]
-      .filter(Boolean)
-      .sort()[0];
+    nextLeadSchedule(lead, openCalls.get(lead.id)?.scheduled_at);
   const overdue = (lead: CRMLead) =>
     !closedStages.includes(lead.pipeline_stage) &&
     !!next(lead) &&
@@ -134,12 +191,12 @@ export default function CRM() {
     if (value === "unclaimed") return !lead.closer_id;
     if (value === "mine") return lead.closer_id === user?.id;
     if (value === "today")
-      return !!date && new Date(date).toDateString() === now.toDateString();
+      return !!date && brasiliaDateKey(date) === brasiliaDateKey(now);
     if (value === "future")
       return (
         !!date &&
         new Date(date) > now &&
-        new Date(date).toDateString() !== now.toDateString()
+        brasiliaDateKey(date) !== brasiliaDateKey(now)
       );
     if (value === "overdue") return !!date && new Date(date) < now;
     return true;
@@ -159,8 +216,10 @@ export default function CRM() {
         `${lead.name} ${lead.athlete_name || ""} ${lead.phone || ""} ${lead.email || ""}`
           .toLocaleLowerCase()
           .includes(search.toLocaleLowerCase()) &&
-        (temperature === "all" || lead.temperature === temperature) &&
-        (approach === "all" || lead.approach_stage === approach) &&
+        (!temperature.length || temperature.includes(lead.temperature)) &&
+        (!approach.length ||
+          approach.includes(lead.approach_stage) ||
+          (approach.includes("abordado") && lead.approach_stage === "reabordado")) &&
         (pipeline === "all" || lead.pipeline_stage === pipeline) &&
         (owner === "all" ||
           lead.sdr_id === owner ||
@@ -171,12 +230,12 @@ export default function CRM() {
     .sort((a, b) =>
       order === "name"
         ? a.name.localeCompare(b.name, "pt-BR")
-        : order === "next"
-          ? (next(a) || "9999").localeCompare(next(b) || "9999")
-          : order === "hot"
+        : order === "hot"
             ? ["quente", "morno", "frio"].indexOf(a.temperature) -
               ["quente", "morno", "frio"].indexOf(b.temperature)
-            : (b.created_at || "").localeCompare(a.created_at || ""),
+            : order === "newest"
+              ? (b.created_at || "").localeCompare(a.created_at || "") || a.id.localeCompare(b.id)
+              : compareLeadUrgency(a, b, openCalls.get(a.id)?.scheduled_at, openCalls.get(b.id)?.scheduled_at),
     );
   const mode = view;
   const groups =
@@ -238,6 +297,7 @@ export default function CRM() {
       names={names}
       sale={saleMap.get(lead.id)}
       emphasizeCall={lead.pipeline_stage === "repassado_closer"}
+      hasContext={contextSummary.leadIds.has(lead.id)}
       busy={busy}
       onRead={() => setReadId(lead.id)}
       onEdit={() => setEditor(lead)}
@@ -269,6 +329,7 @@ export default function CRM() {
     void assignees.refetch();
     void sales.refetch();
     void callsQuery.fetchActivities();
+    void contextSummary.refetch();
     void retryRoles();
   };
   const failure =
@@ -276,13 +337,15 @@ export default function CRM() {
     callsQuery.error ||
     assignees.error ||
     sales.error ||
+    contextSummary.error ||
     rolesError;
   const loading =
     rolesLoading ||
     crm.loading ||
     callsQuery.loading ||
     assignees.isLoading ||
-    sales.isLoading;
+    sales.isLoading ||
+    contextSummary.loading;
   const permittedTab =
     tab === "leads" ||
     (tab === "sdr" && capabilities.sdr) ||
@@ -295,7 +358,7 @@ export default function CRM() {
     return <Navigate to="/" replace />;
   return (
     <DashboardLayout>
-      {realtimeUnavailable && <p role="status" className="mb-4 rounded-lg border p-3 text-sm text-muted-foreground">Conexão em tempo real indisponível. Atualização automática a cada 15 segundos e ao voltar à janela.</p>}
+      {realtimeUnavailable && <p role="status" className="mb-4 rounded-lg border p-3 text-sm text-muted-foreground">Conexão em tempo real indisponível. Verificação automática a cada {AUTO_REFRESH_INTERVAL_LABEL} e ao voltar à janela.</p>}
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -357,7 +420,7 @@ export default function CRM() {
           value={tab}
           onValueChange={(value) => {
             setParams({ tab: value });
-            setView(value === "sdr" ? "pipeline" : "list");
+            setView("list");
           }}
         >
           <TabsList className="h-auto flex flex-wrap justify-start gap-1 w-fit max-w-full">
@@ -421,8 +484,8 @@ export default function CRM() {
                         setParams({ tab: "closer" });
                         setQueue("closed");
                         setSearch("");
-                        setTemperature("all");
-                        setApproach("all");
+                        setTemperature([]);
+                        setApproach([]);
                         setPipeline("all");
                         setOwner("all");
                         setOverdueOnly(false);
@@ -473,32 +536,20 @@ export default function CRM() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
-                    <select
-                      className={selectClass}
-                      aria-label="Filtrar aquecimento"
-                      value={temperature}
-                      onChange={(e) => setTemperature(e.target.value)}
-                    >
-                      <option value="all">Todo aquecimento</option>
-                      {temperatures.map((t) => (
-                        <option key={t.value} value={t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className={selectClass}
-                      aria-label="Filtrar abordagem"
-                      value={approach}
-                      onChange={(e) => setApproach(e.target.value)}
-                    >
-                      <option value="all">Toda abordagem</option>
-                      {APPROACH_STAGES.map((t) => (
-                        <option key={t.value} value={t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
+                    <MultiSelectFilter
+                      label="Temperatura"
+                      allLabel="Toda temperatura"
+                      options={temperatures}
+                      values={temperature}
+                      onChange={setTemperature}
+                    />
+                    <MultiSelectFilter
+                      label="Abordagem"
+                      allLabel="Toda abordagem"
+                      options={approachFilters}
+                      values={approach}
+                      onChange={setApproach}
+                    />
                     <select
                       className={selectClass}
                       aria-label="Filtrar pipeline"
@@ -531,9 +582,9 @@ export default function CRM() {
                       value={order}
                       onChange={(e) => setOrder(e.target.value)}
                     >
+                      <option value="automatic">Urgência automática</option>
                       <option value="newest">Mais recentes</option>
                       <option value="name">Nome A–Z</option>
-                      <option value="next">Próxima ação</option>
                       <option value="hot">Mais quentes</option>
                     </select>
                   </div>
@@ -548,7 +599,7 @@ export default function CRM() {
                     </label>
                     <span>
                       {filtered.length} de {crm.leads.length} leads ·
-                      atualização automática
+                      atrasados primeiro · atualização automática
                     </span>
                   </div>
                 </div>

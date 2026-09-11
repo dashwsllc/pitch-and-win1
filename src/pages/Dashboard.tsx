@@ -32,6 +32,8 @@ import {
 } from "lucide-react"
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { AUTO_REFRESH_INTERVAL_LABEL } from '@/lib/sync'
+import { BRASILIA_TIME_ZONE, brasiliaParts, formatBrasiliaDate } from '@/lib/brasilia-time'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -115,7 +117,7 @@ export default function Dashboard() {
   }, [loading, selectedFilter])
 
   const getGreeting = () => {
-    const hour = currentTime.getHours()
+    const hour = brasiliaParts(currentTime).hour
     if (hour < 12) return 'Bom dia'
     if (hour < 18) return 'Boa tarde'
     return 'Boa noite'
@@ -136,7 +138,7 @@ export default function Dashboard() {
                   <Radio className="h-3.5 w-3.5 text-success" />
                   Dados ao vivo
                 </span>
-                <span className="capitalize">{currentTime.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                <span className="capitalize">{formatBrasiliaDate(currentTime, { weekday: 'long', day: 'numeric', month: 'long', year: undefined })}</span>
               </div>
 
               <h1 data-hero-item className="mt-5 text-balance text-[clamp(2rem,5vw,3.35rem)] font-light leading-[0.98] tracking-[-0.045em] text-white">
@@ -160,7 +162,7 @@ export default function Dashboard() {
 
               <div className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/[0.035] px-3 text-xs tabular-nums text-muted-foreground shadow-[rgba(255,255,255,0.07)_0_0_0_1px_inset]">
                 <Activity className="h-3.5 w-3.5 text-electric" />
-                {currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                {currentTime.toLocaleTimeString('pt-BR', { timeZone: BRASILIA_TIME_ZONE, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </div>
 
               <Button
@@ -186,7 +188,7 @@ export default function Dashboard() {
               </div>
               <h2 className="mt-1.5 text-xl font-normal tracking-[-0.025em] text-white sm:text-2xl">Metas em andamento</h2>
             </div>
-            <span className="hidden text-xs text-muted-foreground sm:block">Atualização automática a cada 30 segundos</span>
+            <span className="hidden text-xs text-muted-foreground sm:block">Tempo real · verificação a cada {AUTO_REFRESH_INTERVAL_LABEL}</span>
           </div>
           <GoalsProgress />
         </section>

@@ -44,7 +44,7 @@ Migration forward-only **`20260910010000_crm_shared_workflow.sql`**, aplicada em
 - As RPCs de agendamento/reagendamento/resultado continuam protegidas. Reagendar mantém `crm_activities.scheduled_at` e `crm_leads.next_followup_at` sincronizados.
 - Trigger impede updates diretos do workflow e preserva autoria/histórico. A timeline registra autor, horário e estados anteriores/novos da classificação, abordagem, pipeline, atribuição e retorno.
 - `crm_sale_links` compartilha apenas o status de venda; ID/acesso ao registro só é retornado a quem pode ler a venda. A RLS financeira não foi ampliada. Nova segunda venda para o mesmo fechamento é bloqueada; vendas históricas não são removidas.
-- Realtime de leads, atividades/calls, vendas e sinal administrativo invalida as consultas. Há fallback a cada 15 segundos e no foco, com indicador quando a conexão Realtime falha. Paginação percorre todas as páginas de leads, atividades, responsáveis e vínculos; não há corte silencioso de registros.
+- Realtime de leads, atividades/calls, vendas e sinal administrativo invalida as consultas. Há fallback a cada 50 segundos e no foco, com indicador quando a conexão Realtime falha. Paginação percorre todas as páginas de leads, atividades, responsáveis e vínculos; não há corte silencioso de registros.
 
 ## Verificação
 

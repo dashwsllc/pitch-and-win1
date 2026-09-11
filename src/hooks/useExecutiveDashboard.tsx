@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from './useAuth'
 import { fetchAllPages } from '@/lib/supabase-pages'
+import { addDaysToDateKey, brasiliaDateKey, brasiliaDateRange, formatDateKey } from '@/lib/brasilia-time'
 
 interface ExecutiveDashboardData {
   totalSellers: number
@@ -31,13 +32,6 @@ interface ExecutiveDashboardData {
   }>
 }
 
-// Chave de dia no fuso local. created_at e UTC, entao comparar com
-// toISOString joga registros do fim da tarde para o dia seguinte.
-const chaveDia = (value: Date | string) => {
-  const date = value instanceof Date ? value : new Date(value)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
 export function useExecutiveDashboard(dateFilter: string = '30dias') {
   const { user } = useAuth()
   const [data, setData] = useState<ExecutiveDashboardData>({
@@ -54,47 +48,25 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const latestFetch = useRef(0)
 
   const getDateRange = (filter: string) => {
-    const now = new Date()
-    const start = new Date()
-    
-    switch (filter) {
-      case 'hoje':
-        start.setHours(0, 0, 0, 0)
-        break
-      case 'ontem':
-        start.setDate(now.getDate() - 1)
-        start.setHours(0, 0, 0, 0)
-        now.setDate(now.getDate() - 1)
-        now.setHours(23, 59, 59, 999)
-        break
-      case '7dias':
-        start.setDate(now.getDate() - 6)
-        start.setHours(0, 0, 0, 0)
-        break
-      case '14dias':
-        start.setDate(now.getDate() - 13)
-        start.setHours(0, 0, 0, 0)
-        break
-      case '30dias':
-      default:
-        start.setDate(now.getDate() - 29)
-        start.setHours(0, 0, 0, 0)
-        break
-    }
-    
-    return { start: start.toISOString(), end: now.toISOString() }
+    const today = brasiliaDateKey()
+    const days = filter === '7dias' ? 7 : filter === '14dias' ? 14 : filter === '30dias' ? 30 : 1
+    const lastDay = filter === 'ontem' ? addDaysToDateKey(today, -1) : today
+    const range = brasiliaDateRange(days, lastDay)
+    return { start: range.start.toISOString(), end: range.end.toISOString(), days, lastDay }
   }
 
   const fetchExecutiveDashboard = useCallback(async () => {
+    const requestId = ++latestFetch.current
     if (!user) return
 
     setLoading(true)
     setError(null)
 
     try {
-      const { start, end } = getDateRange(dateFilter)
+      const { start, end, days, lastDay } = getDateRange(dateFilter)
 
       // Fetch profiles for name resolution
       const profilesData = await fetchAllPages((from, to) => supabase
@@ -115,9 +87,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
         .select('id, user_id').in('role', ['seller','closer','sdr','bdr'])
         .order('id')
         .range(from, to))
-      // user_roles nao tem chave estrangeira para auth.users e mantem linhas de
-      // contas ja removidas. Conta apenas quem ainda tem perfil ativo, como em
-      // get_team_ranking.
+      // Count each active collaborator once, including accumulated roles.
       const totalSellers = new Set(
         (sellerRoles ?? []).map(role => role.user_id).filter(id => activeProfiles.has(id))
       ).size
@@ -128,7 +98,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
         .select('id, user_id, nome_produto, valor_venda, created_at')
         .eq('approval_status', 'aprovada')
         .gte('created_at', start)
-        .lte('created_at', end)
+        .lt('created_at', end)
         .order('created_at', { ascending: false })
         .order('id')
         .range(from, to))
@@ -138,7 +108,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
         .from('abordagens')
         .select('id, user_id, nomes_abordados, created_at')
         .gte('created_at', start)
-        .lte('created_at', end)
+        .lt('created_at', end)
         .order('created_at', { ascending: false })
         .order('id')
         .range(from, to))
@@ -157,27 +127,14 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       const activeSubscriptions = subscriptionsData?.filter(sub => sub.status === 'ativa').length || 0
       const conversionRate = totalApproaches > 0 ? (totalSales / totalApproaches) * 100 : 0
 
-      // Sales by period (last 7 days)
-      const salesByPeriod = []
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date()
-        date.setDate(date.getDate() - i)
-        const dateStr = chaveDia(date)
-
-        const daySales = salesData?.filter(sale =>
-          chaveDia(sale.created_at) === dateStr
-        ) || []
-
-        const dayApproaches = approachesData?.filter(approach =>
-          chaveDia(approach.created_at) === dateStr
-        ) || []
-        
-        salesByPeriod.push({
-          month: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-          vendas: daySales.length,
-          abordagens: dayApproaches.length
-        })
-      }
+      const dateKeys = Array.from({ length: days }, (_, index) =>
+        addDaysToDateKey(lastDay, index - days + 1),
+      )
+      const salesByPeriod = dateKeys.map((dateKey) => ({
+        month: formatDateKey(dateKey, { day: '2-digit', month: '2-digit', year: undefined }),
+        vendas: salesData?.filter((sale) => brasiliaDateKey(sale.created_at) === dateKey).length || 0,
+        abordagens: approachesData?.filter((approach) => brasiliaDateKey(approach.created_at) === dateKey).length || 0,
+      }))
 
       // Top sellers - use profileMap for real names
       const sellerStats = new Map<string, {
@@ -236,12 +193,13 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
         ...(approachesData?.slice(0, 5).map(approach => ({
           type: 'approach' as const,
           seller_name: profileMap.get(approach.user_id) || `Seller ${approach.user_id.substring(0, 8)}`,
-          details: `${approach.nomes_abordados} pessoas abordadas`,
+          details: `Prospects abordados: ${approach.nomes_abordados}`,
           created_at: approach.created_at
         })) || [])
       ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 10)
 
+      if (requestId !== latestFetch.current) return
       setData({
         totalSellers,
         totalSales,
@@ -256,10 +214,11 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       })
 
     } catch (err) {
+      if (requestId !== latestFetch.current) return
       console.error('Error fetching executive dashboard:', err)
       setError('Erro ao carregar dados do dashboard')
     } finally {
-      setLoading(false)
+      if (requestId === latestFetch.current) setLoading(false)
     }
   }, [user, dateFilter])
 

@@ -15,6 +15,7 @@ import {
 } from "@/hooks/useCRM";
 import { callDate } from "@/lib/crm";
 import type { Json } from "@/integrations/supabase/types";
+import { CRMContextPanel } from "./CRMContextPanel";
 
 const stateLabels: Record<string, string> = {
   temperature: "Aquecimento",
@@ -102,6 +103,7 @@ export function CRMLeadDetail({
                 ?.label || lead.pipeline_stage}
             </Badge>
           </div>
+          <CRMContextPanel lead={lead} />
           <dl className="grid gap-x-3 gap-y-2 sm:grid-cols-3">
             {fields.map(([label, value]) => (
               <div key={label} className="min-w-0">

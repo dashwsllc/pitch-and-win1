@@ -1,4 +1,5 @@
 import type { CRMLead } from "@/hooks/useCRM";
+import { BRASILIA_TIME_ZONE, brasiliaDateKey, isValidDateKey } from "@/lib/brasilia-time";
 
 export const ATHLETE_POSITIONS = [
   "Goleiro",
@@ -56,11 +57,10 @@ export function validateContact(form: ContactForm) {
     !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(form.email.trim())
   )
     return "Informe um e-mail válido.";
-  const date = new Date(`${form.athlete_birth_date}T00:00:00`);
   if (
     form.athlete_birth_date &&
-    (!Number.isFinite(+date) ||
-      date > new Date() ||
+    (!isValidDateKey(form.athlete_birth_date) ||
+      form.athlete_birth_date > brasiliaDateKey() ||
       form.athlete_birth_date < "1900-01-01")
   )
     return "Informe uma data de nascimento válida, sem data futura.";
@@ -94,7 +94,8 @@ export function validateContact(form: ContactForm) {
 export const callDate = (value: string | null) =>
   value
     ? new Date(value).toLocaleString("pt-BR", {
-        dateStyle: "short",
-        timeStyle: "short",
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: BRASILIA_TIME_ZONE,
       })
     : "Sem horário";

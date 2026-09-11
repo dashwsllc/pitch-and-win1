@@ -27,7 +27,7 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
     if (role === 'second') await context.addInitScript(() => {
       // Disable only polling intervals; keep React Query notification timers and socket heartbeats.
       const interval = window.setInterval.bind(window)
-      window.setInterval = (callback, delay, ...args) => interval(callback, delay === 15000 || delay === 30000 ? 3600000 : delay, ...args)
+      window.setInterval = (callback, delay, ...args) => interval(callback, delay === 50000 ? 3600000 : delay, ...args)
     })
     await context.addInitScript(({ project, session }) => {
       if (!sessionStorage.getItem(`sb-${project}-auth-token`)) sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))

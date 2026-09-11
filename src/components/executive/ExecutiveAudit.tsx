@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { exactDate } from '@/lib/sales'
+import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 const labels: Record<string,string> = { 'sale.approve': 'Venda aprovada', 'sale.reject': 'Venda rejeitada', 'sale.delete': 'Venda excluída', 'sale.cancel': 'Solicitação cancelada', 'account.update': 'Conta alterada', 'permissions.update': 'Permissões alteradas', 'withdrawal.reject': 'Saque regularizado', 'product.create': 'Produto criado', 'product.update': 'Produto atualizado', 'ticket.create': 'Ticket criado', 'ticket.update': 'Ticket atualizado' }
 
@@ -21,7 +22,7 @@ export function ExecutiveAudit() {
       return { items:data,total:count ?? 0 }
     },
     enabled: !!user,
-    refetchInterval: 30_000,
+    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
   })
   return <section className="surface-panel overflow-hidden rounded-2xl"><div className="flex items-center justify-between gap-3 border-b border-white/[0.06] p-6"><div><h2 className="flex items-center gap-2 text-lg font-medium text-white"><History className="h-5 w-5 text-electric" />Histórico administrativo</h2><p className="mt-1 text-xs text-muted-foreground">Quem alterou, quando e por quê. Registros preservados após exclusões.</p></div><Button variant="ghost" size="icon" aria-label="Atualizar auditoria" disabled={query.isFetching} onClick={() => query.refetch()}><RefreshCw className={`h-4 w-4 ${query.isFetching ? 'animate-spin' : ''}`} /></Button></div><div className="space-y-3 p-4 sm:p-6">
     {query.isError && <p role="alert" className="text-sm text-destructive">Não foi possível consultar a auditoria. Tente atualizar.</p>}

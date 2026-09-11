@@ -10,6 +10,7 @@ import { useRoles } from "@/hooks/useRoles";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { errorMessage } from "@/lib/sales";
+import { brasiliaLocalInputToIso, isoToBrasiliaLocalInput } from "@/lib/brasilia-time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,11 +59,7 @@ export function CRMCallScheduler({
       "",
   );
   const [when, setWhen] = useState(() => {
-    if (!call?.scheduled_at) return "";
-    const date = new Date(call.scheduled_at);
-    return new Date(+date - date.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 16);
+    return isoToBrasiliaLocalInput(call?.scheduled_at);
   });
   const [context, setContext] = useState("");
   const [saving, setSaving] = useState(false);
@@ -88,18 +85,14 @@ export function CRMCallScheduler({
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
-    if (
-      !when ||
-      !Number.isFinite(+new Date(when)) ||
-      new Date(when) <= new Date()
-    ) {
+    const scheduledAt = brasiliaLocalInputToIso(when);
+    if (!scheduledAt || Date.parse(scheduledAt) <= Date.now()) {
       setFailure("Escolha um horário futuro.");
       return;
     }
     setSaving(true);
     setFailure("");
     try {
-      const scheduledAt = new Date(when).toISOString();
       const { error } = call
         ? await supabase.rpc("reschedule_crm_call", {
             p_activity_id: call.id,
@@ -212,7 +205,7 @@ export function CRMCallScheduler({
             </>
           )}
           <div className="space-y-1">
-            <Label className="text-xs" htmlFor="call-when">Data e hora (horário local)</Label>
+            <Label className="text-xs" htmlFor="call-when">Data e hora (horário de Brasília)</Label>
             <Input
               className="h-9"
               id="call-when"

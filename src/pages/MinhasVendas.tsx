@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast'
 import { errorMessage } from '@/lib/sales'
 import { CRMLinkedSale } from '@/components/crm/CRMLinkedSale'
 import { fetchAllPages } from '@/lib/supabase-pages'
+import { formatBrasiliaDate } from '@/lib/brasilia-time'
 
 interface Venda {
   id: string
@@ -254,7 +255,7 @@ export default function MinhasVendas() {
                       return (
                         <tr key={v.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                           <td className="p-3 text-muted-foreground text-xs">
-                            {new Date(v.created_at).toLocaleDateString('pt-BR')}
+                            {formatBrasiliaDate(v.created_at)}
                           </td>
                           <td className="p-3">
                             <p className="font-medium text-foreground">{v.nome_comprador}</p>
@@ -346,7 +347,7 @@ export default function MinhasVendas() {
           </div>
           <p className="text-xs text-muted-foreground">
             Rejeitado em: {rejectionDetail?.reviewed_at
-              ? new Date(rejectionDetail.reviewed_at).toLocaleDateString('pt-BR', {
+              ? formatBrasiliaDate(rejectionDetail.reviewed_at, {
                   day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
                 })
               : '—'}

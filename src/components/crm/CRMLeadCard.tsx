@@ -13,6 +13,7 @@ import {
   Undo2,
   UserCog,
   CheckCircle2,
+  MessageSquareMore,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,8 @@ import { useRoles } from "@/hooks/useRoles";
 import { useAuth } from "@/hooks/useAuth";
 import { callDate } from "@/lib/crm";
 import type { Json } from "@/integrations/supabase/types";
+import { BRASILIA_TIME_ZONE } from "@/lib/brasilia-time";
+import { nextLeadSchedule } from "@/lib/crm-order";
 
 export function CRMLeadCard({
   lead,
@@ -48,6 +51,7 @@ export function CRMLeadCard({
   busy,
   sale,
   emphasizeCall = false,
+  hasContext = false,
   onRead,
   onEdit,
   onAction,
@@ -61,6 +65,7 @@ export function CRMLeadCard({
   busy: boolean;
   sale?: { sale_id: string | null; can_open: boolean };
   emphasizeCall?: boolean;
+  hasContext?: boolean;
   onRead: () => void;
   onEdit: () => void;
   onAction: (action: string) => void;
@@ -87,17 +92,17 @@ export function CRMLeadCard({
     (handed
       ? capabilities.closer && (!lead.closer_id || canManage)
       : capabilities.sdr);
-  const next = [lead.next_followup_at, call?.scheduled_at]
-    .filter(Boolean)
-    .sort()[0];
+  const next = nextLeadSchedule(lead, call?.scheduled_at);
   const callMoment = call?.scheduled_at ? new Date(call.scheduled_at) : null;
   const callDay = callMoment?.toLocaleDateString("pt-BR", {
+    timeZone: BRASILIA_TIME_ZONE,
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
   const callTime = callMoment?.toLocaleTimeString("pt-BR", {
+    timeZone: BRASILIA_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -153,6 +158,13 @@ export function CRMLeadCard({
               tip: "Abrir ficha e histórico",
             },
             {
+              label: `${hasContext ? "Abrir contexto registrado" : "Adicionar contexto"} de ${lead.name}`,
+              icon: MessageSquareMore,
+              action: onRead,
+              tip: hasContext ? "Contexto registrado" : "Sem contexto registrado",
+              active: hasContext,
+            },
+            {
               label: `Editar ${lead.name}`,
               icon: Pencil,
               action: onEdit,
@@ -164,7 +176,7 @@ export function CRMLeadCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className={`h-8 w-8 ${item.active ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
                   aria-label={item.label}
                   title={item.tip}
                   onClick={item.action}

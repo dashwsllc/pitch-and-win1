@@ -37,7 +37,7 @@ export async function realFixtures(run) {
   const users = [], clients = {}, sessions = {}
   const productId = randomUUID(), ticketId = randomUUID(), runId = randomUUID()
   const name = `CRM QA ${runId.slice(0, 8)}`
-  const roles = { seller: ['seller'], second: ['seller'], executive: ['executive'], sdr: ['seller', 'sdr'], closer: ['seller', 'closer'], blocked: ['bdr'], suspended: ['seller'] }
+  const roles = { seller: ['seller'], second: ['seller'], executive: ['executive'], sdr: ['sdr'], closer: ['seller', 'closer'], blocked: ['bdr'], suspended: ['seller'] }
   let cleaned = false
   const cleanup = async () => {
     const failures = []

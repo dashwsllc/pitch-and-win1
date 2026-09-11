@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/integrations/supabase/client'
+import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 export function DataSync() {
   const { user, session } = useAuth()
@@ -24,6 +25,7 @@ export function DataSync() {
         void queryClient.invalidateQueries({ queryKey: ['executive-withdrawals'] })
         void queryClient.invalidateQueries({ queryKey: ['profile'] })
         void queryClient.invalidateQueries({ queryKey: ['products'] })
+        void queryClient.invalidateQueries({ queryKey: ['daily-goals'] })
         window.dispatchEvent(new Event('dashboard-data-changed'))
       }, 180)
     }
@@ -37,7 +39,7 @@ export function DataSync() {
       if (!disposed) channel.subscribe(status => { if (status === 'SUBSCRIBED') refresh() })
     }).catch(() => { if (!disposed) refresh() })
     window.addEventListener('focus', refresh)
-    const interval = setInterval(() => { if (!document.hidden) refresh() }, 30_000)
+    const interval = setInterval(() => { if (!document.hidden) refresh() }, AUTO_REFRESH_INTERVAL_MS)
     return () => {
       disposed = true
       clearTimeout(timeout)

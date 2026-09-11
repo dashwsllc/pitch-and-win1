@@ -230,6 +230,51 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_goal_tasks: {
+        Row: {
+          assignee_id: string
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_completed: boolean
+          position: number
+          task_date: string
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          assignee_id: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_completed?: boolean
+          position?: number
+          task_date: string
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          assignee_id?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_completed?: boolean
+          position?: number
+          task_date?: string
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       crm_activities: {
         Row: {
           previous_state: Json | null
@@ -294,6 +339,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "crm_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "crm_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_lead_contexts: {
+        Row: {
+          author_id: string
+          author_name: string
+          author_role: string
+          content: string
+          context_type: string
+          created_at: string
+          id: string
+          lead_id: string
+          updated_at: string
+          updated_by: string | null
+          updated_by_name: string | null
+          version: number
+        }
+        Insert: {
+          author_id: string
+          author_name: string
+          author_role: string
+          content: string
+          context_type: string
+          created_at?: string
+          id?: string
+          lead_id: string
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_name?: string | null
+          version?: number
+        }
+        Update: {
+          author_id?: string
+          author_name?: string
+          author_role?: string
+          content?: string
+          context_type?: string
+          created_at?: string
+          id?: string
+          lead_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_name?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_lead_contexts_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "crm_leads"
@@ -1170,6 +1268,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      crm_add_lead_context: {
+        Args: { p_lead_id: string; p_context_type: string; p_content: string }
+        Returns: Database["public"]["Tables"]["crm_lead_contexts"]["Row"]
+      }
+      crm_update_lead_context: {
+        Args: { p_context_id: string; p_context_type: string; p_content: string; p_expected_version: number }
+        Returns: Database["public"]["Tables"]["crm_lead_contexts"]["Row"]
+      }
+      executive_create_daily_goal_task: {
+        Args: { p_assignee_id: string; p_task_date: string; p_title: string }
+        Returns: Database["public"]["Tables"]["daily_goal_tasks"]["Row"]
+      }
+      executive_update_daily_goal_task: {
+        Args: { p_task_id: string; p_assignee_id: string; p_task_date: string; p_title: string; p_expected_version: number }
+        Returns: Database["public"]["Tables"]["daily_goal_tasks"]["Row"]
+      }
+      executive_delete_daily_goal_task: {
+        Args: { p_task_id: string; p_expected_version: number }
+        Returns: undefined
+      }
+      set_daily_goal_task_completed: {
+        Args: { p_task_id: string; p_completed: boolean; p_expected_version: number }
+        Returns: Database["public"]["Tables"]["daily_goal_tasks"]["Row"]
+      }
       crm_can: { Args: { p_capability: string }; Returns: boolean }
       crm_transition: { Args: { p_lead_id: string; p_action: string; p_expected_version: number; p_data?: Json }; Returns: Database['public']['Tables']['crm_leads']['Row'] }
       crm_sale_links: { Args: Record<PropertyKey, never>; Returns: { lead_id: string; sale_id: string | null; can_open: boolean }[] }

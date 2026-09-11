@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast'
 import { errorMessage } from '@/lib/sales'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import type { Tables } from '@/integrations/supabase/types'
+import { formatBrasiliaDate } from '@/lib/brasilia-time'
 
 export default function Saques() {
   const { user } = useAuth()
@@ -482,7 +483,7 @@ export default function Saques() {
                       {withdrawals.map(w => (
                         <tr key={w.id} className="hover:bg-muted/20 transition-colors">
                           <td className="py-3 text-muted-foreground">
-                            {new Date(w.created_at).toLocaleDateString('pt-BR')}
+                            {formatBrasiliaDate(w.created_at)}
                           </td>
                           <td className="py-3 font-semibold text-foreground">
                             {formatCurrency(Number(w.valor_solicitado || 0))}
@@ -500,7 +501,7 @@ export default function Saques() {
                           </td>
                           <td className="py-3 text-muted-foreground hidden lg:table-cell">
                             {w.previsao_pagamento
-                              ? new Date(w.previsao_pagamento).toLocaleDateString('pt-BR')
+                              ? formatBrasiliaDate(w.previsao_pagamento)
                               : w.status === 'pendente' || w.status === 'processando'
                                 ? <span className="flex items-center gap-1 text-xs"><Calendar className="w-3 h-3" /> Até 3 dias úteis</span>
                                 : '—'

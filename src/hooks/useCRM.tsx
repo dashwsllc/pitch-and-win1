@@ -4,9 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, Json } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useRoles } from "./useRoles";
+import { validatePlainText } from "@/lib/plain-text";
+import { fetchAllPages } from "@/lib/supabase-pages";
+import { AUTO_REFRESH_INTERVAL_MS } from "@/lib/sync";
 
 export type CRMLead = Tables<"crm_leads">;
 export type CRMActivity = Tables<"crm_activities">;
+export type CRMLeadContext = Tables<"crm_lead_contexts">;
 export const PIPELINE_STAGES = [
   { value: "novo", label: "Novo" },
   { value: "em_qualificacao", label: "Em qualificação" },
@@ -54,7 +58,7 @@ export const APPROACH_LABELS: Record<string, string> = {
 };
 const queryOptions = {
   staleTime: 5_000,
-  refetchInterval: 15_000,
+  refetchInterval: AUTO_REFRESH_INTERVAL_MS,
   refetchOnWindowFocus: true,
   retry: 1,
 };
@@ -79,6 +83,13 @@ export function useCRMRealtime() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "crm_activities" },
+        () => {
+          void client.invalidateQueries({ queryKey: ["crm"] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "crm_lead_contexts" },
         () => {
           void client.invalidateQueries({ queryKey: ["crm"] });
         },
@@ -231,6 +242,101 @@ export function useCRMActivities(leadId: string | null, callsOnly = false) {
     error: query.error,
     fetchActivities: refresh,
     createActivity,
+  };
+}
+
+export function useCRMContextSummary() {
+  const { user } = useAuth();
+  const { hasCRMAccess } = useRoles();
+  const query = useQuery({
+    queryKey: ["crm", "context-summary", user?.id],
+    enabled: !!user && hasCRMAccess,
+    ...queryOptions,
+    queryFn: async () => {
+      const leadIds = new Set<string>();
+      for (let from = 0; ; from += 500) {
+        const { data, error } = await supabase
+          .from("crm_lead_contexts")
+          .select("lead_id")
+          .order("lead_id")
+          .order("id")
+          .range(from, from + 499);
+        if (error) throw error;
+        data.forEach((row) => leadIds.add(row.lead_id));
+        if (data.length < 500) return leadIds;
+      }
+    },
+  });
+  return {
+    leadIds: query.data ?? new Set<string>(),
+    loading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
+  };
+}
+
+export function useCRMContexts(leadId: string | null) {
+  const { user } = useAuth();
+  const { hasCRMAccess } = useRoles();
+  const client = useQueryClient();
+  const key = ["crm", "contexts", user?.id, leadId];
+  const query = useQuery({
+    queryKey: key,
+    enabled: !!user && hasCRMAccess && !!leadId,
+    ...queryOptions,
+    queryFn: async () => {
+      return fetchAllPages((from, to) => supabase
+        .from("crm_lead_contexts")
+        .select("*")
+        .eq("lead_id", leadId!)
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to));
+    },
+  });
+  const refresh = async () => {
+    await client.invalidateQueries({ queryKey: ["crm"] });
+  };
+  const importContext = async (
+    contextType: "whatsapp_summary" | "call_transcript" | "manual_note",
+    content: string,
+  ) => {
+    if (!leadId) throw new Error("Lead não selecionado.");
+    const sanitized = validatePlainText(content, 50_000);
+    if (!sanitized) throw new Error("Cole ou anexe um conteúdo antes de salvar.");
+    const { data, error } = await supabase.rpc("crm_add_lead_context", {
+      p_lead_id: leadId,
+      p_context_type: contextType,
+      p_content: sanitized,
+    });
+    if (error) throw error;
+    await refresh();
+    return data;
+  };
+  const updateContext = async (
+    context: CRMLeadContext,
+    contextType: "whatsapp_summary" | "call_transcript" | "manual_note",
+    content: string,
+  ) => {
+    const sanitized = validatePlainText(content, 50_000);
+    if (!sanitized) throw new Error("O contexto não pode ficar vazio.");
+    const { data, error } = await supabase.rpc("crm_update_lead_context", {
+      p_context_id: context.id,
+      p_context_type: contextType,
+      p_content: sanitized,
+      p_expected_version: context.version,
+    });
+    if (error) throw error;
+    await refresh();
+    return data;
+  };
+  return {
+    contexts: query.data ?? [],
+    loading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
+    importContext,
+    updateContext,
   };
 }
 

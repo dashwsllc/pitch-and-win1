@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
+import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 const allowedAvatarTypes = new Map([
   ['image/png', 'png'],
@@ -34,7 +35,7 @@ export function useProfile() {
       return data
     },
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
     retry: 1,
   })
   const updateProfile = async (updates: { display_name?: string; avatar_url?: string }) => {

@@ -24,13 +24,7 @@ import { MetricCard } from '@/components/dashboard/MetricCard'
 import { SalesChart } from '@/components/dashboard/SalesChart'
 import { errorMessage } from '@/lib/sales'
 import { fetchAllPages } from '@/lib/supabase-pages'
-
-// Chave de dia no fuso local. created_at e UTC, entao comparar com
-// toISOString joga registros do fim da tarde para o dia seguinte.
-const chaveDia = (value: Date | string) => {
-  const date = value instanceof Date ? value : new Date(value)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
+import { addDaysToDateKey, brasiliaDateKey, formatBrasiliaDate, formatDateKey } from '@/lib/brasilia-time'
 
 interface SellerSale {
   id: string
@@ -128,27 +122,18 @@ export function ExecutiveSellerDetails() {
       const conversionRate = totalApproaches > 0 ? (totalSales / totalApproaches) * 100 : 0
 
       // Vendas dos últimos 7 dias
-      const salesByDay = []
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date()
-        date.setDate(date.getDate() - i)
-        const dateStr = chaveDia(date)
-
-        const daySales = sales.filter(sale =>
-          chaveDia(sale.created_at) === dateStr
-        )
-
-        const dayApproaches = approaches.filter(approach =>
-          chaveDia(approach.created_at) === dateStr
-        )
-        
-        salesByDay.push({
-          period: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      const today = brasiliaDateKey()
+      const salesByDay = Array.from({ length: 7 }, (_, index) => {
+        const dateKey = addDaysToDateKey(today, index - 6)
+        const daySales = sales.filter((sale) => brasiliaDateKey(sale.created_at) === dateKey)
+        const dayApproaches = approaches.filter((approach) => brasiliaDateKey(approach.created_at) === dateKey)
+        return {
+          period: formatDateKey(dateKey, { day: '2-digit', month: '2-digit', year: undefined }),
           vendas: daySales.length,
           abordagens: dayApproaches.length,
           valor: daySales.reduce((sum, sale) => sum + Number(sale.valor_venda), 0)
-        })
-      }
+        }
+      })
 
       if (requestId !== latestRequest.current) return
 
@@ -334,7 +319,7 @@ export function ExecutiveSellerDetails() {
                           <div>
                             <p className="font-medium text-sm">{sale.nome_produto}</p>
                             <p className="text-xs text-muted-foreground">
-                              {new Date(sale.created_at).toLocaleDateString('pt-BR')}
+                              {formatBrasiliaDate(sale.created_at)}
                             </p>
                           </div>
                           <p className="font-semibold text-foreground">
@@ -373,7 +358,7 @@ export function ExecutiveSellerDetails() {
                         <div>
                           <p className="font-medium text-sm">Abordados: {approach.nomes_abordados}</p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(approach.created_at).toLocaleDateString('pt-BR')}
+                            {formatBrasiliaDate(approach.created_at)}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {approach.mostrou_ia ? 'Mostrou IA' : 'Não mostrou IA'}

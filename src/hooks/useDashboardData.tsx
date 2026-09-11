@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { fetchAllPages } from '@/lib/supabase-pages'
+import { addDaysToDateKey, brasiliaDateKey, brasiliaDateRange, formatDateKey } from '@/lib/brasilia-time'
 
 interface DashboardMetrics {
   totalVendas: number
@@ -37,36 +38,24 @@ export function useDashboardData(dateFilter: string = "30dias") {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const latestFetch = useRef(0)
 
   const getDateRange = (filter: string) => {
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    
-    switch (filter) {
-      case "hoje":
-        return { start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
-      case "ontem": {
-        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
-        return { start: yesterday, end: today }
-      }
-      case "7dias":
-        return { start: new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
-      case "14dias":
-        return { start: new Date(today.getTime() - 13 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
-      case "30dias":
-      default:
-        return { start: new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000), end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
-    }
+    const today = brasiliaDateKey()
+    const days = filter === '7dias' ? 7 : filter === '14dias' ? 14 : filter === '30dias' ? 30 : 1
+    const lastDay = filter === 'ontem' ? addDaysToDateKey(today, -1) : today
+    return { ...brasiliaDateRange(days, lastDay), days, lastDay }
   }
 
   const fetchDashboardData = useCallback(async () => {
+    const requestId = ++latestFetch.current
     if (!userId || rolesLoading) return
 
     try {
       setLoading(true)
       setError(null)
 
-      const { start, end } = getDateRange(dateFilter)
+      const { start, end, days, lastDay } = getDateRange(dateFilter)
 
       // Executives see the consolidated commercial operation. Sellers see only
       // their own data. RLS remains the final source of authorization.
@@ -103,44 +92,25 @@ export function useDashboardData(dateFilter: string = "30dias") {
       const totalAbordagens = abordagens?.length || 0
       const conversao = totalAbordagens > 0 ? (quantidadeVendas / totalAbordagens) * 100 : 0
 
-      // Monthly data (last 6 months)
-      const vendasPorMes = new Map<string, number>()
-      const abordagensPorMes = new Map<string, number>()
-      
-      // Meses no fuso local. Usar setMonth sobre a data de hoje pula ou repete
-      // meses quando o dia atual nao existe no mes anterior (dia 29 a 31).
-      const hoje = new Date()
-      const chaveMes = (date: Date) =>
-        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      const ultimos6Meses = Array.from({ length: 6 }, (_, i) =>
-        chaveMes(new Date(hoje.getFullYear(), hoje.getMonth() - i, 1))
-      ).reverse()
-
-      ultimos6Meses.forEach(mes => {
-        vendasPorMes.set(mes, 0)
-        abordagensPorMes.set(mes, 0)
+      // The chart follows the selected period and compares event counts with
+      // event counts. Revenue remains in the dedicated revenue metrics.
+      const dateKeys = Array.from({ length: days }, (_, index) =>
+        addDaysToDateKey(lastDay, index - days + 1),
+      )
+      const vendasPorDia = new Map(dateKeys.map((key) => [key, 0]))
+      const abordagensPorDia = new Map(dateKeys.map((key) => [key, 0]))
+      vendas?.forEach((venda) => {
+        const key = brasiliaDateKey(venda.created_at)
+        if (vendasPorDia.has(key)) vendasPorDia.set(key, vendasPorDia.get(key)! + 1)
       })
-
-      vendas?.forEach(venda => {
-        const mes = chaveMes(new Date(venda.created_at))
-        if (vendasPorMes.has(mes)) {
-          vendasPorMes.set(mes, vendasPorMes.get(mes)! + Number(venda.valor_venda))
-        }
+      abordagens?.forEach((abordagem) => {
+        const key = brasiliaDateKey(abordagem.created_at)
+        if (abordagensPorDia.has(key)) abordagensPorDia.set(key, abordagensPorDia.get(key)! + 1)
       })
-
-      abordagens?.forEach(abordagem => {
-        const mes = chaveMes(new Date(abordagem.created_at))
-        if (abordagensPorMes.has(mes)) {
-          abordagensPorMes.set(mes, abordagensPorMes.get(mes)! + 1)
-        }
-      })
-
-      const vendasMes = ultimos6Meses.map(mes => ({
-        // new Date('2026-09-01') e meia-noite UTC e cai no mes anterior em UTC-3.
-        month: new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 1)
-          .toLocaleDateString('pt-BR', { month: 'short' }),
-        vendas: vendasPorMes.get(mes) || 0,
-        abordagens: abordagensPorMes.get(mes) || 0
+      const vendasMes = dateKeys.map((key) => ({
+        month: formatDateKey(key, { day: '2-digit', month: '2-digit', year: undefined }),
+        vendas: vendasPorDia.get(key) || 0,
+        abordagens: abordagensPorDia.get(key) || 0,
       }))
 
       // Top products
@@ -165,6 +135,7 @@ export function useDashboardData(dateFilter: string = "30dias") {
         .sort((a, b) => b.valor - a.valor)
         .slice(0, 5)
 
+      if (requestId !== latestFetch.current) return
       setMetrics({
         totalVendas,
         quantidadeVendas,
@@ -175,10 +146,11 @@ export function useDashboardData(dateFilter: string = "30dias") {
         produtosMaisVendidos
       })
     } catch (err) {
+      if (requestId !== latestFetch.current) return
       console.error('Erro ao buscar dados do dashboard:', err)
       setError('Erro ao carregar dados do dashboard')
     } finally {
-      setLoading(false)
+      if (requestId === latestFetch.current) setLoading(false)
     }
   }, [dateFilter, isExecutive, rolesLoading, userId])
 

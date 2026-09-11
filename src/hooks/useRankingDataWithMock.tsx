@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 export interface RankingUser {
   user_id: string
@@ -23,7 +24,7 @@ export function useRankingDataWithMock() {
       return (data as unknown as RankingUser[]).map(seller => ({ ...seller, isCurrentUser: seller.user_id === user?.id }))
     },
     staleTime: 10_000,
-    refetchInterval: 30_000,
+    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
   })
   return { ranking: query.data ?? [], loading: query.isPending, error: query.error?.message ?? null }
 }

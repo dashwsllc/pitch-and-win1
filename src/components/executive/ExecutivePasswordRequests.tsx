@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { errorMessage, exactDate } from '@/lib/sales'
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +44,6 @@ import {
 import { supabase } from '@/integrations/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { useAllUsers } from '@/hooks/useRoles'
-import { errorMessage } from '@/lib/sales'
 import { Textarea } from '@/components/ui/textarea'
 
 interface PasswordRequest {
@@ -316,11 +316,11 @@ export function ExecutivePasswordRequests() {
                 <div>
                   <p className="font-medium text-foreground">{request.email}</p>
                   <p className="text-sm text-muted-foreground">
-                    Solicitado em {new Date(request.requested_at).toLocaleString('pt-BR')}
+                    Solicitado em {exactDate(request.requested_at)} · Brasília
                   </p>
                   {request.processed_at && (
                     <p className="text-xs text-muted-foreground">
-                      Processado em {new Date(request.processed_at).toLocaleString('pt-BR')}
+                      Processado em {exactDate(request.processed_at)} · Brasília
                     </p>
                   )}
                 </div>
