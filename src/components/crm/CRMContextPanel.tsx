@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { FileText, Loader2, MessageSquareText, Pencil, Upload } from 'lucide-react'
+import { Download, FileText, Loader2, MessageSquareText, Pencil, Upload } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -12,9 +12,7 @@ import { CRMLead, CRMLeadContext, useCRMContexts } from '@/hooks/useCRM'
 import { callDate } from '@/lib/crm'
 import { safePlainText, sanitizePlainText, validatePlainText } from '@/lib/plain-text'
 import { errorMessage } from '@/lib/sales'
-
-const MAX_CONTEXT_LENGTH = 50_000
-const MAX_FILE_BYTES = 256 * 1024
+import { CONTEXT_FILE_TYPE_ERROR, convertContextTxt, downloadContextMarkdown, MAX_CONTEXT_LENGTH, validateContextFileText, type CRMContextFile } from '@/lib/crm-context-file'
 
 const contextLabels: Record<string, string> = {
   whatsapp_summary: 'Resumo de WhatsApp',
@@ -34,6 +32,9 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
   const [content, setContent] = useState('')
   const [failure, setFailure] = useState('')
   const [saving, setSaving] = useState(false)
+  const [readingFile, setReadingFile] = useState(false)
+  const [attachment, setAttachment] = useState<CRMContextFile | null>(null)
+  const fileReadVersion = useRef(0)
 
   const resetDialog = () => {
     setOpen(false)
@@ -41,6 +42,9 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
     setType('')
     setContent('')
     setFailure('')
+    setAttachment(null)
+    setReadingFile(false)
+    fileReadVersion.current++
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -53,6 +57,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
     setType('')
     setContent('')
     setFailure('')
+    setAttachment(null)
     setOpen(true)
   }
 
@@ -66,30 +71,44 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
 
   const importFile = async (file: File | undefined) => {
     if (!file) return
-    if (file.size < 1 || file.size > MAX_FILE_BYTES) {
-      setFailure('Use um arquivo de texto de até 256 KB.')
-      return
-    }
-    const allowed = file.type.startsWith('text/') || /\.(txt|md|csv)$/i.test(file.name)
-    if (!allowed) {
-      setFailure('Use um arquivo de texto (.txt, .md ou .csv).')
-      return
-    }
+    const version = ++fileReadVersion.current
+    setReadingFile(true)
     try {
-      const text = validatePlainText(await file.text(), MAX_CONTEXT_LENGTH)
-      if (!text) throw new Error('O arquivo está vazio.')
-      setContent(text)
+      const converted = await convertContextTxt(file)
+      if (version !== fileReadVersion.current) return
+      setAttachment(converted)
+      setContent(converted.content)
       setFailure('')
     } catch (cause) {
-      setFailure(errorMessage(cause))
+      if (version === fileReadVersion.current) setFailure(errorMessage(cause))
+    } finally {
+      if (version === fileReadVersion.current) {
+        setReadingFile(false)
+        if (fileRef.current) fileRef.current.value = ''
+      }
     }
+  }
+
+  const handleDrop = (event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes('Files')) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (saving) return
+    const files = Array.from(event.dataTransfer.files)
+    if (files.length !== 1 || !/\.txt$/i.test(files[0].name)) {
+      setFailure(files.some(file => !/\.txt$/i.test(file.name)) ? CONTEXT_FILE_TYPE_ERROR : 'Envie um arquivo .txt por vez.')
+      return
+    }
+    if (editing) { setFailure('Anexe o .txt em uma nova importação de contexto.'); return }
+    void importFile(files[0])
   }
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (saving || readingFile) return
     let sanitized: string
     try {
-      sanitized = validatePlainText(content, MAX_CONTEXT_LENGTH)
+      sanitized = attachment ? validateContextFileText(content) : validatePlainText(content, MAX_CONTEXT_LENGTH)
     } catch (cause) {
       setFailure(errorMessage(cause))
       return
@@ -108,7 +127,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
           sanitized,
         )
       } else {
-        await context.importContext(type as 'whatsapp_summary' | 'call_transcript' | 'manual_note', sanitized)
+        await context.importContext(type as 'whatsapp_summary' | 'call_transcript' | 'manual_note', sanitized, attachment ?? undefined)
       }
       toast({
         title: editing ? 'Contexto atualizado' : 'Contexto importado',
@@ -167,16 +186,20 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
               <Pencil className="h-3.5 w-3.5" />
             </Button>}
           </div>
-          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5">{safePlainText(entry.content, MAX_CONTEXT_LENGTH)}</p>
+          {entry.file_name && entry.file_content !== null && <Button type="button" variant="outline" size="sm" className="mt-2 max-w-full" onClick={() => downloadContextMarkdown(entry.file_name!, entry.file_content!)}>
+            <Download className="mr-2 h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="truncate">Baixar {entry.file_name}</span>
+          </Button>}
+          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5">{entry.file_name ? entry.content : safePlainText(entry.content, MAX_CONTEXT_LENGTH)}</p>
         </article>
       ))}
 
       <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
-        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[640px]" data-lenis-prevent>
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[640px]" data-lenis-prevent onDrop={handleDrop}
+          onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar contexto' : 'Importar contexto do lead'}</DialogTitle>
             <DialogDescription>
-              Importe o bloco completo. O conteúdo será salvo como texto seguro, com autor e horário automáticos.
+              Cole o texto ou anexe um .txt. O arquivo será salvo automaticamente em .md, preservando o conteúdo original.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={save} className="space-y-4">
@@ -193,8 +216,11 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
               {!editing && (
                 <div className="space-y-2">
                   <Label htmlFor="context-file">Anexar texto transcrito (opcional)</Label>
-                  <Input ref={fileRef} id="context-file" type="file" accept="text/plain,text/markdown,text/csv,.txt,.md,.csv" onChange={(event) => void importFile(event.target.files?.[0])} />
-                  <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><FileText className="h-3.5 w-3.5" />TXT, MD ou CSV, até 256 KB.</p>
+                  <Input ref={fileRef} id="context-file" type="file" accept=".txt" aria-describedby="context-file-help context-video-help" onChange={(event) => void importFile(event.target.files?.[0])} />
+                  <p id="context-file-help" className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><FileText className="h-3.5 w-3.5" aria-hidden="true" />Apenas .txt, até 256 KB. Conversão automática para .md.</p>
+                  <p id="context-video-help" className="text-xs leading-5 text-muted-foreground">Tem vídeo relevante? Hospede no Google Drive e cole o link aqui no contexto. Não aceitamos upload direto de vídeo ou foto.</p>
+                  {readingFile && <p role="status" className="text-xs text-muted-foreground">Preparando arquivo…</p>}
+                  {attachment && !readingFile && <p role="status" className="break-words text-xs text-muted-foreground">{attachment.file.name} pronto para salvar. O arquivo original será preservado mesmo se você editar o contexto abaixo.</p>}
                 </div>
               )}
               <div className="space-y-2">
@@ -207,7 +233,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
               {failure && <p role="alert" className="text-sm text-destructive">{failure}</p>}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={close}>Cancelar</Button>
-                <Button type="submit" disabled={!type || !sanitizePlainText(content, MAX_CONTEXT_LENGTH)}>
+                <Button type="submit" disabled={readingFile || !type || !sanitizePlainText(content, MAX_CONTEXT_LENGTH)}>
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                   {editing ? 'Salvar alteração' : 'Importar e salvar'}
                 </Button>

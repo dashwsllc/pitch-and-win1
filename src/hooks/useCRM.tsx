@@ -5,6 +5,7 @@ import type { Tables, TablesInsert, Json } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useRoles } from "./useRoles";
 import { validatePlainText } from "@/lib/plain-text";
+import { validateContextFileText, type CRMContextFile } from "@/lib/crm-context-file";
 import { fetchAllPages } from "@/lib/supabase-pages";
 import { AUTO_REFRESH_INTERVAL_MS } from "@/lib/sync";
 
@@ -300,11 +301,18 @@ export function useCRMContexts(leadId: string | null) {
   const importContext = async (
     contextType: "whatsapp_summary" | "call_transcript" | "manual_note",
     content: string,
+    attachment?: CRMContextFile,
   ) => {
     if (!leadId) throw new Error("Lead não selecionado.");
-    const sanitized = validatePlainText(content, 50_000);
+    const sanitized = attachment ? validateContextFileText(content) : validatePlainText(content, 50_000);
     if (!sanitized) throw new Error("Cole ou anexe um conteúdo antes de salvar.");
-    const { data, error } = await supabase.rpc("crm_add_lead_context", {
+    const { data, error } = attachment ? await supabase.rpc("crm_import_txt_context", {
+      p_lead_id: leadId,
+      p_context_type: contextType,
+      p_content: sanitized,
+      p_source_name: attachment.sourceName,
+      p_source_content: attachment.content,
+    }) : await supabase.rpc("crm_add_lead_context", {
       p_lead_id: leadId,
       p_context_type: contextType,
       p_content: sanitized,

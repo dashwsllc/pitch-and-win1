@@ -354,6 +354,9 @@ export type Database = {
       }
       crm_lead_contexts: {
         Row: {
+          file_name: string | null
+          file_content: string | null
+          file_mime_type: string | null
           author_id: string
           author_name: string
           author_role: string
@@ -368,6 +371,9 @@ export type Database = {
           version: number
         }
         Insert: {
+          file_name?: string | null
+          file_content?: string | null
+          file_mime_type?: string | null
           author_id: string
           author_name: string
           author_role: string
@@ -382,6 +388,9 @@ export type Database = {
           version?: number
         }
         Update: {
+          file_name?: string | null
+          file_content?: string | null
+          file_mime_type?: string | null
           author_id?: string
           author_name?: string
           author_role?: string
@@ -1274,6 +1283,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      crm_import_txt_context: {
+        Args: { p_lead_id: string; p_context_type: string; p_content: string; p_source_name: string; p_source_content: string }
+        Returns: Database["public"]["Tables"]["crm_lead_contexts"]["Row"]
+      }
       get_my_registration_status: { Args: Record<PropertyKey, never>; Returns: Json }
       executive_list_registration_requests: { Args: Record<PropertyKey, never>; Returns: Json }
       executive_review_registration: { Args: { p_user_id: string; p_action: 'approve' | 'reject' }; Returns: Json }

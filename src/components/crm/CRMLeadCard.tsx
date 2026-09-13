@@ -13,7 +13,6 @@ import {
   Undo2,
   UserCog,
   CheckCircle2,
-  MessageSquareMore,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -152,16 +151,10 @@ export function CRMLeadCard({
         <div className="flex shrink-0">
           {[
             {
-              label: `Abrir ficha de ${lead.name}`,
+              label: `Contexto de ${lead.name}`,
               icon: BookOpen,
               action: onRead,
-              tip: "Abrir ficha e histórico",
-            },
-            {
-              label: `${hasContext ? "Abrir contexto registrado" : "Adicionar contexto"} de ${lead.name}`,
-              icon: MessageSquareMore,
-              action: onRead,
-              tip: hasContext ? "Contexto registrado" : "Sem contexto registrado",
+              tip: "Contexto",
               active: hasContext,
             },
             {

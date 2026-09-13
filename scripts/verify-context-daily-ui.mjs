@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { chromium, expect as baseExpect } from '../.verification.local/node_modules/@playwright/test/index.mjs'
 import { brasiliaDateKey, brasiliaDayBounds } from '../src/lib/brasilia-time.ts'
 
-const origin = 'http://127.0.0.1:5198'
+const origin = process.env.CRM_TEST_ORIGIN || 'http://127.0.0.1:5198'
 const expect = baseExpect.configure({timeout:20000})
 const project = 'mbzwchnxtskysqplqiyy'
 const actor = 'ce110000-0000-4000-8000-000000000001'
@@ -26,11 +26,14 @@ const context = await browser.newContext({ viewport:{width:1440,height:1080}, re
 await context.routeWebSocket(/supabase\.co/, socket => socket.close())
 await context.route('https://**/*', async route => {
   const url = new URL(route.request().url())
+  if (url.origin === origin) return route.continue()
   if (!url.hostname.endsWith('.supabase.co')) return route.abort()
   const resource = url.pathname.split('/').at(-1)
   const payload = route.request().postDataJSON() ?? {}
   let data = []
-  if (resource === 'user_roles') data = roles()
+  if (resource === 'get_my_registration_status') data = {status:'approved'}
+  else if (resource === 'executive_list_registration_requests') data = []
+  else if (resource === 'user_roles') data = roles()
   else if (resource === 'profiles') data = url.searchParams.has('user_id') ? profile : [profile]
   else if (resource === 'crm_leads') data = leads
   else if (resource === 'crm_lead_contexts') data = contexts.filter(c => !url.searchParams.has('lead_id') || c.lead_id === url.searchParams.get('lead_id').slice(3))
@@ -38,8 +41,9 @@ await context.route('https://**/*', async route => {
   else if (resource === 'daily_goal_tasks') {
     goalReads++
     data = tasks.filter(t => t.task_date === url.searchParams.get('task_date')?.slice(3))
-  } else if (resource === 'crm_add_lead_context') {
+  } else if (resource === 'crm_add_lead_context' || resource === 'crm_import_txt_context') {
     data = {id:randomUUID(),lead_id:payload.p_lead_id,context_type:payload.p_context_type,content:payload.p_content,author_id:actor,author_name:'QA Colaborador',author_role:role,created_at:now,updated_at:now,version:1}
+    if (resource === 'crm_import_txt_context') Object.assign(data, {file_name:payload.p_source_name.replace(/\.txt$/i,'.md'),file_content:payload.p_source_content,file_mime_type:'text/markdown'})
     contexts.push(data)
   } else if (resource === 'crm_update_lead_context') {
     data = contexts.find(c=>c.id===payload.p_context_id)
@@ -78,22 +82,59 @@ try {
   await expect(page.getByRole('article')).toHaveCount(1)
   await page.reload()
   const card = page.getByRole('article',{name:'Lead Atrasado',exact:true})
+  await expect(card.getByRole('button',{name:/contexto/i})).toHaveCount(1)
+  await expect(card.locator('[title="Abrir ficha e histórico"], [title="Sem contexto registrado"]')).toHaveCount(0)
+  await expect(card.getByRole('button',{name:'Contexto de Atrasado',exact:true})).toHaveAttribute('title','Contexto')
   await card.getByRole('button',{name:/contexto/i}).click()
   await page.getByRole('button',{name:'Importar conversa/transcrição',exact:true}).click()
   let dialog = page.getByRole('dialog',{name:'Importar contexto do lead',exact:true})
   await dialog.getByLabel('Tipo do conteúdo *',{exact:true}).selectOption('call_transcript')
+  const uploader = dialog.getByLabel('Anexar texto transcrito (opcional)',{exact:true})
+  await expect(uploader).toHaveAttribute('accept','.txt')
+  await expect(dialog.getByText('Tem vídeo relevante?',{exact:false})).toBeVisible()
+  for (const [name,mimeType] of [['photo.jpg','image/jpeg'],['video.mp4','video/mp4'],['notes.md','text/markdown'],['notes.csv','text/csv']]) {
+    await uploader.setInputFiles({name,mimeType,buffer:Buffer.from('not accepted')})
+    await expect(dialog.getByRole('alert')).toContainText('Apenas arquivos .txt')
+    await expect(dialog.getByLabel('Conteúdo *',{exact:true})).toHaveValue('')
+  }
+  const droppedVideo = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer()
+    transfer.items.add(new File(['video'],'video.mp4',{type:'video/mp4'}))
+    return transfer
+  })
+  await dialog.dispatchEvent('drop',{dataTransfer:droppedVideo})
+  await expect(dialog.getByRole('alert')).toContainText('Vídeos e fotos')
+  await droppedVideo.dispose()
   await dialog.getByLabel('Anexar texto transcrito (opcional)',{exact:true}).setInputFiles({name:'long.txt',mimeType:'text/plain',buffer:Buffer.from('x'.repeat(50001))})
   await expect(dialog.getByRole('alert')).toContainText('excede')
-  const imported = 'Preocupação com prazo\n<script>alert("unsafe")</script>'
+  const imported = '\uFEFF  Preocupação com prazo 😀\r\n<script>alert("unsafe")</script>\r\nhttps://drive.google.com/file/d/example/view  \r\n'
   await dialog.getByLabel('Anexar texto transcrito (opcional)',{exact:true}).setInputFiles({name:'call.txt',mimeType:'text/plain',buffer:Buffer.from(imported)})
   await dialog.getByRole('button',{name:'Importar e salvar',exact:true}).click()
   await expect(dialog).toHaveCount(0)
-  await expect(page.getByText(imported,{exact:true})).toBeVisible()
+  await expect(page.getByText('Preocupação com prazo',{exact:false})).toBeVisible()
   assert.equal(contexts[0].author_role,'sdr')
+  assert.equal(contexts[0].content,imported)
+  assert.equal(contexts[0].file_content,imported)
+  assert.equal(contexts[0].file_name,'call.md')
+  assert.equal(contexts[0].file_mime_type,'text/markdown')
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button',{name:'Baixar call.md',exact:true}).click()
+  const download = await downloadPromise
+  assert.equal(download.suggestedFilename(),'call.md')
+  const chunks = []
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk)
+  assert.deepEqual(Buffer.concat(chunks), Buffer.from(imported))
   await page.screenshot({path:'.verification.local/context-desktop.png'})
   await page.reload()
   await page.getByRole('article',{name:'Lead Atrasado',exact:true}).getByRole('button',{name:/contexto/i}).click()
-  await expect(page.getByText(imported,{exact:true})).toBeVisible()
+  await expect(page.getByText('Preocupação com prazo',{exact:false})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Baixar call.md',exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'Editar Transcrição de ligação',exact:true}).click()
+  let editDialog = page.getByRole('dialog',{name:'Editar contexto',exact:true})
+  await editDialog.getByLabel('Conteúdo *',{exact:true}).fill('Contexto editado com link https://drive.google.com/file/d/example/view')
+  await editDialog.getByRole('button',{name:'Salvar alteração',exact:true}).click()
+  await expect(editDialog).toHaveCount(0)
+  assert.equal(contexts[0].file_content,imported,'Editing must preserve the archived original')
   role='closer'
   await page.reload()
   await page.getByRole('article',{name:'Lead Atrasado',exact:true}).getByRole('button',{name:/contexto/i}).click()
@@ -107,6 +148,12 @@ try {
   await page.setViewportSize({width:390,height:844})
   await page.screenshot({path:'.verification.local/context-mobile.png'})
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
+  if (process.argv.includes('--context-only')) {
+    assert.deepEqual(errors,[])
+    console.log('PASS: one Contexto action, TXT-only selection/drop rejection, faithful Markdown import/download, reload, immutable original on edit, SDR/Closer and mobile')
+    await browser.close()
+    process.exit(0)
+  }
   await page.goto(origin)
   await expect(page.getByRole('checkbox',{name:'Concluir Revisar contexto',exact:true})).toBeVisible()
   await page.getByRole('checkbox',{name:'Concluir Revisar contexto',exact:true}).click()
