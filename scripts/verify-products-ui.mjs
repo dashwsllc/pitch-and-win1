@@ -27,7 +27,7 @@ const productName = `QA Catálogo ${suffix}`
 const browser = await chromium.launch({ channel: 'chromium', headless: true })
 const errors = []
 mkdirSync('.verification.local', { recursive: true })
-let execPage, sellerPage, channel
+let execPage, executiveSalePage, sellerPage, channel
 const expect = baseExpect.configure({ timeout: 15000 })
 
 async function openAs(client, user, url, viewport) {
@@ -50,6 +50,7 @@ try {
     const created = must(await admin.auth.admin.createUser({ email: `qa-catalog-${role}-${suffix}@example.invalid`, email_confirm: true, user_metadata: { display_name: `QA Catálogo ${role}` } }))
     users.push(created.user)
   }
+  must(await admin.from('registration_requests').update({ status: 'approved' }).in('user_id', users.map(user => user.id)))
   must(await admin.from('user_roles').insert({ user_id: users[0].id, role: 'executive' }))
   must(await admin.from('user_roles').update({ commission_rate: 20 }).eq('user_id', users[1].id))
   execPage = await openAs(executive, users[0], '/executive?tab=products', { width: 1440, height: 1080 })
@@ -86,11 +87,22 @@ try {
   await execPage.getByRole('heading', { name: 'Produtos e tickets', exact: true }).scrollIntoViewIfNeeded()
   await execPage.screenshot({ path: '.verification.local/catalog-desktop.png', animations: 'disabled' })
 
+  step('executive sale form omits all commission messaging')
+  executiveSalePage = await execPage.context().newPage()
+  executiveSalePage.on('pageerror', error => errors.push(error.message))
+  await executiveSalePage.goto(`${origin}/vendas`)
+  await executiveSalePage.getByRole('combobox', { name: 'Nome Do Produto Vendido *' }).click()
+  await executiveSalePage.getByRole('option', { name: productName, exact: true }).click()
+  await executiveSalePage.getByRole('combobox', { name: 'Ticket e valor da venda *' }).click()
+  await executiveSalePage.getByRole('option', { name: /Completo.*1\.497,50/ }).click()
+  await expect(executiveSalePage.getByText(/comiss/i)).toHaveCount(0)
+
   step('seller receives new product without reloading and records a sale')
   await sellerPage.getByRole('combobox', { name: 'Nome Do Produto Vendido *' }).click()
   await sellerPage.getByRole('option', { name: productName, exact: true }).click()
   await sellerPage.getByRole('combobox', { name: 'Ticket e valor da venda *' }).click()
   await sellerPage.getByRole('option', { name: /Completo.*1\.497,50/ }).click()
+  await expect(sellerPage.getByText('Sua taxa de comissão:', { exact: true })).toBeVisible()
   await sellerPage.getByLabel('Nome Do Comprador *').fill('Comprador de verificação')
   await sellerPage.getByLabel('WhatsApp Do Comprador *').fill('11999999999')
   await sellerPage.getByLabel('Email Do Comprador *').fill(`qa-buyer-${suffix}@example.invalid`)

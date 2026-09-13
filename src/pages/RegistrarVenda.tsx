@@ -233,8 +233,9 @@ export default function RegistrarVenda() {
 
       toast({
         title: "Venda registrada com sucesso!",
-        description:
-          "Aguardando aprovação do executive. O saldo será atualizado após a validação.",
+        description: isExecutive
+          ? "A venda foi enviada para validação e já está disponível no painel de vendas."
+          : "Aguardando aprovação do executive. O saldo será atualizado após a validação.",
       });
       setJustRegistered(true);
       void queryClient.invalidateQueries({ queryKey: ["sales-board"] });
@@ -434,7 +435,7 @@ export default function RegistrarVenda() {
               </div>
 
               {/* Commission Info — somente leitura */}
-              {ticket && !rolesLoading && (
+              {ticket && !rolesLoading && !isExecutive && (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
                   <Info className="w-4 h-4 text-green-400 flex-shrink-0" />
                   <div className="text-sm">
@@ -536,12 +537,18 @@ export default function RegistrarVenda() {
                     Venda registrada! Aguardando aprovação
                   </p>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    Sua venda foi enviada para validação do executive. Seu saldo
-                    será atualizado após a aprovação. Acompanhe o status em{" "}
-                    <a href="/minhas-vendas" className="text-primary underline">
-                      Minhas Vendas
-                    </a>
-                    .
+                    {isExecutive ? (
+                      "A venda foi enviada para validação e já está disponível no painel de vendas."
+                    ) : (
+                      <>
+                        Sua venda foi enviada para validação do executive. Seu saldo
+                        será atualizado após a aprovação. Acompanhe o status em{" "}
+                        <a href="/minhas-vendas" className="text-primary underline">
+                          Minhas Vendas
+                        </a>
+                        .
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
