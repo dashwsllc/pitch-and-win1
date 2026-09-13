@@ -22,6 +22,7 @@ import { MetricCard } from '@/components/dashboard/MetricCard'
 import { SalesChart } from '@/components/dashboard/SalesChart'
 import { FilterTabs } from '@/components/dashboard/FilterTabs'
 import { ExecutiveUserManagement } from '@/components/executive/ExecutiveUserManagement'
+import { ExecutiveRegistrationRequests } from '@/components/executive/ExecutiveRegistrationRequests'
 import { ExecutivePasswordRequests } from '@/components/executive/ExecutivePasswordRequests'
 import { ExecutiveSellerDetails } from '@/components/executive/ExecutiveSellerDetails'
 import { ExecutiveSalesApproval } from '@/components/executive/ExecutiveSalesApproval'
@@ -71,6 +72,8 @@ export default function ExecutiveDashboard() {
         </div>
 
         {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+
+        <ExecutiveRegistrationRequests />
 
         {/* Filter Tabs */}
         <FilterTabs value={selectedFilter} onValueChange={setSelectedFilter} />

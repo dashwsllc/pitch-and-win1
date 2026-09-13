@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      registration_requests: {
+        Row: { user_id: string; display_name: string; email: string; requested_role: 'seller'; status: 'pending' | 'approved' | 'rejected'; created_at: string; reviewed_at: string | null; reviewed_by: string | null }
+        Insert: { user_id: string; display_name: string; email: string; requested_role?: 'seller'; status?: 'pending' | 'approved' | 'rejected'; created_at?: string; reviewed_at?: string | null; reviewed_by?: string | null }
+        Update: { status?: 'pending' | 'approved' | 'rejected'; reviewed_at?: string | null; reviewed_by?: string | null }
+        Relationships: []
+      }
       products: {
         Row: { id: string; name: string; description: string | null; active: boolean; created_by: string | null; created_at: string; updated_at: string }
         Insert: { id?: string; name: string; description?: string | null; active?: boolean; created_by?: string | null; created_at?: string; updated_at?: string }
@@ -1268,6 +1274,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_my_registration_status: { Args: Record<PropertyKey, never>; Returns: Json }
+      executive_list_registration_requests: { Args: Record<PropertyKey, never>; Returns: Json }
+      executive_review_registration: { Args: { p_user_id: string; p_action: 'approve' | 'reject' }; Returns: Json }
+      registration_has_access: { Args: Record<PropertyKey, never>; Returns: boolean }
       crm_add_lead_context: {
         Args: { p_lead_id: string; p_context_type: string; p_content: string }
         Returns: Database["public"]["Tables"]["crm_lead_contexts"]["Row"]

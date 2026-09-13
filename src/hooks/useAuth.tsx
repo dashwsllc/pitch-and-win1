@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
 
@@ -9,34 +9,92 @@ interface AuthContextType {
   signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error: unknown }>
   signOut: () => Promise<void>
   loading: boolean
+  registrationStatus: 'pending' | 'approved' | 'rejected' | null
+  registrationError: boolean
+  refreshRegistration: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [registration, setRegistration] = useState<{ userId: string; status: 'pending' | 'approved' | 'rejected' } | null>(null)
+  const [registrationError, setRegistrationError] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const refreshRegistration = useCallback(() => setRefreshKey(key => key + 1), [])
+  const sessionUserId = session?.user.id
+  const accessToken = session?.access_token
+  const registrationStatus = registration?.userId === sessionUserId ? registration?.status ?? null : null
+  const loading = authLoading || (!!session && !registrationStatus && !registrationError)
+  // A session lets a pending collaborator follow their request, but only an
+  // approved account is exposed to the existing dashboard routes and hooks.
+  const user = registrationStatus === 'approved' ? session?.user ?? null : null
 
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
         setSession(session)
-        setUser(session?.user ?? null)
-        setLoading(false)
+        setAuthLoading(false)
       }
     )
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
+      setAuthLoading(false)
     })
 
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    setRegistrationError(false)
+    if (!sessionUserId || !accessToken) { setRegistration(null); return }
+    let disposed = false
+    let running = false
+    let rerun = false
+    const refresh = async () => {
+      if (running) { rerun = true; return }
+      running = true
+      do {
+        rerun = false
+        try {
+          const { data, error } = await supabase.rpc('get_my_registration_status')
+          const status = (data as { status?: string } | null)?.status
+          if (error || !status || !['pending', 'approved', 'rejected'].includes(status)) throw error ?? new Error('Invalid registration status')
+          if (!disposed) {
+            setRegistration({ userId: sessionUserId, status: status as 'pending' | 'approved' | 'rejected' })
+            setRegistrationError(false)
+          }
+        } catch {
+          if (!disposed) setRegistrationError(true)
+        }
+      } while (rerun && !disposed)
+      running = false
+    }
+    void refresh()
+    const channel = supabase.channel(`registration-${sessionUserId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'registration_requests', filter: `user_id=eq.${sessionUserId}` }, () => { void refresh() })
+    void supabase.realtime.setAuth(accessToken).then(() => {
+      if (!disposed) channel.subscribe(status => { if (status === 'SUBSCRIBED') void refresh() })
+    }).catch(() => { if (!disposed) void refresh() })
+    const onVisible = () => { if (!document.hidden) void refresh() }
+    // Realtime is immediate; polling catches reconnects and missed events.
+    const interval = setInterval(onVisible, 5000)
+    window.addEventListener('focus', onVisible)
+    window.addEventListener('online', onVisible)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      disposed = true
+      clearInterval(interval)
+      window.removeEventListener('focus', onVisible)
+      window.removeEventListener('online', onVisible)
+      document.removeEventListener('visibilitychange', onVisible)
+      void supabase.removeChannel(channel)
+    }
+  }, [sessionUserId, accessToken, refreshKey])
 
   const signUp = async (email: string, password: string, displayName?: string, captchaToken?: string) => {
     const redirectUrl = `${window.location.origin}/`
@@ -53,16 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    // Do not depend only on onAuthStateChange here. The sign-up response is the
-    // authoritative result and already contains a session when email
-    // confirmation is disabled. Applying it immediately also prevents the auth
-    // screen from getting stuck while the listener is still being dispatched.
+    // The database trigger atomically creates the pending approval request.
+    // A session is retained only to track that request until it is approved.
     if (!error && data.session) {
       setSession(data.session)
-      setUser(data.session.user)
     }
 
-    return { error, session: data.session }
+    const duplicate = !error && data.user?.identities?.length === 0
+    return { error: duplicate ? new Error('Registration not created') : error, session: data.session }
   }
 
   const signIn = async (email: string, password: string, captchaToken?: string) => {
@@ -75,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
-    setUser(null)
+    setRegistration(null)
     setSession(null)
     await supabase.auth.signOut()
     // onAuthStateChange + ProtectedRoute will redirect to /auth
@@ -88,7 +144,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signIn,
       signOut,
-      loading
+      loading,
+      registrationStatus, registrationError, refreshRegistration
     }}>
       {children}
     </AuthContext.Provider>
