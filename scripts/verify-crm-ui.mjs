@@ -77,7 +77,7 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
     await dialog.getByRole('button', { name: 'Salvar cadastro', exact: true }).click()
     await expect(dialog).toHaveCount(0)
     assert.equal((await leadBy(leadId)).city_state, 'São Paulo / SP')
-    await card.getByRole('button', { name: `Abrir ficha de ${name}`, exact: true }).click()
+    await card.getByRole('button', { name: `Contexto de ${name}`, exact: true }).click()
     const sheet = page.getByRole('dialog', { name: `Ficha de ${name}`, exact: true })
     await expect(sheet.getByText('São Paulo / SP', { exact: true })).toBeVisible()
     await expect(sheet.getByRole('heading', { name: 'Histórico do lead', exact: true })).toBeVisible()
