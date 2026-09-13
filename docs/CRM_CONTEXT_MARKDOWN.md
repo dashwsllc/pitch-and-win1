@@ -28,6 +28,7 @@ o segundo ícone que também abria a ficha foi removido.
 node scripts/verify-crm-context-file.mjs
 node scripts/check-crm-context-file-db.mjs --deployed
 node scripts/verify-context-daily-ui.mjs --context-only
+node scripts/verify-crm-context-file-real.mjs --run-disposable-check
 npx tsc -b --pretty false
 npm run lint
 npm run build
@@ -42,3 +43,8 @@ Cobertura: formatos recusados, binários, limites, preservação UTF-8/UTF-16,
 seleção/arraste, arquivo `.md` baixado byte a byte, persistência após reload,
 original preservado após edição, bloqueio de escrita direta e conta pendente,
 autoria, funcionamento SDR/Closer, navegação única e largura de 390 px.
+
+O último comando é um smoke test do domínio e banco de produção. Ele cria uma
+conta e um lead identificados como QA, envia um TXT pela interface publicada,
+compara banco e download byte a byte, testa a rejeição de arquivo não TXT e
+remove os dois no bloco de encerramento, inclusive se a asserção falhar.
