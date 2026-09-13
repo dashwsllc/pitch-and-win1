@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Download, FileText, Loader2, MessageSquareText, Pencil, Upload } from 'lucide-react'
+import { Download, ExternalLink, FileText, Link2, Loader2, MessageSquareText, Pencil, Upload } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -13,6 +13,7 @@ import { callDate } from '@/lib/crm'
 import { safePlainText, sanitizePlainText, validatePlainText } from '@/lib/plain-text'
 import { errorMessage } from '@/lib/sales'
 import { CONTEXT_FILE_TYPE_ERROR, convertContextTxt, downloadContextMarkdown, MAX_CONTEXT_LENGTH, validateContextFileText, type CRMContextFile } from '@/lib/crm-context-file'
+import { MAX_CONTEXT_MEDIA_URL_LENGTH, normalizeContextMediaUrl } from '@/lib/crm-context-media'
 
 const contextLabels: Record<string, string> = {
   whatsapp_summary: 'Resumo de WhatsApp',
@@ -30,6 +31,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
   const [editing, setEditing] = useState<CRMLeadContext | null>(null)
   const [type, setType] = useState('')
   const [content, setContent] = useState('')
+  const [mediaUrl, setMediaUrl] = useState('')
   const [failure, setFailure] = useState('')
   const [saving, setSaving] = useState(false)
   const [readingFile, setReadingFile] = useState(false)
@@ -41,6 +43,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
     setEditing(null)
     setType('')
     setContent('')
+    setMediaUrl('')
     setFailure('')
     setAttachment(null)
     setReadingFile(false)
@@ -56,6 +59,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
     setEditing(null)
     setType('')
     setContent('')
+    setMediaUrl('')
     setFailure('')
     setAttachment(null)
     setOpen(true)
@@ -65,6 +69,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
     setEditing(entry)
     setType(entry.context_type)
     setContent(entry.content)
+    setMediaUrl(entry.media_url ?? '')
     setFailure('')
     setOpen(true)
   }
@@ -107,8 +112,10 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
     event.preventDefault()
     if (saving || readingFile) return
     let sanitized: string
+    let normalizedMediaUrl: string | null
     try {
       sanitized = attachment ? validateContextFileText(content) : validatePlainText(content, MAX_CONTEXT_LENGTH)
+      normalizedMediaUrl = normalizeContextMediaUrl(mediaUrl)
     } catch (cause) {
       setFailure(errorMessage(cause))
       return
@@ -125,9 +132,15 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
           editing,
           type as 'whatsapp_summary' | 'call_transcript' | 'manual_note',
           sanitized,
+          normalizedMediaUrl,
         )
       } else {
-        await context.importContext(type as 'whatsapp_summary' | 'call_transcript' | 'manual_note', sanitized, attachment ?? undefined)
+        await context.importContext(
+          type as 'whatsapp_summary' | 'call_transcript' | 'manual_note',
+          sanitized,
+          attachment ?? undefined,
+          normalizedMediaUrl,
+        )
       }
       toast({
         title: editing ? 'Contexto atualizado' : 'Contexto importado',
@@ -189,6 +202,11 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
           {entry.file_name && entry.file_content !== null && <Button type="button" variant="outline" size="sm" className="mt-2 max-w-full" onClick={() => downloadContextMarkdown(entry.file_name!, entry.file_content!)}>
             <Download className="mr-2 h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="truncate">Baixar {entry.file_name}</span>
           </Button>}
+          {entry.media_url && <Button asChild type="button" variant="outline" size="sm" className="mt-2 max-w-full">
+            <a href={entry.media_url} target="_blank" rel="noopener noreferrer" aria-label="Abrir mídia no Google Drive em uma nova aba">
+              <ExternalLink className="mr-2 h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="truncate">Abrir mídia no Google Drive</span>
+            </a>
+          </Button>}
           <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5">{entry.file_name ? entry.content : safePlainText(entry.content, MAX_CONTEXT_LENGTH)}</p>
         </article>
       ))}
@@ -216,13 +234,35 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
               {!editing && (
                 <div className="space-y-2">
                   <Label htmlFor="context-file">Anexar texto transcrito (opcional)</Label>
-                  <Input ref={fileRef} id="context-file" type="file" accept=".txt" aria-describedby="context-file-help context-video-help" onChange={(event) => void importFile(event.target.files?.[0])} />
+                  <Input ref={fileRef} id="context-file" type="file" accept=".txt" aria-describedby="context-file-help context-media-help" onChange={(event) => void importFile(event.target.files?.[0])} />
                   <p id="context-file-help" className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><FileText className="h-3.5 w-3.5" aria-hidden="true" />Apenas .txt, até 256 KB. Conversão automática para .md.</p>
-                  <p id="context-video-help" className="text-xs leading-5 text-muted-foreground">Tem vídeo relevante? Hospede no Google Drive e cole o link aqui no contexto. Não aceitamos upload direto de vídeo ou foto.</p>
                   {readingFile && <p role="status" className="text-xs text-muted-foreground">Preparando arquivo…</p>}
                   {attachment && !readingFile && <p role="status" className="break-words text-xs text-muted-foreground">{attachment.file.name} pronto para salvar. O arquivo original será preservado mesmo se você editar o contexto abaixo.</p>}
                 </div>
               )}
+              <div className="space-y-2">
+                <Label htmlFor="context-media-url">Link do Google Drive (opcional)</Label>
+                <div className="relative">
+                  <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    id="context-media-url"
+                    type="url"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoComplete="off"
+                    spellCheck={false}
+                    maxLength={MAX_CONTEXT_MEDIA_URL_LENGTH}
+                    className="pl-9"
+                    value={mediaUrl}
+                    onChange={(event) => { setMediaUrl(event.target.value); setFailure('') }}
+                    placeholder="https://drive.google.com/file/d/..."
+                    aria-describedby="context-media-help"
+                  />
+                </div>
+                <p id="context-media-help" className="text-xs leading-5 text-muted-foreground">
+                  Para vídeo, áudio ou outra mídia pesada, cole um link compartilhável do Google Drive. Confirme que qualquer pessoa com o link pode acessar. Não aceitamos upload direto de vídeo ou foto.
+                </p>
+              </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor="context-content">Conteúdo *</Label>

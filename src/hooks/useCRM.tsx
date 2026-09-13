@@ -6,6 +6,7 @@ import { useAuth } from "./useAuth";
 import { useRoles } from "./useRoles";
 import { validatePlainText } from "@/lib/plain-text";
 import { validateContextFileText, type CRMContextFile } from "@/lib/crm-context-file";
+import { normalizeContextMediaUrl } from "@/lib/crm-context-media";
 import { fetchAllPages } from "@/lib/supabase-pages";
 import { AUTO_REFRESH_INTERVAL_MS } from "@/lib/sync";
 
@@ -302,20 +303,24 @@ export function useCRMContexts(leadId: string | null) {
     contextType: "whatsapp_summary" | "call_transcript" | "manual_note",
     content: string,
     attachment?: CRMContextFile,
+    mediaUrl?: string | null,
   ) => {
     if (!leadId) throw new Error("Lead não selecionado.");
     const sanitized = attachment ? validateContextFileText(content) : validatePlainText(content, 50_000);
+    const normalizedMediaUrl = normalizeContextMediaUrl(mediaUrl ?? "");
     if (!sanitized) throw new Error("Cole ou anexe um conteúdo antes de salvar.");
-    const { data, error } = attachment ? await supabase.rpc("crm_import_txt_context", {
+    const { data, error } = attachment ? await supabase.rpc("crm_import_txt_context_with_media", {
       p_lead_id: leadId,
       p_context_type: contextType,
       p_content: sanitized,
       p_source_name: attachment.sourceName,
       p_source_content: attachment.content,
-    }) : await supabase.rpc("crm_add_lead_context", {
+      p_media_url: normalizedMediaUrl,
+    }) : await supabase.rpc("crm_add_lead_context_with_media", {
       p_lead_id: leadId,
       p_context_type: contextType,
       p_content: sanitized,
+      p_media_url: normalizedMediaUrl,
     });
     if (error) throw error;
     await refresh();
@@ -325,13 +330,16 @@ export function useCRMContexts(leadId: string | null) {
     context: CRMLeadContext,
     contextType: "whatsapp_summary" | "call_transcript" | "manual_note",
     content: string,
+    mediaUrl?: string | null,
   ) => {
     const sanitized = validatePlainText(content, 50_000);
+    const normalizedMediaUrl = normalizeContextMediaUrl(mediaUrl ?? "");
     if (!sanitized) throw new Error("O contexto não pode ficar vazio.");
-    const { data, error } = await supabase.rpc("crm_update_lead_context", {
+    const { data, error } = await supabase.rpc("crm_update_lead_context_with_media", {
       p_context_id: context.id,
       p_context_type: contextType,
       p_content: sanitized,
+      p_media_url: normalizedMediaUrl,
       p_expected_version: context.version,
     });
     if (error) throw error;

@@ -41,13 +41,13 @@ await context.route('https://**/*', async route => {
   else if (resource === 'daily_goal_tasks') {
     goalReads++
     data = tasks.filter(t => t.task_date === url.searchParams.get('task_date')?.slice(3))
-  } else if (resource === 'crm_add_lead_context' || resource === 'crm_import_txt_context') {
-    data = {id:randomUUID(),lead_id:payload.p_lead_id,context_type:payload.p_context_type,content:payload.p_content,author_id:actor,author_name:'QA Colaborador',author_role:role,created_at:now,updated_at:now,version:1}
-    if (resource === 'crm_import_txt_context') Object.assign(data, {file_name:payload.p_source_name.replace(/\.txt$/i,'.md'),file_content:payload.p_source_content,file_mime_type:'text/markdown'})
+  } else if (resource === 'crm_add_lead_context_with_media' || resource === 'crm_import_txt_context_with_media') {
+    data = {id:randomUUID(),lead_id:payload.p_lead_id,context_type:payload.p_context_type,content:payload.p_content,media_url:payload.p_media_url,author_id:actor,author_name:'QA Colaborador',author_role:role,created_at:now,updated_at:now,version:1}
+    if (resource === 'crm_import_txt_context_with_media') Object.assign(data, {file_name:payload.p_source_name.replace(/\.txt$/i,'.md'),file_content:payload.p_source_content,file_mime_type:'text/markdown'})
     contexts.push(data)
-  } else if (resource === 'crm_update_lead_context') {
+  } else if (resource === 'crm_update_lead_context_with_media') {
     data = contexts.find(c=>c.id===payload.p_context_id)
-    Object.assign(data,{content:payload.p_content,context_type:payload.p_context_type,updated_by:actor,updated_by_name:'QA Colaborador',updated_at:now,version:data.version+1})
+    Object.assign(data,{content:payload.p_content,context_type:payload.p_context_type,media_url:payload.p_media_url,updated_by:actor,updated_by_name:'QA Colaborador',updated_at:now,version:data.version+1})
   } else if (resource === 'set_daily_goal_task_completed') {
     data = tasks.find(t=>t.id===payload.p_task_id)
     Object.assign(data,{is_completed:payload.p_completed,version:data.version+1})
@@ -91,7 +91,15 @@ try {
   await dialog.getByLabel('Tipo do conteúdo *',{exact:true}).selectOption('call_transcript')
   const uploader = dialog.getByLabel('Anexar texto transcrito (opcional)',{exact:true})
   await expect(uploader).toHaveAttribute('accept','.txt')
-  await expect(dialog.getByText('Tem vídeo relevante?',{exact:false})).toBeVisible()
+  const mediaLink = dialog.getByLabel('Link do Google Drive (opcional)',{exact:true})
+  await expect(mediaLink).toBeVisible()
+  await expect(dialog.getByText('Para vídeo, áudio ou outra mídia pesada',{exact:false})).toBeVisible()
+  await mediaLink.fill('https://evil.example/video')
+  await dialog.getByLabel('Conteúdo *',{exact:true}).fill('Explicação da mídia')
+  await dialog.getByRole('button',{name:'Importar e salvar',exact:true}).click()
+  await expect(dialog.getByRole('alert')).toContainText('link compartilhável válido do Google Drive')
+  await mediaLink.fill('')
+  await dialog.getByLabel('Conteúdo *',{exact:true}).fill('')
   for (const [name,mimeType] of [['photo.jpg','image/jpeg'],['video.mp4','video/mp4'],['notes.md','text/markdown'],['notes.csv','text/csv']]) {
     await uploader.setInputFiles({name,mimeType,buffer:Buffer.from('not accepted')})
     await expect(dialog.getByRole('alert')).toContainText('Apenas arquivos .txt')
@@ -107,8 +115,11 @@ try {
   await droppedVideo.dispose()
   await dialog.getByLabel('Anexar texto transcrito (opcional)',{exact:true}).setInputFiles({name:'long.txt',mimeType:'text/plain',buffer:Buffer.from('x'.repeat(50001))})
   await expect(dialog.getByRole('alert')).toContainText('excede')
-  const imported = '\uFEFF  Preocupação com prazo 😀\r\n<script>alert("unsafe")</script>\r\nhttps://drive.google.com/file/d/example/view  \r\n'
+  // Browser file pickers may normalize native line endings; this still verifies
+  // byte-for-byte preservation of the bytes exposed by the selected File.
+  const imported = '\uFEFF  Preocupação com prazo 😀\n<script>alert("unsafe")</script>\nhttps://drive.google.com/file/d/example/view  \n'
   await dialog.getByLabel('Anexar texto transcrito (opcional)',{exact:true}).setInputFiles({name:'call.txt',mimeType:'text/plain',buffer:Buffer.from(imported)})
+  await mediaLink.fill(' https://drive.google.com/file/d/media-example/view?usp=sharing ')
   await dialog.getByRole('button',{name:'Importar e salvar',exact:true}).click()
   await expect(dialog).toHaveCount(0)
   await expect(page.getByText('Preocupação com prazo',{exact:false})).toBeVisible()
@@ -117,6 +128,7 @@ try {
   assert.equal(contexts[0].file_content,imported)
   assert.equal(contexts[0].file_name,'call.md')
   assert.equal(contexts[0].file_mime_type,'text/markdown')
+  assert.equal(contexts[0].media_url,'https://drive.google.com/file/d/media-example/view?usp=sharing')
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button',{name:'Baixar call.md',exact:true}).click()
   const download = await downloadPromise
@@ -129,12 +141,18 @@ try {
   await page.getByRole('article',{name:'Lead Atrasado',exact:true}).getByRole('button',{name:/contexto/i}).click()
   await expect(page.getByText('Preocupação com prazo',{exact:false})).toBeVisible()
   await expect(page.getByRole('button',{name:'Baixar call.md',exact:true})).toBeVisible()
+  const savedMediaLink = page.getByRole('link',{name:'Abrir mídia no Google Drive em uma nova aba',exact:true})
+  await expect(savedMediaLink).toHaveAttribute('href','https://drive.google.com/file/d/media-example/view?usp=sharing')
+  await expect(savedMediaLink).toHaveAttribute('target','_blank')
   await page.getByRole('button',{name:'Editar Transcrição de ligação',exact:true}).click()
   let editDialog = page.getByRole('dialog',{name:'Editar contexto',exact:true})
+  await expect(editDialog.getByLabel('Link do Google Drive (opcional)',{exact:true})).toHaveValue('https://drive.google.com/file/d/media-example/view?usp=sharing')
+  await editDialog.getByLabel('Link do Google Drive (opcional)',{exact:true}).fill('https://drive.google.com/drive/folders/folder-example')
   await editDialog.getByLabel('Conteúdo *',{exact:true}).fill('Contexto editado com link https://drive.google.com/file/d/example/view')
   await editDialog.getByRole('button',{name:'Salvar alteração',exact:true}).click()
   await expect(editDialog).toHaveCount(0)
   assert.equal(contexts[0].file_content,imported,'Editing must preserve the archived original')
+  assert.equal(contexts[0].media_url,'https://drive.google.com/drive/folders/folder-example')
   role='closer'
   await page.reload()
   await page.getByRole('article',{name:'Lead Atrasado',exact:true}).getByRole('button',{name:/contexto/i}).click()
@@ -150,7 +168,7 @@ try {
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
   if (process.argv.includes('--context-only')) {
     assert.deepEqual(errors,[])
-    console.log('PASS: one Contexto action, TXT-only selection/drop rejection, faithful Markdown import/download, reload, immutable original on edit, SDR/Closer and mobile')
+    console.log('PASS: Contexto supports validated Drive media links, TXT-only selection/drop rejection, faithful Markdown import/download, reload, editing, SDR/Closer and mobile')
     await browser.close()
     process.exit(0)
   }
