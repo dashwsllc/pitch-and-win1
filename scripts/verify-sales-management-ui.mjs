@@ -8,7 +8,7 @@ assert(['127.0.0.1', 'localhost'].includes(new URL(origin).hostname))
 const expect = baseExpect.configure({ timeout: 15000 })
 const actor = 'af140000-0000-4000-8000-000000000001', accountId = 'af140000-0000-4000-8000-000000000002'
 const project = 'mbzwchnxtskysqplqiyy', now = new Date().toISOString()
-let role = 'executive', writes = 0, accountDeletes = 0, conflict = false
+let role = 'executive', writes = 0, accountDeletes = 0, leadDeletes = 0, conflict = false
 const errors = [], leads = [], mutations = []
 const profile = { id: actor, user_id: actor, display_name: 'QA Admin', suspended: false, created_at: now }
 const roles = id => [{ id, user_id: id, role: id === actor ? role : 'seller', crm_access: true, commission_rate: 20, updated_at: now }]
@@ -61,6 +61,13 @@ await context.route('https://**/*', async route => {
   } else if (resource === 'crm_transition') {
     data = leads.find(l => l.id === payload.p_lead_id)
     Object.assign(data, payload.p_data, { version: data.version + 1 })
+  } else if (resource === 'crm_delete_lead') {
+    const index = leads.findIndex(l => l.id === payload.p_lead_id)
+    assert.notEqual(index,-1)
+    assert.equal(payload.p_expected_version,leads[index].version)
+    leadDeletes++
+    data = { lead_id: leads[index].id, detached_sales: 0 }
+    leads.splice(index,1)
   } else if (resource === 'executive_list_users') data = { users: accounts.map(a => ({ ...a, email: 'qa@example.invalid', user_roles: roles(a.user_id), account_revision: now })), fetched_at: now }
   else if (resource === 'executive-delete-account') { accountDeletes++; accounts.splice(accounts.findIndex(a => a.user_id === payload.user_id),1); data = { success: true } }
   else if (resource.startsWith('get_')) data = 0
@@ -132,6 +139,17 @@ try {
   await page.getByRole('button',{name:'Salvar cadastro',exact:true}).click()
   await expect(leadCard).toContainText('15 anos')
   assert.equal(leads[0].athlete_age,15)
+  await leadCard.getByRole('button',{name:'Contexto de Responsável QA',exact:true}).click()
+  const leadDetail = page.getByRole('dialog')
+  await expect(leadDetail.getByRole('button',{name:'Editar Atleta QA',exact:true})).toBeVisible()
+  await leadDetail.getByRole('button',{name:'Excluir lead de Atleta QA',exact:true}).click()
+  await expect(page.getByRole('alertdialog')).toContainText('Excluir este lead?')
+  await page.getByRole('button',{name:'Cancelar',exact:true}).click()
+  assert.equal(leadDeletes,0)
+  await leadCard.getByRole('button',{name:'Excluir lead de Atleta QA',exact:true}).click()
+  await page.getByRole('button',{name:'Excluir lead',exact:true}).click()
+  await expect(leadCard).toHaveCount(0)
+  assert.equal(leadDeletes,1)
   await page.goto(`${origin}/executive?tab=users`)
   const accountCard = page.getByText('Conta teste',{exact:true}).locator('xpath=ancestor::article')
   await accountCard.getByRole('button',{name:'Editar conta',exact:true}).click()
@@ -173,7 +191,7 @@ try {
   assert.equal(sales.length,1)
   assert.equal(sales[0].approval_status,'rejeitada')
   assert.deepEqual(errors,[])
-  console.log('PASS: home order/statuses; CRM athlete name and create/edit age; sale edit/delete + dashboard/cache sync; conflict and cancel flows; account confirmation; seller permissions and 390px layout.')
+  console.log('PASS: home order/statuses; CRM athlete name, age and confirmed lead deletion; sale edit/delete + dashboard/cache sync; conflict and cancel flows; account confirmation; seller permissions and 390px layout.')
 } catch(error) {
   await page.screenshot({path:'.verification.local/sales-management-failure.png',fullPage:true})
   throw error

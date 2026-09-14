@@ -119,15 +119,24 @@ export function useCRMLeads() {
       await refresh();
     }
   };
-  const deleteLead = async (id: string) => {
-    const { error } = await supabase
-      .from("crm_leads")
-      .delete()
-      .eq("id", id)
-      .select("id")
-      .single();
-    if (error) throw error;
-    await refresh();
+  const deleteLead = async (lead: CRMLead) => {
+    try {
+      const { data, error } = await supabase.rpc("crm_delete_lead", {
+        p_lead_id: lead.id,
+        p_expected_version: lead.version,
+      });
+      if (error) throw error;
+      client.setQueryData<CRMLead[]>(["crm", "leads", user?.id], (rows) =>
+        rows?.filter((row) => row.id !== lead.id),
+      );
+      return data;
+    } finally {
+      await Promise.all([
+        refresh(),
+        client.invalidateQueries({ queryKey: ["sales-board"] }),
+        client.invalidateQueries({ queryKey: ["managed-sales"] }),
+      ]);
+    }
   };
   return {
     leads: hasCRMAccess ? (query.data ?? []) : [],

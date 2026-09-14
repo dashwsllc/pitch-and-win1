@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Pencil,
+  Trash2,
   Phone,
   CalendarClock,
   AlertTriangle,
@@ -59,6 +60,7 @@ export function CRMLeadCard({
   hasContext = false,
   onRead,
   onEdit,
+  onDelete,
   onAction,
   onTransition,
   onSchedule,
@@ -73,6 +75,7 @@ export function CRMLeadCard({
   hasContext?: boolean;
   onRead: () => void;
   onEdit: () => void;
+  onDelete: () => void;
   onAction: (action: string) => void;
   onTransition: (action: string, data?: Json) => void;
   onSchedule: () => void;
@@ -189,13 +192,20 @@ export function CRMLeadCard({
               action: onEdit,
               tip: "Editar cadastro",
             },
+            {
+              label: `Excluir lead de ${athleteLabel}`,
+              icon: Trash2,
+              action: onDelete,
+              tip: "Excluir lead",
+              destructive: true,
+            },
           ].map((item) => (
             <Tooltip key={item.label}>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`h-8 w-8 ${item.active ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
+                  className={`h-8 w-8 ${item.destructive ? "text-destructive hover:bg-destructive/10 hover:text-destructive" : item.active ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
                   aria-label={item.label}
                   title={item.tip}
                   onClick={item.action}

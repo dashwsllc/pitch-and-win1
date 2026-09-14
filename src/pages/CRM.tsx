@@ -8,6 +8,7 @@ import {
   CalendarClock,
   ArrowRight,
   ListFilter,
+  Trash2,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +16,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -156,6 +166,7 @@ export default function CRM() {
   const [queue, setQueue] = useState("queue");
   const [readId, setReadId] = useState<string | null>(null);
   const [editor, setEditor] = useState<CRMLead | "new" | null>(null);
+  const [deleting, setDeleting] = useState<CRMLead | null>(null);
   const [action, setAction] = useState<{ lead: CRMLead; name: string } | null>(
     null,
   );
@@ -342,6 +353,18 @@ export default function CRM() {
             ? "Lead assumido"
             : "Lead atualizado",
     );
+  const requestDelete = (lead: CRMLead) => {
+    setReadId(null);
+    setEditor(null);
+    setAction(null);
+    setSchedule(null);
+    setDeleting(lead);
+  };
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    const deleted = await run(() => crm.deleteLead(deleting), "Lead excluído");
+    if (deleted) setDeleting(null);
+  };
   const renderLead = (lead: CRMLead) => (
     <CRMLeadCard
       key={lead.id}
@@ -354,6 +377,7 @@ export default function CRM() {
       busy={busy}
       onRead={() => setReadId(lead.id)}
       onEdit={() => setEditor(lead)}
+      onDelete={() => requestDelete(lead)}
       onAction={(name) => setAction({ lead, name })}
       onTransition={(name, data) => {
         void transition(lead, name, data);
@@ -749,7 +773,13 @@ export default function CRM() {
             key={selected.id}
             lead={selected}
             names={names}
+            busy={busy}
             onClose={() => setReadId(null)}
+            onEdit={() => {
+              setReadId(null);
+              setEditor(selected);
+            }}
+            onDelete={() => requestDelete(selected)}
           />
         )}
         {editor && (
@@ -783,6 +813,30 @@ export default function CRM() {
             onClose={() => setSchedule(null)}
           />
         )}
+        <AlertDialog
+          open={!!deleting}
+          onOpenChange={(open) => {
+            if (!open && !busy) setDeleting(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir este lead?</AlertDialogTitle>
+              <AlertDialogDescription>
+                O cadastro de {deleting?.athlete_name?.trim() || deleting?.name || "este lead"},
+                suas calls, seu histórico e seus contextos serão excluídos. Vendas já
+                registradas serão preservadas e apenas desvinculadas do lead.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+              <Button variant="destructive" disabled={busy} onClick={() => void confirmDelete()}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                {busy ? "Excluindo..." : "Excluir lead"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );

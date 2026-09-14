@@ -133,10 +133,21 @@ assert.equal(leadNotificationOwner({ pipeline_stage: 'em_contato', closer_id: nu
 // Hierarquia do atleta na interface
 // ---------------------------------------------------------------------------
 const detailSource = readFileSync(new URL('../src/components/crm/CRMLeadDetail.tsx', import.meta.url), 'utf8')
+const crmPageSource = readFileSync(new URL('../src/pages/CRM.tsx', import.meta.url), 'utf8')
+const crmHookSource = readFileSync(new URL('../src/hooks/useCRM.tsx', import.meta.url), 'utf8')
 assert.match(cardSource, /athleteLabel = lead\.athlete_name\?\.trim\(\) \|\| lead\.name/)
 assert.match(cardSource, /<h3 className="font-semibold text-sm break-words">\{athleteLabel\}<\/h3>/)
 assert.match(cardSource, /Responsável: \{lead\.name\?\.trim\(\) \|\| "Não informado"\}/)
 assert.match(detailSource, /\["Atleta", lead\.athlete_name\][\s\S]*\["Responsável", lead\.name\]/)
+
+// A lixeira acompanha o lápis no card e na ficha. A tela exige confirmação e
+// o hook usa a operação versionada/auditada do banco, nunca DELETE direto.
+assert.match(cardSource, /icon: Pencil[\s\S]*icon: Trash2/)
+assert.match(detailSource, /<Pencil[\s\S]*<Trash2/)
+assert.match(crmPageSource, /<AlertDialogTitle>Excluir este lead\?<\/AlertDialogTitle>/)
+assert.match(crmPageSource, /crm\.deleteLead\(deleting\)/)
+assert.match(crmHookSource, /supabase\.rpc\("crm_delete_lead"/)
+assert.doesNotMatch(crmHookSource, /\.from\("crm_leads"\)[\s\S]{0,120}\.delete\(\)/)
 
 // ---------------------------------------------------------------------------
 // Ordenacao operacional: atrasadas, acontecendo agora, proximas e o resto
@@ -158,4 +169,4 @@ assert.deepEqual(ordenado.slice(0, 4), ['a-muito-atrasada', 'b-agora', 'c-proxim
 // Sem agenda e leads encerrados ficam no fim.
 assert.deepEqual(ordenado.slice(4).sort(), ['e-sem-agenda', 'f-encerrada'])
 
-console.log('PASS: CRM validation, roles, scheduling, athlete data, call states, notification windows, ordering and athlete-first hierarchy.')
+console.log('PASS: CRM validation, roles, scheduling, athlete data, lead deletion, call states, notification windows, ordering and athlete-first hierarchy.')

@@ -1342,6 +1342,7 @@ export type Database = {
       }
       crm_can: { Args: { p_capability: string }; Returns: boolean }
       crm_transition: { Args: { p_lead_id: string; p_action: string; p_expected_version: number; p_data?: Json }; Returns: Database['public']['Tables']['crm_leads']['Row'] }
+      crm_delete_lead: { Args: { p_lead_id: string; p_expected_version: number }; Returns: Json }
       crm_sale_links: { Args: Record<PropertyKey, never>; Returns: { lead_id: string; sale_id: string | null; can_open: boolean }[] }
 
       crm_has_access: { Args: Record<PropertyKey, never>; Returns: boolean }

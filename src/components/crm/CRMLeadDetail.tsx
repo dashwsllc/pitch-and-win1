@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   CRMLead,
   PIPELINE_STAGES,
@@ -41,10 +42,16 @@ const valueLabel = (value: Json | undefined, names: Record<string, string>) => {
 export function CRMLeadDetail({
   lead,
   onClose,
+  onEdit,
+  onDelete,
+  busy,
   names,
 }: {
   lead: CRMLead;
   onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  busy: boolean;
   names: Record<string, string>;
 }) {
   const { activities, loading, error, fetchActivities } = useCRMActivities(
@@ -88,7 +95,7 @@ export function CRMLeadDetail({
         className="w-full overflow-y-auto p-4 sm:max-w-[680px]"
         data-lenis-prevent
       >
-        <SheetHeader className="space-y-1">
+        <SheetHeader className="space-y-1 pr-24">
           <SheetTitle className="text-base">
             Ficha de {lead.athlete_name?.trim() || lead.name}
           </SheetTitle>
@@ -96,6 +103,30 @@ export function CRMLeadDetail({
             Cadastro e histórico completo · leitura
           </SheetDescription>
         </SheetHeader>
+        <div className="absolute right-11 top-2 flex items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground"
+            aria-label={`Editar ${lead.athlete_name?.trim() || lead.name}`}
+            title="Editar cadastro"
+            onClick={onEdit}
+            disabled={busy}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            aria-label={`Excluir lead de ${lead.athlete_name?.trim() || lead.name}`}
+            title="Excluir lead"
+            onClick={onDelete}
+            disabled={busy}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
         <div className="mt-4 space-y-4 break-words">
           <div className="flex flex-wrap gap-1">
             <Badge className="h-5 px-2 text-[10px]" variant="outline">{lead.temperature}</Badge>
