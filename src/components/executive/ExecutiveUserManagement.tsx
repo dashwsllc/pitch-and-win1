@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Clock3, KeyRound, Loader2, Pencil, RefreshCw, Search, ShieldCheck, Trash2, Users } from 'lucide-react'
+import { AlertTriangle, Clock3, ImagePlus, KeyRound, Loader2, Pencil, RefreshCw, Search, ShieldCheck, Trash2, Users, X } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
 import { errorMessage, exactDate } from '@/lib/sales'
 import { AUTO_REFRESH_INTERVAL_LABEL } from '@/lib/sync'
+import { avatarObjectPath, validateAvatarFile } from '@/lib/avatar'
 
 interface AccountForm {
   display_name: string
@@ -42,11 +43,17 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
   const [editing, setEditing] = useState<ExecutiveUser | null>(null)
   const [form, setForm] = useState<AccountForm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [avatarRemoved, setAvatarRemoved] = useState(false)
+  const avatarInput = useRef<HTMLInputElement>(null)
   const [deleting, setDeleting] = useState<ExecutiveUser | null>(null)
   const [deleteReason, setDeleteReason] = useState('')
   const [deleteBusy, setDeleteBusy] = useState(false)
 
   const open = (account: ExecutiveUser) => {
+    setAvatarFile(null)
+    setAvatarRemoved(false)
     setEditing(account)
     setForm({
       display_name: account.display_name ?? '', email: account.email ?? '', phone: account.phone ? `+${account.phone.replace(/^\+/, '')}` : '',
@@ -59,7 +66,30 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
     })
   }
   const change = <K extends keyof AccountForm>(key: K, value: AccountForm[K]) => setForm(current => current && ({ ...current, [key]: value }))
-  const close = () => { if (!saving) { setEditing(null); setForm(null) } }
+  const close = () => { if (!saving) { setEditing(null); setForm(null); setAvatarFile(null); setAvatarRemoved(false) } }
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview(null)
+      return
+    }
+    const preview = URL.createObjectURL(avatarFile)
+    setAvatarPreview(preview)
+    return () => URL.revokeObjectURL(preview)
+  }, [avatarFile])
+
+  const selectAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try {
+      await validateAvatarFile(file)
+      setAvatarFile(file)
+      setAvatarRemoved(false)
+    } catch (cause) {
+      toast({ title: 'Imagem inválida', description: errorMessage(cause), variant: 'destructive' })
+    }
+  }
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -69,10 +99,26 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
       toast({ title: 'Confira os papéis, a comissão e o motivo da alteração.', variant: 'destructive' }); return
     }
     setSaving(true)
+    let uploadedAvatarPath: string | null = null
+    let accountUpdated = false
     try {
+      let nextAvatarUrl = avatarRemoved ? '' : form.avatar_url
+      if (avatarFile) {
+        const extension = await validateAvatarFile(avatarFile)
+        uploadedAvatarPath = `${editing.user_id}/${crypto.randomUUID()}.${extension}`
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(uploadedAvatarPath, avatarFile, {
+            upsert: false,
+            contentType: avatarFile.type,
+            cacheControl: '3600',
+          })
+        if (uploadError) throw new Error('Não foi possível enviar a imagem. Tente novamente.')
+        nextAvatarUrl = supabase.storage.from('avatars').getPublicUrl(uploadedAvatarPath).data.publicUrl
+      }
       const { confirm_password: _confirmation, ...payload } = form
       const { data, error: functionError } = await supabase.functions.invoke('executive-update-account', {
-        body: { ...payload, commission_rate: Number(form.commission_rate), user_id: editing.user_id,
+        body: { ...payload, avatar_url: nextAvatarUrl, commission_rate: Number(form.commission_rate), user_id: editing.user_id,
           expected_revision: editing.account_revision, expected_updated_at: editing.updated_at },
       })
       if (functionError) {
@@ -84,14 +130,26 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
         throw new Error(message)
       }
       if (!data?.success) throw new Error(data?.error || 'Não foi possível confirmar a atualização.')
+      accountUpdated = true
+      const previousAvatarPath = avatarObjectPath(editing.avatar_url, editing.user_id)
+      if ((avatarFile || avatarRemoved) && previousAvatarPath && previousAvatarPath !== uploadedAvatarPath) {
+        await supabase.storage.from('avatars').remove([previousAvatarPath])
+      }
       toast({ title: 'Conta atualizada', description: 'Dados, acesso e histórico administrativo sincronizados.' })
-      setEditing(null); setForm(null)
+      setEditing(null); setForm(null); setAvatarFile(null); setAvatarRemoved(false)
       await queryClient.invalidateQueries({ queryKey: ['executive-users'] })
+      void queryClient.invalidateQueries({ queryKey: ['profile', editing.user_id] })
       void queryClient.invalidateQueries({ queryKey: ['executive-audit'] })
       void queryClient.invalidateQueries({ queryKey: ['team-ranking'] })
+      void queryClient.invalidateQueries({ queryKey: ['sales-board'] })
       window.dispatchEvent(new Event('dashboard-data-changed'))
       if (editing.user_id === actor?.id) await supabase.auth.refreshSession()
-    } catch (err) { toast({ title: 'Alteração não concluída', description: errorMessage(err), variant: 'destructive' }) }
+    } catch (err) {
+      if (uploadedAvatarPath && !accountUpdated) {
+        await supabase.storage.from('avatars').remove([uploadedAvatarPath])
+      }
+      toast({ title: 'Alteração não concluída', description: errorMessage(err), variant: 'destructive' })
+    }
     finally { setSaving(false) }
   }
 
@@ -158,7 +216,25 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
                 <div className="space-y-2"><Label htmlFor="account-name">Nome de exibição</Label><Input id="account-name" value={form.display_name} onChange={e => change('display_name',e.target.value)} required maxLength={120} /></div>
                 <div className="space-y-2"><Label htmlFor="account-email">E-mail de acesso</Label><Input id="account-email" type="email" value={form.email} onChange={e => change('email',e.target.value)} required maxLength={254} /></div>
                 <div className="space-y-2"><Label htmlFor="account-phone">Telefone</Label><Input id="account-phone" type="tel" placeholder="+5511999999999" pattern="\+[1-9][0-9]{7,14}" value={form.phone} onChange={e => change('phone',e.target.value)} /><p className="text-[10px] text-muted-foreground">Código internacional, sem espaços. Pode ficar vazio.</p></div>
-                <div className="space-y-2"><Label htmlFor="account-avatar">Foto de perfil (URL HTTPS)</Label><Input id="account-avatar" type="url" placeholder="https://…" value={form.avatar_url} onChange={e => change('avatar_url',e.target.value)} /></div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Foto do membro</Label>
+                  <div className="flex flex-wrap items-center gap-4 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+                    <Avatar className="h-16 w-16 rounded-xl">
+                      <AvatarImage src={avatarPreview || (!avatarRemoved ? form.avatar_url : '')} alt={`Foto de ${form.display_name}`} />
+                      <AvatarFallback className="rounded-xl bg-electric-violet/15 text-lg text-violet-200">{(form.display_name || form.email || '?').slice(0,2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => avatarInput.current?.click()}>
+                          <ImagePlus className="mr-2 h-4 w-4" />Selecionar da galeria
+                        </Button>
+                        {(form.avatar_url || avatarFile) && !avatarRemoved && <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setAvatarFile(null); setAvatarRemoved(true) }}><X className="mr-2 h-4 w-4" />Remover foto</Button>}
+                      </div>
+                      <Input ref={avatarInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={selectAvatar} className="hidden" aria-label="Selecionar foto do membro na galeria" />
+                      <p className="text-[10px] text-muted-foreground">PNG, JPG ou WEBP, com no máximo 2 MB.{avatarFile ? ` Selecionada: ${avatarFile.name}` : ''}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">Ao trocar o e-mail, o novo endereço passa a ser o login. Confira-o com o usuário antes de salvar.</p>
             </fieldset>

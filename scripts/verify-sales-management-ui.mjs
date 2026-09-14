@@ -133,6 +133,15 @@ try {
   await expect(leadCard).toContainText('15 anos')
   assert.equal(leads[0].athlete_age,15)
   await page.goto(`${origin}/executive?tab=users`)
+  const accountCard = page.getByText('Conta teste',{exact:true}).locator('xpath=ancestor::article')
+  await accountCard.getByRole('button',{name:'Editar conta',exact:true}).click()
+  await expect(page.getByText('Foto de perfil (URL HTTPS)',{exact:true})).toHaveCount(0)
+  await page.getByLabel('Selecionar foto do membro na galeria').setInputFiles({
+    name:'membro.png',mimeType:'image/png',
+    buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64'),
+  })
+  await expect(page.getByText('Selecionada: membro.png',{exact:false})).toBeVisible()
+  await page.getByRole('button',{name:'Cancelar',exact:true}).click()
   await page.getByRole('button',{name:'Excluir conta de Conta teste',exact:true}).click()
   await expect(page.getByRole('dialog')).toContainText('Excluir conta permanentemente')
   await page.getByRole('button',{name:'Cancelar',exact:true}).click()

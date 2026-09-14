@@ -26,6 +26,7 @@ const users = []
 const sales = []
 const products = []
 const tickets = []
+const avatarPaths = []
 const clients = [admin,executive,seller]
 let checkpoint = 'setup'
 const must = response => { if (response.error) throw new Error(response.error.message); return response.data }
@@ -36,10 +37,23 @@ try {
     users.push(data.user)
   }
   const [actor,target] = users
+  must(await admin.from('registration_requests').update({status:'approved',reviewed_at:new Date().toISOString()}).in('user_id',users.map(user => user.id)))
   must(await admin.from('user_roles').insert({user_id:actor.id,role:'executive'}))
   must(await admin.from('user_roles').update({commission_rate:20}).eq('user_id',target.id))
   must(await executive.auth.signInWithPassword({email:actor.email,password}))
   must(await seller.auth.signInWithPassword({email:target.email,password}))
+
+  step('executive member avatar upload')
+  assert.equal(must(await executive.rpc('is_executive',{_user_id:actor.id})),true)
+  const avatarBytes = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'))
+  const avatarPath = `${target.id}/${randomUUID()}.png`
+  must(await executive.storage.from('avatars').upload(avatarPath, avatarBytes, {contentType:'image/png',upsert:false}))
+  avatarPaths.push(avatarPath)
+  const deniedAvatarPath = `${actor.id}/${randomUUID()}.png`
+  const deniedAvatar = await seller.storage.from('avatars').upload(deniedAvatarPath, avatarBytes, {contentType:'image/png',upsert:false})
+  if (!deniedAvatar.error) avatarPaths.push(deniedAvatarPath)
+  assert(deniedAvatar.error, 'Seller must not upload an avatar into another member folder')
+  const avatarUrl = executive.storage.from('avatars').getPublicUrl(avatarPath).data.publicUrl
 
   step('authoritative last login')
   const authBefore = must(await admin.auth.admin.getUserById(target.id)).user
@@ -49,7 +63,7 @@ try {
   assert(account.last_sign_in_at && authBefore.last_sign_in_at)
 
   step('Auth Admin account transaction')
-  const form = {user_id:target.id,display_name:'Verificação temporária atualizada',email:`qa-updated-${suffix}@example.invalid`,phone:'',avatar_url:'',
+  const form = {user_id:target.id,display_name:'Verificação temporária atualizada',email:`qa-updated-${suffix}@example.invalid`,phone:'',avatar_url:avatarUrl,
     roles:['seller','sdr'],commission_rate:0,crm_access:true,can_view_sales:false,suspended:false,
     password:newPassword,reason:'Verificação técnica temporária da edição de conta',expected_revision:account.account_revision,expected_updated_at:account.updated_at}
   const response = await executive.functions.invoke('executive-update-account',{body:form})
@@ -61,11 +75,16 @@ try {
   const authAfter = must(await admin.auth.admin.getUserById(target.id)).user
   assert.equal(authAfter.email,form.email)
   assert.equal(authAfter.last_sign_in_at,authBefore.last_sign_in_at, 'Editing an account must not alter last login')
-  const profile = must(await admin.from('profiles').select('display_name').eq('user_id',target.id).single())
+  const profile = must(await admin.from('profiles').select('display_name,avatar_url').eq('user_id',target.id).single())
   assert.equal(profile.display_name,form.display_name)
+  assert.equal(profile.avatar_url,avatarUrl)
   const roles = must(await admin.from('user_roles').select('role,commission_rate,crm_access').eq('user_id',target.id))
   assert.equal(roles.length,2)
   assert(roles.every(r => r.commission_rate===0 && r.crm_access))
+  const refreshedDirectory = must(await executive.rpc('executive_list_users'))
+  const refreshedAccount = refreshedDirectory.users.find(u => u.user_id===target.id)
+  const externalAvatar = await executive.functions.invoke('executive-update-account',{body:{...form,password:'',avatar_url:'https://example.com/avatar.png',expected_revision:refreshedAccount.account_revision,expected_updated_at:refreshedAccount.updated_at}})
+  assert(externalAvatar.error, 'Account API must reject external avatar URLs')
   const stale = await executive.functions.invoke('executive-update-account',{body:form})
   assert(stale.error, 'Stale changes should be rejected')
   must(await seller.auth.signInWithPassword({email:form.email,password:newPassword}))
@@ -147,6 +166,10 @@ try {
   for(const id of products) {
     const response=await admin.from('products').delete().eq('id',id)
     if(response.error) cleanupErrors.push('temporary product')
+  }
+  if(avatarPaths.length) {
+    const response=await admin.storage.from('avatars').remove(avatarPaths)
+    if(response.error) cleanupErrors.push('temporary avatars')
   }
   const ids=[...users.map(u => u.id),...sales,...products,...tickets]
   if(ids.length) {

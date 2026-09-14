@@ -2,6 +2,24 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.116.0"
 import { isTrustedOrigin, jsonResponse, preflightResponse, readJsonBody, RequestError } from '../_shared/http.ts'
 const validRoles = ['seller','executive','super_admin','closer','sdr','bdr','traffic_manager']
 
+function isManagedAvatarUrl(value: string, userId: string): boolean {
+  if (value === '') return true
+  try {
+    const storageOrigin = new URL(Deno.env.get('SUPABASE_URL')!).origin
+    const parsed = new URL(value)
+    const prefix = `/storage/v1/object/public/avatars/${userId}/`
+    const objectName = decodeURIComponent(parsed.pathname.slice(prefix.length))
+    return parsed.origin === storageOrigin
+      && parsed.pathname.startsWith(prefix)
+      && objectName.length > 0
+      && !objectName.includes('/')
+      && !objectName.includes('..')
+      && /\.(png|jpe?g|webp)$/i.test(objectName)
+  } catch {
+    return false
+  }
+}
+
 Deno.serve(async (req) => {
   const preflight = preflightResponse(req)
   if (preflight) return preflight
@@ -30,7 +48,7 @@ Deno.serve(async (req) => {
       || typeof display_name !== 'string' || display_name.trim().length < 1 || display_name.length > 120
       || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254
       || typeof phone !== 'string' || (phone !== '' && !/^\+[1-9]\d{7,14}$/.test(phone))
-      || typeof avatar_url !== 'string' || (avatar_url !== '' && !/^https:\/\//i.test(avatar_url))
+      || typeof avatar_url !== 'string'
       || typeof reason !== 'string' || reason.trim().length < 5 || reason.length > 2000
       || !Array.isArray(roles) || roles.length === 0 || roles.some(r => !validRoles.includes(r))
       || typeof commission_rate !== 'number' || !Number.isFinite(commission_rate) || commission_rate < 0 || commission_rate > 100
@@ -43,6 +61,14 @@ Deno.serve(async (req) => {
     }
     const { data: { user: target }, error: targetError } = await admin.auth.admin.getUserById(user_id)
     if (targetError || !target) return jsonResponse(req, { error: 'Usuário não encontrado' }, 404)
+    const { data: targetProfile, error: profileError } = await admin.from('profiles')
+      .select('avatar_url').eq('user_id', user_id).single()
+    if (profileError || !targetProfile) return jsonResponse(req, { error: 'Perfil não encontrado' }, 404)
+    // Legacy external URLs can remain while another account field is edited.
+    // Every new avatar must come from this project's managed Storage bucket.
+    if (avatar_url !== (targetProfile.avatar_url ?? '') && !isManagedAvatarUrl(avatar_url, user_id)) {
+      return jsonResponse(req, { error: 'Selecione a foto pela galeria do gerenciamento de contas.' }, 400)
+    }
     if ((target.app_metadata?.dashboard_account?.revision ?? '') !== expected_revision) {
       return jsonResponse(req, { error: 'A conta mudou durante a edição. Reabra e confira os dados.' }, 409)
     }
