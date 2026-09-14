@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Clock3, KeyRound, Loader2, Pencil, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
+import { AlertTriangle, Clock3, KeyRound, Loader2, Pencil, RefreshCw, Search, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -42,6 +42,9 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
   const [editing, setEditing] = useState<ExecutiveUser | null>(null)
   const [form, setForm] = useState<AccountForm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState<ExecutiveUser | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const open = (account: ExecutiveUser) => {
     setEditing(account)
@@ -92,6 +95,34 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
     finally { setSaving(false) }
   }
 
+  const closeDelete = () => { if (!deleteBusy) { setDeleting(null); setDeleteReason('') } }
+  const confirmDelete = async () => {
+    if (!deleting || deleteBusy || deleteReason.trim().length < 5) return
+    setDeleteBusy(true)
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke('executive-delete-account', {
+        body: { user_id: deleting.user_id, reason: deleteReason.trim() },
+      })
+      if (functionError) {
+        let message = errorMessage(functionError)
+        if ('context' in functionError && functionError.context instanceof Response) {
+          const body = await functionError.context.json().catch(() => null)
+          if (body?.error) message = body.error
+        }
+        throw new Error(message)
+      }
+      if (!data?.success) throw new Error(data?.error || 'Não foi possível confirmar a exclusão.')
+      toast({ title: 'Conta excluída', description: 'A exclusão foi registrada na auditoria.' })
+      setDeleting(null)
+      setDeleteReason('')
+      await queryClient.invalidateQueries({ queryKey: ['executive-users'] })
+      void queryClient.invalidateQueries({ queryKey: ['executive-audit'] })
+      void queryClient.invalidateQueries({ queryKey: ['team-ranking'] })
+      window.dispatchEvent(new Event('dashboard-data-changed'))
+    } catch (err) { toast({ title: 'Exclusão não concluída', description: errorMessage(err), variant: 'destructive' }) }
+    finally { setDeleteBusy(false) }
+  }
+
   const filtered = users.filter(account => (account.display_name + ' ' + account.email).toLowerCase().includes(search.toLowerCase()))
   return (
     <section className={`surface-panel overflow-hidden ${compact ? 'rounded-xl' : 'rounded-2xl'}`}>
@@ -104,7 +135,7 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
           <div className="relative w-full sm:w-72"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="h-9 pl-9 text-xs" aria-label="Buscar conta por nome ou e-mail" placeholder="Buscar nome ou e-mail" value={search} onChange={e => setSearch(e.target.value)} /></div>
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Clock3 className="h-3 w-3" />{fetchedAt ? `Consulta: ${exactDate(fetchedAt)} · Brasília` : 'Consultando autenticação…'}</p>
         </div>
-        <div className={`bg-electric-violet/[0.07] text-xs leading-relaxed text-muted-foreground ${compact ? 'rounded-lg px-3 py-2' : 'rounded-xl px-4 py-3'}`}>Último login = última autenticação registrada pelo Supabase Auth, com segundos e fuso de Brasília. Atualização a cada {AUTO_REFRESH_INTERVAL_LABEL}, ao retornar à tela e quando o servidor informa uma mudança. Reabrir a página não conta como novo login.</div>
+        <div className={`bg-electric-violet/[0.07] text-xs leading-relaxed text-muted-foreground ${compact ? 'rounded-lg px-3 py-2' : 'rounded-xl px-4 py-3'}`}>Último login = última autenticação registrada pelo Supabase Auth, com segundos e fuso de Brasília. Atualização automática a cada {AUTO_REFRESH_INTERVAL_LABEL}. Reabrir a página não conta como novo login.</div>
         {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">Não foi possível consultar as contas. {errorMessage(error)} Os horários abaixo, se presentes, são da última consulta bem-sucedida.</p>}
         {loading ? [1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-white/[0.03]" />) : filtered.map(account => {
           const protectedAccount = account.user_roles.some(r => r.role==='super_admin') && !hasRole('super_admin')
@@ -113,7 +144,7 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
               <Avatar className="h-10 w-10 rounded-xl"><AvatarImage src={account.avatar_url ?? ''} /><AvatarFallback className="rounded-xl bg-electric-violet/15 text-violet-200">{(account.display_name || account.email || '?').slice(0,2).toUpperCase()}</AvatarFallback></Avatar>
               <div className="min-w-0"><p className="break-words text-sm font-medium text-ash">{account.display_name || 'Sem nome'}{account.user_id===actor?.id && <span className="ml-2 text-[10px] text-ember">VOCÊ</span>}</p><p className="mt-1 break-all text-xs text-muted-foreground">{account.email || 'E-mail não registrado'}</p><div className="mt-2 flex flex-wrap gap-1">{account.user_roles.map(r => <Badge key={r.role} className="border-0 bg-white/[0.06] text-[10px] font-normal text-muted-foreground">{ROLE_LABELS[r.role]}</Badge>)}{account.suspended && <Badge variant="destructive" className="text-[10px]">Suspenso</Badge>}</div></div>
             </div>
-            <div className="flex flex-wrap items-center gap-4 sm:ml-auto"><div className="text-xs"><p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Último login</p>{account.last_sign_in_at ? <time className="tabular-nums text-ash" dateTime={account.last_sign_in_at} title={`Timestamp original do Auth: ${account.last_sign_in_at}`}>{exactDate(account.last_sign_in_at)} <span className="text-[10px] text-muted-foreground">BRT</span></time> : <span className="text-muted-foreground">Nenhum login registrado pelo Auth</span>}</div><Button variant="outline" size="sm" disabled={protectedAccount} onClick={() => open(account)} title={protectedAccount ? 'Conta gerenciada somente por super admin' : 'Editar todos os dados da conta'}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar conta</Button></div>
+            <div className="flex flex-wrap items-center gap-4 sm:ml-auto"><div className="text-xs"><p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Último login</p>{account.last_sign_in_at ? <time className="tabular-nums text-ash" dateTime={account.last_sign_in_at} title={`Timestamp original do Auth: ${account.last_sign_in_at}`}>{exactDate(account.last_sign_in_at)} <span className="text-[10px] text-muted-foreground">BRT</span></time> : <span className="text-muted-foreground">Nenhum login registrado pelo Auth</span>}</div><Button variant="outline" size="sm" disabled={protectedAccount} onClick={() => open(account)} title={protectedAccount ? 'Conta gerenciada somente por super admin' : 'Editar todos os dados da conta'}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar conta</Button><Button variant="outline" size="icon" className="h-9 w-9 border-rose-500/30 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200" disabled={protectedAccount || account.user_id===actor?.id} onClick={() => { setDeleteReason(''); setDeleting(account) }} title={account.user_id===actor?.id ? 'Você não pode excluir sua própria conta' : protectedAccount ? 'Conta gerenciada somente por super admin' : 'Excluir conta permanentemente'} aria-label={`Excluir conta de ${account.display_name || account.email}`}><Trash2 className="h-3.5 w-3.5" /></Button></div>
           </article>
         })}
         {!loading && filtered.length===0 && !error && <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma conta encontrada.</p>}
@@ -144,6 +175,22 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
             <div className="space-y-2"><Label htmlFor="account-reason">Motivo da alteração</Label><Textarea id="account-reason" required minLength={5} maxLength={2000} value={form.reason} disabled={saving} onChange={e => change('reason',e.target.value)} placeholder="Explique por que esta conta está sendo alterada" /></div>
             <DialogFooter><Button type="button" variant="outline" disabled={saving} onClick={close}>Cancelar</Button><Button type="submit" disabled={saving || !form.roles.length || form.reason.trim().length<5} className="bg-gradient-ember">{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Salvar conta e registrar</Button></DialogFooter>
           </form>}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!deleting} onOpenChange={open => { if (!open) closeDelete() }}>
+        <DialogContent className="sm:max-w-md" data-lenis-prevent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-300"><AlertTriangle className="h-4 w-4" />Excluir conta permanentemente</DialogTitle>
+            <DialogDescription>{deleting?.display_name || deleting?.email}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="rounded-lg bg-rose-500/10 p-3 text-xs leading-relaxed text-rose-200">Esta ação remove a conta do Auth e não pode ser desfeita. Diferente de suspender, o acesso e o histórico de login desaparecem. A exclusão é recusada quando a conta tem vendas, abordagens ou saques registrados — use Suspender acesso nesses casos para preservar o histórico.</p>
+            <div className="space-y-2"><Label htmlFor="delete-reason">Motivo da exclusão</Label><Textarea id="delete-reason" required minLength={5} maxLength={2000} value={deleteReason} disabled={deleteBusy} onChange={e => setDeleteReason(e.target.value)} placeholder="Explique por que esta conta está sendo excluída" /></div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={deleteBusy} onClick={closeDelete}>Cancelar</Button>
+            <Button type="button" variant="destructive" disabled={deleteBusy || deleteReason.trim().length<5} onClick={confirmDelete}>{deleteBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Excluir permanentemente</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </section>

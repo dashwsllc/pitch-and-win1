@@ -42,9 +42,16 @@ import { CRMActionDialog } from "@/components/crm/CRMActionDialog";
 import { CRMCallScheduler } from "@/components/crm/CRMCalls";
 import { CRMUserManagement } from "@/components/crm/CRMUserManagement";
 import { CRMPermissionsReport } from "@/components/crm/CRMPermissionsReport";
-import { brasiliaDateKey } from "@/lib/brasilia-time";
+import {
+  addDaysToDateKey,
+  brasiliaDateKey,
+  formatDateKey,
+  isValidDateKey,
+} from "@/lib/brasilia-time";
+import { callMatchesDateKey, type CallDateFilter } from "@/lib/crm-call-status";
+import { useCRMNotifications } from "@/hooks/useCRMNotifications";
 import { compareLeadUrgency, nextLeadSchedule } from "@/lib/crm-order";
-import { AUTO_REFRESH_INTERVAL_LABEL } from "@/lib/sync";
+import { AUTO_REFRESH_INTERVAL_LABEL, AUTO_REFRESH_INTERVAL_MS } from "@/lib/sync";
 
 const temperatures = [
   { value: "frio", label: "Frios" },
@@ -140,6 +147,8 @@ export default function CRM() {
   const [pipeline, setPipeline] = useState("all");
   const [owner, setOwner] = useState("all");
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [callDateFilter, setCallDateFilter] = useState<CallDateFilter>("all");
+  const [callDateKey, setCallDateKey] = useState("");
   const [order, setOrder] = useState("automatic");
   const [view, setView] = useState("list");
   const [queue, setQueue] = useState("queue");
@@ -157,7 +166,7 @@ export default function CRM() {
   const lock = useRef(false);
   const { realtimeUnavailable } = useCRMRealtime();
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    const timer = window.setInterval(() => setNow(new Date()), AUTO_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, []);
   const names = Object.fromEntries(
@@ -176,6 +185,16 @@ export default function CRM() {
   const saleMap = new Map(
     (sales.data || []).map((sale) => [sale.lead_id, sale]),
   );
+  // Lembretes pessoais de call e avisos de venda para a equipe. Le apenas os
+  // dados ja carregados acima; nao abre consulta nem assinatura propria.
+  useCRMNotifications({
+    userId: user?.id,
+    enabled: !!user && capabilities.leads,
+    leads: crm.leads,
+    calls: callsQuery.activities,
+    names,
+    onOpenLead: (leadId) => setReadId(leadId),
+  });
   const next = (lead: CRMLead) =>
     nextLeadSchedule(lead, openCalls.get(lead.id)?.scheduled_at);
   const overdue = (lead: CRMLead) =>
@@ -210,7 +229,17 @@ export default function CRM() {
     { value: "overdue", label: "Calls atrasadas" },
     { value: "closed", label: "Fechamentos realizados" },
   ];
-  const filtered = crm.leads
+  const todayKey = brasiliaDateKey(now);
+  const tomorrowKey = addDaysToDateKey(todayKey, 1);
+  const selectedCallDateKey =
+    callDateFilter === "today"
+      ? todayKey
+      : callDateFilter === "tomorrow"
+        ? tomorrowKey
+        : isValidDateKey(callDateKey)
+          ? callDateKey
+          : null;
+  const baseFiltered = crm.leads
     .filter(
       (lead) =>
         `${lead.name} ${lead.athlete_name || ""} ${lead.phone || ""} ${lead.email || ""}`
@@ -226,6 +255,28 @@ export default function CRM() {
           lead.closer_id === owner) &&
         (!overdueOnly || overdue(lead)) &&
         (tab !== "closer" || inQueue(lead, queue)),
+    );
+  // Conta sobre os demais filtros ja aplicados, para o numero refletir o que o
+  // usuario esta vendo.
+  const callDateCount = (dateKey: string | null) =>
+    baseFiltered.filter((lead) =>
+      callMatchesDateKey(openCalls.get(lead.id), dateKey),
+    ).length;
+  const callDateOptions: { value: CallDateFilter; label: string; count: number | null }[] = [
+    { value: "all", label: "Todas", count: null },
+    { value: "today", label: "Hoje", count: callDateCount(todayKey) },
+    { value: "tomorrow", label: "Amanhã", count: callDateCount(tomorrowKey) },
+    {
+      value: "specific",
+      label: "Data específica",
+      count: callDateFilter === "specific" ? callDateCount(selectedCallDateKey) : null,
+    },
+  ];
+  const filtered = baseFiltered
+    .filter(
+      (lead) =>
+        callDateFilter === "all" ||
+        callMatchesDateKey(openCalls.get(lead.id), selectedCallDateKey),
     )
     .sort((a, b) =>
       order === "name"
@@ -587,6 +638,52 @@ export default function CRM() {
                       <option value="name">Nome A–Z</option>
                       <option value="hot">Mais quentes</option>
                     </select>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-2">
+                    <span className="mr-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      Calls:
+                    </span>
+                    {callDateOptions.map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        size="sm"
+                        variant={callDateFilter === option.value ? "default" : "outline"}
+                        aria-pressed={callDateFilter === option.value}
+                        className="h-8 px-3 text-xs"
+                        onClick={() => {
+                          setCallDateFilter(option.value);
+                          if (option.value === "specific" && !callDateKey) {
+                            setCallDateKey(todayKey);
+                          }
+                        }}
+                      >
+                        {option.label}
+                        {option.count !== null && (
+                          <span className="ml-1 opacity-70">({option.count})</span>
+                        )}
+                      </Button>
+                    ))}
+                    {callDateFilter === "specific" && (
+                      <Input
+                        type="date"
+                        aria-label="Escolher data das calls"
+                        className="h-8 w-auto text-xs"
+                        value={callDateKey}
+                        onChange={(event) => setCallDateKey(event.target.value)}
+                      />
+                    )}
+                    {callDateFilter === "specific" && !selectedCallDateKey && (
+                      <span role="status" className="text-[11px] text-amber-400">
+                        Escolha uma data válida.
+                      </span>
+                    )}
+                    {callDateFilter === "specific" && selectedCallDateKey && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {formatDateKey(selectedCallDateKey)}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-2 flex flex-wrap justify-between gap-2 px-0.5 text-[11px] leading-4 text-muted-foreground">
                     <label className="flex items-center gap-1.5">

@@ -4,6 +4,7 @@ import { crmCapabilities } from '../src/lib/crm-capabilities.ts'
 import { registerHooks } from 'node:module'
 registerHooks({ resolve(specifier, context, nextResolve) {
   if (specifier === '@/lib/brasilia-time') return nextResolve(new URL('../src/lib/brasilia-time.ts', import.meta.url).href, context)
+  if (specifier === '@/lib/crm-age') return nextResolve(new URL('../src/lib/crm-age.ts', import.meta.url).href, context)
   return nextResolve(specifier, context)
 } })
 const { emptyContact, validateContact, contactPayload } = await import('../src/lib/crm.ts')
@@ -27,4 +28,100 @@ assert.match(callsSource, /isSdrHandoff[\s\S]*handoff_and_schedule_closer_call/)
 assert.match(callsSource, /O lead só será enviado ao Closer depois que o agendamento for/)
 assert.match(cardSource, /Agendar call e enviar/)
 assert.doesNotMatch(cardSource, /onAction\("handoff"\)/)
-console.log('PASS: contact validation, capability matrix and schedule-before-handoff wiring.')
+// ---------------------------------------------------------------------------
+// Idade do atleta
+// ---------------------------------------------------------------------------
+const { ageFromBirthDate, resolveAthleteAge, athleteAgeConflict } = await import('../src/lib/crm-age.ts')
+const hoje = new Date('2026-09-14T12:00:00Z')
+// Aniversario ja ocorreu no ano corrente.
+assert.equal(ageFromBirthDate('2010-05-15', hoje), 16)
+// Aniversario ainda nao ocorreu: nao basta subtrair os anos.
+assert.equal(ageFromBirthDate('2010-12-31', hoje), 15)
+// Aniversario exatamente hoje ja conta.
+assert.equal(ageFromBirthDate('2010-09-14', hoje), 16)
+assert.equal(ageFromBirthDate(null, hoje), null)
+assert.equal(ageFromBirthDate('data-invalida', hoje), null)
+// A data de nascimento tem prioridade sobre a idade digitada.
+assert.deepEqual(resolveAthleteAge({ athlete_birth_date: '2010-05-15', athlete_age: 17 }, hoje), { age: 16, source: 'birth_date' })
+// Sem nascimento, vale a idade manual.
+assert.deepEqual(resolveAthleteAge({ athlete_birth_date: null, athlete_age: 16 }, hoje), { age: 16, source: 'manual' })
+assert.deepEqual(resolveAthleteAge({ athlete_birth_date: null, athlete_age: null }, hoje), { age: null, source: null })
+// Idade fora da faixa nao e aceita como fonte.
+assert.equal(resolveAthleteAge({ athlete_age: 0 }, hoje).age, null)
+assert.equal(resolveAthleteAge({ athlete_age: 200 }, hoje).age, null)
+assert.deepEqual(athleteAgeConflict({ athlete_birth_date: '2010-05-15', athlete_age: 17 }, hoje), { calculated: 16, informed: 17 })
+assert.equal(athleteAgeConflict({ athlete_birth_date: '2010-05-15', athlete_age: 16 }, hoje), null)
+// Informar idade nunca inventa uma data de nascimento.
+const comIdade = contactPayload({ ...minimal, athlete_age: '16' })
+assert.equal(comIdade.athlete_age, 16)
+assert.equal(comIdade.athlete_birth_date, null)
+assert.equal(contactPayload(minimal).athlete_age, null)
+assert.equal(validateContact({ ...minimal, athlete_age: '16' }), null)
+assert.ok(validateContact({ ...minimal, athlete_age: '0' }))
+assert.ok(validateContact({ ...minimal, athlete_age: '200' }))
+assert.ok(validateContact({ ...minimal, athlete_age: '16.5' }))
+
+// ---------------------------------------------------------------------------
+// Estado temporal das calls
+// ---------------------------------------------------------------------------
+const { callTimingState, isCallPastDue, callMatchesDateKey, callStateLabel, minutesUntilCall } =
+  await import('../src/lib/crm-call-status.ts')
+const agora = new Date('2026-09-14T12:00:00Z').getTime()
+const emMinutos = (m) => ({ scheduled_at: new Date(agora + m * 60_000).toISOString() })
+assert.equal(callTimingState(emMinutos(120), agora), 'upcoming')
+assert.equal(callTimingState(emMinutos(45), agora), 'soon')
+assert.equal(callTimingState(emMinutos(20), agora), 'approaching')
+assert.equal(callTimingState(emMinutos(5), agora), 'urgent')
+assert.equal(callTimingState(emMinutos(0), agora), 'now')
+assert.equal(callTimingState(emMinutos(-10), agora), 'now')
+assert.equal(callTimingState(emMinutos(-45), agora), 'overdue')
+// Call concluida ou com resultado nunca gera alerta de atraso.
+assert.equal(callTimingState({ ...emMinutos(-120), is_completed: true }, agora), 'completed')
+assert.equal(callTimingState({ ...emMinutos(-120), outcome: 'venda_concluida' }, agora), 'completed')
+// Lead encerrado tambem nao gera alerta.
+assert.equal(callTimingState(emMinutos(-120), agora, 'fechado_ganho'), 'completed')
+assert.equal(callTimingState(null, agora), 'none')
+assert.equal(isCallPastDue(emMinutos(-45), agora), true)
+assert.equal(isCallPastDue(emMinutos(5), agora), false)
+assert.equal(isCallPastDue({ ...emMinutos(-45), is_completed: true }, agora), false)
+// A urgencia sempre tem texto, nunca depende so de cor.
+assert.equal(callStateLabel('overdue', -45), 'Call não efetuada')
+assert.equal(callStateLabel('now', 0), 'Call agora')
+assert.equal(callStateLabel('upcoming', 120), null)
+assert.equal(minutesUntilCall(emMinutos(30), agora), 30)
+// O dia da call usa o calendario de Brasilia, nao o UTC.
+assert.equal(callMatchesDateKey({ scheduled_at: '2026-09-14T02:00:00Z' }, '2026-09-13'), true)
+assert.equal(callMatchesDateKey({ scheduled_at: '2026-09-14T02:00:00Z' }, '2026-09-14'), false)
+assert.equal(callMatchesDateKey({ scheduled_at: null }, '2026-09-14'), false)
+assert.equal(callMatchesDateKey({ scheduled_at: '2026-09-14T18:00:00Z' }, null), false)
+
+// ---------------------------------------------------------------------------
+// Hierarquia do atleta na interface
+// ---------------------------------------------------------------------------
+const detailSource = readFileSync(new URL('../src/components/crm/CRMLeadDetail.tsx', import.meta.url), 'utf8')
+assert.match(cardSource, /athleteLabel = lead\.athlete_name\?\.trim\(\) \|\| lead\.name/)
+assert.match(cardSource, /<h3 className="font-semibold text-sm break-words">\{athleteLabel\}<\/h3>/)
+assert.match(cardSource, /Responsável: \{lead\.name\?\.trim\(\) \|\| "Não informado"\}/)
+assert.match(detailSource, /\["Atleta", lead\.athlete_name\][\s\S]*\["Responsável", lead\.name\]/)
+
+// ---------------------------------------------------------------------------
+// Ordenacao operacional: atrasadas, acontecendo agora, proximas e o resto
+// ---------------------------------------------------------------------------
+const { compareLeadUrgency } = await import('../src/lib/crm-order.ts')
+const quando = (m) => new Date(agora + m * 60_000).toISOString()
+const leadBase = { created_at: '2026-09-01T00:00:00Z', pipeline_stage: 'repassado_closer' }
+const ordenado = [
+  { ...leadBase, id: 'd-futura-tarde', next_followup_at: quando(600) },
+  { ...leadBase, id: 'e-sem-agenda', next_followup_at: null },
+  { ...leadBase, id: 'c-proxima', next_followup_at: quando(20) },
+  { ...leadBase, id: 'a-muito-atrasada', next_followup_at: quando(-300) },
+  { ...leadBase, id: 'f-encerrada', pipeline_stage: 'fechado_ganho', next_followup_at: quando(-10) },
+  { ...leadBase, id: 'b-agora', next_followup_at: quando(-5) },
+]
+  .sort((x, y) => compareLeadUrgency(x, y))
+  .map((lead) => lead.id)
+assert.deepEqual(ordenado.slice(0, 4), ['a-muito-atrasada', 'b-agora', 'c-proxima', 'd-futura-tarde'])
+// Sem agenda e leads encerrados ficam no fim.
+assert.deepEqual(ordenado.slice(4).sort(), ['e-sem-agenda', 'f-encerrada'])
+
+console.log('PASS: contact validation, capability matrix, schedule-before-handoff, athlete age, call timing states, operational ordering and athlete-first hierarchy.')

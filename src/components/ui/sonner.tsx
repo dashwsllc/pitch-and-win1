@@ -9,6 +9,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
+      // Padrao do sonner, fixado explicitamente: os avisos do CRM
+      // precisam ficar no canto inferior direito.
+      position="bottom-right"
       className="toaster group"
       toastOptions={{
         classNames: {

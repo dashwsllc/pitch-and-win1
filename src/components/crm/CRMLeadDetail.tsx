@@ -14,6 +14,7 @@ import {
   useCRMActivities,
 } from "@/hooks/useCRM";
 import { callDate } from "@/lib/crm";
+import { formatAthleteAge, resolveAthleteAge } from "@/lib/crm-age";
 import type { Json } from "@/integrations/supabase/types";
 import { CRMContextPanel } from "./CRMContextPanel";
 
@@ -50,8 +51,9 @@ export function CRMLeadDetail({
     lead.id,
   );
   const fields: [string, string | number | null][] = [
-    ["Responsável", lead.name],
     ["Atleta", lead.athlete_name],
+    ["Idade", formatAthleteAge(lead)],
+    ["Responsável", lead.name],
     ["WhatsApp", lead.phone],
     ["E-mail", lead.email],
     ["Cidade / UF", lead.city_state],
@@ -87,7 +89,9 @@ export function CRMLeadDetail({
         data-lenis-prevent
       >
         <SheetHeader className="space-y-1">
-          <SheetTitle className="text-base">Ficha de {lead.name}</SheetTitle>
+          <SheetTitle className="text-base">
+            Ficha de {lead.athlete_name?.trim() || lead.name}
+          </SheetTitle>
           <SheetDescription className="text-xs">
             Cadastro e histórico completo · leitura
           </SheetDescription>

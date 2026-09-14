@@ -28,13 +28,14 @@ export function CRMLinkedSale() {
           "id,nome_comprador,email_comprador,whatsapp_comprador,nome_produto,ticket_name,valor_venda,approval_status,created_at,crm_lead_id",
         )
         .eq("id", id)
+        .in("approval_status", ["aprovada", "pendente"])
         .single();
       if (error)
         throw new Error("Venda indisponível ou sem permissão de acesso.");
       return data;
     },
     retry: 1,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
   return (
     <Dialog

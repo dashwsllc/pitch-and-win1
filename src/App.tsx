@@ -25,7 +25,14 @@ const MinhasVendas = lazy(() => import("./pages/MinhasVendas"));
 const VendasTime = lazy(() => import("./pages/VendasTime"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

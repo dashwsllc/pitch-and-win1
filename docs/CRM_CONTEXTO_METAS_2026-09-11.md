@@ -26,10 +26,9 @@ RLS e Realtime. Não há dependência do projeto vide-match.
 - Checklist com percentual, concluídas/total, confirmação de 100%, atenção nas
   últimas seis horas e alerta nas últimas duas. O executivo cadastra tarefas por
   colaborador/data; apenas o próprio colaborador marca/desmarca a conclusão.
-- O pedido posterior substituiu o intervalo inicial de três minutos: o refresh
-  periódico padrão/mínimo agora é **50 segundos**, centralizado e configurável por
-  `VITE_AUTO_REFRESH_INTERVAL_MS`. Realtime e atualização ao voltar à janela continuam.
-  Relógios/contadores locais não representam consultas ao banco.
+- O pedido posterior substituiu o intervalo inicial de três minutos: todo refresh
+  automático agora usa o intervalo fixo e não configurável de **50 segundos**.
+  Relógios e contadores periódicos seguem a mesma cadência.
 - A pedido do usuário, Alex corresponde a Sinclair. Metas de 11/09: Sinclair 7,
   Pedro 2, Pedro iago 2 e Ismael 3. David permanece sem tarefas pré-definidas e pode
   recebê-las pelo painel, sem mudança de código.

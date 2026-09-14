@@ -24,7 +24,7 @@ export function useProducts() {
     },
     staleTime: 0,
     refetchInterval: AUTO_REFRESH_INTERVAL_MS,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     retry: 1,
   })
 }

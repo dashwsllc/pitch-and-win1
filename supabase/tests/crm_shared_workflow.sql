@@ -2,6 +2,14 @@
 INSERT INTO auth.users(id,email,raw_user_meta_data,raw_app_meta_data,created_at,updated_at)
 SELECT ('ce100000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'crm-shared-qa-'||n||'@example.invalid',
   jsonb_build_object('display_name','CRM Shared QA '||n),'{}',now(),now() FROM generate_series(1,9) n;
+-- A politica restritiva registration_access (migracao 20260912090000) exige
+-- cadastro aprovado para qualquer acesso. As fixtures criam contas direto em
+-- auth.users, entao a aprovacao precisa ser registrada explicitamente.
+INSERT INTO public.registration_requests(user_id,display_name,email,requested_role,status,reviewed_at)
+SELECT u.id, COALESCE(u.raw_user_meta_data->>'display_name','QA'), u.email, 'seller', 'approved', now()
+FROM auth.users u WHERE u.id::text LIKE 'ce100000-0000-4000-8000-%'
+ON CONFLICT (user_id) DO UPDATE SET status='approved', reviewed_at=now();
+
 DELETE FROM public.user_roles WHERE user_id::text LIKE 'ce100000-0000-4000-8000-%';
 INSERT INTO public.user_roles(user_id,role,crm_access) VALUES
 ('ce100000-0000-4000-8000-000000000001','seller',false),
@@ -44,6 +52,16 @@ DO $$ DECLARE l public.crm_leads; old_version bigint; a public.crm_activities; B
   IF l.name<>'QA Responsável editado' OR l.email IS NOT NULL OR l.priority IS NOT NULL THEN RAISE EXCEPTION 'FAIL optional edit'; END IF;
   BEGIN PERFORM public.crm_transition(l.id,'edit',old_version,'{"name":"QA stale"}'); RAISE EXCEPTION 'FAIL stale edit'; EXCEPTION WHEN SQLSTATE 'PT409' THEN NULL; END;
   BEGIN PERFORM public.crm_transition(l.id,'edit',l.version,'{"closer_id":null}'); RAISE EXCEPTION 'FAIL editing protected field'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  -- Idade do atleta: aceita valor manual, nao inventa data de nascimento,
+  -- coexiste com um nascimento informado e recusa faixa invalida.
+  l:=public.crm_transition(l.id,'edit',l.version,'{"name":"QA Responsável editado","athlete_name":"QA Atleta","phone":"11988888888","athlete_age":16}');
+  IF l.athlete_age<>16 THEN RAISE EXCEPTION 'FAIL athlete_age nao persistiu'; END IF;
+  IF l.athlete_birth_date IS NOT NULL THEN RAISE EXCEPTION 'FAIL data de nascimento inventada'; END IF;
+  l:=public.crm_transition(l.id,'edit',l.version,'{"name":"QA Responsável editado","athlete_name":"QA Atleta","phone":"11988888888","athlete_age":16,"athlete_birth_date":"2010-05-15"}');
+  IF l.athlete_age<>16 OR l.athlete_birth_date<>DATE '2010-05-15' THEN RAISE EXCEPTION 'FAIL idade e nascimento nao coexistem'; END IF;
+  l:=public.crm_transition(l.id,'edit',l.version,'{"name":"QA Responsável editado","athlete_name":"QA Atleta","phone":"11988888888","athlete_age":null}');
+  IF l.athlete_age IS NOT NULL THEN RAISE EXCEPTION 'FAIL idade nao pode ser limpa'; END IF;
+  BEGIN PERFORM public.crm_transition(l.id,'edit',l.version,'{"name":"QA Responsável editado","athlete_name":"QA Atleta","phone":"11988888888","athlete_age":200}'); RAISE EXCEPTION 'FAIL idade fora da faixa aceita'; EXCEPTION WHEN check_violation THEN NULL; END;
   l:=public.crm_transition(l.id,'approach',l.version,'{"stage":"em_abordagem"}');
   IF l.pipeline_stage<>'em_qualificacao' THEN RAISE EXCEPTION 'FAIL approach pipeline'; END IF;
   l:=public.crm_transition(l.id,'approach',l.version,'{"stage":"abordado"}');

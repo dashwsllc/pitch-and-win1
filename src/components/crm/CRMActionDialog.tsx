@@ -86,7 +86,8 @@ export function CRMActionDialog({
         <DialogHeader>
           <DialogTitle>{actionTitles[action]}</DialogTitle>
           <DialogDescription>
-            {lead.name} · {lead.athlete_name || "Atleta não informado"}
+            {lead.athlete_name?.trim() || "Atleta não informado"} · Responsável:{" "}
+            {lead.name}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="space-y-3">

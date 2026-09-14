@@ -161,28 +161,8 @@ export function useDashboardData(dateFilter: string = "30dias") {
     const refresh = () => { void fetchDashboardData() }
     window.addEventListener('dashboard-data-changed', refresh)
 
-    // The executive channel must receive every seller change. The seller
-    // channel stays scoped to its owner to avoid unnecessary refreshes.
-    const realtimeScope = isExecutive
-      ? {}
-      : { filter: `user_id=eq.${userId}` }
-
-    const channel = supabase.channel(`dashboard-data-${isExecutive ? 'all' : userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'vendas', ...realtimeScope },
-        () => { void fetchDashboardData() }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'abordagens', ...realtimeScope },
-        () => { void fetchDashboardData() }
-      )
-      .subscribe()
-
     return () => {
       window.removeEventListener('dashboard-data-changed', refresh)
-      supabase.removeChannel(channel)
     }
   }, [fetchDashboardData, isExecutive, rolesLoading, userId])
 

@@ -173,6 +173,27 @@ try {
     process.exit(0)
   }
   await page.goto(origin)
+  const dashboardSections = page.locator('[data-dashboard-section]')
+  await expect(dashboardSections).toHaveCount(7)
+  assert.deepEqual(await dashboardSections.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-dashboard-section'))), [
+    'greeting',
+    'commercial-indicators',
+    'goals-in-progress',
+    'recent-sales',
+    'transparent-operation',
+    'commercial-evolution',
+    'featured-products',
+  ])
+  const sectionTops = await dashboardSections.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top + scrollY))
+  assert(sectionTops.every((top, index) => index === 0 || top > sectionTops[index - 1]), 'Dashboard sections must render in strict top-to-bottom order')
+  await page.evaluate(() => {
+    window.__dashboardRefreshEvents = 0
+    window.addEventListener('dashboard-data-changed', () => { window.__dashboardRefreshEvents++ })
+  })
+  await page.clock.runFor(49_900)
+  assert.equal(await page.evaluate(() => window.__dashboardRefreshEvents), 0, 'Dashboard refreshed before 50 seconds')
+  await page.clock.runFor(200)
+  await expect.poll(() => page.evaluate(() => window.__dashboardRefreshEvents)).toBe(1)
   await expect(page.getByRole('checkbox',{name:'Concluir Revisar contexto',exact:true})).toBeVisible()
   await page.getByRole('checkbox',{name:'Concluir Revisar contexto',exact:true}).click()
   await expect(page.getByText('Todas as metas do dia foram concluídas.',{exact:true})).toBeVisible()
@@ -198,7 +219,7 @@ try {
   await page.getByLabel('Data da tarefa · horário de Brasília',{exact:true}).fill(today)
   await page.screenshot({path:'.verification.local/goals-executive.png'})
   assert.deepEqual(errors,[])
-  console.log('PASS: default order, combined multiselect, import file/size/XSS text, SDR/Closer, reload, checklist, 50-second polling, executive creation and mobile layout (mock API).')
+  console.log('PASS: exact six-section dashboard order, CRM context, checklist, universal 50-second polling, executive creation and mobile layout (mock API).')
 } catch(error) {
   await page.screenshot({path:'.verification.local/context-daily-failure.png',fullPage:true})
   console.error(errors)

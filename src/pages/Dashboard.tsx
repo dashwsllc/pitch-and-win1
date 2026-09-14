@@ -32,7 +32,7 @@ import {
 } from "lucide-react"
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { AUTO_REFRESH_INTERVAL_LABEL } from '@/lib/sync'
+import { AUTO_REFRESH_INTERVAL_LABEL, AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 import { BRASILIA_TIME_ZONE, brasiliaParts, formatBrasiliaDate } from '@/lib/brasilia-time'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -55,7 +55,7 @@ export default function Dashboard() {
   const [currentTime, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    const timer = setInterval(() => setCurrentTime(new Date()), AUTO_REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
   }, [])
 
@@ -126,7 +126,7 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div ref={dashboardRef} className="relative mx-auto max-w-[1520px] space-y-7 pb-8">
-        <section className="surface-panel relative overflow-hidden rounded-3xl p-5 sm:p-7 lg:p-8">
+        <section data-dashboard-section="greeting" className="surface-panel relative overflow-hidden rounded-3xl p-5 sm:p-7 lg:p-8">
           <div data-ambient-orb aria-hidden="true" className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-electric-violet/10 blur-[90px]" />
           <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 left-[12%] h-48 w-72 rounded-full bg-ember/[0.07] blur-[80px]" />
           <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-ember/30 to-transparent" />
@@ -177,36 +177,18 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <section data-scroll-reveal><RecentSales /></section>
-
-        <section data-scroll-reveal className="space-y-3">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-ember">
-                <Flame className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-[0.14em]">Performance</span>
-              </div>
-              <h2 className="mt-1.5 text-xl font-normal tracking-[-0.025em] text-white sm:text-2xl">Metas em andamento</h2>
+        <section data-dashboard-section="commercial-indicators" data-scroll-reveal className="space-y-3">
+          <div className="sticky top-20 z-20 rounded-2xl border border-white/[0.05] bg-[#0e0918]/78 p-1.5 backdrop-blur-xl">
+            <FilterTabs value={selectedFilter} onValueChange={setSelectedFilter} />
+          </div>
+          {error && (
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              {error}. Tente atualizar novamente.
             </div>
-            <span className="hidden text-xs text-muted-foreground sm:block">Tempo real · verificação a cada {AUTO_REFRESH_INTERVAL_LABEL}</span>
-          </div>
-          <GoalsProgress />
-        </section>
-
-        <section data-scroll-reveal className="sticky top-20 z-20 rounded-2xl border border-white/[0.05] bg-[#0e0918]/78 p-1.5 backdrop-blur-xl">
-          <FilterTabs value={selectedFilter} onValueChange={setSelectedFilter} />
-        </section>
-
-        {error && (
-          <div
-            role="alert"
-            className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {error}. Tente atualizar novamente.
-          </div>
-        )}
-
-        <section data-scroll-reveal className="space-y-3">
+          )}
           <div className="flex items-end justify-between gap-4">
             <div>
               <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Visão do período</span>
@@ -282,18 +264,35 @@ export default function Dashboard() {
         </div>
         </section>
 
-        <section data-scroll-reveal><SalesBoard compact /></section>
+        <section data-dashboard-section="goals-in-progress" data-scroll-reveal className="space-y-3">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-ember">
+                <Flame className="h-4 w-4" />
+                <span className="text-xs font-medium uppercase tracking-[0.14em]">Performance</span>
+              </div>
+              <h2 className="mt-1.5 text-xl font-normal tracking-[-0.025em] text-white sm:text-2xl">Metas em andamento</h2>
+            </div>
+            <span className="hidden text-xs text-muted-foreground sm:block">Atualização automática a cada {AUTO_REFRESH_INTERVAL_LABEL}</span>
+          </div>
+          <GoalsProgress />
+        </section>
 
-        <section data-scroll-reveal className="grid gap-4 xl:grid-cols-3">
-          <div className="space-y-4 xl:col-span-2">
-            <SalesChart data={metrics.vendasMes} loading={loading} />
-            <ProductsRanking data={metrics.produtosMaisVendidos} loading={loading} />
-          </div>
-          
-          <div className="space-y-4">
-            <LeaderboardPreview />
-            <QuickActions />
-          </div>
+        <section data-dashboard-section="commercial-evolution" data-scroll-reveal>
+          <SalesChart data={metrics.vendasMes} loading={loading} />
+        </section>
+
+        <section data-dashboard-section="featured-products" data-scroll-reveal>
+          <ProductsRanking data={metrics.produtosMaisVendidos} loading={loading} />
+        </section>
+
+        <section data-dashboard-section="recent-sales" data-scroll-reveal><RecentSales /></section>
+
+        <section data-dashboard-section="transparent-operation" data-scroll-reveal><SalesBoard compact /></section>
+
+        <section data-scroll-reveal className="grid gap-4 xl:grid-cols-2">
+          <LeaderboardPreview />
+          <QuickActions />
         </section>
       </div>
     </DashboardLayout>

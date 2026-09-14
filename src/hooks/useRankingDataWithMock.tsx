@@ -6,6 +6,7 @@ import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 export interface RankingUser {
   user_id: string
   name: string
+  avatarUrl: string | null
   totalVendas: number
   quantidadeVendas: number
   conversao: number

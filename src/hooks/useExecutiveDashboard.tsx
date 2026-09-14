@@ -227,23 +227,8 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
     const refresh = () => { void fetchExecutiveDashboard() }
     window.addEventListener('dashboard-data-changed', refresh)
 
-    // Sincronização em Tempo Real (Dashboard Executivo)
-    const channel = supabase.channel('executive-dashboard-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'vendas' },
-        () => fetchExecutiveDashboard()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'abordagens' },
-        () => fetchExecutiveDashboard()
-      )
-      .subscribe()
-
     return () => {
       window.removeEventListener('dashboard-data-changed', refresh)
-      supabase.removeChannel(channel)
     }
   }, [fetchExecutiveDashboard])
 

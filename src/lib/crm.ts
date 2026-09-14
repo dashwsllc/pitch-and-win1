@@ -1,5 +1,6 @@
 import type { CRMLead } from "@/hooks/useCRM";
 import { BRASILIA_TIME_ZONE, brasiliaDateKey, isValidDateKey } from "@/lib/brasilia-time";
+import { MAX_ATHLETE_AGE, MIN_ATHLETE_AGE } from "@/lib/crm-age";
 
 export const ATHLETE_POSITIONS = [
   "Goleiro",
@@ -16,6 +17,7 @@ export const emptyContact = {
   city_state: "",
   athlete_name: "",
   athlete_birth_date: "",
+  athlete_age: "",
   athlete_position: "",
   athlete_height_cm: "",
   athlete_weight_kg: "",
@@ -37,6 +39,8 @@ export function contactPayload(form: ContactForm) {
     phone: form.phone.trim(),
     email: form.email.trim() || null,
     athlete_birth_date: form.athlete_birth_date || null,
+    // A idade informada manualmente nao gera uma data de nascimento.
+    athlete_age: form.athlete_age === "" ? null : Number(form.athlete_age),
     athlete_position: form.athlete_position || null,
     athlete_name: form.athlete_name.trim(),
     athlete_height_cm:
@@ -64,6 +68,13 @@ export function validateContact(form: ContactForm) {
       form.athlete_birth_date < "1900-01-01")
   )
     return "Informe uma data de nascimento válida, sem data futura.";
+  if (
+    form.athlete_age !== "" &&
+    (!Number.isInteger(Number(form.athlete_age)) ||
+      Number(form.athlete_age) < MIN_ATHLETE_AGE ||
+      Number(form.athlete_age) > MAX_ATHLETE_AGE)
+  )
+    return `Idade do atleta deve ser um número inteiro entre ${MIN_ATHLETE_AGE} e ${MAX_ATHLETE_AGE}.`;
   if (
     form.athlete_position &&
     !ATHLETE_POSITIONS.includes(form.athlete_position)

@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
 import type { Tables } from '@/integrations/supabase/types'
 import { exactDate } from '@/lib/sales'
+import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 export function ExecutiveRegistrationRequests() {
   const { user } = useAuth()
@@ -21,11 +22,9 @@ export function ExecutiveRegistrationRequests() {
       if (error) throw error
       return data as unknown as Tables<'registration_requests'>[]
     },
-    // DataSync invalidates this key as soon as a signup commits. This shorter
-    // fallback applies only to registration requests, including reconnects.
-    refetchInterval: 5000,
-    refetchOnWindowFocus: 'always',
-    refetchOnReconnect: 'always',
+    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     staleTime: 0,
   })
 

@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useRankingDataWithMock } from '@/hooks/useRankingDataWithMock'
@@ -96,6 +96,7 @@ export function LeaderboardPreview() {
               
               {/* Avatar */}
               <Avatar className="h-8 w-8">
+                {seller.avatarUrl && <AvatarImage src={seller.avatarUrl} alt={seller.name} className="object-cover" />}
                 <AvatarFallback className={cn(
                   'text-xs font-medium text-white',
                   avatarColors[index % avatarColors.length]

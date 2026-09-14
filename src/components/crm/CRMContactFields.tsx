@@ -1,6 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ATHLETE_POSITIONS, ContactForm } from "@/lib/crm";
+import { MAX_ATHLETE_AGE, MIN_ATHLETE_AGE, ageFromBirthDate, athleteAgeConflict } from "@/lib/crm-age";
 
 export function CRMContactFields({
   value,
@@ -30,7 +31,7 @@ export function CRMContactFields({
         required={required}
         min={min}
         max={max}
-        step={type === "number" ? "0.1" : undefined}
+        step={type === "number" ? (key === "athlete_age" ? "1" : "0.1") : undefined}
         maxLength={
           key === "email"
             ? 254
@@ -46,6 +47,11 @@ export function CRMContactFields({
       />
     </div>
   );
+  const calculatedAge = ageFromBirthDate(value.athlete_birth_date);
+  const ageConflict = athleteAgeConflict({
+    athlete_birth_date: value.athlete_birth_date,
+    athlete_age: value.athlete_age === "" ? null : Number(value.athlete_age),
+  });
   return (
     <div className="space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dados do responsável</p>
@@ -65,6 +71,36 @@ export function CRMContactFields({
           false,
           "1900-01-01",
         )}
+        <div className="space-y-1">
+          {field(
+            "athlete_age",
+            "Idade do atleta",
+            "number",
+            false,
+            String(MIN_ATHLETE_AGE),
+            String(MAX_ATHLETE_AGE),
+          )}
+          {calculatedAge !== null ? (
+            <p className="text-[11px] leading-4 text-muted-foreground">
+              Pela data de nascimento: {calculatedAge}{" "}
+              {calculatedAge === 1 ? "ano" : "anos"}. Esse cálculo tem
+              prioridade sobre a idade digitada.
+            </p>
+          ) : (
+            <p className="text-[11px] leading-4 text-muted-foreground">
+              Use quando não houver data de nascimento. Informar a idade não
+              registra uma data de nascimento.
+            </p>
+          )}
+          {ageConflict && (
+            <p role="status" className="text-[11px] leading-4 text-amber-400">
+              A data de nascimento indica {ageConflict.calculated}{" "}
+              {ageConflict.calculated === 1 ? "ano" : "anos"} e a idade digitada
+              é {ageConflict.informed}. O CRM exibirá{" "}
+              {ageConflict.calculated}.
+            </p>
+          )}
+        </div>
         <div className="space-y-1">
           <Label className="text-xs" htmlFor={`${prefix}-position`}>Posição em campo</Label>
           <select

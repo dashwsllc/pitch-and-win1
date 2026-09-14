@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ShoppingCart, ArrowLeft, Info, Clock, Package } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { errorMessage, money } from "@/lib/sales";
+import { RecentSalesManagement } from "@/components/sales/RecentSalesManagement";
+import { refreshSalesData } from "@/lib/sync";
 
 export default function RegistrarVenda() {
   const navigate = useNavigate();
@@ -238,9 +240,7 @@ export default function RegistrarVenda() {
           : "Aguardando aprovação do executive. O saldo será atualizado após a validação.",
       });
       setJustRegistered(true);
-      void queryClient.invalidateQueries({ queryKey: ["sales-board"] });
-      void queryClient.invalidateQueries({ queryKey: ["crm"] });
-      window.dispatchEvent(new Event("dashboard-data-changed"));
+      await refreshSalesData(queryClient);
       resetForm();
       setLinkedLead(null);
       setSearchParams(
@@ -267,7 +267,7 @@ export default function RegistrarVenda() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center gap-4 mb-6">
           <Button
             variant="ghost"
@@ -555,6 +555,7 @@ export default function RegistrarVenda() {
             )}
           </CardContent>
         </Card>
+        <RecentSalesManagement />
       </div>
     </DashboardLayout>
   );

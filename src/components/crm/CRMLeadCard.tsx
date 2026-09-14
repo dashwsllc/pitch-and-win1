@@ -42,6 +42,12 @@ import { callDate } from "@/lib/crm";
 import type { Json } from "@/integrations/supabase/types";
 import { BRASILIA_TIME_ZONE } from "@/lib/brasilia-time";
 import { nextLeadSchedule } from "@/lib/crm-order";
+import {
+  callStateLabel,
+  callTimingState,
+  minutesUntilCall,
+} from "@/lib/crm-call-status";
+import { formatAthleteAge } from "@/lib/crm-age";
 
 export function CRMLeadCard({
   lead,
@@ -110,7 +116,24 @@ export function CRMLeadCard({
     (!callMoment ||
       Math.abs(new Date(lead.next_followup_at).getTime() - callMoment.getTime()) >
         60_000);
-  const overdue = !closed && !!next && new Date(next) < new Date();
+  const now = Date.now();
+  const overdue = !closed && !!next && Date.parse(next) < now;
+  // Estado da call vem do helper central, compartilhado com filtros e avisos.
+  const callState = callTimingState(call, now, lead.pipeline_stage);
+  const callMinutes = minutesUntilCall(call, now);
+  const callLabel = callStateLabel(callState, callMinutes);
+  const callTone =
+    callState === "overdue"
+      ? "border-rose-400/50 text-rose-300"
+      : callState === "now"
+        ? "border-primary/60 text-primary"
+        : callState === "urgent"
+          ? "border-amber-400/60 text-amber-300"
+          : callState === "approaching"
+            ? "border-amber-400/40 text-amber-400/90"
+            : "border-border/70 text-muted-foreground";
+  const athleteLabel = lead.athlete_name?.trim() || lead.name?.trim() || "Lead sem nome";
+  const athleteAge = formatAthleteAge(lead);
   const incomplete =
     !lead.name?.trim() || !lead.athlete_name?.trim() || !lead.phone?.trim();
   const color = {
@@ -125,14 +148,17 @@ export function CRMLeadCard({
   }[lead.temperature];
   return (
     <article
-      aria-label={`Lead ${lead.name}`}
+      aria-label={`Lead ${athleteLabel}`}
       className={`min-w-0 self-start rounded-lg border border-l-4 bg-card p-3 space-y-2 ${color} ${overdue ? "border-amber-600/60" : "border-border/60"}`}
     >
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-sm break-words">{lead.name}</h3>
+          <h3 className="font-semibold text-sm break-words">{athleteLabel}</h3>
           <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            <span className="truncate">Atleta: {lead.athlete_name || "Não informado"}</span>
+            {athleteAge && <span className="shrink-0">{athleteAge}</span>}
+            <span className="truncate">
+              Responsável: {lead.name?.trim() || "Não informado"}
+            </span>
             {lead.phone ? (
               <a
                 href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`}
@@ -197,11 +223,22 @@ export function CRMLeadCard({
             Cadastro incompleto
           </Badge>
         )}
-        {overdue && (
-          <Badge variant="outline" className="h-5 px-2 text-[10px] text-amber-400">
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            Atrasado
+        {callLabel ? (
+          <Badge variant="outline" className={`h-5 px-2 text-[10px] ${callTone}`}>
+            {callState === "overdue" ? (
+              <AlertTriangle className="h-3 w-3 mr-1" />
+            ) : (
+              <CalendarClock className="h-3 w-3 mr-1" />
+            )}
+            {callLabel}
           </Badge>
+        ) : (
+          overdue && (
+            <Badge variant="outline" className="h-5 px-2 text-[10px] text-amber-400">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Atrasado
+            </Badge>
+          )
         )}
       </div>
       <div className="text-[11px] leading-4 text-muted-foreground">
@@ -237,17 +274,21 @@ export function CRMLeadCard({
               : "Call ainda não agendada"
           }
           className={`rounded-md border px-2.5 py-2 ${
-            callMoment
-              ? callMoment < new Date()
-                ? "border-amber-500/60 bg-amber-500/10"
-                : "border-primary/40 bg-primary/10"
-              : "border-border/70 bg-muted/30"
+            !callMoment
+              ? "border-border/70 bg-muted/30"
+              : callState === "overdue"
+                ? "border-rose-400/60 bg-rose-400/10"
+                : callState === "now"
+                  ? "border-primary/60 bg-primary/15"
+                  : callState === "urgent" || callState === "approaching"
+                    ? "border-amber-500/60 bg-amber-500/10"
+                    : "border-primary/40 bg-primary/10"
           }`}
         >
           {callMoment ? (
             <>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {callMoment < new Date() ? "Call atrasada" : "Call agendada"}
+                {callLabel ?? "Call agendada"}
               </p>
               <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
                 <CalendarClock className="h-4 w-4 shrink-0 text-primary" />

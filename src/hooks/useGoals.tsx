@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client'
 import type { Tables } from '@/integrations/supabase/types'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
-import { brasiliaDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
+import { brasiliaDateKey } from '@/lib/brasilia-time'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { sanitizePlainText } from '@/lib/plain-text'
 import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
@@ -15,19 +15,13 @@ export function useBrasiliaToday() {
   const [today, setToday] = useState(() => brasiliaDateKey())
 
   useEffect(() => {
-    let timeout: number
     const update = () => {
-      window.clearTimeout(timeout)
       setToday(brasiliaDateKey())
-      timeout = window.setTimeout(update, millisecondsUntilBrasiliaMidnight() + 50)
     }
     update()
-    window.addEventListener('focus', update)
-    document.addEventListener('visibilitychange', update)
+    const interval = window.setInterval(update, AUTO_REFRESH_INTERVAL_MS)
     return () => {
-      window.clearTimeout(timeout)
-      window.removeEventListener('focus', update)
-      document.removeEventListener('visibilitychange', update)
+      window.clearInterval(interval)
     }
   }, [])
 
@@ -55,7 +49,7 @@ export function useDailyGoals() {
     },
     staleTime: 0,
     refetchInterval: AUTO_REFRESH_INTERVAL_MS,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     retry: 1,
   })
 
@@ -104,7 +98,7 @@ export function useDailyGoalsManagement(assigneeId: string, taskDate: string) {
     },
     staleTime: 0,
     refetchInterval: AUTO_REFRESH_INTERVAL_MS,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     retry: 1,
   })
 

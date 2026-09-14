@@ -2,6 +2,14 @@
 INSERT INTO auth.users(id,email,raw_user_meta_data,raw_app_meta_data,created_at,updated_at)
 VALUES ('aa000000-0000-4000-8000-000000000001','executive-check@example.invalid','{"display_name":"QA Executive"}','{}',now(),now()),
 ('aa000000-0000-4000-8000-000000000002','seller-check@example.invalid','{"display_name":"QA Seller"}','{}',now(),now());
+-- A politica restritiva registration_access (migracao 20260912090000) exige
+-- cadastro aprovado para qualquer acesso. As fixtures criam contas direto em
+-- auth.users, entao a aprovacao precisa ser registrada explicitamente.
+INSERT INTO public.registration_requests(user_id,display_name,email,requested_role,status,reviewed_at)
+SELECT u.id, COALESCE(u.raw_user_meta_data->>'display_name','QA'), u.email, 'seller', 'approved', now()
+FROM auth.users u WHERE u.id::text LIKE 'aa000000-0000-4000-8000-%'
+ON CONFLICT (user_id) DO UPDATE SET status='approved', reviewed_at=now();
+
 -- The seller role is explicit: registering a sale requires the 'sales' capability
 -- and the frozen commission comes from this row.
 INSERT INTO public.user_roles(user_id,role) VALUES ('aa000000-0000-4000-8000-000000000001','executive'),

@@ -31,6 +31,7 @@ export default function Ranking() {
   const rankingData = ranking.map((user, index) => ({
     position: index + 1,
     name: user.name,
+    avatarUrl: user.avatarUrl,
     salesValue: user.totalVendas,
     sales: new Intl.NumberFormat('pt-BR', { 
       style: 'currency', 
@@ -124,6 +125,7 @@ export default function Ranking() {
               <CardContent className="p-6 text-center">
                 <div className="mb-3">{getMedalIcon(2)}</div>
                 <Avatar className="w-16 h-16 mx-auto mb-3 ring-2 ring-slate-300/30">
+                  {rankingData[1].avatarUrl && <AvatarImage src={rankingData[1].avatarUrl} alt={rankingData[1].name} className="object-cover" />}
                   <AvatarFallback className={cn('text-lg font-bold text-white', avatarColors[1])}>
                     {rankingData[1].name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                   </AvatarFallback>
@@ -151,6 +153,7 @@ export default function Ranking() {
               <CardContent className="p-8 text-center relative">
                 <div className="mb-4">{getMedalIcon(1)}</div>
                 <Avatar className="w-20 h-20 mx-auto mb-4 ring-4 ring-amber-400/30">
+                  {rankingData[0].avatarUrl && <AvatarImage src={rankingData[0].avatarUrl} alt={rankingData[0].name} className="object-cover" />}
                   <AvatarFallback className={cn('text-xl font-bold text-white', avatarColors[0])}>
                     {rankingData[0].name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                   </AvatarFallback>
@@ -179,6 +182,7 @@ export default function Ranking() {
               <CardContent className="p-6 text-center">
                 <div className="mb-3">{getMedalIcon(3)}</div>
                 <Avatar className="w-16 h-16 mx-auto mb-3 ring-2 ring-amber-700/30">
+                  {rankingData[2].avatarUrl && <AvatarImage src={rankingData[2].avatarUrl} alt={rankingData[2].name} className="object-cover" />}
                   <AvatarFallback className={cn('text-lg font-bold text-white', avatarColors[2])}>
                     {rankingData[2].name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                   </AvatarFallback>
@@ -235,6 +239,7 @@ export default function Ranking() {
                         
                         {/* Avatar */}
                         <Avatar className="w-9 h-9">
+                          {seller.avatarUrl && <AvatarImage src={seller.avatarUrl} alt={seller.name} className="object-cover" />}
                           <AvatarFallback className={cn(
                             'text-xs font-bold text-white',
                             avatarColors[(seller.position - 1) % avatarColors.length]

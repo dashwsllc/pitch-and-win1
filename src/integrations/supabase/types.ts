@@ -428,6 +428,7 @@ export type Database = {
           version: number
           city_state: string | null
           athlete_name: string | null
+          athlete_age: number | null
           athlete_birth_date: string | null
           athlete_position: string | null
           athlete_height_cm: number | null
@@ -474,6 +475,7 @@ export type Database = {
           version?: number
           city_state?: string | null
           athlete_name?: string | null
+          athlete_age?: number | null
           athlete_birth_date?: string | null
           athlete_position?: string | null
           athlete_height_cm?: number | null
@@ -520,6 +522,7 @@ export type Database = {
           version?: number
           city_state?: string | null
           athlete_name?: string | null
+          athlete_age?: number | null
           athlete_birth_date?: string | null
           athlete_position?: string | null
           athlete_height_cm?: number | null
@@ -1139,6 +1142,7 @@ export type Database = {
       }
       vendas: {
         Row: {
+          commission_rate_applied: number | null
           crm_lead_id: string | null
           product_id: string | null
           ticket_id: string | null
@@ -1164,6 +1168,7 @@ export type Database = {
         }
         Insert: {
           crm_lead_id?: string | null
+          commission_rate_applied?: number | null
           product_id?: string | null
           ticket_id?: string | null
           ticket_name?: string | null
@@ -1188,6 +1193,7 @@ export type Database = {
         }
         Update: {
           crm_lead_id?: string | null
+          commission_rate_applied?: number | null
           product_id?: string | null
           ticket_id?: string | null
           ticket_name?: string | null
@@ -1286,6 +1292,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      manage_sale: {
+        Args: { p_sale_id: string; p_action: string; p_expected_updated_at: string; p_data?: Json; p_reason?: string }
+        Returns: Database["public"]["Tables"]["vendas"]["Row"]
+      }
       crm_import_txt_context: {
         Args: { p_lead_id: string; p_context_type: string; p_content: string; p_source_name: string; p_source_content: string }
         Returns: Database["public"]["Tables"]["crm_lead_contexts"]["Row"]

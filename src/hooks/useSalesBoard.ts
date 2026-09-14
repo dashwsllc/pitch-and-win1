@@ -18,6 +18,6 @@ export function useSalesBoard(status = 'pendente', search = '', page = 0, pageSi
     },
     staleTime: 10_000,
     refetchInterval: AUTO_REFRESH_INTERVAL_MS,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   })
 }

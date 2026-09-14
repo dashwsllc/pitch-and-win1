@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, Json } from "@/integrations/supabase/types";
@@ -61,75 +60,12 @@ export const APPROACH_LABELS: Record<string, string> = {
 const queryOptions = {
   staleTime: 5_000,
   refetchInterval: AUTO_REFRESH_INTERVAL_MS,
-  refetchOnWindowFocus: true,
+  refetchOnWindowFocus: false,
   retry: 1,
 };
 
 export function useCRMRealtime() {
-  const [realtimeUnavailable, setRealtimeUnavailable] = useState(false);
-  const client = useQueryClient();
-  const { user, session } = useAuth();
-  const token = session?.access_token;
-  useEffect(() => {
-    if (!user) return;
-    let disposed = false;
-    const channel = supabase
-      .channel(`crm-${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "crm_leads" },
-        () => {
-          void client.invalidateQueries({ queryKey: ["crm"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "crm_activities" },
-        () => {
-          void client.invalidateQueries({ queryKey: ["crm"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "crm_lead_contexts" },
-        () => {
-          void client.invalidateQueries({ queryKey: ["crm"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "vendas" },
-        () => {
-          void client.invalidateQueries({ queryKey: ["crm"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "dashboard_events" },
-        () => {
-          void client.invalidateQueries({ queryKey: ["crm"] });
-        },
-      );
-    void supabase.realtime
-      .setAuth(token)
-      .then(() => {
-        if (!disposed)
-          channel.subscribe((status) => {
-            if (!disposed) setRealtimeUnavailable(status !== "SUBSCRIBED");
-            if (status === "SUBSCRIBED" || status === "CHANNEL_ERROR")
-              void client.invalidateQueries({ queryKey: ["crm"] });
-          });
-      })
-      .catch(() => {
-        if (!disposed) setRealtimeUnavailable(true);
-        void client.invalidateQueries({ queryKey: ["crm"] });
-      });
-    return () => {
-      disposed = true;
-      void supabase.removeChannel(channel);
-    };
-  }, [user, token, client]);
-  return { realtimeUnavailable };
+  return { realtimeUnavailable: false };
 }
 
 export function useCRMLeads() {

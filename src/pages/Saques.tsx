@@ -113,23 +113,11 @@ export default function Saques() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // ✅ Realtime: atualiza saldo quando vendas ou saques mudam
   useEffect(() => {
     if (!user) return
     const refresh = () => { void fetchData() }
     window.addEventListener('dashboard-data-changed', refresh)
-    const channel = supabase
-      .channel(`saques-realtime-${user.id}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'vendas',
-        filter: `user_id=eq.${user.id}`
-      }, () => fetchData())
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'saques',
-        filter: `user_id=eq.${user.id}`
-      }, () => fetchData())
-      .subscribe()
-    return () => { channel.unsubscribe(); window.removeEventListener('dashboard-data-changed', refresh) }
+    return () => { window.removeEventListener('dashboard-data-changed', refresh) }
   }, [user, fetchData])
 
   const formatCpf = (v: string) => {

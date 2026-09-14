@@ -34,5 +34,8 @@ allowed_mime_types = ["image/png", "image/jpeg", "image/webp"]
 [functions.executive-update-account]
 verify_jwt = true
 
+[functions.executive-delete-account]
+verify_jwt = true
+
 [functions.reset-user-password]
 verify_jwt = true

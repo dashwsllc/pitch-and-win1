@@ -10,6 +10,7 @@ import { formatDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia
 import { safePlainText } from '@/lib/plain-text'
 import { errorMessage } from '@/lib/sales'
 import { cn } from '@/lib/utils'
+import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 function countdownLabel(milliseconds: number) {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000))
@@ -26,7 +27,7 @@ export function GoalsProgress() {
   const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 1000)
+    const timer = window.setInterval(() => setNow(new Date()), AUTO_REFRESH_INTERVAL_MS)
     return () => window.clearInterval(timer)
   }, [])
 

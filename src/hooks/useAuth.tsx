@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
+import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 interface AuthContextType {
   user: User | null
@@ -75,24 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       running = false
     }
     void refresh()
-    const channel = supabase.channel(`registration-${sessionUserId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'registration_requests', filter: `user_id=eq.${sessionUserId}` }, () => { void refresh() })
-    void supabase.realtime.setAuth(accessToken).then(() => {
-      if (!disposed) channel.subscribe(status => { if (status === 'SUBSCRIBED') void refresh() })
-    }).catch(() => { if (!disposed) void refresh() })
     const onVisible = () => { if (!document.hidden) void refresh() }
-    // Realtime is immediate; polling catches reconnects and missed events.
-    const interval = setInterval(onVisible, 5000)
-    window.addEventListener('focus', onVisible)
-    window.addEventListener('online', onVisible)
-    document.addEventListener('visibilitychange', onVisible)
+    const interval = setInterval(onVisible, AUTO_REFRESH_INTERVAL_MS)
     return () => {
       disposed = true
       clearInterval(interval)
-      window.removeEventListener('focus', onVisible)
-      window.removeEventListener('online', onVisible)
-      document.removeEventListener('visibilitychange', onVisible)
-      void supabase.removeChannel(channel)
     }
   }, [sessionUserId, accessToken, refreshKey])
 

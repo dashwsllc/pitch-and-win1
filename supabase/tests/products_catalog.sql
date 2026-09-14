@@ -2,6 +2,14 @@
 INSERT INTO auth.users(id,email,raw_user_meta_data,raw_app_meta_data,created_at,updated_at)
 VALUES ('ac000000-0000-4000-8000-000000000001','catalog-executive@example.invalid','{"display_name":"Catalog QA Executive"}','{}',now(),now()),
 ('ac000000-0000-4000-8000-000000000002','catalog-seller@example.invalid','{"display_name":"Catalog QA Seller"}','{}',now(),now());
+-- A politica restritiva registration_access (migracao 20260912090000) exige
+-- cadastro aprovado para qualquer acesso. As fixtures criam contas direto em
+-- auth.users, entao a aprovacao precisa ser registrada explicitamente.
+INSERT INTO public.registration_requests(user_id,display_name,email,requested_role,status,reviewed_at)
+SELECT u.id, COALESCE(u.raw_user_meta_data->>'display_name','QA'), u.email, 'seller', 'approved', now()
+FROM auth.users u WHERE u.id::text LIKE 'ac000000-0000-4000-8000-%'
+ON CONFLICT (user_id) DO UPDATE SET status='approved', reviewed_at=now();
+
 INSERT INTO public.user_roles(user_id,role) VALUES ('ac000000-0000-4000-8000-000000000001','executive');
 UPDATE public.user_roles SET commission_rate=20 WHERE user_id='ac000000-0000-4000-8000-000000000002';
 CREATE TEMP TABLE catalog_qa_state(product_id uuid, ticket_id uuid, other_id uuid, old_revision timestamptz);
