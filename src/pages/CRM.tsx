@@ -50,6 +50,7 @@ import {
 } from "@/lib/brasilia-time";
 import { callMatchesDateKey, type CallDateFilter } from "@/lib/crm-call-status";
 import { useCRMNotifications } from "@/hooks/useCRMNotifications";
+import { useSalesBoard } from "@/hooks/useSalesBoard";
 import { compareLeadUrgency, nextLeadSchedule } from "@/lib/crm-order";
 import { AUTO_REFRESH_INTERVAL_LABEL, AUTO_REFRESH_INTERVAL_MS } from "@/lib/sync";
 
@@ -137,6 +138,7 @@ export default function CRM() {
   const callsQuery = useCRMActivities(null, true);
   const assignees = useCRMAssignees();
   const sales = useCRMSaleLinks();
+  const approvedSales = useSalesBoard("aprovada", "", 0, 50);
   const contextSummary = useCRMContextSummary();
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
@@ -185,14 +187,14 @@ export default function CRM() {
   const saleMap = new Map(
     (sales.data || []).map((sale) => [sale.lead_id, sale]),
   );
-  // Lembretes pessoais de call e avisos de venda para a equipe. Le apenas os
-  // dados ja carregados acima; nao abre consulta nem assinatura propria.
+  // Calls e abordagens são pessoais; vendas usam a aprovação real registrada
+  // no painel e só entram na janela de aviso uma hora depois da revisão.
   useCRMNotifications({
     userId: user?.id,
     enabled: !!user && capabilities.leads,
     leads: crm.leads,
     calls: callsQuery.activities,
-    names,
+    approvedSales: approvedSales.data?.items || [],
     onOpenLead: (leadId) => setReadId(leadId),
   });
   const next = (lead: CRMLead) =>

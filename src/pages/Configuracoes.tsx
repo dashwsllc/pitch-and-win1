@@ -10,11 +10,17 @@ import { useAuth } from "@/hooks/useAuth"
 import { toast } from "sonner"
 import { Settings, Palette, Bell, Shield, LogOut, Monitor, Sun, Moon } from "lucide-react"
 import { useState } from "react"
+import {
+  readProactiveNotificationsPreference,
+  writeProactiveNotificationsPreference,
+} from "@/lib/notification-preferences"
 
 export default function Configuracoes() {
   const { theme, setTheme } = useTheme()
   const { signOut } = useAuth()
-  const [notifications, setNotifications] = useState(true)
+  const [notifications, setNotifications] = useState(
+    readProactiveNotificationsPreference,
+  )
   const [emailNotifications, setEmailNotifications] = useState(true)
 
   const handleSignOut = async () => {
@@ -24,6 +30,11 @@ export default function Configuracoes() {
     } catch (error) {
       toast.error('Erro ao fazer logout')
     }
+  }
+
+  const handleNotificationsChange = (enabled: boolean) => {
+    setNotifications(enabled)
+    writeProactiveNotificationsPreference(enabled)
   }
 
   const getThemeIcon = (themeValue: string) => {
@@ -112,14 +123,14 @@ export default function Configuracoes() {
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Notificações Push</Label>
+                  <Label>Alertas na tela</Label>
                   <p className="text-xs text-muted-foreground">
-                    Receba notificações em tempo real
+                    Avisos de calls, abordagens e vendas aprovadas
                   </p>
                 </div>
                 <Switch
                   checked={notifications}
-                  onCheckedChange={setNotifications}
+                  onCheckedChange={handleNotificationsChange}
                 />
               </div>
 

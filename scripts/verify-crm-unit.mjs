@@ -5,6 +5,9 @@ import { registerHooks } from 'node:module'
 registerHooks({ resolve(specifier, context, nextResolve) {
   if (specifier === '@/lib/brasilia-time') return nextResolve(new URL('../src/lib/brasilia-time.ts', import.meta.url).href, context)
   if (specifier === '@/lib/crm-age') return nextResolve(new URL('../src/lib/crm-age.ts', import.meta.url).href, context)
+  if (specifier === '@/lib/crm-call-status') return nextResolve(new URL('../src/lib/crm-call-status.ts', import.meta.url).href, context)
+  if (specifier === '@/hooks/useCRM') return { url: 'data:text/javascript,export {}', shortCircuit: true }
+  if (specifier === '@/lib/sales') return { url: 'data:text/javascript,export {}', shortCircuit: true }
   return nextResolve(specifier, context)
 } })
 const { emptyContact, validateContact, contactPayload } = await import('../src/lib/crm.ts')
@@ -96,6 +99,37 @@ assert.equal(callMatchesDateKey({ scheduled_at: null }, '2026-09-14'), false)
 assert.equal(callMatchesDateKey({ scheduled_at: '2026-09-14T18:00:00Z' }, null), false)
 
 // ---------------------------------------------------------------------------
+// Janelas e deduplicação das notificações proativas
+// ---------------------------------------------------------------------------
+const {
+  callReminderMilestone,
+  passedCallMilestones,
+  saleNotificationState,
+  followupNotificationState,
+  leadNotificationOwner,
+} = await import('../src/lib/crm-notifications.ts')
+const notificationAt = (m) => new Date(agora + m * 60_000).toISOString()
+assert.equal(callReminderMilestone(emMinutos(31), agora), null)
+assert.equal(callReminderMilestone(emMinutos(25), agora), 30)
+assert.equal(callReminderMilestone(emMinutos(8), agora), 10)
+assert.equal(callReminderMilestone(emMinutos(0), agora), 0)
+assert.equal(callReminderMilestone(emMinutos(-4), agora), 0)
+assert.equal(callReminderMilestone(emMinutos(-6), agora), null)
+assert.deepEqual(passedCallMilestones(10), [30])
+assert.deepEqual(passedCallMilestones(0), [30, 10])
+const aprovada = { approval_status: 'aprovada', reviewed_at: notificationAt(-60) }
+assert.equal(saleNotificationState(aprovada, agora), 'eligible')
+assert.equal(saleNotificationState({ ...aprovada, reviewed_at: notificationAt(-59) }, agora), 'waiting')
+assert.equal(saleNotificationState({ ...aprovada, reviewed_at: notificationAt(-71) }, agora), 'expired')
+assert.equal(saleNotificationState({ ...aprovada, approval_status: 'pendente' }, agora), 'invalid')
+assert.equal(followupNotificationState({ pipeline_stage: 'em_contato', next_followup_at: notificationAt(-10) }, agora), 'eligible')
+assert.equal(followupNotificationState({ pipeline_stage: 'em_contato', next_followup_at: notificationAt(-16) }, agora), 'expired')
+assert.equal(followupNotificationState({ pipeline_stage: 'fechado_ganho', next_followup_at: notificationAt(0) }, agora), 'invalid')
+assert.equal(leadNotificationOwner({ pipeline_stage: 'repassado_closer', closer_id: 'closer', sdr_id: 'sdr', assigned_to: null, created_by: 'creator' }), 'closer')
+assert.equal(leadNotificationOwner({ pipeline_stage: 'repassado_closer', closer_id: null, sdr_id: 'sdr', assigned_to: 'sdr', created_by: 'creator' }), null)
+assert.equal(leadNotificationOwner({ pipeline_stage: 'em_contato', closer_id: null, sdr_id: 'sdr', assigned_to: null, created_by: 'creator' }), 'sdr')
+
+// ---------------------------------------------------------------------------
 // Hierarquia do atleta na interface
 // ---------------------------------------------------------------------------
 const detailSource = readFileSync(new URL('../src/components/crm/CRMLeadDetail.tsx', import.meta.url), 'utf8')
@@ -124,4 +158,4 @@ assert.deepEqual(ordenado.slice(0, 4), ['a-muito-atrasada', 'b-agora', 'c-proxim
 // Sem agenda e leads encerrados ficam no fim.
 assert.deepEqual(ordenado.slice(4).sort(), ['e-sem-agenda', 'f-encerrada'])
 
-console.log('PASS: contact validation, capability matrix, schedule-before-handoff, athlete age, call timing states, operational ordering and athlete-first hierarchy.')
+console.log('PASS: CRM validation, roles, scheduling, athlete data, call states, notification windows, ordering and athlete-first hierarchy.')

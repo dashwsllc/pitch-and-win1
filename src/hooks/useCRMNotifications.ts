@@ -1,24 +1,30 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import type { CRMActivity, CRMLead } from '@/hooks/useCRM'
-import {
-  CALL_REMINDER_MILESTONES,
-  IN_PROGRESS_WINDOW_MS,
-  MINUTE_MS,
-  callTimestamp,
-  isClosedStage,
-} from '@/lib/crm-call-status'
+import type { TeamSale } from '@/lib/sales'
 import { BRASILIA_TIME_ZONE } from '@/lib/brasilia-time'
+import { callTimestamp, isClosedStage } from '@/lib/crm-call-status'
+import {
+  CALL_START_GRACE_MS,
+  PROACTIVE_NOTIFICATION_COOLDOWN_MS,
+  callReminderKey,
+  callReminderMilestone,
+  followupNotificationKey,
+  followupNotificationState,
+  leadNotificationOwner,
+  passedCallMilestones,
+  saleNotificationKey,
+  saleNotificationState,
+} from '@/lib/crm-notifications'
+import { readProactiveNotificationsPreference } from '@/lib/notification-preferences'
 
-// Verificacao local a cada 30s. Nao faz requisicao: le apenas os dados que o
-// CRM ja carregou no seu proprio ciclo de atualizacao.
 const TICK_MS = 30_000
-const MEMORY_TTL_MS = 7 * 24 * 60 * 60 * 1000
-const STORAGE_PREFIX = 'crm-notifications'
+const MEMORY_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const STORAGE_PREFIX = 'crm-notifications-v2'
+const TOAST_ID = 'crm-proactive-notification'
 
 type Delivered = Record<string, number>
 
-// Persistido para que recarregar a pagina nao reenvie avisos ja mostrados.
 function readDelivered(storageKey: string): Delivered {
   try {
     const raw = window.localStorage.getItem(storageKey)
@@ -38,10 +44,12 @@ function readDelivered(storageKey: string): Delivered {
 
 function writeDelivered(storageKey: string, value: Delivered) {
   try {
-    window.localStorage.setItem(storageKey, JSON.stringify(value))
+    const recent = Object.entries(value)
+      .sort(([, left], [, right]) => right - left)
+      .slice(0, 500)
+    window.localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(recent)))
   } catch {
-    // Armazenamento indisponivel (aba anonima, cota). A deduplicacao continua
-    // valendo em memoria durante a sessao.
+    // A deduplicação continua em memória quando o armazenamento não está disponível.
   }
 }
 
@@ -55,12 +63,30 @@ const callClock = (value: string) =>
 const athleteLabel = (lead: CRMLead | undefined, fallback = 'Lead sem nome') =>
   lead?.athlete_name?.trim() || lead?.name?.trim() || fallback
 
+type CallCandidate = {
+  call: CRMActivity
+  key: string
+  milestone: 30 | 10 | 0
+  label: string
+  scheduledAt: string
+}
+
+type FollowupCandidate = {
+  lead: CRMLead
+  key: string
+}
+
+type SaleCandidate = {
+  sale: TeamSale
+  key: string
+}
+
 export type CRMNotificationsInput = {
   userId: string | null | undefined
   enabled: boolean
   leads: CRMLead[]
   calls: CRMActivity[]
-  names: Record<string, string>
+  approvedSales: TeamSale[]
   onOpenLead?: (leadId: string) => void
 }
 
@@ -69,116 +95,198 @@ export function useCRMNotifications({
   enabled,
   leads,
   calls,
-  names,
+  approvedSales,
   onOpenLead,
 }: CRMNotificationsInput) {
-  // Refs mantem os dados frescos sem reiniciar o timer a cada render.
-  const latest = useRef({ leads, calls, names, onOpenLead })
-  latest.current = { leads, calls, names, onOpenLead }
+  const latest = useRef({ leads, calls, approvedSales, onOpenLead })
+  latest.current = { leads, calls, approvedSales, onOpenLead }
 
   const delivered = useRef<Delivered>({})
+  const lastPopupAt = useRef(0)
   const storageKey = userId ? `${STORAGE_PREFIX}:${userId}` : null
-  const salesBaseline = useRef<Set<string> | null>(null)
 
   useEffect(() => {
-    // Troca de usuario recarrega a memoria de avisos e descarta a linha de base
-    // de vendas do usuario anterior.
     delivered.current = storageKey ? readDelivered(storageKey) : {}
-    salesBaseline.current = null
+    lastPopupAt.current = 0
   }, [storageKey])
 
   useEffect(() => {
     if (!enabled || !userId || !storageKey) return
 
-    const remember = (key: string) => {
-      delivered.current[key] = Date.now()
-      writeDelivered(storageKey, delivered.current)
-    }
-    const alreadySent = (key: string) => key in delivered.current
-
     const check = () => {
-      const now = Date.now()
-      const { leads: currentLeads, calls: currentCalls, names: currentNames } = latest.current
-      const leadById = new Map(currentLeads.map((lead) => [lead.id, lead]))
+      if (document.hidden || !readProactiveNotificationsPreference()) return
 
-      // ----- Lembretes pessoais do closer responsavel pela call -----
+      const now = Date.now()
+      const {
+        leads: currentLeads,
+        calls: currentCalls,
+        approvedSales: currentSales,
+      } = latest.current
+      const leadById = new Map(currentLeads.map((lead) => [lead.id, lead]))
+      let changed = false
+      const remember = (key: string) => {
+        if (key in delivered.current) return
+        delivered.current[key] = now
+        changed = true
+      }
+      const alreadySent = (key: string) => key in delivered.current
+      const persist = () => {
+        if (changed) writeDelivered(storageKey, delivered.current)
+      }
+
+      const callCandidates: CallCandidate[] = []
+      const leadsWithOpenCall = new Set<string>()
+
       for (const call of currentCalls) {
-        if (call.assigned_to !== userId) continue
-        if (call.is_completed || call.outcome) continue
+        if (call.assigned_to !== userId || call.is_completed || call.outcome) continue
         const scheduled = callTimestamp(call)
-        if (scheduled === null) continue
+        if (scheduled === null || !call.scheduled_at) continue
         const lead = leadById.get(call.lead_id)
         if (isClosedStage(lead?.pipeline_stage)) continue
+        if (scheduled >= now - CALL_START_GRACE_MS) {
+          leadsWithOpenCall.add(call.lead_id)
+        }
 
-        const remaining = scheduled - now
-        if (remaining <= -IN_PROGRESS_WINDOW_MS) continue
+        const milestone = callReminderMilestone(call, now)
+        if (milestone === null) {
+          if (scheduled < now - CALL_START_GRACE_MS) {
+            for (const passed of [30, 10, 0] as const) {
+              remember(callReminderKey(call.id, call.scheduled_at, passed))
+            }
+          }
+          continue
+        }
 
-        // Do marco mais urgente para o menos urgente: dispara no maximo um
-        // aviso por call a cada verificacao.
-        const milestone = [...CALL_REMINDER_MILESTONES]
-          .sort((a, b) => a - b)
-          .find(
-            (minutes) =>
-              remaining <= minutes * MINUTE_MS && !alreadySent(`call:${call.id}:${minutes}`),
-          )
-        if (milestone === undefined) continue
+        for (const passed of passedCallMilestones(milestone)) {
+          remember(callReminderKey(call.id, call.scheduled_at, passed))
+        }
+        const key = callReminderKey(call.id, call.scheduled_at, milestone)
+        if (!alreadySent(key)) {
+          callCandidates.push({
+            call,
+            key,
+            milestone,
+            label: athleteLabel(lead),
+            scheduledAt: call.scheduled_at,
+          })
+        }
+      }
 
-        const key = `call:${call.id}:${milestone}`
-        remember(key)
-        const name = athleteLabel(lead)
-        const clock = call.scheduled_at ? callClock(call.scheduled_at) : null
-        const starting = remaining <= 0
-        toast(starting ? 'Sua call começa agora' : `Call em ${milestone} minutos`, {
-          id: key,
-          icon: starting ? '🔔' : '📅',
-          description: clock ? `${name} · ${clock}` : name,
-          duration: starting ? 15_000 : 10_000,
+      const followupCandidates: FollowupCandidate[] = []
+      for (const lead of currentLeads) {
+        if (leadNotificationOwner(lead) !== userId) continue
+        // Calls abertas já têm lembretes próprios; um segundo popup de abordagem
+        // para o mesmo lead só duplicaria a informação.
+        if (leadsWithOpenCall.has(lead.id)) continue
+        const state = followupNotificationState(lead, now)
+        if (state === 'invalid' || state === 'waiting') continue
+        const key = followupNotificationKey(lead)
+        if (state === 'expired') {
+          remember(key)
+        } else if (!alreadySent(key)) {
+          followupCandidates.push({ lead, key })
+        }
+      }
+
+      const saleCandidates: SaleCandidate[] = []
+      for (const sale of currentSales) {
+        const state = saleNotificationState(sale, now)
+        if (state === 'invalid' || state === 'waiting') continue
+        const key = saleNotificationKey(sale)
+        if (state === 'expired') {
+          remember(key)
+        } else if (!alreadySent(key)) {
+          saleCandidates.push({ sale, key })
+        }
+      }
+
+      const callStarting = callCandidates.some(({ milestone }) => milestone === 0)
+      const coolingDown =
+        now - lastPopupAt.current < PROACTIVE_NOTIFICATION_COOLDOWN_MS
+      if (coolingDown && !callStarting) {
+        persist()
+        return
+      }
+
+      // Mostra no máximo um popup por verificação. Itens do mesmo tipo são
+      // agrupados e a prioridade operacional é call, abordagem e venda.
+      if (callCandidates.length > 0) {
+        const sorted = [...callCandidates].sort(
+          (left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt),
+        )
+        const first = sorted[0]
+        const mostUrgent = Math.min(...sorted.map(({ milestone }) => milestone))
+        const title =
+          sorted.length > 1
+            ? `${sorted.length} calls precisam de atenção`
+            : mostUrgent === 0
+              ? 'Sua call começa agora'
+              : `Call em até ${mostUrgent} minutos`
+
+        toast(title, {
+          id: TOAST_ID,
+          icon: mostUrgent === 0 ? '🔔' : '📅',
+          description: `${
+            sorted.length > 1 ? `Mais próxima: ${first.label}` : first.label
+          } · ${callClock(first.scheduledAt)}`,
+          duration: mostUrgent === 0 ? 15_000 : 10_000,
           closeButton: true,
           action: latest.current.onOpenLead
             ? {
                 label: 'Abrir lead',
-                onClick: () => latest.current.onOpenLead?.(call.lead_id),
+                onClick: () => latest.current.onOpenLead?.(first.call.lead_id),
               }
             : undefined,
         })
-      }
-
-      // ----- Vendas concluidas, avisadas para a equipe -----
-      const soldNow = new Set(
-        currentLeads
-          .filter((lead) => lead.pipeline_stage === 'fechado_ganho')
-          .map((lead) => lead.id),
-      )
-      if (salesBaseline.current === null) {
-        // Primeira leitura apenas fotografa o estado atual. Vendas que ja
-        // estavam fechadas nao geram aviso ao abrir ou recarregar a pagina.
-        salesBaseline.current = soldNow
-      } else {
-        for (const leadId of soldNow) {
-          if (salesBaseline.current.has(leadId)) continue
-          const key = `sale:${leadId}`
-          if (alreadySent(key)) continue
-          remember(key)
-          const lead = leadById.get(leadId)
-          const closer = lead?.closed_by || lead?.closer_id
-          const closerName = closer ? currentNames[closer] : null
-          toast('🎉 Nova venda realizada!', {
-            id: key,
-            description: closerName
-              ? `${athleteLabel(lead)} · Venda realizada por: ${closerName}`
-              : athleteLabel(lead),
-            duration: 12_000,
+        callCandidates.forEach(({ key }) => remember(key))
+        lastPopupAt.current = now
+      } else if (followupCandidates.length > 0) {
+        const first = followupCandidates[0]
+        toast(
+          followupCandidates.length === 1
+            ? 'Retorno de abordagem pendente'
+            : `${followupCandidates.length} abordagens precisam de retorno`,
+          {
+            id: TOAST_ID,
+            icon: '📞',
+            description:
+              followupCandidates.length === 1
+                ? athleteLabel(first.lead)
+                : `Comece por ${athleteLabel(first.lead)}`,
+            duration: 10_000,
             closeButton: true,
             action: latest.current.onOpenLead
               ? {
-                  label: 'Ver lead',
-                  onClick: () => latest.current.onOpenLead?.(leadId),
+                  label: 'Abrir lead',
+                  onClick: () => latest.current.onOpenLead?.(first.lead.id),
                 }
               : undefined,
-          })
-        }
-        salesBaseline.current = soldNow
+          },
+        )
+        followupCandidates.forEach(({ key }) => remember(key))
+        lastPopupAt.current = now
+      } else if (saleCandidates.length > 0) {
+        const first = saleCandidates[0].sale
+        toast(
+          saleCandidates.length === 1
+            ? 'Venda aprovada há 1 hora'
+            : `${saleCandidates.length} vendas aprovadas há 1 hora`,
+          {
+            id: TOAST_ID,
+            icon: '🎉',
+            description:
+              saleCandidates.length === 1
+                ? `${first.seller_name} · ${first.nome_produto}`
+                : 'As aprovações foram agrupadas para evitar vários avisos.',
+            duration: 10_000,
+            closeButton: true,
+          },
+        )
+        saleCandidates.forEach(({ key }) => remember(key))
+        lastPopupAt.current = now
       }
+
+      persist()
     }
 
     check()
