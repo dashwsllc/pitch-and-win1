@@ -22,3 +22,29 @@ export function compareLeadUrgency(a: ScheduledLead, b: ScheduledLead, aCall?: s
   const bTime = bNext ? Date.parse(bNext) : Infinity
   return aTime - bTime || (b.created_at ?? '').localeCompare(a.created_at ?? '') || a.id.localeCompare(b.id)
 }
+
+export function compareLeadRecency(a: ScheduledLead, b: ScheduledLead) {
+  return (b.created_at ?? '').localeCompare(a.created_at ?? '') || a.id.localeCompare(b.id)
+}
+
+// For a selected call day, show the next upcoming time first. Calls from
+// earlier today (or from a past selected day) follow from the nearest to the
+// oldest, so the first card is always the most useful moment to act on.
+export function compareCallProximity(
+  aCall?: string | null,
+  bCall?: string | null,
+  now = Date.now(),
+) {
+  const parse = (value?: string | null) => {
+    const time = value ? Date.parse(value) : Number.NaN
+    return Number.isFinite(time) ? time : null
+  }
+  const aTime = parse(aCall)
+  const bTime = parse(bCall)
+  if (aTime === null) return bTime === null ? 0 : 1
+  if (bTime === null) return -1
+  const aUpcoming = aTime >= now
+  const bUpcoming = bTime >= now
+  if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1
+  return aUpcoming ? aTime - bTime : bTime - aTime
+}

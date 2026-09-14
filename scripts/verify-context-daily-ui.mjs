@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { chromium, expect as baseExpect } from '../.verification.local/node_modules/@playwright/test/index.mjs'
-import { brasiliaDateKey, brasiliaDayBounds } from '../src/lib/brasilia-time.ts'
+import { addDaysToDateKey, brasiliaDateKey, brasiliaDayBounds, brasiliaLocalToDate } from '../src/lib/brasilia-time.ts'
 
 const origin = process.env.CRM_TEST_ORIGIN || 'http://127.0.0.1:5198'
 const expect = baseExpect.configure({timeout:20000})
@@ -11,15 +11,21 @@ const project = 'mbzwchnxtskysqplqiyy'
 const actor = 'ce110000-0000-4000-8000-000000000001'
 const now = new Date().toISOString()
 const today = brasiliaDateKey()
+const tomorrow = addDaysToDateKey(today, 1)
 const contexts = [], tasks = [], errors = []
 let role = 'sdr', goalReads = 0
 const profile = { id: actor, user_id: actor, display_name: 'QA Colaborador', suspended: false, created_at: now }
 const roles = () => [{ id: actor, user_id: actor, role, crm_access: false, commission_rate: 10, updated_at: now }]
 const leads = [
-  { id: randomUUID(), name: 'Futuro', temperature: 'quente', approach_stage: 'abordado', next_followup_at: new Date(Date.now()+86400000).toISOString() },
-  { id: randomUUID(), name: 'Atrasado', temperature: 'morno', approach_stage: 'em_abordagem', next_followup_at: new Date(Date.now()-86400000).toISOString() },
-  { id: randomUUID(), name: 'Sem agenda', temperature: 'frio', approach_stage: 'nao_abordado', next_followup_at: null },
-].map(l => ({ ...l, athlete_name:'Atleta', phone:'11999999999', email:null, pipeline_stage:'em_qualificacao', version:1, sdr_id:actor, created_by:actor, created_at:now, updated_at:now }))
+  { id: randomUUID(), name: 'Futuro', temperature: 'quente', approach_stage: 'abordado', next_followup_at: new Date(Date.now()+86400000).toISOString(), pipeline_stage:'em_qualificacao', created_at:new Date(Date.now()-3*86400000).toISOString() },
+  { id: randomUUID(), name: 'Atrasado', temperature: 'morno', approach_stage: 'em_abordagem', next_followup_at: new Date(Date.now()-86400000).toISOString(), pipeline_stage:'repassado_closer', created_at:new Date(Date.now()-2*86400000).toISOString() },
+  { id: randomUUID(), name: 'Sem agenda', temperature: 'frio', approach_stage: 'nao_abordado', next_followup_at: null, pipeline_stage:'repassado_closer', created_at:new Date(Date.now()-86400000).toISOString() },
+].map(l => ({ ...l, athlete_name:l.name, phone:'11999999999', email:null, version:1, sdr_id:actor, closer_id:actor, created_by:actor, updated_at:now }))
+const leadByName = Object.fromEntries(leads.map(lead => [lead.name, lead]))
+const calls = [
+  { id:randomUUID(), lead_id:leadByName['Atrasado'].id, scheduled_at:brasiliaLocalToDate(tomorrow,'15:00:00').toISOString() },
+  { id:randomUUID(), lead_id:leadByName['Sem agenda'].id, scheduled_at:brasiliaLocalToDate(tomorrow,'09:00:00').toISOString() },
+].map(call => ({...call,user_id:actor,assigned_to:actor,activity_type:'reuniao',call_type:'fechamento_closer',title:'Call QA',description:null,is_completed:false,outcome:null,completed_at:null,created_at:now,updated_at:now}))
 tasks.push({ id:randomUUID(), assignee_id:actor, task_date:today, title:'Revisar contexto', is_completed:false, version:1, position:0, created_at:now })
 const browser = await chromium.launch({ headless:true })
 const context = await browser.newContext({ viewport:{width:1440,height:1080}, reducedMotion:'reduce', timezoneId:'Asia/Tokyo' })
@@ -36,6 +42,7 @@ await context.route('https://**/*', async route => {
   else if (resource === 'user_roles') data = roles()
   else if (resource === 'profiles') data = url.searchParams.has('user_id') ? profile : [profile]
   else if (resource === 'crm_leads') data = leads
+  else if (resource === 'crm_activities') data = calls.filter(call => !url.searchParams.has('lead_id') || call.lead_id === url.searchParams.get('lead_id').slice(3))
   else if (resource === 'crm_lead_contexts') data = contexts.filter(c => !url.searchParams.has('lead_id') || c.lead_id === url.searchParams.get('lead_id').slice(3))
   else if (resource === 'crm_call_assignees') data = [{user_id:actor,display_name:'QA Colaborador',role:'closer'}]
   else if (resource === 'daily_goal_tasks') {
@@ -70,7 +77,30 @@ page.on('pageerror', error => errors.push(error.message))
 try {
   await page.goto(`${origin}/crm`)
   await expect(page.getByRole('article')).toHaveCount(3)
-  assert.deepEqual(await page.getByRole('article').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))), ['Lead Atrasado','Lead Futuro','Lead Sem agenda'])
+  await expect(page.getByLabel('Ordenar leads')).toHaveValue('newest')
+  assert.deepEqual(await page.getByRole('article').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))), ['Lead Sem agenda','Lead Atrasado','Lead Futuro'])
+  await page.getByRole('tab',{name:'SDR',exact:true}).click()
+  await expect(page.getByRole('article')).toHaveCount(3)
+  assert.deepEqual(await page.getByRole('article').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))), ['Lead Sem agenda','Lead Atrasado','Lead Futuro'])
+  await page.getByRole('tab',{name:'Leads',exact:true}).click()
+  await page.setViewportSize({width:390,height:844})
+  const tomorrowButton = page.locator('[data-call-date-option="tomorrow"]')
+  await expect(tomorrowButton).toContainText('Amanhã')
+  const tomorrowBox = await tomorrowButton.boundingBox()
+  const tomorrowLabelBox = await tomorrowButton.locator('span').first().boundingBox()
+  assert(tomorrowBox && tomorrowBox.x >= 0 && tomorrowBox.x + tomorrowBox.width <= 390, 'Amanhã must remain fully inside the small viewport')
+  assert(tomorrowLabelBox && tomorrowLabelBox.x >= tomorrowBox.x && tomorrowLabelBox.x + tomorrowLabelBox.width <= tomorrowBox.x + tomorrowBox.width, 'Amanhã label must not be clipped')
+  await page.screenshot({path:'.verification.local/crm-call-filters-mobile.png',fullPage:true})
+  await tomorrowButton.click()
+  await expect(page.getByLabel('Ordenar leads')).toHaveValue('calls')
+  await expect(page.getByLabel('Ordenar leads')).toBeDisabled()
+  assert.deepEqual(await page.getByRole('article').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))), ['Lead Sem agenda','Lead Atrasado'])
+  await page.locator('[data-call-date-option="specific"]').click()
+  await page.getByLabel('Escolher data das calls').fill(tomorrow)
+  assert.deepEqual(await page.getByRole('article').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))), ['Lead Sem agenda','Lead Atrasado'])
+  await page.locator('[data-call-date-option="all"]').click()
+  await expect(page.getByLabel('Ordenar leads')).toHaveValue('newest')
+  await page.setViewportSize({width:1440,height:1080})
   await page.getByRole('button',{name:'Filtrar por Temperatura',exact:true}).click()
   await page.getByLabel('Mornos',{exact:true}).check()
   await page.getByLabel('Quentes',{exact:true}).check()
@@ -155,6 +185,10 @@ try {
   assert.equal(contexts[0].media_url,'https://drive.google.com/drive/folders/folder-example')
   role='closer'
   await page.reload()
+  await page.getByRole('tab',{name:'Closer',exact:true}).click()
+  await expect(page.getByRole('article')).toHaveCount(2)
+  assert.deepEqual(await page.getByRole('article').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))), ['Lead Sem agenda','Lead Atrasado'])
+  await page.getByRole('tab',{name:'Leads',exact:true}).click()
   await page.getByRole('article',{name:'Lead Atrasado',exact:true}).getByRole('button',{name:/contexto/i}).click()
   await page.getByRole('button',{name:'Importar conversa/transcrição',exact:true}).click()
   dialog = page.getByRole('dialog',{name:'Importar contexto do lead',exact:true})

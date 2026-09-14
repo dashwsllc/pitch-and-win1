@@ -152,7 +152,7 @@ assert.doesNotMatch(crmHookSource, /\.from\("crm_leads"\)[\s\S]{0,120}\.delete\(
 // ---------------------------------------------------------------------------
 // Ordenacao operacional: atrasadas, acontecendo agora, proximas e o resto
 // ---------------------------------------------------------------------------
-const { compareLeadUrgency } = await import('../src/lib/crm-order.ts')
+const { compareCallProximity, compareLeadRecency, compareLeadUrgency } = await import('../src/lib/crm-order.ts')
 const quando = (m) => new Date(agora + m * 60_000).toISOString()
 const leadBase = { created_at: '2026-09-01T00:00:00Z', pipeline_stage: 'repassado_closer' }
 const ordenado = [
@@ -168,5 +168,27 @@ const ordenado = [
 assert.deepEqual(ordenado.slice(0, 4), ['a-muito-atrasada', 'b-agora', 'c-proxima', 'd-futura-tarde'])
 // Sem agenda e leads encerrados ficam no fim.
 assert.deepEqual(ordenado.slice(4).sort(), ['e-sem-agenda', 'f-encerrada'])
+
+const porCriacao = [
+  { id: 'antigo', created_at: '2026-09-10T10:00:00Z', pipeline_stage: 'novo' },
+  { id: 'recente', created_at: '2026-09-14T10:00:00Z', pipeline_stage: 'novo' },
+  { id: 'intermediario', created_at: '2026-09-12T10:00:00Z', pipeline_stage: 'novo' },
+].sort(compareLeadRecency).map((lead) => lead.id)
+assert.deepEqual(porCriacao, ['recente', 'intermediario', 'antigo'])
+
+// Em um dia escolhido, horarios futuros sobem em ordem crescente. Horarios
+// ja passados aparecem depois, começando pelo mais próximo do momento atual.
+const callsNoDia = [
+  { id: 'passada-antiga', at: quando(-180) },
+  { id: 'futura-tarde', at: quando(180) },
+  { id: 'passada-recente', at: quando(-30) },
+  { id: 'futura-breve', at: quando(20) },
+].sort((a, b) => compareCallProximity(a.at, b.at, agora)).map((call) => call.id)
+assert.deepEqual(callsNoDia, ['futura-breve', 'futura-tarde', 'passada-recente', 'passada-antiga'])
+
+assert.match(crmPageSource, /useState\("newest"\)/)
+assert.match(crmPageSource, /callDateFilter !== "all"[\s\S]*compareCallProximity/)
+assert.match(crmPageSource, /data-call-date-option=\{option\.value\}/)
+assert.match(crmPageSource, /<span className="shrink-0">\{option\.label\}<\/span>/)
 
 console.log('PASS: CRM validation, roles, scheduling, athlete data, lead deletion, call states, notification windows, ordering and athlete-first hierarchy.')

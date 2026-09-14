@@ -61,7 +61,12 @@ import {
 import { callMatchesDateKey, type CallDateFilter } from "@/lib/crm-call-status";
 import { useCRMNotifications } from "@/hooks/useCRMNotifications";
 import { useSalesBoard } from "@/hooks/useSalesBoard";
-import { compareLeadUrgency, nextLeadSchedule } from "@/lib/crm-order";
+import {
+  compareCallProximity,
+  compareLeadRecency,
+  compareLeadUrgency,
+  nextLeadSchedule,
+} from "@/lib/crm-order";
 import { AUTO_REFRESH_INTERVAL_LABEL, AUTO_REFRESH_INTERVAL_MS } from "@/lib/sync";
 
 const temperatures = [
@@ -161,7 +166,7 @@ export default function CRM() {
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [callDateFilter, setCallDateFilter] = useState<CallDateFilter>("all");
   const [callDateKey, setCallDateKey] = useState("");
-  const [order, setOrder] = useState("automatic");
+  const [order, setOrder] = useState("newest");
   const [view, setView] = useState("list");
   const [queue, setQueue] = useState("queue");
   const [readId, setReadId] = useState<string | null>(null);
@@ -291,16 +296,33 @@ export default function CRM() {
         callDateFilter === "all" ||
         callMatchesDateKey(openCalls.get(lead.id), selectedCallDateKey),
     )
-    .sort((a, b) =>
-      order === "name"
-        ? a.name.localeCompare(b.name, "pt-BR")
-        : order === "hot"
-            ? ["quente", "morno", "frio"].indexOf(a.temperature) -
-              ["quente", "morno", "frio"].indexOf(b.temperature)
-            : order === "newest"
-              ? (b.created_at || "").localeCompare(a.created_at || "") || a.id.localeCompare(b.id)
-              : compareLeadUrgency(a, b, openCalls.get(a.id)?.scheduled_at, openCalls.get(b.id)?.scheduled_at),
-    );
+    .sort((a, b) => {
+      if (callDateFilter !== "all") {
+        return (
+          compareCallProximity(
+            openCalls.get(a.id)?.scheduled_at,
+            openCalls.get(b.id)?.scheduled_at,
+            now.getTime(),
+          ) || compareLeadRecency(a, b)
+        );
+      }
+      if (order === "name") return a.name.localeCompare(b.name, "pt-BR");
+      if (order === "hot") {
+        return (
+          ["quente", "morno", "frio"].indexOf(a.temperature) -
+            ["quente", "morno", "frio"].indexOf(b.temperature) ||
+          compareLeadRecency(a, b)
+        );
+      }
+      return order === "automatic"
+        ? compareLeadUrgency(
+            a,
+            b,
+            openCalls.get(a.id)?.scheduled_at,
+            openCalls.get(b.id)?.scheduled_at,
+          )
+        : compareLeadRecency(a, b);
+    });
   const mode = view;
   const groups =
     tab === "closer" || mode === "list"
@@ -498,6 +520,7 @@ export default function CRM() {
           onValueChange={(value) => {
             setParams({ tab: value });
             setView("list");
+            setOrder("newest");
           }}
         >
           <TabsList className="h-auto flex flex-wrap justify-start gap-1 w-fit max-w-full">
@@ -566,6 +589,7 @@ export default function CRM() {
                         setPipeline("all");
                         setOwner("all");
                         setOverdueOnly(false);
+                        setOrder("newest");
                       }}
                     >
                       Ver fechamentos
@@ -656,17 +680,25 @@ export default function CRM() {
                     <select
                       className={selectClass}
                       aria-label="Ordenar leads"
-                      value={order}
+                      value={callDateFilter === "all" ? order : "calls"}
                       onChange={(e) => setOrder(e.target.value)}
+                      disabled={callDateFilter !== "all"}
                     >
-                      <option value="automatic">Urgência automática</option>
+                      {callDateFilter !== "all" && (
+                        <option value="calls">Horário mais próximo</option>
+                      )}
                       <option value="newest">Mais recentes</option>
+                      <option value="automatic">Calls e retornos prioritários</option>
                       <option value="name">Nome A–Z</option>
                       <option value="hot">Mais quentes</option>
                     </select>
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-2">
-                    <span className="mr-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <div
+                    role="group"
+                    aria-label="Filtrar calls por data"
+                    className="mt-2 grid grid-cols-2 items-center gap-1.5 border-t border-border/40 pt-2 sm:flex sm:flex-wrap"
+                  >
+                    <span className="col-span-2 mr-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground sm:col-span-1">
                       <CalendarClock className="h-3.5 w-3.5" />
                       Calls:
                     </span>
@@ -677,7 +709,8 @@ export default function CRM() {
                         size="sm"
                         variant={callDateFilter === option.value ? "default" : "outline"}
                         aria-pressed={callDateFilter === option.value}
-                        className="h-8 px-3 text-xs"
+                        data-call-date-option={option.value}
+                        className="h-8 w-full min-w-0 px-2 text-xs sm:w-auto sm:min-w-max sm:px-3"
                         onClick={() => {
                           setCallDateFilter(option.value);
                           if (option.value === "specific" && !callDateKey) {
@@ -685,7 +718,7 @@ export default function CRM() {
                           }
                         }}
                       >
-                        {option.label}
+                        <span className="shrink-0">{option.label}</span>
                         {option.count !== null && (
                           <span className="ml-1 opacity-70">({option.count})</span>
                         )}
@@ -695,18 +728,18 @@ export default function CRM() {
                       <Input
                         type="date"
                         aria-label="Escolher data das calls"
-                        className="h-8 w-auto text-xs"
+                        className="col-span-2 h-8 w-full text-xs sm:w-auto"
                         value={callDateKey}
                         onChange={(event) => setCallDateKey(event.target.value)}
                       />
                     )}
                     {callDateFilter === "specific" && !selectedCallDateKey && (
-                      <span role="status" className="text-[11px] text-amber-400">
+                      <span role="status" className="col-span-2 text-[11px] text-amber-400">
                         Escolha uma data válida.
                       </span>
                     )}
                     {callDateFilter === "specific" && selectedCallDateKey && (
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="col-span-2 text-[11px] text-muted-foreground">
                         {formatDateKey(selectedCallDateKey)}
                       </span>
                     )}
@@ -721,8 +754,15 @@ export default function CRM() {
                       Somente atrasados
                     </label>
                     <span>
-                      {filtered.length} de {crm.leads.length} leads ·
-                      atrasados primeiro · atualização automática
+                      {filtered.length} de {crm.leads.length} leads · {callDateFilter !== "all"
+                        ? "calls mais próximas primeiro"
+                        : order === "newest"
+                          ? "mais recentes primeiro"
+                          : order === "automatic"
+                            ? "calls e retornos prioritários"
+                            : order === "hot"
+                              ? "mais quentes primeiro"
+                              : "ordem alfabética"} · atualização automática
                     </span>
                   </div>
                 </div>
