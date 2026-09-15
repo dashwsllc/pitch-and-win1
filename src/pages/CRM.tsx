@@ -80,6 +80,12 @@ const approachFilters = [
   { value: "abordado", label: "Abordado" },
 ];
 const closedStages = ["fechado_ganho", "fechado_perdido", "lead_perdido"];
+// Depois que o SDR agenda a call de fechamento, o lead passa a pertencer ao
+// Closer (repassado_closer) e permanece do lado do Closer até ser devolvido
+// (devolvido_sdr volta para em_qualificacao) ou até o próprio fechamento
+// (fechado_ganho/fechado_perdido, só alcançáveis a partir de repassado_closer).
+// Enquanto isso, a aba SDR não deve mais exibir esse lead.
+const closerOwnedStages = ["repassado_closer", "fechado_ganho", "fechado_perdido"];
 const sdrGroup = (lead: CRMLead) =>
   lead.pipeline_stage === "novo"
     ? "novo"
@@ -272,7 +278,8 @@ export default function CRM() {
           lead.sdr_id === owner ||
           lead.closer_id === owner) &&
         (!overdueOnly || overdue(lead)) &&
-        (tab !== "closer" || inQueue(lead, queue)),
+        (tab !== "closer" || inQueue(lead, queue)) &&
+        (tab !== "sdr" || !closerOwnedStages.includes(lead.pipeline_stage)),
     );
   // Conta sobre os demais filtros ja aplicados, para o numero refletir o que o
   // usuario esta vendo.
@@ -331,7 +338,12 @@ export default function CRM() {
         ? temperatures
         : mode === "approach"
           ? APPROACH_STAGES
-          : sdrGroups;
+          // Na aba SDR, "Enviados ao Closer" nunca teria lead (já são
+          // excluídos acima); a coluna some para não ficar sempre vazia. Na
+          // aba Leads, que mostra tudo, a coluna continua aparecendo.
+          : tab === "sdr"
+            ? sdrGroups.filter((group) => group.value !== "enviados")
+            : sdrGroups;
   const groupFor = (lead: CRMLead) =>
     tab === "closer" || mode === "list"
       ? "all"

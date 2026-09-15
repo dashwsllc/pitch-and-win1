@@ -191,4 +191,13 @@ assert.match(crmPageSource, /callDateFilter !== "all"[\s\S]*compareCallProximity
 assert.match(crmPageSource, /data-call-date-option=\{option\.value\}/)
 assert.match(crmPageSource, /<span className="shrink-0">\{option\.label\}<\/span>/)
 
-console.log('PASS: CRM validation, roles, scheduling, athlete data, lead deletion, call states, notification windows, ordering and athlete-first hierarchy.')
+// A aba SDR deixa de mostrar o lead assim que a call de fechamento é
+// agendada (repassado_closer) e não volta a mostrá-lo mesmo depois de
+// fechado (fechado_ganho/fechado_perdido); só reaparece se for devolvido ao
+// SDR (devolvido_sdr volta para em_qualificacao). A aba Leads continua
+// mostrando tudo, incluindo a coluna "Enviados ao Closer".
+assert.match(crmPageSource, /const closerOwnedStages = \["repassado_closer", "fechado_ganho", "fechado_perdido"\];/)
+assert.match(crmPageSource, /\(tab !== "sdr" \|\| !closerOwnedStages\.includes\(lead\.pipeline_stage\)\)/)
+assert.match(crmPageSource, /tab === "sdr"[\s\S]*sdrGroups\.filter\(\(group\) => group\.value !== "enviados"\)/)
+
+console.log('PASS: CRM validation, roles, scheduling, athlete data, lead deletion, call states, notification windows, ordering, SDR handoff visibility and athlete-first hierarchy.')
