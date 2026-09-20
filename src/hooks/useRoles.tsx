@@ -4,7 +4,6 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useProfile } from "./useProfile";
 import { crmCapabilities } from "@/lib/crm-capabilities";
-import { AUTO_REFRESH_INTERVAL_MS } from "@/lib/sync";
 
 export type UserRole =
   | "seller"
@@ -58,7 +57,6 @@ export function useRoles() {
       return data;
     },
     staleTime: 15_000,
-    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
   });
   const roles: UserRole[] = query.data?.map((row) => row.role) ?? [];
   const capabilities = crmCapabilities(
@@ -120,7 +118,6 @@ export function useAllUsers() {
       return data as unknown as { users: ExecutiveUser[]; fetched_at: string };
     },
     staleTime: 0,
-    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: false,
     retry: 1,
   });

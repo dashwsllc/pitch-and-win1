@@ -31,12 +31,17 @@ import { ExecutiveAudit } from '@/components/executive/ExecutiveAudit'
 import { ExecutiveWithdrawals } from '@/components/executive/ExecutiveWithdrawals'
 import { ExecutiveProducts } from '@/components/executive/ExecutiveProducts'
 import { exactDate } from '@/lib/sales'
+import {
+  createDefaultDashboardCustomRange,
+  DashboardDateFilter,
+} from '@/lib/dashboard-period'
 
 export default function ExecutiveDashboard() {
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedTab = searchParams.get('tab') || 'approvals'
-  const [selectedFilter, setSelectedFilter] = useState('30dias')
-  const { data, loading, refetch, error } = useExecutiveDashboard(selectedFilter)
+  const [selectedFilter, setSelectedFilter] = useState<DashboardDateFilter>('30dias')
+  const [customRange, setCustomRange] = useState(createDefaultDashboardCustomRange)
+  const { data, loading, refetch, error } = useExecutiveDashboard(selectedFilter, customRange)
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -76,7 +81,12 @@ export default function ExecutiveDashboard() {
         <ExecutiveRegistrationRequests />
 
         {/* Filter Tabs */}
-        <FilterTabs value={selectedFilter} onValueChange={setSelectedFilter} />
+        <FilterTabs
+          value={selectedFilter}
+          onValueChange={setSelectedFilter}
+          customRange={customRange}
+          onCustomRangeChange={setCustomRange}
+        />
 
         {/* Main Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

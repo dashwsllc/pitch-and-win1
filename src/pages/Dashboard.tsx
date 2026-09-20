@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/useAuth"
 import { useProfile } from "@/hooks/useProfile"
 import { useRoles } from "@/hooks/useRoles"
 import { useGSAP } from "@/hooks/useGSAP"
+import { useLiveClock } from "@/hooks/useLiveClock"
 import { 
   CircleDollarSign,
   ShoppingBag,
@@ -32,15 +33,20 @@ import {
 } from "lucide-react"
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { AUTO_REFRESH_INTERVAL_LABEL, AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
+import { AUTO_REFRESH_INTERVAL_LABEL } from '@/lib/sync'
 import { BRASILIA_TIME_ZONE, brasiliaParts, formatBrasiliaDate } from '@/lib/brasilia-time'
+import {
+  createDefaultDashboardCustomRange,
+  DashboardDateFilter,
+} from '@/lib/dashboard-period'
 
 gsap.registerPlugin(ScrollTrigger)
 
 export default function Dashboard() {
-  const [selectedFilter, setSelectedFilter] = useState("hoje")
+  const [selectedFilter, setSelectedFilter] = useState<DashboardDateFilter>("hoje")
+  const [customRange, setCustomRange] = useState(createDefaultDashboardCustomRange)
   const { user } = useAuth()
-  const { metrics, loading, error, refetch } = useDashboardData(selectedFilter)
+  const { metrics, loading, error, refetch } = useDashboardData(selectedFilter, customRange)
   const { ranking } = useRankingDataWithMock()
   const { profile } = useProfile()
   const { isExecutive } = useRoles()
@@ -52,12 +58,7 @@ export default function Dashboard() {
   const userName = profile?.display_name || user?.user_metadata?.display_name || user?.email?.split('@')[0] || "Usuário"
   const userPosition = ranking.findIndex(r => r.isCurrentUser) + 1
   
-  const [currentTime, setCurrentTime] = useState(new Date())
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), AUTO_REFRESH_INTERVAL_MS)
-    return () => clearInterval(timer)
-  }, [])
+  const currentTime = useLiveClock()
 
   useEffect(() => {
     if (!dashboardRef.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
@@ -160,10 +161,15 @@ export default function Dashboard() {
                 </Badge>
               )}
 
-              <div className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/[0.035] px-3 text-xs tabular-nums text-muted-foreground shadow-[rgba(255,255,255,0.07)_0_0_0_1px_inset]">
+              <time
+                data-live-clock
+                dateTime={currentTime.toISOString()}
+                aria-label="Horário de Brasília"
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/[0.035] px-3 text-xs tabular-nums text-muted-foreground shadow-[rgba(255,255,255,0.07)_0_0_0_1px_inset]"
+              >
                 <Activity className="h-3.5 w-3.5 text-electric" />
                 {currentTime.toLocaleTimeString('pt-BR', { timeZone: BRASILIA_TIME_ZONE, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </div>
+              </time>
 
               <Button
                 onClick={() => refetch()}
@@ -179,7 +185,12 @@ export default function Dashboard() {
 
         <section data-dashboard-section="commercial-indicators" data-scroll-reveal className="space-y-3">
           <div className="sticky top-20 z-20 rounded-2xl border border-white/[0.05] bg-[#0e0918]/78 p-1.5 backdrop-blur-xl">
-            <FilterTabs value={selectedFilter} onValueChange={setSelectedFilter} />
+            <FilterTabs
+              value={selectedFilter}
+              onValueChange={setSelectedFilter}
+              customRange={customRange}
+              onCustomRangeChange={setCustomRange}
+            />
           </div>
           {error && (
             <div

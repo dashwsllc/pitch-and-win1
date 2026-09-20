@@ -11,11 +11,14 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { MessageSquare, ArrowLeft } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { refreshApproachData } from '@/lib/sync'
 
 export default function NovaAbordagem() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -45,6 +48,7 @@ export default function NovaAbordagem() {
         variant: 'destructive'
       })
     } else {
+      await refreshApproachData(queryClient)
       toast({
         title: 'Abordagem registrada com sucesso!',
         description: 'Os dados foram salvos no sistema'

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -64,11 +64,13 @@ export function ExecutivePasswordRequests() {
   const [newPassword, setNewPassword] = useState('')
   const [resetReason, setResetReason] = useState('')
   const [resetting, setResetting] = useState(false)
+  const latestFetch = useRef(0)
   
   const { users } = useAllUsers()
   const { toast } = useToast()
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
+    const requestId = ++latestFetch.current
     try {
       const { data, error } = await supabase
         .from('password_reset_requests')
@@ -80,17 +82,20 @@ export function ExecutivePasswordRequests() {
         return
       }
 
-      setRequests(data || [])
+      if (requestId === latestFetch.current) setRequests(data || [])
     } catch (error) {
       console.error('Error:', error)
     } finally {
-      setLoading(false)
+      if (requestId === latestFetch.current) setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    fetchRequests()
-  }, [])
+    void fetchRequests()
+    const refresh = () => { void fetchRequests() }
+    window.addEventListener('dashboard-data-changed', refresh)
+    return () => window.removeEventListener('dashboard-data-changed', refresh)
+  }, [fetchRequests])
 
   const processRequest = async (requestId: string, status: 'approved' | 'rejected') => {
     setProcessing(requestId)
@@ -115,7 +120,7 @@ export function ExecutivePasswordRequests() {
           : 'A rejeição foi registrada.'
       })
 
-      fetchRequests()
+      void fetchRequests()
     } catch (error) {
       console.error('Error processing request:', error)
       toast({

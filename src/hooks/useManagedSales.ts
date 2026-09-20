@@ -4,7 +4,6 @@ import type { Tables } from '@/integrations/supabase/types'
 import { useAuth } from './useAuth'
 import { useRoles } from './useRoles'
 import { fetchAllPages } from '@/lib/supabase-pages'
-import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 export type ManagedSale = Tables<'vendas'>
 
@@ -22,7 +21,6 @@ export function useManagedSales(mineOnly = false) {
       return query.range(from, to)
     }),
     staleTime: 0,
-    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
     retry: 1,
   })
 }

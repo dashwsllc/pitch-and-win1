@@ -170,7 +170,7 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
         throw new Error(message)
       }
       if (!data?.success) throw new Error(data?.error || 'Não foi possível confirmar a exclusão.')
-      toast({ title: 'Conta excluída', description: 'A exclusão foi registrada na auditoria.' })
+      toast({ title: 'Conta excluída', description: 'Acesso removido e histórico de vendas, abordagens e saques preservado.' })
       setDeleting(null)
       setDeleteReason('')
       await queryClient.invalidateQueries({ queryKey: ['executive-users'] })
@@ -202,7 +202,7 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
               <Avatar className="h-10 w-10 rounded-xl"><AvatarImage src={account.avatar_url ?? ''} /><AvatarFallback className="rounded-xl bg-electric-violet/15 text-violet-200">{(account.display_name || account.email || '?').slice(0,2).toUpperCase()}</AvatarFallback></Avatar>
               <div className="min-w-0"><p className="break-words text-sm font-medium text-ash">{account.display_name || 'Sem nome'}{account.user_id===actor?.id && <span className="ml-2 text-[10px] text-ember">VOCÊ</span>}</p><p className="mt-1 break-all text-xs text-muted-foreground">{account.email || 'E-mail não registrado'}</p><div className="mt-2 flex flex-wrap gap-1">{account.user_roles.map(r => <Badge key={r.role} className="border-0 bg-white/[0.06] text-[10px] font-normal text-muted-foreground">{ROLE_LABELS[r.role]}</Badge>)}{account.suspended && <Badge variant="destructive" className="text-[10px]">Suspenso</Badge>}</div></div>
             </div>
-            <div className="flex flex-wrap items-center gap-4 sm:ml-auto"><div className="text-xs"><p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Último login</p>{account.last_sign_in_at ? <time className="tabular-nums text-ash" dateTime={account.last_sign_in_at} title={`Timestamp original do Auth: ${account.last_sign_in_at}`}>{exactDate(account.last_sign_in_at)} <span className="text-[10px] text-muted-foreground">BRT</span></time> : <span className="text-muted-foreground">Nenhum login registrado pelo Auth</span>}</div><Button variant="outline" size="sm" disabled={protectedAccount} onClick={() => open(account)} title={protectedAccount ? 'Conta gerenciada somente por super admin' : 'Editar todos os dados da conta'}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar conta</Button><Button variant="outline" size="icon" className="h-9 w-9 border-rose-500/30 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200" disabled={protectedAccount || account.user_id===actor?.id} onClick={() => { setDeleteReason(''); setDeleting(account) }} title={account.user_id===actor?.id ? 'Você não pode excluir sua própria conta' : protectedAccount ? 'Conta gerenciada somente por super admin' : 'Excluir conta permanentemente'} aria-label={`Excluir conta de ${account.display_name || account.email}`}><Trash2 className="h-3.5 w-3.5" /></Button></div>
+          <div className="flex flex-wrap items-center gap-4 sm:ml-auto"><div className="text-xs"><p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Último login</p>{account.last_sign_in_at ? <time className="tabular-nums text-ash" dateTime={account.last_sign_in_at} title={`Timestamp original do Auth: ${account.last_sign_in_at}`}>{exactDate(account.last_sign_in_at)} <span className="text-[10px] text-muted-foreground">BRT</span></time> : <span className="text-muted-foreground">Nenhum login registrado pelo Auth</span>}</div><Button variant="outline" size="sm" disabled={protectedAccount} onClick={() => open(account)} title={protectedAccount ? 'Conta gerenciada somente por super admin' : 'Editar todos os dados da conta'}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar conta</Button><Button variant="outline" size="icon" className="h-9 w-9 border-rose-500/30 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200" disabled={protectedAccount || account.user_id===actor?.id} onClick={() => { setDeleteReason(''); setDeleting(account) }} title={account.user_id===actor?.id ? 'Você não pode excluir sua própria conta' : protectedAccount ? 'Conta gerenciada somente por super admin' : 'Excluir conta e acesso'} aria-label={`Excluir conta de ${account.display_name || account.email}`}><Trash2 className="h-3.5 w-3.5" /></Button></div>
           </article>
         })}
         {!loading && filtered.length===0 && !error && <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma conta encontrada.</p>}
@@ -256,16 +256,16 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
       <Dialog open={!!deleting} onOpenChange={open => { if (!open) closeDelete() }}>
         <DialogContent className="sm:max-w-md" data-lenis-prevent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-rose-300"><AlertTriangle className="h-4 w-4" />Excluir conta permanentemente</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-rose-300"><AlertTriangle className="h-4 w-4" />Excluir conta e acesso</DialogTitle>
             <DialogDescription>{deleting?.display_name || deleting?.email}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
-            <p className="rounded-lg bg-rose-500/10 p-3 text-xs leading-relaxed text-rose-200">Esta ação remove a conta do Auth e não pode ser desfeita. Diferente de suspender, o acesso e o histórico de login desaparecem. A exclusão é recusada quando a conta tem vendas, abordagens ou saques registrados — use Suspender acesso nesses casos para preservar o histórico.</p>
+            <p className="rounded-lg bg-rose-500/10 p-3 text-xs leading-relaxed text-rose-200">Esta ação encerra o acesso e remove a conta da lista de usuários. Não pode ser desfeita. Vendas, abordagens, saques e seus vínculos históricos permanecem registrados.</p>
             <div className="space-y-2"><Label htmlFor="delete-reason">Motivo da exclusão</Label><Textarea id="delete-reason" required minLength={5} maxLength={2000} value={deleteReason} disabled={deleteBusy} onChange={e => setDeleteReason(e.target.value)} placeholder="Explique por que esta conta está sendo excluída" /></div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" disabled={deleteBusy} onClick={closeDelete}>Cancelar</Button>
-            <Button type="button" variant="destructive" disabled={deleteBusy || deleteReason.trim().length<5} onClick={confirmDelete}>{deleteBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Excluir permanentemente</Button>
+            <Button type="button" variant="destructive" disabled={deleteBusy || deleteReason.trim().length<5} onClick={confirmDelete}>{deleteBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Excluir conta</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

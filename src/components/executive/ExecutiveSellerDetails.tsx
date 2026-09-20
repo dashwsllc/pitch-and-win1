@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
@@ -80,7 +80,7 @@ export function ExecutiveSellerDetails() {
   // pode escrever no estado.
   const latestRequest = useRef(0)
 
-  const fetchSellerStats = async (sellerId: string) => {
+  const fetchSellerStats = useCallback(async (sellerId: string) => {
     if (!sellerId) return
     const requestId = ++latestRequest.current
 
@@ -155,13 +155,20 @@ export function ExecutiveSellerDetails() {
     } finally {
       if (requestId === latestRequest.current) setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (selectedSeller) {
-      fetchSellerStats(selectedSeller)
+      void fetchSellerStats(selectedSeller)
     }
-  }, [selectedSeller])
+  }, [selectedSeller, fetchSellerStats])
+
+  useEffect(() => {
+    if (!selectedSeller) return
+    const refresh = () => { void fetchSellerStats(selectedSeller) }
+    window.addEventListener('dashboard-data-changed', refresh)
+    return () => window.removeEventListener('dashboard-data-changed', refresh)
+  }, [selectedSeller, fetchSellerStats])
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {

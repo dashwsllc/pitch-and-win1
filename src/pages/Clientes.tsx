@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth"
 import { toast } from "sonner"
 import { Users, UserPlus, Check, X, Plus } from "lucide-react"
 import { fetchAllPages } from "@/lib/supabase-pages"
+import { notifyDashboardDataChanged } from "@/lib/sync"
 
 interface Assinatura {
   id: string
@@ -74,6 +75,12 @@ export default function Clientes() {
     void fetchAssinaturas()
   }, [fetchAssinaturas])
 
+  useEffect(() => {
+    const refresh = () => { void fetchAssinaturas() }
+    window.addEventListener('dashboard-data-changed', refresh)
+    return () => window.removeEventListener('dashboard-data-changed', refresh)
+  }, [fetchAssinaturas])
+
   // Cadastrar nova assinatura
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -110,7 +117,7 @@ export default function Clientes() {
       setEmailCliente("")
       
       // Recarregar lista
-      void fetchAssinaturas()
+      notifyDashboardDataChanged()
     } catch (error) {
       console.error('Erro ao cadastrar cliente:', error)
       toast.error('Erro ao cadastrar cliente')
@@ -131,7 +138,7 @@ export default function Clientes() {
       if (error) throw error
 
       toast.success(`Assinatura ${novoStatus === 'ativa' ? 'ativada' : 'desativada'} com sucesso!`)
-      void fetchAssinaturas()
+      notifyDashboardDataChanged()
     } catch (error) {
       console.error('Erro ao alterar status:', error)
       toast.error('Erro ao alterar status da assinatura')

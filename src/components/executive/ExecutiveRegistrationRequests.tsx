@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
 import type { Tables } from '@/integrations/supabase/types'
 import { exactDate } from '@/lib/sales'
-import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
+import { SIGNUP_ROLE_LABELS, type SignupRole } from '@/lib/auth-security'
 
 export function ExecutiveRegistrationRequests() {
   const { user } = useAuth()
@@ -22,7 +22,6 @@ export function ExecutiveRegistrationRequests() {
       if (error) throw error
       return data as unknown as Tables<'registration_requests'>[]
     },
-    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     staleTime: 0,
@@ -64,7 +63,7 @@ export function ExecutiveRegistrationRequests() {
         <div className="min-w-0">
           <h3 className="break-words text-sm font-medium text-white">{request.display_name || 'Colaborador'}</h3>
           <p className="mt-1 break-all text-xs text-muted-foreground">{request.email}</p>
-          <p className="mt-2 text-xs text-orange-200">Seller · Aguardando aprovação</p>
+          <p className="mt-2 text-xs text-orange-200">{SIGNUP_ROLE_LABELS[request.requested_role as SignupRole] ?? request.requested_role} · Aguardando aprovação</p>
           <time dateTime={request.created_at} className="mt-1 block text-xs text-muted-foreground">Solicitado em {exactDate(request.created_at)} · Brasília</time>
         </div>
         <div className="flex gap-2">

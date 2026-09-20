@@ -2,7 +2,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from './useAuth'
 import { fetchAllPages } from '@/lib/supabase-pages'
-import { addDaysToDateKey, brasiliaDateKey, brasiliaDateRange, formatDateKey } from '@/lib/brasilia-time'
+import {
+  buildDashboardSeries,
+  createDefaultDashboardCustomRange,
+  DashboardCustomRange,
+  DashboardDateFilter,
+  resolveDashboardPeriod,
+} from '@/lib/dashboard-period'
 
 interface ExecutiveDashboardData {
   totalSellers: number
@@ -32,7 +38,10 @@ interface ExecutiveDashboardData {
   }>
 }
 
-export function useExecutiveDashboard(dateFilter: string = '30dias') {
+export function useExecutiveDashboard(
+  dateFilter: DashboardDateFilter = '30dias',
+  customRange: DashboardCustomRange = createDefaultDashboardCustomRange(),
+) {
   const { user } = useAuth()
   const [data, setData] = useState<ExecutiveDashboardData>({
     totalSellers: 0,
@@ -49,14 +58,8 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const latestFetch = useRef(0)
-
-  const getDateRange = (filter: string) => {
-    const today = brasiliaDateKey()
-    const days = filter === '7dias' ? 7 : filter === '14dias' ? 14 : filter === '30dias' ? 30 : 1
-    const lastDay = filter === 'ontem' ? addDaysToDateKey(today, -1) : today
-    const range = brasiliaDateRange(days, lastDay)
-    return { start: range.start.toISOString(), end: range.end.toISOString(), days, lastDay }
-  }
+  const customStart = customRange.start
+  const customEnd = customRange.end
 
   const fetchExecutiveDashboard = useCallback(async () => {
     const requestId = ++latestFetch.current
@@ -66,7 +69,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
     setError(null)
 
     try {
-      const { start, end, days, lastDay } = getDateRange(dateFilter)
+      const period = resolveDashboardPeriod(dateFilter, { start: customStart, end: customEnd })
 
       // Fetch profiles for name resolution
       const profilesData = await fetchAllPages((from, to) => supabase
@@ -93,25 +96,37 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       ).size
 
       // Fetch sales in period (apenas aprovadas)
-      const salesData = await fetchAllPages((from, to) => supabase
-        .from('vendas')
-        .select('id, user_id, nome_produto, valor_venda, created_at')
-        .eq('approval_status', 'aprovada')
-        .gte('created_at', start)
-        .lt('created_at', end)
-        .order('created_at', { ascending: false })
-        .order('id')
-        .range(from, to))
+      const salesData = await fetchAllPages((from, to) => {
+        let request = supabase
+          .from('vendas')
+          .select('id, user_id, nome_produto, valor_venda, created_at')
+          .eq('approval_status', 'aprovada')
+        if (period.start && period.end) {
+          request = request
+            .gte('created_at', period.start.toISOString())
+            .lt('created_at', period.end.toISOString())
+        }
+        return request
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to)
+      })
 
       // Fetch approaches in period
-      const approachesData = await fetchAllPages((from, to) => supabase
-        .from('abordagens')
-        .select('id, user_id, nomes_abordados, created_at')
-        .gte('created_at', start)
-        .lt('created_at', end)
-        .order('created_at', { ascending: false })
-        .order('id')
-        .range(from, to))
+      const approachesData = await fetchAllPages((from, to) => {
+        let request = supabase
+          .from('abordagens')
+          .select('id, user_id, nomes_abordados, created_at')
+        if (period.start && period.end) {
+          request = request
+            .gte('created_at', period.start.toISOString())
+            .lt('created_at', period.end.toISOString())
+        }
+        return request
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to)
+      })
 
       // Fetch subscriptions
       const subscriptionsData = await fetchAllPages((from, to) => supabase
@@ -127,14 +142,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
       const activeSubscriptions = subscriptionsData?.filter(sub => sub.status === 'ativa').length || 0
       const conversionRate = totalApproaches > 0 ? (totalSales / totalApproaches) * 100 : 0
 
-      const dateKeys = Array.from({ length: days }, (_, index) =>
-        addDaysToDateKey(lastDay, index - days + 1),
-      )
-      const salesByPeriod = dateKeys.map((dateKey) => ({
-        month: formatDateKey(dateKey, { day: '2-digit', month: '2-digit', year: undefined }),
-        vendas: salesData?.filter((sale) => brasiliaDateKey(sale.created_at) === dateKey).length || 0,
-        abordagens: approachesData?.filter((approach) => brasiliaDateKey(approach.created_at) === dateKey).length || 0,
-      }))
+      const salesByPeriod = buildDashboardSeries(salesData, approachesData, period)
 
       // Top sellers - use profileMap for real names
       const sellerStats = new Map<string, {
@@ -220,7 +228,7 @@ export function useExecutiveDashboard(dateFilter: string = '30dias') {
     } finally {
       if (requestId === latestFetch.current) setLoading(false)
     }
-  }, [user, dateFilter])
+  }, [customEnd, customStart, dateFilter, user])
 
   useEffect(() => {
     fetchExecutiveDashboard()

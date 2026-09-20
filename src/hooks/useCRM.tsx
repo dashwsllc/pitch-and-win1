@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, Json } from "@/integrations/supabase/types";
@@ -7,7 +8,6 @@ import { validatePlainText } from "@/lib/plain-text";
 import { validateContextFileText, type CRMContextFile } from "@/lib/crm-context-file";
 import { normalizeContextMediaUrl } from "@/lib/crm-context-media";
 import { fetchAllPages } from "@/lib/supabase-pages";
-import { AUTO_REFRESH_INTERVAL_MS } from "@/lib/sync";
 
 export type CRMLead = Tables<"crm_leads">;
 export type CRMActivity = Tables<"crm_activities">;
@@ -59,13 +59,55 @@ export const APPROACH_LABELS: Record<string, string> = {
 };
 const queryOptions = {
   staleTime: 5_000,
-  refetchInterval: AUTO_REFRESH_INTERVAL_MS,
   refetchOnWindowFocus: false,
   retry: 1,
 };
 
 export function useCRMRealtime() {
-  return { realtimeUnavailable: false };
+  const { user, session } = useAuth();
+  const client = useQueryClient();
+  const [realtimeUnavailable, setRealtimeUnavailable] = useState(false);
+
+  useEffect(() => {
+    if (!user || !session?.access_token) return;
+
+    let disposed = false;
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      window.clearTimeout(debounce);
+      debounce = window.setTimeout(() => {
+        void client.invalidateQueries({ queryKey: ["crm"] });
+      }, 120);
+    };
+    const channel = supabase
+      .channel(`crm-live-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "crm_leads" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "crm_activities" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "crm_lead_contexts" }, refresh);
+
+    void supabase.realtime.setAuth(session.access_token)
+      .then(() => {
+        if (disposed) return;
+        channel.subscribe((status) => {
+          if (disposed) return;
+          if (status === "SUBSCRIBED") setRealtimeUnavailable(false);
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            setRealtimeUnavailable(true);
+          }
+        });
+      })
+      .catch(() => {
+        if (!disposed) setRealtimeUnavailable(true);
+      });
+
+    return () => {
+      disposed = true;
+      window.clearTimeout(debounce);
+      void supabase.removeChannel(channel);
+    };
+  }, [user, session?.access_token, client]);
+
+  return { realtimeUnavailable };
 }
 
 export function useCRMLeads() {

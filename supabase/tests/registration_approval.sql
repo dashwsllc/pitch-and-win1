@@ -9,6 +9,19 @@ DO $$ BEGIN
   IF EXISTS(SELECT 1 FROM public.user_roles WHERE user_id::text LIKE 'a9120000-%' AND role::text <> 'seller') THEN RAISE EXCEPTION 'FAIL role spoof'; END IF;
   IF EXISTS(SELECT 1 FROM auth.users u WHERE NOT EXISTS(SELECT 1 FROM public.registration_requests r WHERE r.user_id=u.id)) THEN RAISE EXCEPTION 'FAIL missing request'; END IF;
 END; $$;
+-- The explicit requested_role is accepted only from the dedicated metadata
+-- field and is kept consistent between the queue and provisioned access.
+INSERT INTO auth.users(id,email,raw_user_meta_data,raw_app_meta_data,created_at,updated_at)
+VALUES(
+  'a9120000-0000-4000-8000-000000000005',
+  'registration-role-qa@example.invalid',
+  '{"display_name":"Registration Role QA","requested_role":"closer"}',
+  '{}', now(), now()
+);
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM public.registration_requests WHERE user_id='a9120000-0000-4000-8000-000000000005' AND requested_role='closer') THEN RAISE EXCEPTION 'FAIL requested role queue'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.user_roles WHERE user_id='a9120000-0000-4000-8000-000000000005' AND role::text='closer') THEN RAISE EXCEPTION 'FAIL requested role provision'; END IF;
+END; $$;
 -- Bootstrap only this disposable reviewer; existing accounts are untouched.
 UPDATE public.registration_requests SET status='approved' WHERE user_id='a9120000-0000-4000-8000-000000000001';
 INSERT INTO public.user_roles(user_id,role) VALUES('a9120000-0000-4000-8000-000000000001','executive');

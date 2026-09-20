@@ -3,7 +3,13 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { fetchAllPages } from '@/lib/supabase-pages'
-import { addDaysToDateKey, brasiliaDateKey, brasiliaDateRange, formatDateKey } from '@/lib/brasilia-time'
+import {
+  buildDashboardSeries,
+  createDefaultDashboardCustomRange,
+  DashboardCustomRange,
+  DashboardDateFilter,
+  resolveDashboardPeriod,
+} from '@/lib/dashboard-period'
 
 interface DashboardMetrics {
   totalVendas: number
@@ -23,7 +29,10 @@ interface DashboardMetrics {
   }>
 }
 
-export function useDashboardData(dateFilter: string = "30dias") {
+export function useDashboardData(
+  dateFilter: DashboardDateFilter = '30dias',
+  customRange: DashboardCustomRange = createDefaultDashboardCustomRange(),
+) {
   const { user } = useAuth()
   const { isExecutive, loading: rolesLoading } = useRoles()
   const userId = user?.id
@@ -39,13 +48,8 @@ export function useDashboardData(dateFilter: string = "30dias") {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const latestFetch = useRef(0)
-
-  const getDateRange = (filter: string) => {
-    const today = brasiliaDateKey()
-    const days = filter === '7dias' ? 7 : filter === '14dias' ? 14 : filter === '30dias' ? 30 : 1
-    const lastDay = filter === 'ontem' ? addDaysToDateKey(today, -1) : today
-    return { ...brasiliaDateRange(days, lastDay), days, lastDay }
-  }
+  const customStart = customRange.start
+  const customEnd = customRange.end
 
   const fetchDashboardData = useCallback(async () => {
     const requestId = ++latestFetch.current
@@ -55,7 +59,7 @@ export function useDashboardData(dateFilter: string = "30dias") {
       setLoading(true)
       setError(null)
 
-      const { start, end, days, lastDay } = getDateRange(dateFilter)
+      const period = resolveDashboardPeriod(dateFilter, { start: customStart, end: customEnd })
 
       // Executives see the consolidated commercial operation. Sellers see only
       // their own data. RLS remains the final source of authorization.
@@ -65,10 +69,12 @@ export function useDashboardData(dateFilter: string = "30dias") {
             .from('vendas')
             .select('id, nome_produto, valor_venda, created_at')
             .eq('approval_status', 'aprovada')
-            .gte('created_at', start.toISOString())
-            .lt('created_at', end.toISOString())
-            .order('created_at')
-            .order('id')
+          if (period.start && period.end) {
+            request = request
+              .gte('created_at', period.start.toISOString())
+              .lt('created_at', period.end.toISOString())
+          }
+          request = request.order('created_at').order('id')
           if (!isExecutive) request = request.eq('user_id', userId)
           return request.range(from, to)
         }),
@@ -76,10 +82,12 @@ export function useDashboardData(dateFilter: string = "30dias") {
           let request = supabase
             .from('abordagens')
             .select('id, created_at')
-            .gte('created_at', start.toISOString())
-            .lt('created_at', end.toISOString())
-            .order('created_at')
-            .order('id')
+          if (period.start && period.end) {
+            request = request
+              .gte('created_at', period.start.toISOString())
+              .lt('created_at', period.end.toISOString())
+          }
+          request = request.order('created_at').order('id')
           if (!isExecutive) request = request.eq('user_id', userId)
           return request.range(from, to)
         }),
@@ -92,26 +100,9 @@ export function useDashboardData(dateFilter: string = "30dias") {
       const totalAbordagens = abordagens?.length || 0
       const conversao = totalAbordagens > 0 ? (quantidadeVendas / totalAbordagens) * 100 : 0
 
-      // The chart follows the selected period and compares event counts with
-      // event counts. Revenue remains in the dedicated revenue metrics.
-      const dateKeys = Array.from({ length: days }, (_, index) =>
-        addDaysToDateKey(lastDay, index - days + 1),
-      )
-      const vendasPorDia = new Map(dateKeys.map((key) => [key, 0]))
-      const abordagensPorDia = new Map(dateKeys.map((key) => [key, 0]))
-      vendas?.forEach((venda) => {
-        const key = brasiliaDateKey(venda.created_at)
-        if (vendasPorDia.has(key)) vendasPorDia.set(key, vendasPorDia.get(key)! + 1)
-      })
-      abordagens?.forEach((abordagem) => {
-        const key = brasiliaDateKey(abordagem.created_at)
-        if (abordagensPorDia.has(key)) abordagensPorDia.set(key, abordagensPorDia.get(key)! + 1)
-      })
-      const vendasMes = dateKeys.map((key) => ({
-        month: formatDateKey(key, { day: '2-digit', month: '2-digit', year: undefined }),
-        vendas: vendasPorDia.get(key) || 0,
-        abordagens: abordagensPorDia.get(key) || 0,
-      }))
+      // Short ranges stay daily; long and all-time ranges are aggregated so
+      // the commercial evolution remains readable.
+      const vendasMes = buildDashboardSeries(vendas, abordagens, period)
 
       // Top products
       const produtosCont = new Map<string, { quantidade: number; valor: number }>()
@@ -152,7 +143,7 @@ export function useDashboardData(dateFilter: string = "30dias") {
     } finally {
       if (requestId === latestFetch.current) setLoading(false)
     }
-  }, [dateFilter, isExecutive, rolesLoading, userId])
+  }, [customEnd, customStart, dateFilter, isExecutive, rolesLoading, userId])
 
   useEffect(() => {
     if (!userId || rolesLoading) return

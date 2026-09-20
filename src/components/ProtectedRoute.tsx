@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
@@ -24,8 +24,12 @@ export function ProtectedRoute({
     error: rolesError,
     refetch: retryRoles,
   } = useRoles();
+  const [suspensionDetected, setSuspensionDetected] = useState(false);
   useEffect(() => {
-    if (profile?.suspended) void signOut();
+    if (profile?.suspended) {
+      setSuspensionDetected(true);
+      void signOut();
+    }
   }, [profile?.suspended, signOut]);
 
   if (
@@ -39,12 +43,12 @@ export function ProtectedRoute({
     );
   }
 
-  if (!user) {
-    return <Navigate to="/auth" replace />;
+  if (profile?.suspended || suspensionDetected) {
+    return <Navigate to="/auth?suspended=true" replace />;
   }
 
-  if (profile?.suspended) {
-    return <Navigate to="/auth?suspended=true" replace />;
+  if (!user) {
+    return <Navigate to="/auth" replace />;
   }
 
   if (error || ((executiveOnly || salesOnly) && rolesError)) {

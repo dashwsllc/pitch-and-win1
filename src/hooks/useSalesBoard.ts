@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from './useAuth'
 import type { SalesBoardData } from '@/lib/sales'
-import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 export function useSalesBoard(status = 'pendente', search = '', page = 0, pageSize = 12) {
   const { user } = useAuth()
@@ -17,7 +16,6 @@ export function useSalesBoard(status = 'pendente', search = '', page = 0, pageSi
       return data as unknown as SalesBoardData
     },
     staleTime: 10_000,
-    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: false,
   })
 }

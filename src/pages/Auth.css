@@ -56,11 +56,14 @@
 .auth-page .auth-input:autofill { background: #0b0515; color: #f0eff1; box-shadow: 0 0 0 1000px #0b0515 inset; }
 .auth-page .auth-input:-webkit-autofill:focus { box-shadow: 0 0 0 1000px #0b0515 inset, 0 0 0 3px #fd7e2026; }
 .auth-field-icon { position: absolute; z-index: 1; pointer-events: none; left: 14px; top: 15px; width: 16px; height: 16px; color: #9c96a4; stroke-width: 1.7; }
-.auth-page .auth-password, .auth-page .auth-fixed-role { padding-right: 48px; }
+.auth-page .auth-password, .auth-page .auth-role-select { padding-right: 48px; }
+.auth-page .auth-role-select { appearance: none; cursor: pointer; }
+.auth-page .auth-role-select:invalid { color: #9c96a4; }
+.auth-page .auth-role-select option { background: #0b0515; color: #f0eff1; }
 .auth-password-toggle { position: absolute; right: 2px; top: 1px; display: grid; place-items: center; width: 42px; height: 44px; color: #b4b1b3; border-radius: 8px; transition: background-color 180ms, color 180ms; }
 .auth-password-toggle svg { width: 17px; height: 17px; stroke-width: 1.7; }
 .auth-password-toggle:hover { color: #f0eff1; background: #ffffff08; }
-.auth-role-lock { position: absolute; right: 16px; top: 16px; width: 14px; height: 14px; color: #9c96a4; }
+.auth-role-chevron { position: absolute; right: 15px; top: 15px; width: 16px; height: 16px; pointer-events: none; color: #9c96a4; }
 .auth-page .auth-submit {
   height: 46px; width: 100%; gap: 8px; border-radius: 10px; border: 1px solid #ffab632e;
   background: linear-gradient(115deg, #fd7e20, #fe5606); color: #241006; font-size: 14px; font-weight: 700;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CheckCircle2, Clock3, Flame, RefreshCw, Sparkles, Target } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -6,11 +6,11 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { useDailyGoals, type DailyGoalTask } from '@/hooks/useGoals'
+import { useLiveClock } from '@/hooks/useLiveClock'
 import { formatDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
 import { safePlainText } from '@/lib/plain-text'
 import { errorMessage } from '@/lib/sales'
 import { cn } from '@/lib/utils'
-import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 function countdownLabel(milliseconds: number) {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000))
@@ -23,13 +23,8 @@ function countdownLabel(milliseconds: number) {
 export function GoalsProgress() {
   const { tasks, today, loading, error, refreshing, refetch, setCompleted } = useDailyGoals()
   const { toast } = useToast()
-  const [now, setNow] = useState(() => new Date())
+  const now = useLiveClock()
   const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set())
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), AUTO_REFRESH_INTERVAL_MS)
-    return () => window.clearInterval(timer)
-  }, [])
 
   const completed = tasks.filter((task) => task.is_completed).length
   const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0

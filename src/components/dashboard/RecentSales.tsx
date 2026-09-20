@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useSalesBoard } from '@/hooks/useSalesBoard'
 import { useAuth } from '@/hooks/useAuth'
 import { exactDate, money } from '@/lib/sales'
-import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
+import { RECENT_SALES_AUTOPLAY_INTERVAL_MS } from '@/lib/sync'
 
 export function RecentSales() {
   const { data, isLoading, isError } = useSalesBoard('aprovada', '', 0, 10)
@@ -36,7 +36,7 @@ export function RecentSales() {
       if (!el || document.hidden || el.scrollWidth <= el.clientWidth) return
       const next = el.scrollLeft + 300
       el.scrollTo({ left: el.scrollLeft >= el.scrollWidth - el.clientWidth - 8 ? 0 : next, behavior: 'smooth' })
-    }, AUTO_REFRESH_INTERVAL_MS)
+    }, RECENT_SALES_AUTOPLAY_INTERVAL_MS)
     return () => clearInterval(timer)
   }, [paused, hovered, focused, reducedMotion, visible, sales.length])
   const move = (direction: number) => {

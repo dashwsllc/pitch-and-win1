@@ -4,10 +4,9 @@ import { supabase } from '@/integrations/supabase/client'
 import type { Tables } from '@/integrations/supabase/types'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
-import { brasiliaDateKey } from '@/lib/brasilia-time'
+import { brasiliaDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { sanitizePlainText } from '@/lib/plain-text'
-import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 export type DailyGoalTask = Tables<'daily_goal_tasks'>
 
@@ -18,10 +17,25 @@ export function useBrasiliaToday() {
     const update = () => {
       setToday(brasiliaDateKey())
     }
+    let timeout: number
+    const schedule = () => {
+      window.clearTimeout(timeout)
+      timeout = window.setTimeout(() => {
+        update()
+        schedule()
+      }, millisecondsUntilBrasiliaMidnight() + 50)
+    }
     update()
-    const interval = window.setInterval(update, AUTO_REFRESH_INTERVAL_MS)
+    schedule()
+    const refreshWhenVisible = () => {
+      if (document.hidden) return
+      update()
+      schedule()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => {
-      window.clearInterval(interval)
+      window.clearTimeout(timeout)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
   }, [])
 
@@ -48,7 +62,6 @@ export function useDailyGoals() {
         .range(from, to))
     },
     staleTime: 0,
-    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: false,
     retry: 1,
   })
@@ -97,7 +110,6 @@ export function useDailyGoalsManagement(assigneeId: string, taskDate: string) {
         .range(from, to))
     },
     staleTime: 0,
-    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: false,
     retry: 1,
   })

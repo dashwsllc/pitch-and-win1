@@ -67,9 +67,11 @@ try {
     await page.getByRole('tab', { name: 'Cadastrar', exact: true }).click()
     await page.getByLabel('Nome completo', { exact: true }).fill(name)
     await page.getByLabel('Email', { exact: true }).fill(email)
+    const requestedRole = action === 'approve' ? 'closer' : 'traffic_manager'
+    await page.getByLabel('Cargo', { exact: true }).selectOption(requestedRole)
     await page.getByLabel('Senha', { exact: true }).fill(password)
     const responsePromise = page.waitForResponse(response => response.url().includes('/auth/v1/signup'))
-    await page.getByRole('button', { name: 'Criar conta', exact: true }).click()
+    await page.getByRole('button', { name: 'Solicitar Acesso', exact: true }).click()
     const signupResponse = await responsePromise
     const signup = await signupResponse.json()
     const newUser = signup.user ?? signup
@@ -79,7 +81,9 @@ try {
     assert.equal(new URL(page.url()).pathname, '/auth')
     const record = must(await admin.from('registration_requests').select('*').eq('user_id', newUser.id).single())
     assert.equal(record.status, 'pending')
-    assert.equal(record.requested_role, 'seller')
+    assert.equal(record.requested_role, requestedRole)
+    const provisionedRoles = must(await admin.from('user_roles').select('role').eq('user_id', newUser.id))
+    assert.deepEqual(provisionedRoles.map(item => item.role), [requestedRole])
     const token = signup.access_token
     assert(token, 'Expected a tracking session')
     const collaborator = createClient(url, publicKey, { ...options, global: { headers: { Authorization: `Bearer ${token}` } } })

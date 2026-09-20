@@ -11,10 +11,12 @@ page.on('pageerror', error => errors.push(error.message))
 // No Auth or database mutations in this visual/failure-state suite.
 await context.routeWebSocket(/supabase\.co/, socket => socket.close())
 let releaseSignup
+let signupPayload
 const signupWait = new Promise(resolve => { releaseSignup = resolve })
 await context.route('https://**/*', async route => {
   if (new URL(route.request().url()).origin === origin) return route.continue()
   if (route.request().url().includes('/auth/v1/signup')) {
+    signupPayload = route.request().postDataJSON()
     await signupWait
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       id: 'a9120000-0000-4000-8000-000000000099', aud: 'authenticated', email: 'auth-ui@example.invalid',
@@ -45,12 +47,17 @@ try {
   await expect(page.getByLabel('Senha', { exact: true })).toHaveAttribute('type', 'text')
   await page.getByRole('tab', { name: 'Cadastrar', exact: true }).click()
   await expect(page.getByLabel('Senha', { exact: true })).toHaveAttribute('type', 'password')
-  await expect(page.getByLabel('Cargo', { exact: true })).toHaveValue('Seller')
-  await expect(page.getByLabel('Cargo', { exact: true })).toHaveAttribute('readonly')
-  assert.equal(await page.getByRole('combobox').count(), 0)
+  await expect(page.getByLabel('Cargo', { exact: true })).toHaveValue('')
+  assert.deepEqual(
+    await page.getByLabel('Cargo', { exact: true }).locator('option:not([disabled])').allTextContents(),
+    ['Vendedor', 'Closer', 'SDR', 'BDR', 'Gestor de Tráfego', 'Executivo'],
+  )
+  assert.equal(await page.getByRole('combobox').count(), 1)
   const fields = await page.locator('.auth-input').evaluateAll(inputs => inputs.map(el => ({ background: getComputedStyle(el).backgroundColor, text: getComputedStyle(el).color })))
   assert.equal(fields.length, 4)
-  assert(fields.every(f => f.background === 'rgb(11, 5, 21)' && f.text === 'rgb(240, 239, 241)'))
+  assert(fields.every(f => f.background === 'rgb(11, 5, 21)'))
+  assert(fields.filter((_, index) => index !== 2).every(f => f.text === 'rgb(240, 239, 241)'))
+  assert.equal(fields[2].text, 'rgb(156, 150, 164)', 'The unselected role placeholder must use the accessible muted color')
   await page.screenshot({ path: '.verification.local/auth-signup-desktop.png' })
   // Chromium's real autofill pseudoclass, not an emulated class on the input.
   const cdp = await context.newCDPSession(page)
@@ -65,23 +72,25 @@ try {
   for (const width of [320, 390, 768]) {
     await page.setViewportSize({ width, height: 844 })
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Horizontal overflow at ${width}px`)
-    await expect(page.getByRole('button', { name: 'Criar conta', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Solicitar Acesso', exact: true })).toBeVisible()
     if (width === 390) await page.screenshot({ path: '.verification.local/auth-signup-mobile.png', fullPage: true })
   }
   await page.getByLabel('Nome completo', { exact: true }).fill('Teste Cadastro')
   await page.getByLabel('Email', { exact: true }).fill('auth-ui@example.invalid')
+  await page.getByLabel('Cargo', { exact: true }).selectOption('closer')
   await page.getByLabel('Senha', { exact: true }).fill('Weakpassword12')
-  await page.getByRole('button', { name: 'Criar conta', exact: true }).click()
+  await page.getByRole('button', { name: 'Solicitar Acesso', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('símbolo')
   await page.getByLabel('Senha', { exact: true }).fill('Strongpassword12!')
-  await page.getByRole('button', { name: 'Criar conta', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Criando conta…', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Solicitar Acesso', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Solicitando acesso…', exact: true })).toBeDisabled()
   await expect(page.locator('button[type=submit] svg.animate-spin')).toBeVisible()
   releaseSignup()
   await expect(page.getByRole('heading', { name: 'Conta criada com sucesso' })).toBeVisible()
   await expect(page.getByText('Sua solicitação foi enviada para análise.', { exact: false })).toBeVisible()
+  assert.equal(signupPayload?.data?.requested_role, 'closer')
   assert.equal(new URL(page.url()).pathname, '/auth', 'Signup without session must not redirect into dashboard')
   await page.screenshot({ path: '.verification.local/auth-pending-mobile.png', fullPage: true })
   assert.deepEqual(errors, [])
-  console.log('PASS: desktop/mobile, dark fields and Chromium autofill, AA text contrast, keyboard navigation, fixed Seller, password toggle, validation, spinner and signup without session')
+  console.log('PASS: desktop/mobile, role selection, signup metadata, AA contrast, validation, spinner and access request without session')
 } finally { await browser.close() }

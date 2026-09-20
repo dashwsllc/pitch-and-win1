@@ -3,7 +3,6 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from './useAuth'
 import { useRoles } from './useRoles'
 import type { Product } from '@/lib/products'
-import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 export function useProducts() {
   const { user } = useAuth()
@@ -23,7 +22,6 @@ export function useProducts() {
       }
     },
     staleTime: 0,
-    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: false,
     retry: 1,
   })

@@ -9,7 +9,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { supabase } from '@/integrations/supabase/client'
 import { errorMessage, money } from '@/lib/sales'
-import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
 
 export default function MinhasVendas() {
   const { user } = useAuth()
@@ -24,7 +23,6 @@ export default function MinhasVendas() {
       return Number(data)
     },
     staleTime: 0,
-    refetchInterval: AUTO_REFRESH_INTERVAL_MS,
   })
   const rows = sales.data ?? []
   const approved = rows.filter(sale => sale.approval_status === 'aprovada')

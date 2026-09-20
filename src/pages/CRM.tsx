@@ -60,6 +60,7 @@ import {
 } from "@/lib/brasilia-time";
 import { callMatchesDateKey, type CallDateFilter } from "@/lib/crm-call-status";
 import { useCRMNotifications } from "@/hooks/useCRMNotifications";
+import { useLiveClock } from "@/hooks/useLiveClock";
 import { useSalesBoard } from "@/hooks/useSalesBoard";
 import {
   compareCallProximity,
@@ -67,7 +68,7 @@ import {
   compareLeadUrgency,
   nextLeadSchedule,
 } from "@/lib/crm-order";
-import { AUTO_REFRESH_INTERVAL_LABEL, AUTO_REFRESH_INTERVAL_MS } from "@/lib/sync";
+import { AUTO_REFRESH_INTERVAL_LABEL, CRM_CLOCK_INTERVAL_MS } from "@/lib/sync";
 
 const temperatures = [
   { value: "frio", label: "Frios" },
@@ -186,13 +187,9 @@ export default function CRM() {
     call?: CRMActivity;
   } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [now, setNow] = useState(() => new Date());
+  const now = useLiveClock(CRM_CLOCK_INTERVAL_MS);
   const lock = useRef(false);
   const { realtimeUnavailable } = useCRMRealtime();
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), AUTO_REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, []);
   const names = Object.fromEntries(
     (assignees.data || []).map((a) => [a.user_id, a.display_name]),
   );

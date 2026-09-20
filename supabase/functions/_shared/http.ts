@@ -1,10 +1,14 @@
-const configuredOrigins = (Deno.env.get('ALLOWED_ORIGINS') ?? 'https://wsltda.site,https://www.wsltda.site')
+const configuredOrigins = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
   .split(',')
   .map(value => value.trim())
   .filter(Boolean)
 
 const allowedOrigins = new Set([
   ...configuredOrigins,
+  'https://wsltda.com',
+  'https://www.wsltda.com',
+  'https://wsltda.site',
+  'https://www.wsltda.site',
   'http://localhost:5173',
   'http://localhost:8080',
 ])

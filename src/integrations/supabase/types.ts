@@ -15,8 +15,8 @@ export type Database = {
   public: {
     Tables: {
       registration_requests: {
-        Row: { user_id: string; display_name: string; email: string; requested_role: 'seller'; status: 'pending' | 'approved' | 'rejected'; created_at: string; reviewed_at: string | null; reviewed_by: string | null }
-        Insert: { user_id: string; display_name: string; email: string; requested_role?: 'seller'; status?: 'pending' | 'approved' | 'rejected'; created_at?: string; reviewed_at?: string | null; reviewed_by?: string | null }
+        Row: { user_id: string; display_name: string; email: string; requested_role: 'seller' | 'closer' | 'sdr' | 'bdr' | 'traffic_manager' | 'executive'; status: 'pending' | 'approved' | 'rejected'; created_at: string; reviewed_at: string | null; reviewed_by: string | null }
+        Insert: { user_id: string; display_name: string; email: string; requested_role?: 'seller' | 'closer' | 'sdr' | 'bdr' | 'traffic_manager' | 'executive'; status?: 'pending' | 'approved' | 'rejected'; created_at?: string; reviewed_at?: string | null; reviewed_by?: string | null }
         Update: { status?: 'pending' | 'approved' | 'rejected'; reviewed_at?: string | null; reviewed_by?: string | null }
         Relationships: []
       }

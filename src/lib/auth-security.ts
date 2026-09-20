@@ -27,6 +27,22 @@ export const displayNameSchema = z
   .min(2, 'O nome deve ter pelo menos 2 caracteres.')
   .max(120, 'O nome deve ter no máximo 120 caracteres.');
 
+export const SIGNUP_ROLE_LABELS = {
+  seller: 'Vendedor',
+  closer: 'Closer',
+  sdr: 'SDR',
+  bdr: 'BDR',
+  traffic_manager: 'Gestor de Tráfego',
+  executive: 'Executivo',
+} as const;
+
+export type SignupRole = keyof typeof SIGNUP_ROLE_LABELS;
+
+export const signupRoleSchema = z.enum(
+  Object.keys(SIGNUP_ROLE_LABELS) as [SignupRole, ...SignupRole[]],
+  { required_error: 'Selecione seu cargo.', invalid_type_error: 'Selecione um cargo válido.' },
+);
+
 export function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? 'Confira os dados informados.';
 }

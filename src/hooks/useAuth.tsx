@@ -1,12 +1,13 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
-import { supabase } from '@/integrations/supabase/client'
+import { clearStoredSupabaseSession, supabase } from '@/integrations/supabase/client'
 import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
+import type { SignupRole } from '@/lib/auth-security'
 
 interface AuthContextType {
   user: User | null
   session: Session | null
-  signUp: (email: string, password: string, displayName?: string, captchaToken?: string) => Promise<{ error: unknown; session: Session | null }>
+  signUp: (email: string, password: string, displayName: string, requestedRole: SignupRole, captchaToken?: string) => Promise<{ error: unknown; session: Session | null }>
   signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error: unknown }>
   signOut: () => Promise<void>
   loading: boolean
@@ -23,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [registration, setRegistration] = useState<{ userId: string; status: 'pending' | 'approved' | 'rejected' } | null>(null)
   const [registrationError, setRegistrationError] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const signingOut = useRef(false)
   const refreshRegistration = useCallback(() => setRefreshKey(key => key + 1), [])
   const sessionUserId = session?.user.id
   const accessToken = session?.access_token
@@ -33,21 +35,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const user = registrationStatus === 'approved' ? session?.user ?? null : null
 
   useEffect(() => {
-    // Set up auth state listener
+    let disposed = false
+    let authRevision = 0
+    const applySession = (nextSession: Session | null) => {
+      if (disposed || (signingOut.current && nextSession)) return
+      authRevision += 1
+      setSession(nextSession)
+      setAuthLoading(false)
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session)
-        setAuthLoading(false)
-      }
+      (_event, nextSession) => applySession(nextSession)
     )
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setAuthLoading(false)
-    })
+    // Do not let a slower initial read overwrite a newer sign-in/sign-out event.
+    const initialRevision = authRevision
+    void supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (disposed || authRevision !== initialRevision) return
+        applySession(error ? null : data.session)
+      })
+      .catch(() => {
+        if (disposed || authRevision !== initialRevision) return
+        applySession(null)
+      })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      disposed = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -77,14 +93,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     void refresh()
     const onVisible = () => { if (!document.hidden) void refresh() }
-    const interval = setInterval(onVisible, AUTO_REFRESH_INTERVAL_MS)
+    const channel = supabase
+      .channel(`registration-status-${sessionUserId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'registration_requests',
+        filter: `user_id=eq.${sessionUserId}`,
+      }, () => { void refresh() })
+
+    void supabase.realtime.setAuth(accessToken)
+      .then(() => { if (!disposed) channel.subscribe() })
+      .catch(() => { /* The polling fallback below remains active. */ })
+
+    const interval = window.setInterval(onVisible, AUTO_REFRESH_INTERVAL_MS)
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', onVisible)
     return () => {
       disposed = true
-      clearInterval(interval)
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', onVisible)
+      void supabase.removeChannel(channel)
     }
   }, [sessionUserId, accessToken, refreshKey])
 
-  const signUp = async (email: string, password: string, displayName?: string, captchaToken?: string) => {
+  const signUp = async (email: string, password: string, displayName: string, requestedRole: SignupRole, captchaToken?: string) => {
     const redirectUrl = `${window.location.origin}/`
     
     const { data, error } = await supabase.auth.signUp({
@@ -94,7 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: redirectUrl,
         captchaToken,
         data: {
-          display_name: displayName
+          display_name: displayName,
+          requested_role: requestedRole,
         }
       }
     })
@@ -118,12 +153,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error }
   }
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
+    signingOut.current = true
     setRegistration(null)
+    setRegistrationError(false)
     setSession(null)
-    await supabase.auth.signOut()
-    // onAuthStateChange + ProtectedRoute will redirect to /auth
-  }
+    try {
+      const { error } = await supabase.auth.signOut()
+      // A transport failure prevents supabase-js from reaching its normal
+      // local cleanup. Never leave a refresh token behind after the UI exits.
+      if (error) clearStoredSupabaseSession()
+    } catch {
+      clearStoredSupabaseSession()
+    } finally {
+      setRegistration(null)
+      setRegistrationError(false)
+      setSession(null)
+      signingOut.current = false
+    }
+  }, [])
 
   return (
     <AuthContext.Provider value={{
