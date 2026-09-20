@@ -98,7 +98,7 @@ export function GoalsProgress() {
           </div>
           <p className="text-sm font-medium text-ash">Nenhuma tarefa definida para hoje</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            O executivo pode cadastrar seu checklist de {formatDateKey(today)}.
+            O Executive pode cadastrar seu checklist de {formatDateKey(today)}.
           </p>
         </CardContent>
       </Card>

@@ -18,12 +18,13 @@ Deno.serve(async req => {
     const { user_id, new_password, reason } = body
     if (Object.keys(body).some(key => !['user_id', 'new_password', 'reason'].includes(key))
       || typeof user_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(user_id)
-      || typeof new_password !== 'string' || new_password.length < 12 || new_password.length > 128
+      || typeof new_password !== 'string' || new_password.length < 7 || new_password.length > 128
+      || !/[A-Z]/.test(new_password) || !/[^A-Za-z0-9]/.test(new_password)
       || typeof reason !== 'string' || reason.trim().length < 5) {
-      return jsonResponse(req, { error: 'Informe uma senha de 12 a 128 caracteres e o motivo da alteração.' }, 400)
+      return jsonResponse(req, { error: 'Informe uma senha de 7 a 128 caracteres, com letra maiúscula e caractere especial, além do motivo da alteração.' }, 400)
     }
     const { data, error } = await client.rpc('executive_list_users')
-    if (error) return jsonResponse(req, { error: 'Acesso executivo necessário' }, 403)
+    if (error) return jsonResponse(req, { error: 'Acesso Executive necessário' }, 403)
     const account = data.users.find((row: { user_id: string }) => row.user_id === user_id)
     if (!account) return jsonResponse(req, { error: 'Conta não encontrada' }, 404)
     const roles = account.user_roles

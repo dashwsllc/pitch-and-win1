@@ -83,7 +83,7 @@ export function SalesBoard({ compact = false, management = false }: { compact?: 
             {key==='pendente' ? 'Pendentes' : key==='aprovada' ? 'Aprovadas' : 'Rejeitadas'} <span className="ml-1.5 opacity-60">{summary?.[key==='pendente' ? 'pending' : key==='aprovada' ? 'approved' : 'rejected'] ?? '—'}</span>
           </button>)}
         </div>
-        {!compact && <div className="relative w-full sm:w-64"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input aria-label="Buscar vendedor ou produto" className="h-9 border-white/[0.08] bg-white/[0.025] pl-9 text-xs" placeholder="Buscar vendedor ou produto" value={search} onChange={e => setSearch(e.target.value)} /></div>}
+        {!compact && <div className="relative w-full sm:w-64"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input aria-label="Buscar Seller ou produto" className="h-9 border-white/[0.08] bg-white/[0.025] pl-9 text-xs" placeholder="Buscar Seller ou produto" value={search} onChange={e => setSearch(e.target.value)} /></div>}
       </div>
       {query.isError && <p role="alert" className="mx-5 mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">Falha ao atualizar vendas. {errorMessage(query.error)}{query.data ? ' Os dados abaixo são da última consulta bem-sucedida.' : ''}</p>}
       <div className="px-4 pb-4 sm:px-6">

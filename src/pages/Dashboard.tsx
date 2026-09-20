@@ -267,7 +267,7 @@ export default function Dashboard() {
           <MetricCard
             title="Posição Ranking"
             value={userPosition > 0 ? `#${userPosition}` : '—'}
-            subtitle={userPosition > 0 ? 'de ' + ranking.length + ' vendedores' : 'Ranking não iniciado'}
+            subtitle={userPosition > 0 ? 'de ' + ranking.length + ' Sellers' : 'Ranking não iniciado'}
             icon={<Medal className="h-5 w-5" strokeWidth={1.8} />}
             accent="ember"
             loading={loading}

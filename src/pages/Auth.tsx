@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { BarChart3, BriefcaseBusiness, Check, ChevronDown, Clock3, Eye, EyeOff, Loader2, LockKeyhole, Mail, ShieldCheck, UserRound } from 'lucide-react'
+import { BarChart3, Check, Clock3, Eye, EyeOff, Loader2, LockKeyhole, Mail, ShieldCheck, UserRound } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { Turnstile, captchaRequired } from '@/components/security/Turnstile'
@@ -14,8 +14,6 @@ import {
   firstIssue,
   loginPasswordSchema,
   publicAuthError,
-  SIGNUP_ROLE_LABELS,
-  signupRoleSchema,
   strongPasswordSchema,
 } from '@/lib/auth-security'
 import './Auth.css'
@@ -48,8 +46,7 @@ export default function Auth() {
     const email = emailSchema.safeParse(formData.get('email'))
     const password = (signup ? strongPasswordSchema : loginPasswordSchema).safeParse(formData.get('password'))
     const name = displayNameSchema.safeParse(signup ? formData.get('name') : 'Login')
-    const requestedRole = signupRoleSchema.safeParse(signup ? formData.get('cargo') : 'seller')
-    const invalid = !email.success ? email.error : !password.success ? password.error : !name.success ? name.error : !requestedRole.success ? requestedRole.error : null
+    const invalid = !email.success ? email.error : !password.success ? password.error : !name.success ? name.error : null
     const captcha = signup ? signUpCaptcha : signInCaptcha
     if (invalid || (captchaRequired && !captcha)) {
       setFormError(invalid ? firstIssue(invalid) : 'Conclua a verificação anti-bot.')
@@ -60,7 +57,7 @@ export default function Auth() {
     setFormError(null)
     try {
       if (signup) {
-        const { error } = await signUp(email.data, password.data, name.data, requestedRole.data, captcha ?? undefined)
+        const { error } = await signUp(email.data, password.data, name.data, captcha ?? undefined)
         if (error) throw error
         // Success is independent of automatic login/email confirmation settings.
         // The request already exists in the same committed transaction as Auth.
@@ -95,7 +92,7 @@ export default function Auth() {
       <div className="auth-input-wrap">
         <LockKeyhole className="auth-field-icon" aria-hidden="true" />
         <Input id={`${prefix}-password`} name="password" aria-label="Senha" type={showPassword ? 'text' : 'password'}
-          placeholder="Digite sua senha" required minLength={signup ? 12 : undefined} maxLength={128}
+          placeholder="Digite sua senha" required minLength={signup ? 7 : undefined} maxLength={128}
           autoComplete={signup ? 'new-password' : 'current-password'} aria-describedby={signup ? 'password-hint' : undefined}
           className="auth-input auth-password" />
         <button type="button" className="auth-password-toggle" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
@@ -103,7 +100,7 @@ export default function Auth() {
           {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
         </button>
       </div>
-      {signup && <p id="password-hint" className="auth-hint">12 ou mais caracteres, com maiúscula, minúscula, número e símbolo.</p>}
+      {signup && <p id="password-hint" className="auth-hint">7 ou mais caracteres, com letra maiúscula e caractere especial.</p>}
     </div>
   }
 
@@ -180,19 +177,6 @@ export default function Auth() {
                     </div>
                   </div>
                   {emailField(true)}
-                  <div className="auth-field">
-                    <Label htmlFor="signup-cargo">Cargo</Label>
-                    <div className="auth-input-wrap">
-                      <BriefcaseBusiness className="auth-field-icon" aria-hidden="true" />
-                      <select id="signup-cargo" name="cargo" aria-label="Cargo" defaultValue="" required className="auth-input auth-role-select">
-                        <option value="" disabled>Selecione seu cargo</option>
-                        {Object.entries(SIGNUP_ROLE_LABELS).map(([role, label]) => (
-                          <option key={role} value={role}>{label}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="auth-role-chevron" aria-hidden="true" />
-                    </div>
-                  </div>
                   {passwordField(true)}
                   <Turnstile key={`signup-${captchaKey}`} onToken={setSignUpCaptcha} />
                   {formError && <p className="auth-error" role="alert">{formError}</p>}

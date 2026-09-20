@@ -147,7 +147,7 @@ export default function ResetPassword() {
                       type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       required
-                      minLength={6}
+                      minLength={7}
                       className="w-full pr-10"
                     />
                     <Button
@@ -175,7 +175,7 @@ export default function ResetPassword() {
                       type={showConfirmPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       required
-                      minLength={6}
+                      minLength={7}
                       className="w-full pr-10"
                     />
                     <Button

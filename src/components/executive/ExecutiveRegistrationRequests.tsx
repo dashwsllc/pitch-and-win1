@@ -7,7 +7,6 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
 import type { Tables } from '@/integrations/supabase/types'
 import { exactDate } from '@/lib/sales'
-import { SIGNUP_ROLE_LABELS, type SignupRole } from '@/lib/auth-security'
 
 export function ExecutiveRegistrationRequests() {
   const { user } = useAuth()
@@ -63,7 +62,7 @@ export function ExecutiveRegistrationRequests() {
         <div className="min-w-0">
           <h3 className="break-words text-sm font-medium text-white">{request.display_name || 'Colaborador'}</h3>
           <p className="mt-1 break-all text-xs text-muted-foreground">{request.email}</p>
-          <p className="mt-2 text-xs text-orange-200">{SIGNUP_ROLE_LABELS[request.requested_role as SignupRole] ?? request.requested_role} · Aguardando aprovação</p>
+          <p className="mt-2 text-xs text-orange-200">Cargo definido pelo Super Admin após a aprovação</p>
           <time dateTime={request.created_at} className="mt-1 block text-xs text-muted-foreground">Solicitado em {exactDate(request.created_at)} · Brasília</time>
         </div>
         <div className="flex gap-2">

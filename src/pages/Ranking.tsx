@@ -104,7 +104,7 @@ export default function Ranking() {
             </div>
             <div>
               <h1 className="text-3xl font-light text-foreground tracking-tight">
-                Ranking de <span className="font-semibold">Vendedores</span>
+                Ranking de <span className="font-semibold">Sellers</span>
               </h1>
               <p className="text-muted-foreground mt-0.5">
                 Ranking acumulado do time · somente vendas aprovadas.
@@ -354,7 +354,7 @@ export default function Ranking() {
                   <h3 className="text-lg font-semibold text-foreground mb-1">1º Lugar</h3>
                   <p className="text-3xl font-bold text-amber-400 mb-2">R$ 5.000</p>
                   <p className="text-xs text-muted-foreground mb-3">
-                    Prêmio em dinheiro para o vendedor #1
+                    Prêmio em dinheiro para o Seller #1
                   </p>
                   <Badge className="bg-amber-400/10 text-amber-400 border-amber-400/20">
                     Closer do Mês

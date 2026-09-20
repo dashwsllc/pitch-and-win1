@@ -61,7 +61,7 @@ export default function ExecutiveDashboard() {
         <div className="surface-panel flex flex-col justify-between gap-4 rounded-2xl p-6 sm:flex-row sm:items-center">
           <div>
             <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-electric">Decisões, pessoas e performance</p>
-            <h1 className="text-3xl font-light tracking-tight text-white">Central executiva</h1>
+            <h1 className="text-3xl font-light tracking-tight text-white">Central Executive</h1>
             <p className="mt-2 text-sm text-muted-foreground">Visão da operação e controle de cada decisão comercial.</p>
           </div>
           <div className="flex items-center gap-3">
@@ -91,7 +91,7 @@ export default function ExecutiveDashboard() {
         {/* Main Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard
-            title="Total de Vendedores"
+            title="Total de Sellers"
             value={data.totalSellers.toString()}
             icon={<Users className="w-5 h-5" />}
             loading={loading}
@@ -145,7 +145,7 @@ export default function ExecutiveDashboard() {
           
           <Card>
             <CardHeader>
-              <CardTitle>Top Vendedores</CardTitle>
+              <CardTitle>Top Sellers</CardTitle>
               <CardDescription>Melhores performers do período</CardDescription>
             </CardHeader>
             <CardContent>
@@ -188,7 +188,7 @@ export default function ExecutiveDashboard() {
             <TabsTrigger className="px-4 py-2.5" value="products">Produtos e tickets</TabsTrigger>
             <TabsTrigger className="px-4 py-2.5" value="users">Contas e acessos</TabsTrigger>
             <TabsTrigger className="px-4 py-2.5" value="passwords">Solicitações de senha</TabsTrigger>
-            <TabsTrigger className="px-4 py-2.5" value="details">Vendedores</TabsTrigger>
+            <TabsTrigger className="px-4 py-2.5" value="details">Sellers</TabsTrigger>
             <TabsTrigger className="px-4 py-2.5" value="goals">Metas</TabsTrigger>
             <TabsTrigger className="px-4 py-2.5" value="withdrawals">Saques</TabsTrigger>
             <TabsTrigger className="px-4 py-2.5" value="audit"><History className="mr-1.5 h-3.5 w-3.5" />Auditoria</TabsTrigger>
@@ -222,7 +222,7 @@ export default function ExecutiveDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Atividade Recente</CardTitle>
-            <CardDescription>Últimas ações dos vendedores</CardDescription>
+            <CardDescription>Últimas ações dos Sellers</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (

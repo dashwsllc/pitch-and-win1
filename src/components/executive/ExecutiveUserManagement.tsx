@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { errorMessage, exactDate } from '@/lib/sales'
 import { AUTO_REFRESH_INTERVAL_LABEL } from '@/lib/sync'
 import { avatarObjectPath, validateAvatarFile } from '@/lib/avatar'
+import { firstIssue, strongPasswordSchema } from '@/lib/auth-security'
 
 interface AccountForm {
   display_name: string
@@ -95,6 +96,10 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
     event.preventDefault()
     if (!editing || !form || saving) return
     if (form.password !== form.confirm_password) { toast({ title: 'As senhas não coincidem', variant: 'destructive' }); return }
+    if (form.password) {
+      const passwordResult = strongPasswordSchema.safeParse(form.password)
+      if (!passwordResult.success) { toast({ title: firstIssue(passwordResult.error), variant: 'destructive' }); return }
+    }
     if (!form.roles.length || form.reason.trim().length < 5 || form.commission_rate.trim() === '') {
       toast({ title: 'Confira os papéis, a comissão e o motivo da alteração.', variant: 'destructive' }); return
     }
@@ -239,12 +244,12 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
               <p className="text-xs text-muted-foreground">Ao trocar o e-mail, o novo endereço passa a ser o login. Confira-o com o usuário antes de salvar.</p>
             </fieldset>
             <fieldset disabled={saving} className="space-y-4 border-t border-border pt-4"><legend className="px-1 text-xs font-medium uppercase tracking-wider text-electric">Permissões e comissão</legend>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(Object.keys(ROLE_LABELS) as UserRole[]).filter(role => role!=='super_admin' || hasRole('super_admin')).map(role => <label key={role} className="flex cursor-pointer items-center gap-2 rounded-lg border border-white/[0.07] p-3 text-xs"><Checkbox checked={form.roles.includes(role)} onCheckedChange={checked => change('roles',checked ? [...form.roles,role] : form.roles.filter(r => r!==role))} />{ROLE_LABELS[role]}</label>)}</div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(Object.keys(ROLE_LABELS) as UserRole[]).filter(role => hasRole('super_admin') || (role!=='super_admin' && role!=='executive')).map(role => <label key={role} className="flex cursor-pointer items-center gap-2 rounded-lg border border-white/[0.07] p-3 text-xs"><Checkbox checked={form.roles.includes(role)} onCheckedChange={checked => change('roles',checked ? [...form.roles,role] : form.roles.filter(r => r!==role))} />{ROLE_LABELS[role]}</label>)}</div>
               <div className="grid items-start gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="account-commission">Comissão (%)</Label><Input id="account-commission" type="number" min="0" max="100" step="0.01" required value={form.commission_rate} onChange={e => change('commission_rate',e.target.value)} /><p className="text-[10px] text-muted-foreground">Vale para aprovações futuras. Comissões já aprovadas mantêm o valor registrado.</p></div><div className="space-y-4 pt-1"><label className="flex items-center justify-between gap-3 text-xs"><span>Acesso ao CRM</span><Switch checked={form.crm_access} onCheckedChange={value => change('crm_access',value)} /></label><label className="flex items-center justify-between gap-3 text-xs"><span>Permissão de visualizar vendas</span><Switch checked={form.can_view_sales} onCheckedChange={value => change('can_view_sales',value)} /></label><label className="flex items-center justify-between gap-3 text-xs text-rose-300"><span>Suspender acesso</span><Switch checked={form.suspended} disabled={editing.user_id===actor?.id} onCheckedChange={value => change('suspended',value)} /></label></div></div>
               <p className="text-[10px] text-muted-foreground">Sellers sem função específica acessam SDR e Closer. Funções SDR/Closer definem a área operacional. A opção Acesso ao CRM concede exceções a outros cargos; não revoga o acesso inerente aos cargos comerciais. Para bloquear uma conta, use Suspender acesso.</p>
             </fieldset>
             <fieldset disabled={saving} className="space-y-4 border-t border-border pt-4"><legend className="flex items-center gap-1.5 px-1 text-xs font-medium uppercase tracking-wider text-electric"><KeyRound className="h-3.5 w-3.5" /> Segurança</legend>
-              <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="account-password">Nova senha (opcional)</Label><Input id="account-password" type="password" autoComplete="new-password" minLength={12} maxLength={128} value={form.password} onChange={e => change('password',e.target.value)} placeholder="Mínimo 12 caracteres" /></div><div className="space-y-2"><Label htmlFor="account-confirm">Confirmar nova senha</Label><Input id="account-confirm" type="password" autoComplete="new-password" required={!!form.password} value={form.confirm_password} onChange={e => change('confirm_password',e.target.value)} /></div></div>
+              <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="account-password">Nova senha (opcional)</Label><Input id="account-password" type="password" autoComplete="new-password" minLength={7} maxLength={128} value={form.password} onChange={e => change('password',e.target.value)} placeholder="Mínimo 7 caracteres" /><p className="text-[10px] text-muted-foreground">Inclua uma letra maiúscula e um caractere especial.</p></div><div className="space-y-2"><Label htmlFor="account-confirm">Confirmar nova senha</Label><Input id="account-confirm" type="password" autoComplete="new-password" required={!!form.password} value={form.confirm_password} onChange={e => change('confirm_password',e.target.value)} /></div></div>
               <p className="text-[10px] text-muted-foreground">Deixe vazio para manter a senha. Senhas existentes nunca são exibidas.</p>
             </fieldset>
             <div className="rounded-lg bg-white/[0.025] p-3 text-[11px] leading-relaxed text-muted-foreground"><p>Criada em: {exactDate(editing.created_at)} · Brasília</p><p>Último login oficial: {editing.last_sign_in_at ? exactDate(editing.last_sign_in_at) : 'Nenhum registro'} · Brasília</p>{editing.last_sign_in_at && <p className="mt-1 break-all font-mono">UTC original: {editing.last_sign_in_at}</p>}<p className="mt-2">Identificador e horários históricos são registros do servidor, não campos editáveis.</p></div>

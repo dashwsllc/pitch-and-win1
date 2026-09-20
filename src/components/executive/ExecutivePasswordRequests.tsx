@@ -45,6 +45,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { useAllUsers } from '@/hooks/useRoles'
 import { Textarea } from '@/components/ui/textarea'
+import { firstIssue, strongPasswordSchema } from '@/lib/auth-security'
 
 interface PasswordRequest {
   id: string
@@ -134,10 +135,13 @@ export function ExecutivePasswordRequests() {
   }
 
   const resetUserPassword = async () => {
-    if (!selectedUser || newPassword.length < 12 || resetReason.trim().length < 5) {
+    const passwordResult = strongPasswordSchema.safeParse(newPassword)
+    if (!selectedUser || !passwordResult.success || resetReason.trim().length < 5) {
       toast({
         title: 'Campos obrigatórios',
-        description: 'Selecione uma conta, defina uma senha com pelo menos 12 caracteres e informe o motivo.',
+        description: !passwordResult.success
+          ? firstIssue(passwordResult.error)
+          : 'Selecione uma conta e informe o motivo da alteração.',
         variant: 'destructive'
       })
       return
@@ -280,10 +284,11 @@ export function ExecutivePasswordRequests() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Digite a nova senha"
-                    minLength={12}
+                    minLength={7}
                     maxLength={128}
                     autoComplete="new-password"
                   />
+                  <p className="text-xs text-muted-foreground">Mínimo de 7 caracteres, uma letra maiúscula e um caractere especial.</p>
                 </div>
               </div>
               <div className="space-y-2">
@@ -296,7 +301,7 @@ export function ExecutivePasswordRequests() {
                 </Button>
                 <Button 
                   onClick={resetUserPassword}
-                  disabled={resetting || !selectedUser || newPassword.length < 12 || resetReason.trim().length < 5}
+                  disabled={resetting || !selectedUser || !strongPasswordSchema.safeParse(newPassword).success || resetReason.trim().length < 5}
                   className="bg-gradient-primary hover:opacity-90"
                 >
                   {resetting ? (

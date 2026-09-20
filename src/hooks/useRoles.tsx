@@ -16,12 +16,12 @@ export type UserRole =
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: "Super Admin",
-  executive: "Executivo",
+  executive: "Executive",
   closer: "Closer",
   sdr: "SDR",
   bdr: "BDR",
   traffic_manager: "Gestor de Tráfego",
-  seller: "Vendedor",
+  seller: "Seller",
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -74,7 +74,7 @@ export function useRoles() {
     canViewSales: isExecutive || !!query.data?.some((r) => r.can_view_sales),
     // executive_review_sale congela a taxa da linha escolhida por
     // ORDER BY updated_at DESC, id LIMIT 1. Sem a mesma ordenacao aqui, a taxa
-    // exibida ao vendedor depende da ordem que o PostgREST devolver.
+    // exibida ao Seller depende da ordem que o PostgREST devolver.
     commissionRate: Number(
       [...(query.data ?? [])].sort(
         (a, b) =>

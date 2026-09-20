@@ -2,12 +2,11 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, Re
 import { User, Session } from '@supabase/supabase-js'
 import { clearStoredSupabaseSession, supabase } from '@/integrations/supabase/client'
 import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
-import type { SignupRole } from '@/lib/auth-security'
 
 interface AuthContextType {
   user: User | null
   session: Session | null
-  signUp: (email: string, password: string, displayName: string, requestedRole: SignupRole, captchaToken?: string) => Promise<{ error: unknown; session: Session | null }>
+  signUp: (email: string, password: string, displayName: string, captchaToken?: string) => Promise<{ error: unknown; session: Session | null }>
   signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error: unknown }>
   signOut: () => Promise<void>
   loading: boolean
@@ -118,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [sessionUserId, accessToken, refreshKey])
 
-  const signUp = async (email: string, password: string, displayName: string, requestedRole: SignupRole, captchaToken?: string) => {
+  const signUp = async (email: string, password: string, displayName: string, captchaToken?: string) => {
     const redirectUrl = `${window.location.origin}/`
     
     const { data, error } = await supabase.auth.signUp({
@@ -129,7 +128,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         captchaToken,
         data: {
           display_name: displayName,
-          requested_role: requestedRole,
         }
       }
     })

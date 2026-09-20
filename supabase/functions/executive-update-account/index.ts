@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
     const { data: { user: actor }, error: authError } = await admin.auth.getUser(token)
     if (authError || !actor) return jsonResponse(req, { error: 'Sessão inválida. Entre novamente.' }, 401)
     const { data: authorized, error: roleError } = await admin.rpc('is_executive', { _user_id: actor.id })
-    if (roleError || !authorized) return jsonResponse(req, { error: 'Acesso executivo necessário' }, 403)
+    if (roleError || !authorized) return jsonResponse(req, { error: 'Acesso Executive necessário' }, 403)
 
     const body = await readJsonBody<Record<string, unknown>>(req)
     const allowedFields = new Set(['user_id','display_name','email','phone','avatar_url','password','roles','commission_rate',
@@ -56,8 +56,8 @@ Deno.serve(async (req) => {
       || typeof expected_revision !== 'string' || (expected_updated_at !== null && typeof expected_updated_at !== 'string')) {
       return jsonResponse(req, { error: 'Confira nome, e-mail, telefone internacional, permissões, comissão e motivo.' }, 400)
     }
-    if (password && (typeof password !== 'string' || password.length < 12 || password.length > 128)) {
-      return jsonResponse(req, { error: 'A nova senha deve ter de 12 a 128 caracteres.' }, 400)
+    if (password && (typeof password !== 'string' || password.length < 7 || password.length > 128 || !/[A-Z]/.test(password) || !/[^A-Za-z0-9]/.test(password))) {
+      return jsonResponse(req, { error: 'A nova senha deve ter de 7 a 128 caracteres, uma letra maiúscula e um caractere especial.' }, 400)
     }
     const { data: { user: target }, error: targetError } = await admin.auth.admin.getUserById(user_id)
     if (targetError || !target) return jsonResponse(req, { error: 'Usuário não encontrado' }, 404)

@@ -35,7 +35,7 @@ await context.route('https://**/*', async route => {
     })
   } else if (resource === 'get_sales_board') {
     const visible = sales.filter(s => s.approval_status !== 'rejeitada' || role === 'executive')
-    const items = visible.filter(s => s.approval_status === payload.p_status).map(s => ({ ...s, seller_name: 'QA Vendedor' }))
+    const items = visible.filter(s => s.approval_status === payload.p_status).map(s => ({ ...s, seller_name: 'QA Seller' }))
     data = { items, total: items.length, fetched_at: now, summary: { approved: visible.filter(s => s.approval_status === 'aprovada').length, pending: visible.filter(s => s.approval_status === 'pendente').length, rejected: visible.filter(s => s.approval_status === 'rejeitada').length, approved_value: visible.filter(s => s.approval_status === 'aprovada').reduce((sum,s) => sum+s.valor_venda,0), pending_value: 1000, overdue: 0 } }
   } else if (resource === 'manage_sale') {
     writes++

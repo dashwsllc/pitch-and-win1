@@ -9,8 +9,8 @@ DO $$ BEGIN
   IF EXISTS(SELECT 1 FROM public.user_roles WHERE user_id::text LIKE 'a9120000-%' AND role::text <> 'seller') THEN RAISE EXCEPTION 'FAIL role spoof'; END IF;
   IF EXISTS(SELECT 1 FROM auth.users u WHERE NOT EXISTS(SELECT 1 FROM public.registration_requests r WHERE r.user_id=u.id)) THEN RAISE EXCEPTION 'FAIL missing request'; END IF;
 END; $$;
--- The explicit requested_role is accepted only from the dedicated metadata
--- field and is kept consistent between the queue and provisioned access.
+-- Public metadata never assigns a role. The Super Admin chooses it after
+-- approving the account.
 INSERT INTO auth.users(id,email,raw_user_meta_data,raw_app_meta_data,created_at,updated_at)
 VALUES(
   'a9120000-0000-4000-8000-000000000005',
@@ -19,8 +19,21 @@ VALUES(
   '{}', now(), now()
 );
 DO $$ BEGIN
-  IF NOT EXISTS(SELECT 1 FROM public.registration_requests WHERE user_id='a9120000-0000-4000-8000-000000000005' AND requested_role='closer') THEN RAISE EXCEPTION 'FAIL requested role queue'; END IF;
-  IF NOT EXISTS(SELECT 1 FROM public.user_roles WHERE user_id='a9120000-0000-4000-8000-000000000005' AND role::text='closer') THEN RAISE EXCEPTION 'FAIL requested role provision'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.registration_requests WHERE user_id='a9120000-0000-4000-8000-000000000005' AND requested_role='seller') THEN RAISE EXCEPTION 'FAIL public role metadata ignored in queue'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.user_roles WHERE user_id='a9120000-0000-4000-8000-000000000005' AND role::text='seller') THEN RAISE EXCEPTION 'FAIL default role provision'; END IF;
+  IF EXISTS(SELECT 1 FROM public.user_roles WHERE user_id='a9120000-0000-4000-8000-000000000005' AND role::text='closer') THEN RAISE EXCEPTION 'FAIL public operational role assignment'; END IF;
+END; $$;
+INSERT INTO auth.users(id,email,raw_user_meta_data,raw_app_meta_data,created_at,updated_at)
+VALUES(
+  'a9120000-0000-4000-8000-000000000006',
+  'registration-restricted-role-qa@example.invalid',
+  '{"display_name":"Restricted Role QA","requested_role":"executive"}',
+  '{}', now(), now()
+);
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM public.registration_requests WHERE user_id='a9120000-0000-4000-8000-000000000006' AND requested_role='seller') THEN RAISE EXCEPTION 'FAIL restricted requested role fallback'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.user_roles WHERE user_id='a9120000-0000-4000-8000-000000000006' AND role::text='seller') THEN RAISE EXCEPTION 'FAIL restricted provision fallback'; END IF;
+  IF EXISTS(SELECT 1 FROM public.user_roles WHERE user_id='a9120000-0000-4000-8000-000000000006' AND role::text IN ('executive','super_admin')) THEN RAISE EXCEPTION 'FAIL administrative role self assignment'; END IF;
 END; $$;
 -- Bootstrap only this disposable reviewer; existing accounts are untouched.
 UPDATE public.registration_requests SET status='approved' WHERE user_id='a9120000-0000-4000-8000-000000000001';

@@ -76,7 +76,7 @@ export function ExecutiveSellerDetails() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Trocar de vendedor rapido dispara consultas concorrentes; so a ultima
+  // Trocar de Seller rapido dispara consultas concorrentes; so a ultima
   // pode escrever no estado.
   const latestRequest = useRef(0)
 
@@ -190,7 +190,7 @@ export function ExecutiveSellerDetails() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="w-5 h-5" />
-            Detalhes por Vendedor
+            Detalhes por Seller
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -198,7 +198,7 @@ export function ExecutiveSellerDetails() {
             <div className="flex-1">
               <Select value={selectedSeller} onValueChange={setSelectedSeller}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione um vendedor para ver os detalhes" />
+                  <SelectValue placeholder="Selecione um Seller para ver os detalhes" />
                 </SelectTrigger>
                 <SelectContent>
                   {users.map((user) => (
@@ -226,7 +226,7 @@ export function ExecutiveSellerDetails() {
 
       {error && (
         <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          Não foi possível carregar os indicadores deste vendedor: {error}
+          Não foi possível carregar os indicadores deste Seller: {error}
         </p>
       )}
 
@@ -241,7 +241,7 @@ export function ExecutiveSellerDetails() {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-foreground">
-                    {selectedUser?.display_name || 'Vendedor'}
+                    {selectedUser?.display_name || 'Seller'}
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     ID: {selectedUser?.user_id?.substring(0, 8)}...

@@ -38,6 +38,15 @@ try {
   must(await admin.from('registration_requests').update({ status: 'approved' }).eq('user_id', actor.id))
   must(await admin.from('user_roles').insert({ user_id: actor.id, role: 'executive' }))
   const executiveSession = must(await executive.auth.signInWithPassword({ email: actor.email, password })).session
+  const restricted = must(await admin.auth.admin.createUser({
+    email: `qa-restricted-role-${suffix}@example.invalid`,
+    password,
+    email_confirm: true,
+    user_metadata: { display_name: 'QA cargo administrativo bloqueado', requested_role: 'executive' },
+  })).user
+  createdIds.add(restricted.id)
+  assert.equal(must(await admin.from('registration_requests').select('requested_role').eq('user_id', restricted.id).single()).requested_role, 'seller')
+  assert.deepEqual(must(await admin.from('user_roles').select('role').eq('user_id', restricted.id)).map(item => item.role), ['seller'])
   await executive.realtime.setAuth(executiveSession.access_token)
   const channel = executive.channel(`qa-registration-events-${suffix}`)
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dashboard_events', filter: 'topic=eq.users' }, () => { queueEvents++ })
@@ -67,8 +76,6 @@ try {
     await page.getByRole('tab', { name: 'Cadastrar', exact: true }).click()
     await page.getByLabel('Nome completo', { exact: true }).fill(name)
     await page.getByLabel('Email', { exact: true }).fill(email)
-    const requestedRole = action === 'approve' ? 'closer' : 'traffic_manager'
-    await page.getByLabel('Cargo', { exact: true }).selectOption(requestedRole)
     await page.getByLabel('Senha', { exact: true }).fill(password)
     const responsePromise = page.waitForResponse(response => response.url().includes('/auth/v1/signup'))
     await page.getByRole('button', { name: 'Solicitar Acesso', exact: true }).click()
@@ -81,9 +88,9 @@ try {
     assert.equal(new URL(page.url()).pathname, '/auth')
     const record = must(await admin.from('registration_requests').select('*').eq('user_id', newUser.id).single())
     assert.equal(record.status, 'pending')
-    assert.equal(record.requested_role, requestedRole)
+    assert.equal(record.requested_role, 'seller')
     const provisionedRoles = must(await admin.from('user_roles').select('role').eq('user_id', newUser.id))
-    assert.deepEqual(provisionedRoles.map(item => item.role), [requestedRole])
+    assert.deepEqual(provisionedRoles.map(item => item.role), ['seller'])
     const token = signup.access_token
     assert(token, 'Expected a tracking session')
     const collaborator = createClient(url, publicKey, { ...options, global: { headers: { Authorization: `Bearer ${token}` } } })

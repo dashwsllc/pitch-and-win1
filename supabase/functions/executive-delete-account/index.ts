@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     const { data: { user: actor }, error: authError } = await admin.auth.getUser(token)
     if (authError || !actor) return jsonResponse(req, { error: 'Sessão inválida. Entre novamente.' }, 401)
     const { data: authorized, error: roleError } = await admin.rpc('is_executive', { _user_id: actor.id })
-    if (roleError || !authorized) return jsonResponse(req, { error: 'Acesso executivo necessário' }, 403)
+    if (roleError || !authorized) return jsonResponse(req, { error: 'Acesso Executive necessário' }, 403)
 
     const body = await readJsonBody<Record<string, unknown>>(req)
     const allowedFields = new Set(['user_id', 'reason'])
