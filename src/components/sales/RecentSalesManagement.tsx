@@ -80,7 +80,7 @@ export function RecentSalesManagement({ mineOnly = false }: { mineOnly?: boolean
     } catch (error) { setRescheduleFailure(errorMessage(error)) }
     finally { submitting.current = false; setBusy(false) }
   }
-  return <section aria-label="Gerenciamento das últimas vendas" className="surface-panel overflow-hidden rounded-2xl">
+  return <section id="vendas-registradas" aria-label="Gerenciamento das últimas vendas" className="surface-panel scroll-mt-20 overflow-hidden rounded-2xl">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 p-5">
       <div><h2 className="flex items-center gap-2 text-lg font-medium"><ShoppingBag className="h-5 w-5 text-primary" />Últimas vendas</h2><p className="mt-1 text-xs text-muted-foreground">{mineOnly || !isExecutive ? 'Suas vendas mais recentes.' : 'As vendas mais recentes da operação.'} Edições e correções atualizam a Dashboard.</p></div>
       <Button variant="outline" size="sm" disabled={query.isFetching} onClick={() => query.refetch()}><RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? 'animate-spin' : ''}`} />Atualizar vendas</Button>
@@ -102,7 +102,7 @@ export function RecentSalesManagement({ mineOnly = false }: { mineOnly?: boolean
             <div className="ml-auto text-right"><p className="text-lg font-semibold tabular-nums">{money(sale.valor_venda)}</p><Badge className={`mt-1 ${saleStatus[sale.approval_status as keyof typeof saleStatus].color}`}>{sale.approval_status === 'aprovada' ? 'Aprovada' : 'Pendente'}</Badge></div>
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border/50 pt-3">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><time dateTime={sale.created_at}>{exactDate(sale.created_at)} · Brasília</time>{hasRole('super_admin') && <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Remarcar data da venda de ${sale.nome_comprador}`} title="Remarcar data e horário" onClick={() => { setRescheduling(sale); setRescheduledAt(isoToBrasiliaLocalInput(sale.created_at, true)); setRescheduleReason(''); setRescheduleFailure('') }}><CalendarClock className="h-4 w-4" /></Button>}</div>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><time dateTime={sale.created_at}>{exactDate(sale.created_at)} · Brasília</time>{hasRole('super_admin') && <Button size="sm" variant="outline" className="h-8 gap-1.5 border-amber-400/30 bg-amber-400/[0.07] px-2.5 text-xs text-amber-100 hover:bg-amber-400/[0.12]" aria-label={`Corrigir data da compra de ${sale.nome_comprador}`} title="Corrigir data e horário da compra" onClick={() => { setRescheduling(sale); setRescheduledAt(isoToBrasiliaLocalInput(sale.created_at, true)); setRescheduleReason(''); setRescheduleFailure('') }}><CalendarClock className="h-4 w-4" />Corrigir data</Button>}</div>
             {canManage && <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setEditing(sale)} aria-label={`Editar venda de ${sale.nome_comprador}`}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar</Button><Button size="sm" variant="outline" className="text-destructive" onClick={() => { setDeleting(sale); setReason(''); setFailure('') }} aria-label={`Excluir venda de ${sale.nome_comprador}`}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Excluir</Button></div>}
           </div>
         </article>

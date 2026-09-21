@@ -17,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
 import { useToast } from "@/hooks/use-toast";
-import { ShoppingCart, ArrowLeft, Info, Clock, Package } from "lucide-react";
+import { ShoppingCart, ArrowLeft, Info, Clock, CalendarClock, Package } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { errorMessage, money } from "@/lib/sales";
 import { RecentSalesManagement } from "@/components/sales/RecentSalesManagement";
@@ -34,7 +34,7 @@ export default function RegistrarVenda() {
     name: string;
   } | null>(null);
   const { user } = useAuth();
-  const { commissionRate, loading: rolesLoading, isExecutive } = useRoles();
+  const { commissionRate, loading: rolesLoading, isExecutive, hasRole } = useRoles();
   const catalog = useProducts();
   const queryClient = useQueryClient();
   const submitting = useRef(false);
@@ -292,6 +292,17 @@ export default function RegistrarVenda() {
             </div>
           </div>
         </div>
+
+        {hasRole('super_admin') && (
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2 border-amber-400/30 bg-amber-400/[0.07] text-amber-100 hover:bg-amber-400/[0.12] sm:w-auto"
+            onClick={() => document.getElementById('vendas-registradas')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          >
+            <CalendarClock className="h-4 w-4" />
+            Ver vendas registradas e corrigir data da compra
+          </Button>
+        )}
 
         {isExecutive && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
