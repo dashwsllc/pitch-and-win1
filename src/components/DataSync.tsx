@@ -17,7 +17,7 @@ export function DataSync() {
     }
 
     let disposed = false
-    let debounce: ReturnType<typeof setTimeout> | undefined
+    let debounce: number | undefined
     let refreshing = false
     let refreshQueued = false
     let subscribedOnce = false

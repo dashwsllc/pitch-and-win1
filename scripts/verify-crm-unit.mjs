@@ -193,16 +193,40 @@ assert.match(crmPageSource, /callDateFilter !== "all"[\s\S]*compareCallProximity
 assert.match(crmPageSource, /data-call-date-option=\{option\.value\}/)
 assert.match(crmPageSource, /<span className="shrink-0">\{option\.label\}<\/span>/)
 
-// Leads encerrados saem da lista ativa. SDR mantém subfilas explícitas para
-// atendimento, calls, fechados e negativas/remarketing. Remarketing não deve
-// aparecer como uma área principal separada do SDR.
-assert.match(crmPageSource, /const negativeStages = \["fechado_perdido", "lead_perdido"\]/)
-assert.match(crmPageSource, /\{ value: "closed", label: "Fechados" \}/)
-assert.match(crmPageSource, /\{ value: "negative", label: "Negativas \/ Remarketing" \}/)
+// Resultados and remarketing share the same records in their dedicated views.
 assert.match(crmPageSource, /if \(tab === "leads"\) return !closedStages\.includes/)
-assert.doesNotMatch(crmPageSource, /value="remarketing">Remarketing/)
-assert.match(crmPageSource, /sdrQueue === "negative"/)
-assert.match(crmPageSource, /requestedTab === "remarketing" \? "sdr"/)
+const { leadScheduledOn, leadResult, resultMatches, canReopenResult, inRemarketing } = await import('../src/lib/crm-results.ts')
+const emptyFilters = { search: '', outcome: 'all', approval: 'all', seller: 'all', from: '', to: '' }
+const resultLead = {
+  id: 'result', name: 'Responsável', athlete_name: 'Atleta', pipeline_stage: 'fechado_ganho',
+  last_result_outcome: 'venda_concluida', last_result_at: '2026-09-22T02:30:00Z',
+  last_result_closer_id: 'closer', last_result_closer_name: 'Maria Closer', closer_id: 'closer', sdr_id: 'sdr',
+}
+const resultSale = { seller_id: 'seller', seller_name: 'Ana Vendas', approval_status: 'rejeitada' }
+assert.equal(resultMatches(resultLead, resultSale, { ...emptyFilters, from: '2026-09-21', to: '2026-09-21' }), true)
+assert.equal(resultMatches(resultLead, resultSale, { ...emptyFilters, from: '2026-09-22' }), false)
+assert.equal(resultMatches(resultLead, resultSale, { ...emptyFilters, outcome: 'won', approval: 'rejeitada' }), true)
+assert.equal(resultMatches(resultLead, resultSale, { ...emptyFilters, approval: 'aprovada' }), false)
+assert.equal(resultMatches(resultLead, resultSale, { ...emptyFilters, seller: 'seller' }), true)
+assert.equal(resultMatches(resultLead, resultSale, { ...emptyFilters, seller: 'closer' }), false)
+assert.equal(resultMatches(resultLead, undefined, { ...emptyFilters, seller: 'closer', approval: 'unregistered' }), true)
+assert.equal(resultMatches(resultLead, resultSale, { ...emptyFilters, search: 'maria' }), true)
+assert.equal(resultMatches(resultLead, resultSale, { ...emptyFilters, outcome: 'lost' }), false)
+assert.equal(leadResult({ ...resultLead, pipeline_stage: 'em_qualificacao' }), 'venda_concluida')
+assert.equal(resultMatches({ ...resultLead, pipeline_stage: 'em_qualificacao' }, resultSale, emptyFilters), true)
+assert.equal(canReopenResult(resultLead, 'other', { executive: false, closer: true, sdr: false }), false)
+assert.equal(canReopenResult(resultLead, 'closer', { executive: false, closer: true, sdr: false }), true)
+assert.equal(canReopenResult({ ...resultLead, pipeline_stage: 'em_qualificacao' }, 'closer', { executive: true, closer: true, sdr: true }), false)
+assert.equal(inRemarketing({ pipeline_stage: 'fechado_perdido', remarketing_status: 'scheduled' }), true)
+assert.equal(inRemarketing({ pipeline_stage: 'fechado_perdido', remarketing_status: 'do_not_contact' }), false)
+assert.equal(inRemarketing({ pipeline_stage: 'em_qualificacao', remarketing_status: 'reactivated' }), false)
+assert.equal(leadScheduledOn({ next_followup_at: null }, ['2026-09-22T02:30:00Z'], '2026-09-21'), true)
+assert.equal(leadScheduledOn({ next_followup_at: null }, ['2026-09-22T02:30:00Z'], '2026-09-22'), false)
+assert.equal(leadScheduledOn({ next_followup_at: '2026-09-21T16:00:00Z' }, ['2026-09-23T16:00:00Z'], '2026-09-23'), true)
+assert.equal(leadScheduledOn({ next_followup_at: '2026-09-21T16:00:00Z' }, [], '2026-09-21'), true)
+assert.equal(leadScheduledOn({ next_followup_at: null }, [], '2026-09-21'), false)
+assert.equal(leadScheduledOn({ next_followup_at: 'bad-date' }, [], '2026-09-21'), false)
+assert.equal(leadScheduledOn({ next_followup_at: '2026-09-21T16:00:00Z' }, [], ''), false)
 
 const qualificationSource = readFileSync(new URL('../src/components/crm/CRMQualificationDialog.tsx', import.meta.url), 'utf8')
 const remarketingSource = readFileSync(new URL('../src/components/crm/CRMRemarketingDialog.tsx', import.meta.url), 'utf8')

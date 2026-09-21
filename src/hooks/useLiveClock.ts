@@ -7,7 +7,7 @@ export function useLiveClock(intervalMs = LIVE_CLOCK_INTERVAL_MS) {
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined
+    let timer: number | undefined
 
     const schedule = () => {
       const remainder = Date.now() % intervalMs

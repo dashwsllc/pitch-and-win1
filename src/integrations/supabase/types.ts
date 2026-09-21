@@ -424,6 +424,10 @@ export type Database = {
           closer_id: string | null
           handed_off_at: string | null
           closed_at: string | null
+          last_result_outcome: string | null
+          last_result_at: string | null
+          last_result_closer_id: string | null
+          last_result_closer_name: string | null
           closed_by: string | null
           version: number
           city_state: string | null
@@ -483,6 +487,10 @@ export type Database = {
           closer_id?: string | null
           handed_off_at?: string | null
           closed_at?: string | null
+          last_result_outcome?: string | null
+          last_result_at?: string | null
+          last_result_closer_id?: string | null
+          last_result_closer_name?: string | null
           closed_by?: string | null
           version?: number
           city_state?: string | null
@@ -542,6 +550,10 @@ export type Database = {
           closer_id?: string | null
           handed_off_at?: string | null
           closed_at?: string | null
+          last_result_outcome?: string | null
+          last_result_at?: string | null
+          last_result_closer_id?: string | null
+          last_result_closer_name?: string | null
           closed_by?: string | null
           version?: number
           city_state?: string | null
@@ -1381,6 +1393,11 @@ export type Database = {
       crm_delete_lead: { Args: { p_lead_id: string; p_expected_version: number }; Returns: Json }
       crm_sale_links: { Args: Record<PropertyKey, never>; Returns: { lead_id: string; sale_id: string | null; can_open: boolean }[] }
 
+      crm_result_sale_links: { Args: Record<PropertyKey, never>; Returns: { lead_id: string; sale_id: string | null; can_open: boolean; approval_status: string; seller_id: string; seller_name: string }[] }
+      crm_reopen_result: {
+        Args: { p_lead_id: string; p_expected_version: number; p_target: string; p_assigned_to: string; p_next_at: string; p_note?: string }
+        Returns: Database["public"]["Tables"]["crm_leads"]["Row"]
+      }
       crm_has_access: { Args: Record<PropertyKey, never>; Returns: boolean }
       crm_call_assignees: { Args: Record<PropertyKey, never>; Returns: { user_id: string; display_name: string; role: string }[] }
       handoff_and_schedule_closer_call: {

@@ -10,7 +10,6 @@ import {
   CalendarPlus,
   PhoneCall,
   Play,
-  CircleX,
   Undo2,
   UserCog,
   CheckCircle2,
@@ -110,6 +109,9 @@ export function CRMLeadCard({
     (handed
       ? capabilities.closer && (!lead.closer_id || canManage)
       : capabilities.sdr);
+  const canSendRemarketing = !closed && (handed
+    ? capabilities.closer && canManage
+    : capabilities.sdr || lead.created_by === user?.id);
   const next = nextLeadSchedule(lead, call?.scheduled_at);
   const callMoment = call?.scheduled_at ? new Date(call.scheduled_at) : null;
   const callDay = callMoment?.toLocaleDateString("pt-BR", {
@@ -399,7 +401,7 @@ export function CRMLeadCard({
                 : "Agendar qualificação"}
           </Button>
         )}
-        {negative && capabilities.sdr && (
+        {negative && capabilities.sdr && (capabilities.executive || !lead.sdr_id || lead.sdr_id === user?.id) && (
           <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={onRemarketing}>
             <RefreshCcw className="mr-1.5 h-3.5 w-3.5" /> Remarketing
           </Button>
@@ -461,11 +463,11 @@ export function CRMLeadCard({
                     <Play className="mr-2 h-4 w-4" /> Iniciar qualificação
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onSelect={() => onAction("lose")} className="text-destructive focus:text-destructive">
-                  <CircleX className="mr-2 h-4 w-4" /> Lead perdido
-                </DropdownMenuItem>
               </>
             )}
+            {canSendRemarketing && <DropdownMenuItem onSelect={() => onAction("remarketing")}>
+              <RefreshCcw className="mr-2 h-4 w-4" /> Enviar para Remarketing
+            </DropdownMenuItem>}
             {handed && capabilities.closer && !!lead.closer_id && canManage && (
               <>
                 <DropdownMenuSeparator />

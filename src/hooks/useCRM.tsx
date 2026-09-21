@@ -8,6 +8,9 @@ import { validatePlainText } from "@/lib/plain-text";
 import { validateContextFileText, type CRMContextFile } from "@/lib/crm-context-file";
 import { normalizeContextMediaUrl } from "@/lib/crm-context-media";
 import { fetchAllPages } from "@/lib/supabase-pages";
+import { refreshDashboardData } from "@/lib/sync";
+import type { CRMResultSale } from "@/lib/crm-results";
+import type { CRMReturnData } from "@/components/crm/CRMReturnDialog";
 
 export type CRMLead = Tables<"crm_leads">;
 export type CRMActivity = Tables<"crm_activities">;
@@ -19,7 +22,7 @@ export const PIPELINE_STAGES = [
   { value: "repassado_closer", label: "Repassado para Closer" },
   { value: "fechado_ganho", label: "Venda concluída" },
   { value: "lead_perdido", label: "Lead perdido" },
-  { value: "fechado_perdido", label: "Venda perdida" },
+  { value: "fechado_perdido", label: "Venda recusada" },
   { value: "contato_feito", label: "Contato feito (anterior)" },
   { value: "proposta_enviada", label: "Proposta enviada (anterior)" },
   { value: "negociacao", label: "Negociação (anterior)" },
@@ -42,7 +45,7 @@ export const CALL_OUTCOMES: Record<string, string> = {
   avancou: "Avançou",
   lead_perdido: "Lead perdido",
   venda_concluida: "Venda concluída",
-  venda_perdida: "Venda perdida",
+  venda_perdida: "Venda recusada",
   devolvido_sdr: "Devolvido ao SDR",
 };
 export const APPROACH_STAGES = [
@@ -72,7 +75,8 @@ export function useCRMRealtime() {
     if (!user || !session?.access_token) return;
 
     let disposed = false;
-    let debounce: ReturnType<typeof setTimeout> | undefined;
+    let debounce: number | undefined;
+    let subscribedOnce = false;
     const refresh = () => {
       window.clearTimeout(debounce);
       debounce = window.setTimeout(() => {
@@ -90,7 +94,11 @@ export function useCRMRealtime() {
         if (disposed) return;
         channel.subscribe((status) => {
           if (disposed) return;
-          if (status === "SUBSCRIBED") setRealtimeUnavailable(false);
+          if (status === "SUBSCRIBED") {
+            setRealtimeUnavailable(false);
+            if (subscribedOnce) refresh();
+            subscribedOnce = true;
+          }
           if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             setRealtimeUnavailable(true);
           }
@@ -133,7 +141,7 @@ export function useCRMLeads() {
       }
     },
   });
-  const refresh = () => client.invalidateQueries({ queryKey: ["crm"] });
+  const refresh = () => refreshDashboardData(client);
   const createLead = async (lead: TablesInsert<"crm_leads">) => {
     const { data, error } = await supabase
       .from("crm_leads")
@@ -216,6 +224,16 @@ export function useCRMLeads() {
       await refresh();
     }
   };
+  const reopenResult = async (lead: CRMLead, data: CRMReturnData) => {
+    try {
+      const { data: updated, error } = await supabase.rpc("crm_reopen_result", {
+        p_lead_id: lead.id, p_expected_version: lead.version, p_target: data.target,
+        p_assigned_to: data.assignedTo, p_next_at: data.nextAt, p_note: data.note,
+      });
+      if (error) throw error;
+      return updated;
+    } finally { await refresh(); }
+  };
   return {
     leads: hasCRMAccess ? (query.data ?? []) : [],
     // isPending fica sempre verdadeiro numa consulta desabilitada; isLoading
@@ -228,6 +246,7 @@ export function useCRMLeads() {
     deleteLead,
     markNegative,
     updateRemarketing,
+    reopenResult,
   };
 }
 
@@ -413,14 +432,10 @@ export function useCRMSaleLinks() {
     enabled: !!user && hasCRMAccess,
     ...queryOptions,
     queryFn: async () => {
-      const rows: {
-        lead_id: string;
-        sale_id: string | null;
-        can_open: boolean;
-      }[] = [];
+      const rows: CRMResultSale[] = [];
       for (let from = 0; ; from += 500) {
         const { data, error } = await supabase
-          .rpc("crm_sale_links")
+          .rpc("crm_result_sale_links")
           .order("lead_id")
           .order("sale_id")
           .range(from, from + 499);
