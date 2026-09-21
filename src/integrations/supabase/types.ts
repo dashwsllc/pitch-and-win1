@@ -434,6 +434,18 @@ export type Database = {
           athlete_height_cm: number | null
           athlete_weight_kg: number | null
           performance_report_url: string | null
+          qualification_income_range: string | null
+          qualification_goal: string | null
+          qualification_decision_maker: string | null
+          qualification_timeline: string | null
+          qualification_summary: string | null
+          qualification_completed_at: string | null
+          qualification_completed_by: string | null
+          negative_reason: string | null
+          remarketing_status: string | null
+          remarketing_next_at: string | null
+          remarketing_last_contact_at: string | null
+          remarketing_attempt_count: number
           age: number | null
           approach_count: number
           approached: boolean
@@ -481,6 +493,18 @@ export type Database = {
           athlete_height_cm?: number | null
           athlete_weight_kg?: number | null
           performance_report_url?: string | null
+          qualification_income_range?: string | null
+          qualification_goal?: string | null
+          qualification_decision_maker?: string | null
+          qualification_timeline?: string | null
+          qualification_summary?: string | null
+          qualification_completed_at?: string | null
+          qualification_completed_by?: string | null
+          negative_reason?: string | null
+          remarketing_status?: string | null
+          remarketing_next_at?: string | null
+          remarketing_last_contact_at?: string | null
+          remarketing_attempt_count?: number
           age?: number | null
           approach_count?: number
           approached?: boolean
@@ -528,6 +552,18 @@ export type Database = {
           athlete_height_cm?: number | null
           athlete_weight_kg?: number | null
           performance_report_url?: string | null
+          qualification_income_range?: string | null
+          qualification_goal?: string | null
+          qualification_decision_maker?: string | null
+          qualification_timeline?: string | null
+          qualification_summary?: string | null
+          qualification_completed_at?: string | null
+          qualification_completed_by?: string | null
+          negative_reason?: string | null
+          remarketing_status?: string | null
+          remarketing_next_at?: string | null
+          remarketing_last_contact_at?: string | null
+          remarketing_attempt_count?: number
           age?: number | null
           approach_count?: number
           approached?: boolean
@@ -1358,6 +1394,18 @@ export type Database = {
       resolve_closer_call: {
         Args: { p_activity_id: string; p_outcome: string; p_expected_revision: string }
         Returns: Database["public"]["Tables"]["crm_activities"]["Row"]
+      }
+      resolve_sdr_qualification_call: {
+        Args: { p_activity_id: string; p_outcome: string; p_expected_revision: string; p_data?: Json }
+        Returns: Database["public"]["Tables"]["crm_activities"]["Row"]
+      }
+      crm_mark_negative: {
+        Args: { p_lead_id: string; p_expected_version: number; p_reason: string; p_next_at: string; p_note?: string }
+        Returns: Database["public"]["Tables"]["crm_leads"]["Row"]
+      }
+      crm_update_remarketing: {
+        Args: { p_lead_id: string; p_expected_version: number; p_action: string; p_next_at?: string | null; p_note?: string }
+        Returns: Database["public"]["Tables"]["crm_leads"]["Row"]
       }
       reschedule_crm_call: {
         Args: { p_activity_id: string; p_scheduled_at: string; p_expected_revision: string }

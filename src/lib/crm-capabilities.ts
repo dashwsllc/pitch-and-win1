@@ -1,28 +1,26 @@
-// Mirrors crm_user_can in 20260910120000_seller_closer_access.sql.
-// Closer includes sale registration to complete the explicit CRM → Vendas flow.
+// Mirrors crm_user_can in the latest CRM permissions migration.
 export function crmCapabilities(
   roles: readonly string[],
   crmAccess = false,
   active = true,
 ) {
-  const admin =
-    active && roles.some((role) => ["executive", "super_admin"].includes(role));
-  const generalSeller =
-    roles.includes("seller") &&
-    !roles.some((role) => ["sdr", "closer"].includes(role));
+  const admin = active && roles.includes("super_admin");
+  const executive =
+    active && (admin || roles.includes("executive"));
   return {
     admin,
+    executive,
     leads:
       active &&
-      (admin ||
+      (executive ||
         crmAccess ||
         roles.some((role) => ["seller", "sdr", "closer"].includes(role))),
-    sdr: active && (admin || generalSeller || roles.includes("sdr")),
+    sdr: active && (executive || roles.includes("sdr")),
     closer:
       active &&
-      (admin || roles.some((role) => ["seller", "closer"].includes(role))),
+      (executive || roles.includes("closer")),
     sales:
       active &&
-      (admin || roles.some((role) => ["seller", "closer"].includes(role))),
+      (executive || roles.some((role) => ["seller", "closer"].includes(role))),
   };
 }

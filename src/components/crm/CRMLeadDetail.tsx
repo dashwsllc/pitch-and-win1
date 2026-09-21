@@ -15,6 +15,13 @@ import {
   useCRMActivities,
 } from "@/hooks/useCRM";
 import { callDate } from "@/lib/crm";
+import {
+  DECISION_MAKERS,
+  INCOME_RANGES,
+  PURCHASE_TIMELINES,
+  REMARKETING_STATUS_LABELS,
+  optionLabel,
+} from "@/lib/crm-qualification";
 import { formatAthleteAge, resolveAthleteAge } from "@/lib/crm-age";
 import type { Json } from "@/integrations/supabase/types";
 import { CRMContextPanel } from "./CRMContextPanel";
@@ -80,6 +87,15 @@ export function CRMLeadDetail({
     ],
     ["Repasse", lead.handed_off_at ? callDate(lead.handed_off_at) : null],
     ["Fechamento", lead.closed_at ? callDate(lead.closed_at) : null],
+    ["Faixa de renda", optionLabel(INCOME_RANGES, lead.qualification_income_range)],
+    ["Decisor", optionLabel(DECISION_MAKERS, lead.qualification_decision_maker)],
+    ["Prazo de decisão", optionLabel(PURCHASE_TIMELINES, lead.qualification_timeline)],
+    ["Objetivo", lead.qualification_goal],
+    ["Resumo da qualificação", lead.qualification_summary],
+    ["Motivo da negativa", lead.negative_reason],
+    ["Remarketing", lead.remarketing_status ? REMARKETING_STATUS_LABELS[lead.remarketing_status] || lead.remarketing_status : null],
+    ["Próximo remarketing", lead.remarketing_next_at ? callDate(lead.remarketing_next_at) : null],
+    ["Tentativas de remarketing", lead.remarketing_attempt_count ? String(lead.remarketing_attempt_count) : null],
     ["Tentativas de contato", lead.approach_count],
     ["Empresa (histórico)", lead.company],
     ["Cargo (histórico)", lead.job_title],

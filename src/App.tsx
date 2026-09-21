@@ -61,7 +61,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/executive" element={
-                <ProtectedRoute executiveOnly>
+                <ProtectedRoute superAdminOnly>
                   <ExecutiveDashboard />
                 </ProtectedRoute>
               } />

@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { errorMessage } from "@/lib/sales";
 
 export function CRMPermissionsReport() {
-  const { isExecutive } = useRoles();
+  const { isSuperAdmin } = useRoles();
   const { users, loading, error, refetch } = useAllUsers();
   const [search, setSearch] = useState("");
-  if (!isExecutive)
-    return <p role="alert">Acesso restrito a executive e super_admin.</p>;
+  if (!isSuperAdmin)
+    return <p role="alert">Acesso restrito ao Super Admin.</p>;
   return (
     <Card>
       <CardHeader className="p-4 pb-2">
@@ -20,9 +20,9 @@ export function CRMPermissionsReport() {
       </CardHeader>
       <CardContent className="space-y-3 p-4 pt-2">
         <p className="text-xs leading-4 text-muted-foreground">
-          Sellers sem SDR ou Closer trabalham nas duas áreas. Funções
-          específicas definem a área operacional. Contas suspensas permanecem
-          bloqueadas.
+          SDR acessa a operação SDR; Closer acessa a operação Closer; Executive
+          opera as duas áreas sem receber funções administrativas; somente Super
+          Admin gerencia contas e permissões. Contas suspensas permanecem bloqueadas.
         </p>
         <Input
           className="h-9"
@@ -78,6 +78,7 @@ export function CRMPermissionsReport() {
                             {
                               {
                                 admin: "Gerenciar Usuários + Permissões",
+                                executive: "Executive operacional",
                                 leads: "Leads",
                                 sdr: "SDR",
                                 closer: "Closer",

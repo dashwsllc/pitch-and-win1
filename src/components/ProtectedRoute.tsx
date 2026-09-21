@@ -7,18 +7,21 @@ import { useRoles } from "@/hooks/useRoles";
 interface ProtectedRouteProps {
   children: React.ReactNode;
   executiveOnly?: boolean;
+  superAdminOnly?: boolean;
   salesOnly?: boolean;
 }
 
 export function ProtectedRoute({
   children,
   executiveOnly = false,
+  superAdminOnly = false,
   salesOnly = false,
 }: ProtectedRouteProps) {
   const { user, loading: authLoading, signOut } = useAuth();
   const { profile, loading: profileLoading, error, refetch } = useProfile();
   const {
     isExecutive,
+    isSuperAdmin,
     capabilities,
     loading: rolesLoading,
     error: rolesError,
@@ -34,7 +37,7 @@ export function ProtectedRoute({
 
   if (
     authLoading ||
-    (user && (profileLoading || ((executiveOnly || salesOnly) && rolesLoading)))
+    (user && (profileLoading || ((executiveOnly || superAdminOnly || salesOnly) && rolesLoading)))
   ) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -51,7 +54,7 @@ export function ProtectedRoute({
     return <Navigate to="/auth" replace />;
   }
 
-  if (error || ((executiveOnly || salesOnly) && rolesError)) {
+  if (error || ((executiveOnly || superAdminOnly || salesOnly) && rolesError)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-6 text-center">
         <p>Não foi possível verificar seu acesso.</p>
@@ -68,6 +71,7 @@ export function ProtectedRoute({
     );
   }
   if (executiveOnly && !isExecutive) return <Navigate to="/" replace />;
+  if (superAdminOnly && !isSuperAdmin) return <Navigate to="/" replace />;
   if (salesOnly && !capabilities.sales) return <Navigate to="/" replace />;
 
   return <>{children}</>;

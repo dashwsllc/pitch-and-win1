@@ -42,10 +42,11 @@ export function CRMActionDialog({
   const [note, setNote] = useState("");
   const [assigned, setAssigned] = useState(lead.closer_id || "");
   const [outcome, setOutcome] = useState("");
+  const [negativeReason, setNegativeReason] = useState("");
   const [when, setWhen] = useState("");
   const [failure, setFailure] = useState("");
   const needsDate =
-    action === "followup" || (action === "close" && outcome === "followup");
+    action === "followup" || action === "lose" || (action === "close" && outcome === "followup");
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -63,6 +64,7 @@ export function CRMActionDialog({
         note,
         closer_id: assigned || null,
         outcome,
+        negative_reason: negativeReason,
         next_at: nextAt,
       })
     )
@@ -131,9 +133,25 @@ export function CRMActionDialog({
                 </select>
               </div>
             )}
+            {action === "lose" && (
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="negative-reason">Motivo da negativa *</Label>
+                <Input
+                  id="negative-reason"
+                  required
+                  minLength={2}
+                  maxLength={500}
+                  value={negativeReason}
+                  onChange={(e) => setNegativeReason(e.target.value)}
+                  placeholder="Ex.: sem orçamento no momento"
+                />
+              </div>
+            )}
             {needsDate && (
               <div className="space-y-1">
-                <Label className="text-xs" htmlFor="next-at">Próxima data e hora · Brasília *</Label>
+                <Label className="text-xs" htmlFor="next-at">
+                  {action === "lose" ? "Primeiro follow-up de remarketing" : "Próxima data e hora"} · Brasília *
+                </Label>
                 <Input
                   className="h-9"
                   id="next-at"
@@ -152,11 +170,17 @@ export function CRMActionDialog({
                 id="action-note"
                 className="min-h-20"
                 maxLength={10000}
-                required={["contact", "note"].includes(action)}
+                required={["contact", "note", "lose"].includes(action)}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
+                placeholder={action === "lose" ? "Registre o contexto para a próxima abordagem do SDR" : undefined}
               />
             </div>
+            {action === "lose" && (
+              <p className="text-xs text-muted-foreground">
+                O lead sairá da lista ativa e entrará em Negativas / Remarketing, mantendo todo o histórico.
+              </p>
+            )}
             {action === "close" && (
               <p className="text-xs text-muted-foreground">
                 Data, hora e autor serão registrados automaticamente. Após uma

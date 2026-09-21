@@ -180,6 +180,42 @@ export function useCRMLeads() {
       ]);
     }
   };
+  const markNegative = async (
+    lead: CRMLead,
+    data: { reason: string; nextAt: string; note?: string },
+  ) => {
+    try {
+      const { data: updated, error } = await supabase.rpc("crm_mark_negative", {
+        p_lead_id: lead.id,
+        p_expected_version: lead.version,
+        p_reason: data.reason,
+        p_next_at: data.nextAt,
+        p_note: data.note || "",
+      });
+      if (error) throw error;
+      return updated;
+    } finally {
+      await refresh();
+    }
+  };
+  const updateRemarketing = async (
+    lead: CRMLead,
+    data: { action: string; nextAt?: string | null; note?: string },
+  ) => {
+    try {
+      const { data: updated, error } = await supabase.rpc("crm_update_remarketing", {
+        p_lead_id: lead.id,
+        p_expected_version: lead.version,
+        p_action: data.action,
+        p_next_at: data.nextAt ?? null,
+        p_note: data.note || "",
+      });
+      if (error) throw error;
+      return updated;
+    } finally {
+      await refresh();
+    }
+  };
   return {
     leads: hasCRMAccess ? (query.data ?? []) : [],
     // isPending fica sempre verdadeiro numa consulta desabilitada; isLoading
@@ -190,6 +226,8 @@ export function useCRMLeads() {
     createLead,
     transition,
     deleteLead,
+    markNegative,
+    updateRemarketing,
   };
 }
 

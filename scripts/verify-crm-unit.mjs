@@ -17,19 +17,21 @@ for (const field of ['email','athlete_birth_date','athlete_position','athlete_he
 for (const field of ['name','athlete_name','phone']) assert.ok(validateContact({ ...minimal, [field]: '' }))
 assert.ok(validateContact({ ...minimal, email: 'invalid' }))
 assert.ok(validateContact({ ...minimal, athlete_height_cm: '999' }))
-assert.deepEqual(crmCapabilities(['seller']), { admin: false, leads: true, sdr: true, closer: true, sales: true })
-assert.equal(crmCapabilities(['seller','sdr']).closer, true)
+assert.deepEqual(crmCapabilities(['seller']), { admin: false, executive: false, leads: true, sdr: false, closer: false, sales: true })
+assert.equal(crmCapabilities(['seller','sdr']).closer, false)
 assert.equal(crmCapabilities(['seller','sdr']).sales, true)
 assert.equal(crmCapabilities(['seller','closer']).sdr, false)
 assert.equal(crmCapabilities(['bdr'], false).leads, false)
 assert.equal(crmCapabilities(['bdr'], true).leads, true)
 assert.equal(crmCapabilities(['seller'], true, false).leads, false)
-assert.ok(Object.values(crmCapabilities(['executive'])).every(Boolean))
+assert.deepEqual(crmCapabilities(['executive']), { admin: false, executive: true, leads: true, sdr: true, closer: true, sales: true })
+assert.ok(Object.values(crmCapabilities(['super_admin'])).every(Boolean))
 const callsSource = readFileSync(new URL('../src/components/crm/CRMCalls.tsx', import.meta.url), 'utf8')
 const cardSource = readFileSync(new URL('../src/components/crm/CRMLeadCard.tsx', import.meta.url), 'utf8')
 assert.match(callsSource, /isSdrHandoff[\s\S]*handoff_and_schedule_closer_call/)
 assert.match(callsSource, /O lead só será enviado ao Closer depois que o agendamento for/)
-assert.match(cardSource, /Agendar call e enviar/)
+assert.match(cardSource, /Agendar qualificação/)
+assert.match(cardSource, /Agendar fechamento e enviar ao Closer/)
 assert.doesNotMatch(cardSource, /onAction\("handoff"\)/)
 // ---------------------------------------------------------------------------
 // Idade do atleta
@@ -191,13 +193,21 @@ assert.match(crmPageSource, /callDateFilter !== "all"[\s\S]*compareCallProximity
 assert.match(crmPageSource, /data-call-date-option=\{option\.value\}/)
 assert.match(crmPageSource, /<span className="shrink-0">\{option\.label\}<\/span>/)
 
-// A aba SDR deixa de mostrar o lead assim que a call de fechamento é
-// agendada (repassado_closer) e não volta a mostrá-lo mesmo depois de
-// fechado (fechado_ganho/fechado_perdido); só reaparece se for devolvido ao
-// SDR (devolvido_sdr volta para em_qualificacao). A aba Leads continua
-// mostrando tudo, incluindo a coluna "Enviados ao Closer".
-assert.match(crmPageSource, /const closerOwnedStages = \["repassado_closer", "fechado_ganho", "fechado_perdido"\];/)
-assert.match(crmPageSource, /\(tab !== "sdr" \|\| !closerOwnedStages\.includes\(lead\.pipeline_stage\)\)/)
-assert.match(crmPageSource, /tab === "sdr"[\s\S]*sdrGroups\.filter\(\(group\) => group\.value !== "enviados"\)/)
+// Leads encerrados saem da lista ativa. SDR mantém subfilas explícitas para
+// atendimento, calls, fechados e negativas; a negativa também possui o
+// departamento dedicado de Remarketing.
+assert.match(crmPageSource, /const negativeStages = \["fechado_perdido", "lead_perdido"\]/)
+assert.match(crmPageSource, /\{ value: "closed", label: "Fechados" \}/)
+assert.match(crmPageSource, /\{ value: "negative", label: "Negativas \/ Remarketing" \}/)
+assert.match(crmPageSource, /if \(tab === "leads"\) return !closedStages\.includes/)
+assert.match(crmPageSource, /value="remarketing">Remarketing/)
 
-console.log('PASS: CRM validation, roles, scheduling, athlete data, lead deletion, call states, notification windows, ordering, SDR handoff visibility and athlete-first hierarchy.')
+const qualificationSource = readFileSync(new URL('../src/components/crm/CRMQualificationDialog.tsx', import.meta.url), 'utf8')
+const remarketingSource = readFileSync(new URL('../src/components/crm/CRMRemarketingDialog.tsx', import.meta.url), 'utf8')
+assert.match(qualificationSource, /Faixa de renda média/)
+assert.match(qualificationSource, /Quem decide/)
+assert.match(qualificationSource, /Resumo para o Closer/)
+assert.match(remarketingSource, /Registrar contato e próxima tentativa/)
+assert.match(remarketingSource, /Reativar para qualificação/)
+
+console.log('PASS: CRM validation, strict roles, SDR qualification calls, remarketing queues, athlete data, lead deletion, call states, notifications, ordering and athlete-first hierarchy.')

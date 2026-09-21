@@ -24,13 +24,17 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
+export type CRMCallIntent = "qualification" | "handoff" | "closer";
+
 export function CRMCallScheduler({
   lead,
   call,
+  intent,
   onClose,
 }: {
   lead: CRMLead;
   call?: CRMActivity;
+  intent: CRMCallIntent;
   onClose: () => void;
 }) {
   const { user } = useAuth();
@@ -40,21 +44,20 @@ export function CRMCallScheduler({
   const { toast } = useToast();
   const isSdrHandoff =
     !call &&
-    lead.pipeline_stage !== "repassado_closer" &&
+    intent === "handoff" &&
     capabilities.sdr;
   const [type] = useState(
-    call?.call_type ||
-      (isSdrHandoff || lead.pipeline_stage === "repassado_closer"
-        ? "fechamento_closer"
-        : "qualificacao"),
+    call?.call_type || (intent === "qualification" ? "qualificacao" : "fechamento_closer"),
   );
   const [assigned, setAssigned] = useState(
     call?.assigned_to ||
       (isSdrHandoff
         ? lead.closer_id
+        : type === "qualificacao"
+          ? lead.sdr_id
         : lead.pipeline_stage === "repassado_closer"
           ? lead.closer_id
-          : lead.sdr_id) ||
+          : null) ||
       (isSdrHandoff ? "" : user?.id) ||
       "",
   );
@@ -78,7 +81,7 @@ export function CRMCallScheduler({
         isSdrHandoff ||
         type !== "fechamento_closer" ||
         !!lead.closer_id ||
-        capabilities.admin ||
+        capabilities.executive ||
         a.user_id === user?.id,
     );
   const assignedName = candidates.find((a) => a.user_id === assigned)?.display_name;
@@ -148,7 +151,9 @@ export function CRMCallScheduler({
               ? "Reagendar call"
               : isSdrHandoff
                 ? "Agendar call e enviar ao Closer"
-                : "Agendar call"}
+                : type === "qualificacao"
+                  ? "Agendar call de qualificação do SDR"
+                  : "Agendar call do Closer"}
           </DialogTitle>
           <DialogDescription>
             {lead.athlete_name || "Atleta não informado"} · {lead.name}
@@ -156,6 +161,11 @@ export function CRMCallScheduler({
               <span className="mt-1 block">
                 O lead só será enviado ao Closer depois que o agendamento for
                 salvo com sucesso.
+              </span>
+            )}
+            {!call && type === "qualificacao" && (
+              <span className="mt-1 block">
+                Esta call pertence ao SDR e não envia o lead ao Closer. O repasse acontece somente depois do resultado da qualificação.
               </span>
             )}
           </DialogDescription>
@@ -217,14 +227,16 @@ export function CRMCallScheduler({
           </div>
           {!call && (
             <div className="space-y-1">
-              <Label className="text-xs" htmlFor="call-context">Contexto da reunião</Label>
+                <Label className="text-xs" htmlFor="call-context">
+                  {type === "qualificacao" ? "Pauta e dados preliminares" : "Contexto da reunião"}
+                </Label>
               <Textarea
                 id="call-context"
                 className="min-h-20"
                 maxLength={10000}
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
-                placeholder="Participantes e informações para a call"
+                placeholder={type === "qualificacao" ? "Dúvidas a validar, perfil inicial e pontos da abordagem" : "Participantes e informações para a call"}
               />
             </div>
           )}

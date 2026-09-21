@@ -40,11 +40,11 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
     return tab
   }
   try {
-    for (const [role, expected] of Object.entries({ seller: [true,true,true,false], second: [true,true,true,false], executive: [true,true,true,true], sdr: [true,true,false,false], closer: [true,false,true,false], blocked: [false,false,false,false], suspended: [false,false,false,false] })) {
+    for (const [role, expected] of Object.entries({ seller: [true,true,false,false], second: [true,false,true,false], executive: [true,true,true,false], super_admin: [true,true,true,true], sdr: [true,true,false,false], closer: [true,false,true,false], blocked: [false,false,false,false], suspended: [false,false,false,false] })) {
       for (const [i, capability] of ['leads', 'sdr', 'closer', 'admin'].entries()) assert.equal(await checked(clients[role].rpc('crm_can', { p_capability: capability })), expected[i], `${role} ${capability}`)
     }
     assert.ok((await clients.seller.rpc('executive_list_users')).error, 'seller user-directory access')
-    assert.ok(await checked(clients.executive.rpc('executive_list_users')))
+    assert.ok(await checked(clients.super_admin.rpc('executive_list_users')))
     const anonymous = createClient(url, anon, { auth: { persistSession: false } })
     assert.ok((await anonymous.rpc('crm_transition', { p_lead_id: actor('seller'), p_action: 'claim', p_expected_version: 1 })).error, 'anonymous RPC')
     const anonLeads = await anonymous.from('crm_leads').select('id').limit(1)
@@ -52,7 +52,7 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
 
     page = await session('seller')
     await expect(page.getByRole('tab', { name: 'SDR', exact: true })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Closer', exact: true })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Closer', exact: true })).toHaveCount(0)
     await expect(page.getByRole('tab', { name: 'Gerenciar Usuários', exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: 'Novo Lead', exact: true }).click()
     let dialog = page.getByRole('dialog', { name: 'Novo Lead', exact: true })
@@ -88,7 +88,7 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
     for (const stage of ['em_abordagem', 'abordado', 'reabordado', 'nao_abordado', 'abordado']) {
       await page.getByLabel(`Abordagem de ${name}`, { exact: true }).selectOption(stage)
       await expect.poll(async () => (await leadBy(leadId)).approach_stage).toBe(stage)
-      await expect(card.getByRole('button', { name: 'Agendar call e enviar', exact: true })).toBeEnabled()
+      await expect(card.getByRole('button', { name: 'Agendar e enviar ao Closer', exact: true })).toBeEnabled()
     }
     lead = await leadBy(leadId)
     assert.equal(lead.pipeline_stage, 'pronto_closer')
@@ -111,7 +111,7 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
       realtime.subscribe(status => { if (status === 'SUBSCRIBED') { clearTimeout(timer); resolve() } else if (status === 'CHANNEL_ERROR') { clearTimeout(timer); reject(Error('Realtime subscription failed')) } })
     })
     // This session has polling disabled, so cross-session UI update proves Realtime.
-    await card.getByRole('button', { name: 'Agendar call e enviar', exact: true }).click()
+    await card.getByRole('button', { name: 'Agendar e enviar ao Closer', exact: true }).click()
     dialog = page.getByRole('dialog', { name: 'Agendar call e enviar ao Closer', exact: true })
     await expect(dialog.getByLabel('Responsável', { exact: true })).toHaveValue('')
     await dialog.getByLabel('Responsável', { exact: true }).selectOption(actor('second'))
@@ -202,15 +202,18 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
       assert.equal((await checked(clients[role].from('crm_leads').select('id').eq('id', leadId))).length, 0)
       assert.ok((await clients[role].rpc('crm_transition', { p_lead_id: leadId, p_action: 'claim', p_expected_version: 1 })).error)
     }
-    for (const role of ['sdr','closer','executive']) {
+    for (const role of ['sdr','closer','executive','super_admin']) {
       const tab = await session(role)
       await expect(tab.getByRole('tab', { name: role === 'closer' ? 'Closer' : 'SDR', exact: true })).toBeVisible()
-      if (role !== 'executive') await expect(tab.getByRole('tab', { name: role === 'closer' ? 'SDR' : 'Closer', exact: true })).toHaveCount(0)
-      else {
+      if (!['executive','super_admin'].includes(role)) await expect(tab.getByRole('tab', { name: role === 'closer' ? 'SDR' : 'Closer', exact: true })).toHaveCount(0)
+      if (role === 'super_admin') {
         await tab.getByRole('tab', { name: 'Relatório de Permissões', exact: true }).click()
         await expect(tab.getByLabel('Buscar usuário no relatório', { exact: true })).toBeVisible()
         await tab.getByRole('tab', { name: 'Gerenciar Usuários', exact: true }).click()
         await expect(tab.getByPlaceholder(/Buscar/).first()).toBeVisible()
+      } else if (role === 'executive') {
+        await expect(tab.getByRole('tab', { name: 'Gerenciar Usuários', exact: true })).toHaveCount(0)
+        await expect(tab.getByRole('tab', { name: 'Relatório de Permissões', exact: true })).toHaveCount(0)
       }
       await tab.context().close()
     }

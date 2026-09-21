@@ -64,11 +64,13 @@ export function useRoles() {
     !!query.data?.some((r) => r.crm_access),
     !!profile && !profile.suspended,
   );
-  const isExecutive = capabilities.admin;
+  const isExecutive = capabilities.executive;
+  const isSuperAdmin = capabilities.admin;
   return {
     roles,
     primaryRole: roles[0] || "seller",
     isExecutive,
+    isSuperAdmin,
     capabilities,
     hasCRMAccess: capabilities.leads,
     canViewSales: isExecutive || !!query.data?.some((r) => r.can_view_sales),
@@ -108,10 +110,10 @@ export interface ExecutiveUser {
 
 export function useAllUsers() {
   const { user } = useAuth();
-  const { isExecutive, loading: rolesLoading } = useRoles();
+  const { isSuperAdmin, loading: rolesLoading } = useRoles();
   const query = useQuery({
     queryKey: ["executive-users", "directory", user?.id],
-    enabled: !!user && isExecutive,
+    enabled: !!user && isSuperAdmin,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("executive_list_users");
       if (error) throw error;
@@ -124,7 +126,7 @@ export function useAllUsers() {
   return {
     users: query.data?.users ?? [],
     fetchedAt: query.data?.fetched_at ?? null,
-    loading: rolesLoading || (isExecutive && query.isPending),
+    loading: rolesLoading || (isSuperAdmin && query.isPending),
     error: query.error,
     isFetching: query.isFetching,
     refetch: query.refetch,

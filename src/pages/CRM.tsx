@@ -4,11 +4,12 @@ import {
   Plus,
   RefreshCw,
   Users,
-  Flame,
   CalendarClock,
   ArrowRight,
   ListFilter,
   Trash2,
+  RefreshCcw,
+  PhoneCall,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,13 +44,14 @@ import { useRoles } from "@/hooks/useRoles";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { errorMessage } from "@/lib/sales";
-import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { CRMLeadDetail } from "@/components/crm/CRMLeadDetail";
 import { CRMLeadEditor } from "@/components/crm/CRMLeadEditor";
 import { CRMLeadCard } from "@/components/crm/CRMLeadCard";
 import { CRMActionDialog } from "@/components/crm/CRMActionDialog";
-import { CRMCallScheduler } from "@/components/crm/CRMCalls";
+import { CRMCallScheduler, type CRMCallIntent } from "@/components/crm/CRMCalls";
+import { CRMQualificationDialog } from "@/components/crm/CRMQualificationDialog";
+import { CRMRemarketingDialog } from "@/components/crm/CRMRemarketingDialog";
 import { CRMUserManagement } from "@/components/crm/CRMUserManagement";
 import { CRMPermissionsReport } from "@/components/crm/CRMPermissionsReport";
 import {
@@ -81,12 +83,12 @@ const approachFilters = [
   { value: "abordado", label: "Abordado" },
 ];
 const closedStages = ["fechado_ganho", "fechado_perdido", "lead_perdido"];
+const negativeStages = ["fechado_perdido", "lead_perdido"];
 // Depois que o SDR agenda a call de fechamento, o lead passa a pertencer ao
 // Closer (repassado_closer) e permanece do lado do Closer até ser devolvido
 // (devolvido_sdr volta para em_qualificacao) ou até o próprio fechamento
 // (fechado_ganho/fechado_perdido, só alcançáveis a partir de repassado_closer).
 // Enquanto isso, a aba SDR não deve mais exibir esse lead.
-const closerOwnedStages = ["repassado_closer", "fechado_ganho", "fechado_perdido"];
 const sdrGroup = (lead: CRMLead) =>
   lead.pipeline_stage === "novo"
     ? "novo"
@@ -94,9 +96,7 @@ const sdrGroup = (lead: CRMLead) =>
       ? "enviados"
       : lead.pipeline_stage === "pronto_closer"
         ? "prontos"
-        : closedStages.includes(lead.pipeline_stage)
-          ? "encerrados"
-          : lead.approach_stage === "em_abordagem"
+        : lead.approach_stage === "em_abordagem"
             ? "abordagem"
             : "qualificacao";
 const sdrGroups = [
@@ -105,7 +105,12 @@ const sdrGroups = [
   { value: "qualificacao", label: "Em qualificação / aquecimento" },
   { value: "prontos", label: "Prontos para Closer" },
   { value: "enviados", label: "Enviados ao Closer" },
-  { value: "encerrados", label: "Encerrados" },
+];
+const sdrQueues = [
+  { value: "active", label: "Em atendimento" },
+  { value: "calls", label: "Calls de qualificação" },
+  { value: "closed", label: "Fechados" },
+  { value: "negative", label: "Negativas / Remarketing" },
 ];
 const selectClass =
   "h-9 min-w-0 w-full rounded-md border border-input bg-background px-2 text-xs";
@@ -176,6 +181,7 @@ export default function CRM() {
   const [order, setOrder] = useState("newest");
   const [view, setView] = useState("list");
   const [queue, setQueue] = useState("queue");
+  const [sdrQueue, setSdrQueue] = useState("active");
   const [readId, setReadId] = useState<string | null>(null);
   const [editor, setEditor] = useState<CRMLead | "new" | null>(null);
   const [deleting, setDeleting] = useState<CRMLead | null>(null);
@@ -185,7 +191,13 @@ export default function CRM() {
   const [schedule, setSchedule] = useState<{
     lead: CRMLead;
     call?: CRMActivity;
+    intent: CRMCallIntent;
   } | null>(null);
+  const [qualification, setQualification] = useState<{
+    lead: CRMLead;
+    call: CRMActivity;
+  } | null>(null);
+  const [remarketing, setRemarketing] = useState<CRMLead | null>(null);
   const [busy, setBusy] = useState(false);
   const now = useLiveClock(CRM_CLOCK_INTERVAL_MS);
   const lock = useRef(false);
@@ -224,6 +236,7 @@ export default function CRM() {
     new Date(next(lead)!) < now;
   const closed = (lead: CRMLead) =>
     ["fechado_ganho", "fechado_perdido"].includes(lead.pipeline_stage);
+  const negative = (lead: CRMLead) => negativeStages.includes(lead.pipeline_stage);
   const inQueue = (lead: CRMLead, value: string) => {
     if (value === "closed") return closed(lead);
     if (lead.pipeline_stage !== "repassado_closer") return false;
@@ -250,6 +263,20 @@ export default function CRM() {
     { value: "overdue", label: "Calls atrasadas" },
     { value: "closed", label: "Fechamentos realizados" },
   ];
+  const inSdrQueue = (lead: CRMLead, value: string) => {
+    if (value === "calls")
+      return openCalls.get(lead.id)?.call_type === "qualificacao";
+    if (value === "closed") return lead.pipeline_stage === "fechado_ganho";
+    if (value === "negative") return negative(lead);
+    return !closedStages.includes(lead.pipeline_stage) && lead.pipeline_stage !== "repassado_closer";
+  };
+  const visibleInTab = (lead: CRMLead) => {
+    if (tab === "leads") return !closedStages.includes(lead.pipeline_stage);
+    if (tab === "remarketing") return negative(lead);
+    if (tab === "closer") return inQueue(lead, queue);
+    if (tab === "sdr") return inSdrQueue(lead, sdrQueue);
+    return true;
+  };
   const todayKey = brasiliaDateKey(now);
   const tomorrowKey = addDaysToDateKey(todayKey, 1);
   const selectedCallDateKey =
@@ -275,9 +302,9 @@ export default function CRM() {
           lead.sdr_id === owner ||
           lead.closer_id === owner) &&
         (!overdueOnly || overdue(lead)) &&
-        (tab !== "closer" || inQueue(lead, queue)) &&
-        (tab !== "sdr" || !closerOwnedStages.includes(lead.pipeline_stage)),
+        visibleInTab(lead),
     );
+  const visibleLeadCount = crm.leads.filter(visibleInTab).length;
   // Conta sobre os demais filtros ja aplicados, para o numero refletir o que o
   // usuario esta vendo.
   const callDateCount = (dateKey: string | null) =>
@@ -329,7 +356,7 @@ export default function CRM() {
     });
   const mode = view;
   const groups =
-    tab === "closer" || mode === "list"
+    tab === "closer" || tab === "remarketing" || mode === "list"
       ? [{ value: "all", label: "Leads" }]
       : mode === "temperature"
         ? temperatures
@@ -342,7 +369,7 @@ export default function CRM() {
             ? sdrGroups.filter((group) => group.value !== "enviados")
             : sdrGroups;
   const groupFor = (lead: CRMLead) =>
-    tab === "closer" || mode === "list"
+    tab === "closer" || tab === "remarketing" || mode === "list"
       ? "all"
       : mode === "temperature"
         ? lead.temperature
@@ -384,11 +411,29 @@ export default function CRM() {
             ? "Lead assumido"
             : "Lead atualizado",
     );
+  const saveAction = (lead: CRMLead, name: string, data: Json) => {
+    if (name !== "lose") return transition(lead, name, data);
+    const payload = data as {
+      negative_reason?: string;
+      next_at?: string;
+      note?: string;
+    };
+    return run(
+      () => crm.markNegative(lead, {
+        reason: payload.negative_reason || "",
+        nextAt: payload.next_at || "",
+        note: payload.note,
+      }),
+      "Lead enviado para Negativas / Remarketing",
+    );
+  };
   const requestDelete = (lead: CRMLead) => {
     setReadId(null);
     setEditor(null);
     setAction(null);
     setSchedule(null);
+    setQualification(null);
+    setRemarketing(null);
     setDeleting(lead);
   };
   const confirmDelete = async () => {
@@ -413,23 +458,12 @@ export default function CRM() {
       onTransition={(name, data) => {
         void transition(lead, name, data);
       }}
-      onSchedule={() => setSchedule({ lead, call: openCalls.get(lead.id) })}
-      onQualifyCall={(outcome) => {
+      onSchedule={(intent) => setSchedule({ lead, call: openCalls.get(lead.id), intent })}
+      onQualifyCall={() => {
         const call = openCalls.get(lead.id);
-        if (call)
-          void run(async () => {
-            try {
-              const { error } = await supabase.rpc("resolve_closer_call", {
-                p_activity_id: call.id,
-                p_outcome: outcome,
-                p_expected_revision: call.updated_at,
-              });
-              if (error) throw error;
-            } finally {
-              await crm.fetchLeads();
-            }
-          }, "Qualificação concluída");
+        if (call) setQualification({ lead, call });
       }}
+      onRemarketing={() => setRemarketing(lead)}
     />
   );
   const retry = () => {
@@ -457,6 +491,7 @@ export default function CRM() {
   const permittedTab =
     tab === "leads" ||
     (tab === "sdr" && capabilities.sdr) ||
+    (tab === "remarketing" && capabilities.sdr) ||
     (tab === "closer" && capabilities.closer) ||
     (["users", "permissions"].includes(tab) && capabilities.admin);
   const pendingSales = crm.leads.filter(
@@ -492,13 +527,11 @@ export default function CRM() {
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: "Leads", value: crm.leads.length, icon: Users },
+            { label: "Leads ativos", value: crm.leads.filter((lead) => !closedStages.includes(lead.pipeline_stage)).length, icon: Users },
             {
-              label: "Prontos para Closer",
-              value: crm.leads.filter(
-                (l) => l.pipeline_stage === "pronto_closer",
-              ).length,
-              icon: Flame,
+              label: "Remarketing",
+              value: crm.leads.filter(negative).length,
+              icon: RefreshCcw,
             },
             {
               label: "Fila Closer",
@@ -508,9 +541,9 @@ export default function CRM() {
               icon: ArrowRight,
             },
             {
-              label: "Atrasados",
-              value: crm.leads.filter(overdue).length,
-              icon: CalendarClock,
+              label: "Calls SDR",
+              value: crm.leads.filter((lead) => openCalls.get(lead.id)?.call_type === "qualificacao").length,
+              icon: PhoneCall,
             },
           ].map((item) => (
             <Card key={item.label} className="border-border/50">
@@ -530,11 +563,14 @@ export default function CRM() {
             setParams({ tab: value });
             setView("list");
             setOrder("newest");
+            setSdrQueue("active");
+            setQueue("queue");
           }}
         >
           <TabsList className="h-auto flex flex-wrap justify-start gap-1 w-fit max-w-full">
             <TabsTrigger className="h-8 px-3 text-xs" value="leads">Leads</TabsTrigger>
             {capabilities.sdr && <TabsTrigger className="h-8 px-3 text-xs" value="sdr">SDR</TabsTrigger>}
+            {capabilities.sdr && <TabsTrigger className="h-8 px-3 text-xs" value="remarketing">Remarketing</TabsTrigger>}
             {capabilities.closer && (
               <TabsTrigger className="h-8 px-3 text-xs" value="closer">Closer</TabsTrigger>
             )}
@@ -621,21 +657,38 @@ export default function CRM() {
                       ))}
                     </TabsList>
                   </Tabs>
+                ) : tab === "remarketing" ? (
+                  <div className="rounded-lg border border-violet-400/20 bg-violet-400/[0.05] p-3 text-xs text-muted-foreground">
+                    Negativas ficam fora de “Leads ativos”. O SDR agenda, registra cada tentativa e reativa o lead quando houver nova oportunidade.
+                  </div>
                 ) : (
-                  <Tabs value={mode} onValueChange={setView}>
-                    <TabsList className="h-auto flex flex-wrap justify-start gap-1">
-                      {[
-                        { value: "list", label: "Todos os leads" },
-                        { value: "temperature", label: "Aquecimento" },
-                        { value: "approach", label: "Abordagem" },
-                        { value: "pipeline", label: "Esteira SDR" },
-                      ].map((v) => (
-                        <TabsTrigger className="h-8 px-3 text-xs" value={v.value} key={v.value}>
-                          {v.label}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                  </Tabs>
+                  <div className="space-y-2">
+                    {tab === "sdr" && (
+                      <Tabs value={sdrQueue} onValueChange={(value) => { setSdrQueue(value); setView("list"); }}>
+                        <TabsList className="h-auto flex flex-wrap justify-start gap-1">
+                          {sdrQueues.map((item) => (
+                            <TabsTrigger className="h-8 px-3 text-xs" value={item.value} key={item.value}>
+                              {item.label} <span className="ml-1">{crm.leads.filter((lead) => inSdrQueue(lead, item.value)).length}</span>
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </Tabs>
+                    )}
+                    <Tabs value={mode} onValueChange={setView}>
+                      <TabsList className="h-auto flex flex-wrap justify-start gap-1">
+                        {[
+                          { value: "list", label: tab === "leads" ? "Todos ativos" : "Lista" },
+                          { value: "temperature", label: "Aquecimento" },
+                          { value: "approach", label: "Abordagem" },
+                          { value: "pipeline", label: "Esteira SDR" },
+                        ].map((v) => (
+                          <TabsTrigger className="h-8 px-3 text-xs" value={v.value} key={v.value}>
+                            {v.label}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </Tabs>
+                  </div>
                 )}
                 <div className="rounded-lg border bg-card/80 p-2.5">
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1.8fr)_repeat(5,minmax(120px,1fr))]">
@@ -763,7 +816,7 @@ export default function CRM() {
                       Somente atrasados
                     </label>
                     <span>
-                      {filtered.length} de {crm.leads.length} leads · {callDateFilter !== "all"
+                      {filtered.length} de {visibleLeadCount} leads nesta área · {callDateFilter !== "all"
                         ? "calls mais próximas primeiro"
                         : order === "newest"
                           ? "mais recentes primeiro"
@@ -852,14 +905,33 @@ export default function CRM() {
             candidates={candidates}
             busy={busy}
             onClose={() => setAction(null)}
-            onSave={(data) => transition(action.lead, action.name, data)}
+            onSave={(data) => saveAction(action.lead, action.name, data)}
           />
         )}
         {schedule && (
           <CRMCallScheduler
             lead={schedule.lead}
             call={schedule.call}
+            intent={schedule.intent}
             onClose={() => setSchedule(null)}
+          />
+        )}
+        {qualification && (
+          <CRMQualificationDialog
+            lead={qualification.lead}
+            call={qualification.call}
+            onClose={() => setQualification(null)}
+          />
+        )}
+        {remarketing && (
+          <CRMRemarketingDialog
+            lead={remarketing}
+            busy={busy}
+            onClose={() => setRemarketing(null)}
+            onSave={(data) => run(
+              () => crm.updateRemarketing(remarketing, data),
+              data.action === "reactivate" ? "Lead reativado" : "Remarketing atualizado",
+            )}
           />
         )}
         <AlertDialog

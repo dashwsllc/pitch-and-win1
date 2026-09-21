@@ -8,11 +8,11 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { isExecutive } = useRoles()
+  const { isSuperAdmin } = useRoles()
   
   return (
     <div className="min-h-screen bg-transparent">
-      <ExecutiveAppSidebar isExecutive={isExecutive} />
+      <ExecutiveAppSidebar isExecutive={isSuperAdmin} />
       
       <div className="ml-16 flex min-h-screen flex-col sm:ml-[72px]">
         <header className="sticky top-0 z-30 h-16 border-b border-white/[0.055] bg-[#0e0918]/80 backdrop-blur-xl">

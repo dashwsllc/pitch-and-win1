@@ -14,6 +14,7 @@ import {
   Undo2,
   UserCog,
   CheckCircle2,
+  RefreshCcw,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,12 @@ import {
   minutesUntilCall,
 } from "@/lib/crm-call-status";
 import { formatAthleteAge } from "@/lib/crm-age";
+import type { CRMCallIntent } from "./CRMCalls";
+import {
+  INCOME_RANGES,
+  REMARKETING_STATUS_LABELS,
+  optionLabel,
+} from "@/lib/crm-qualification";
 
 export function CRMLeadCard({
   lead,
@@ -65,6 +72,7 @@ export function CRMLeadCard({
   onTransition,
   onSchedule,
   onQualifyCall,
+  onRemarketing,
 }: {
   lead: CRMLead;
   call?: CRMActivity;
@@ -78,8 +86,9 @@ export function CRMLeadCard({
   onDelete: () => void;
   onAction: (action: string) => void;
   onTransition: (action: string, data?: Json) => void;
-  onSchedule: () => void;
-  onQualifyCall: (outcome: string) => void;
+  onSchedule: (intent: CRMCallIntent) => void;
+  onQualifyCall: () => void;
+  onRemarketing: () => void;
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -88,8 +97,9 @@ export function CRMLeadCard({
     lead.pipeline_stage,
   );
   const handed = lead.pipeline_stage === "repassado_closer";
+  const negative = ["lead_perdido", "fechado_perdido"].includes(lead.pipeline_stage);
   const own = lead.closer_id === user?.id;
-  const canManage = capabilities.admin || own;
+  const canManage = capabilities.executive || own;
   const canOperate =
     !closed &&
     (handed
@@ -149,6 +159,12 @@ export function CRMLeadCard({
     morno: "bg-yellow-600/15 text-yellow-500",
     quente: "bg-orange-600/15 text-orange-400",
   }[lead.temperature];
+  const qualificationCall = call?.call_type === "qualificacao";
+  const primaryIntent: CRMCallIntent = qualificationCall
+    ? "qualification"
+    : lead.pipeline_stage === "pronto_closer"
+      ? "handoff"
+      : "qualification";
   return (
     <article
       aria-label={`Lead ${athleteLabel}`}
@@ -250,6 +266,16 @@ export function CRMLeadCard({
             </Badge>
           )
         )}
+        {lead.qualification_income_range && (
+          <Badge variant="outline" className="h-5 px-2 text-[10px] text-sky-300">
+            Renda: {optionLabel(INCOME_RANGES, lead.qualification_income_range)}
+          </Badge>
+        )}
+        {negative && lead.remarketing_status && (
+          <Badge variant="outline" className="h-5 px-2 text-[10px] text-violet-300">
+            {REMARKETING_STATUS_LABELS[lead.remarketing_status] || lead.remarketing_status}
+          </Badge>
+        )}
       </div>
       <div className="text-[11px] leading-4 text-muted-foreground">
         <p className="truncate" title={`SDR: ${names[lead.sdr_id || ""] || (lead.sdr_id ? "Usuário anterior" : "Sem responsável")} · Closer: ${names[lead.closer_id || ""] || (lead.closer_id ? "Usuário anterior" : handed ? "Fila compartilhada" : "Sem responsável")}`}>
@@ -273,6 +299,12 @@ export function CRMLeadCard({
         )}
         {emphasizeCall && showFollowup && (
           <p className="truncate">Próximo retorno: {callDate(lead.next_followup_at)}</p>
+        )}
+        {negative && lead.negative_reason && (
+          <p className="line-clamp-2" title={lead.negative_reason}>Negativa: {lead.negative_reason}</p>
+        )}
+        {negative && lead.remarketing_next_at && (
+          <p className="truncate">Próximo remarketing: {callDate(lead.remarketing_next_at)}</p>
         )}
       </div>
       {emphasizeCall && (
@@ -319,7 +351,7 @@ export function CRMLeadCard({
       {lead.pipeline_stage === "pronto_closer" && (
         <p className="text-[11px] leading-4 text-orange-400">Pronto para repasse ao Closer.</p>
       )}
-      {capabilities.sdr && (
+      {capabilities.sdr && !closed && !handed && (
         <div className="grid grid-cols-2 gap-1.5 border-t border-border/40 pt-2">
           <label className="min-w-0">
             <span className="sr-only">Aquecimento</span>
@@ -359,8 +391,17 @@ export function CRMLeadCard({
       )}
       <div className="flex items-center gap-1.5 border-t border-border/40 pt-2">
         {!closed && !handed && capabilities.sdr && (
-          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={onSchedule}>
-            Agendar call e enviar
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onSchedule(primaryIntent)}>
+            {qualificationCall
+              ? "Reagendar call SDR"
+              : primaryIntent === "handoff"
+                ? "Agendar e enviar ao Closer"
+                : "Agendar qualificação"}
+          </Button>
+        )}
+        {negative && capabilities.sdr && (
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={onRemarketing}>
+            <RefreshCcw className="mr-1.5 h-3.5 w-3.5" /> Remarketing
           </Button>
         )}
         {handed && capabilities.closer && !lead.closer_id && (
@@ -390,10 +431,25 @@ export function CRMLeadCard({
                 </DropdownMenuItem>
               </>
             )}
-            {canSchedule && (
+            {canSchedule && call && (
               <>
-                <DropdownMenuItem onSelect={onSchedule}>
-                  <PhoneCall className="mr-2 h-4 w-4" /> {call ? "Reagendar call" : handed ? "Agendar call" : "Agendar call e enviar ao Closer"}
+                <DropdownMenuItem onSelect={() => onSchedule(qualificationCall ? "qualification" : "closer")}>
+                  <PhoneCall className="mr-2 h-4 w-4" /> Reagendar call
+                </DropdownMenuItem>
+              </>
+            )}
+            {canSchedule && !call && handed && (
+              <DropdownMenuItem onSelect={() => onSchedule("closer")}>
+                <PhoneCall className="mr-2 h-4 w-4" /> Agendar call do Closer
+              </DropdownMenuItem>
+            )}
+            {!closed && !handed && capabilities.sdr && !call && (
+              <>
+                <DropdownMenuItem onSelect={() => onSchedule("qualification")}>
+                  <PhoneCall className="mr-2 h-4 w-4" /> Agendar call de qualificação SDR
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onSchedule("handoff")}>
+                  <CalendarClock className="mr-2 h-4 w-4" /> Agendar fechamento e enviar ao Closer
                 </DropdownMenuItem>
               </>
             )}
@@ -421,7 +477,7 @@ export function CRMLeadCard({
                 </DropdownMenuItem>
               </>
             )}
-            {handed && capabilities.closer && !lead.closer_id && capabilities.admin && (
+            {handed && capabilities.closer && !lead.closer_id && capabilities.executive && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => onAction("assign")}>
@@ -429,11 +485,11 @@ export function CRMLeadCard({
                 </DropdownMenuItem>
               </>
             )}
-            {call?.call_type === "qualificacao" && !call.is_completed && capabilities.sdr && (capabilities.admin || call.assigned_to === user?.id) && (
+            {call?.call_type === "qualificacao" && !call.is_completed && capabilities.sdr && (capabilities.executive || call.assigned_to === user?.id) && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => onQualifyCall("avancou")}>
-                  <CheckCircle2 className="mr-2 h-4 w-4" /> Concluir qualificação
+                <DropdownMenuItem onSelect={onQualifyCall}>
+                  <CheckCircle2 className="mr-2 h-4 w-4" /> Registrar resultado da qualificação
                 </DropdownMenuItem>
               </>
             )}
