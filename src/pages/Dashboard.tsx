@@ -33,7 +33,6 @@ import {
 } from "lucide-react"
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { AUTO_REFRESH_INTERVAL_LABEL } from '@/lib/sync'
 import { BRASILIA_TIME_ZONE, brasiliaParts, formatBrasiliaDate } from '@/lib/brasilia-time'
 import {
   createDefaultDashboardCustomRange,
@@ -284,7 +283,7 @@ export default function Dashboard() {
               </div>
               <h2 className="mt-1.5 text-xl font-normal tracking-[-0.025em] text-white sm:text-2xl">Metas em andamento</h2>
             </div>
-            <span className="hidden text-xs text-muted-foreground sm:block">Atualização automática a cada {AUTO_REFRESH_INTERVAL_LABEL}</span>
+            <span className="hidden text-xs text-muted-foreground sm:block">Sincroniza quando os dados mudam</span>
           </div>
           <GoalsProgress />
         </section>

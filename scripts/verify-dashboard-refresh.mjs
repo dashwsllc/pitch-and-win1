@@ -43,7 +43,6 @@ for (const file of files) {
 
 const intervalSummary = intervals.map(item => [item.file.slice(root.length + 1), item.delay])
 assert.deepEqual(intervalSummary.sort(), [
-  ['src/components/DataSync.tsx', 'AUTO_REFRESH_INTERVAL_MS'],
   ['src/components/dashboard/RecentSales.tsx', 'RECENT_SALES_AUTOPLAY_INTERVAL_MS'],
   ['src/hooks/useAuth.tsx', 'AUTO_REFRESH_INTERVAL_MS'],
   ['src/hooks/useCRMNotifications.ts', 'TICK_MS'],
@@ -52,6 +51,9 @@ assert.deepEqual(intervalSummary.sort(), [
 const source = relative => sources.get(`/${relative}`) ?? sources.get(relative)
 assert.match(source('src/components/DataSync.tsx'), /table:\s*'dashboard_events'/)
 assert.match(source('src/components/DataSync.tsx'), /refreshDashboardData\(queryClient\)/)
+assert.doesNotMatch(source('src/components/DataSync.tsx'), /setInterval\(|visibilitychange|addEventListener\('focus'/)
+assert.match(source('src/hooks/useDashboardData.tsx'), /fetchDashboardData\(false\)/)
+assert.match(source('src/hooks/useExecutiveDashboard.tsx'), /fetchExecutiveDashboard\(false\)/)
 assert.match(source('src/hooks/useCRM.tsx'), /table:\s*"crm_leads"/)
 assert.match(source('src/hooks/useCRM.tsx'), /table:\s*"crm_activities"/)
 assert.match(source('src/hooks/useCRM.tsx'), /table:\s*"crm_lead_contexts"/)
@@ -65,4 +67,4 @@ const migration = readFileSync(resolve(root, 'supabase/migrations/20260920203000
 assert.match(migration, /dashboard_subscriptions_signal/)
 assert.match(migration, /dashboard_password_requests_signal/)
 
-console.log('PASS: clocks are independent, query refresh is centralized, realtime covers every live surface, and the 50-second fallback stays synchronized.')
+console.log('PASS: clocks are independent, dashboards have no periodic refresh, and Realtime updates legacy and query-backed views without loading skeletons.')

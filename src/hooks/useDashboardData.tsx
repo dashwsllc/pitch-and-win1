@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { fetchAllPages } from '@/lib/supabase-pages'
+import { millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
 import {
   buildDashboardSeries,
   createDefaultDashboardCustomRange,
@@ -51,12 +52,12 @@ export function useDashboardData(
   const customStart = customRange.start
   const customEnd = customRange.end
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchDashboardData = useCallback(async (showLoading = false) => {
     const requestId = ++latestFetch.current
     if (!userId || rolesLoading) return
 
     try {
-      setLoading(true)
+      if (showLoading) setLoading(true)
       setError(null)
 
       const period = resolveDashboardPeriod(dateFilter, { start: customStart, end: customEnd })
@@ -148,8 +149,8 @@ export function useDashboardData(
   useEffect(() => {
     if (!userId || rolesLoading) return
 
-    void fetchDashboardData()
-    const refresh = () => { void fetchDashboardData() }
+    void fetchDashboardData(true)
+    const refresh = () => { void fetchDashboardData(false) }
     window.addEventListener('dashboard-data-changed', refresh)
 
     return () => {
@@ -157,5 +158,18 @@ export function useDashboardData(
     }
   }, [fetchDashboardData, isExecutive, rolesLoading, userId])
 
-  return { metrics, loading, error, refetch: fetchDashboardData }
+  useEffect(() => {
+    if (!userId || rolesLoading || dateFilter === 'all' || dateFilter === 'custom') return
+    let timeout: number
+    const schedule = () => {
+      timeout = window.setTimeout(() => {
+        void fetchDashboardData(false)
+        schedule()
+      }, millisecondsUntilBrasiliaMidnight() + 100)
+    }
+    schedule()
+    return () => window.clearTimeout(timeout)
+  }, [dateFilter, fetchDashboardData, rolesLoading, userId])
+
+  return { metrics, loading, error, refetch: () => fetchDashboardData(true) }
 }

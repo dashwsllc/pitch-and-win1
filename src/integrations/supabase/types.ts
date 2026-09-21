@@ -1367,6 +1367,16 @@ export type Database = {
       executive_save_product: { Args: { p_product_id: string | null; p_name: string; p_description?: string | null; p_active?: boolean; p_expected_updated_at?: string | null }; Returns: Database["public"]["Tables"]["products"]["Row"] }
       executive_save_product_ticket: { Args: { p_ticket_id: string | null; p_product_id: string; p_name: string; p_price: number; p_active?: boolean; p_expected_updated_at?: string | null }; Returns: Database["public"]["Tables"]["product_tickets"]["Row"] }
       executive_review_sale: { Args: { p_sale_id: string; p_action: string; p_reason?: string; p_expected_status?: string }; Returns: Json }
+      super_admin_reschedule_sale: {
+        Args: {
+          p_sale_id: string
+          p_created_at: string
+          p_reason: string
+          p_expected_created_at: string
+          p_expected_status: string
+        }
+        Returns: Json
+      }
       get_sales_board: { Args: { p_status?: string; p_search?: string; p_page?: number; p_page_size?: number }; Returns: Json }
       get_team_ranking: { Args: never; Returns: Json }
       get_company_goal_totals: { Args: never; Returns: Json }

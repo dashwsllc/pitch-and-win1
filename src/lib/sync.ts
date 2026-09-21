@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 
-// Database fallback cadence. Realtime normally refreshes the app first, but
-// this guarantees eventual consistency if the socket is unavailable.
+// Registration-status fallback cadence. Dashboards themselves do not poll:
+// they update on actual changes, network reconnection or an explicit refresh.
 export const AUTO_REFRESH_INTERVAL_MS = 50_000
 
 export const AUTO_REFRESH_INTERVAL_LABEL = `${AUTO_REFRESH_INTERVAL_MS / 1000} segundos`

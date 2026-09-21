@@ -8,7 +8,7 @@ assert(['127.0.0.1', 'localhost'].includes(new URL(origin).hostname))
 const expect = baseExpect.configure({ timeout: 15000 })
 const actor = 'af140000-0000-4000-8000-000000000001', accountId = 'af140000-0000-4000-8000-000000000002'
 const project = 'mbzwchnxtskysqplqiyy', now = new Date().toISOString()
-let role = 'executive', writes = 0, accountDeletes = 0, leadDeletes = 0, conflict = false
+let role = 'super_admin', writes = 0, reschedules = 0, accountDeletes = 0, leadDeletes = 0, conflict = false
 const errors = [], leads = [], mutations = []
 const profile = { id: actor, user_id: actor, display_name: 'QA Admin', suspended: false, created_at: now }
 const roles = id => [{ id, user_id: id, role: id === actor ? role : 'seller', crm_access: true, commission_rate: 20, updated_at: now }]
@@ -34,9 +34,21 @@ await context.route('https://**/*', async route => {
       return (!status || (status.startsWith('eq.') ? sale.approval_status === status.slice(3) : status.includes(sale.approval_status)))
     })
   } else if (resource === 'get_sales_board') {
-    const visible = sales.filter(s => s.approval_status !== 'rejeitada' || role === 'executive')
+    const visible = sales.filter(s => s.approval_status !== 'rejeitada' || ['executive','super_admin'].includes(role))
     const items = visible.filter(s => s.approval_status === payload.p_status).map(s => ({ ...s, seller_name: 'QA Seller' }))
     data = { items, total: items.length, fetched_at: now, summary: { approved: visible.filter(s => s.approval_status === 'aprovada').length, pending: visible.filter(s => s.approval_status === 'pendente').length, rejected: visible.filter(s => s.approval_status === 'rejeitada').length, approved_value: visible.filter(s => s.approval_status === 'aprovada').reduce((sum,s) => sum+s.valor_venda,0), pending_value: 1000, overdue: 0 } }
+  } else if (resource === 'super_admin_reschedule_sale') {
+    assert.equal(role,'super_admin','Only Super Admin may call reschedule')
+    const sale = sales.find(s => s.id === payload.p_sale_id)
+    assert(sale)
+    assert.equal(payload.p_expected_created_at,sale.created_at)
+    assert.equal(payload.p_expected_status,sale.approval_status)
+    assert(payload.p_reason.trim().length >= 5)
+    assert(['pendente','aprovada'].includes(sale.approval_status))
+    reschedules++
+    sale.created_at = payload.p_created_at
+    sale.updated_at = new Date(Date.now()+reschedules).toISOString()
+    data = { id:sale.id, created_at:sale.created_at, approval_status:sale.approval_status }
   } else if (resource === 'manage_sale') {
     writes++
     if (conflict) { conflict = false; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'PT409', message: 'Esta venda foi alterada. Atualize a lista.' }) }) }
@@ -90,6 +102,31 @@ try {
   await page.goto(`${origin}/vendas`)
   const board = page.getByRole('region',{name:'Gerenciamento das últimas vendas'})
   await expect(board.getByRole('article')).toHaveCount(2)
+  const approvedCard = board.getByRole('article',{name:'Venda de Comprador 1'})
+  await approvedCard.getByRole('button',{name:'Remarcar data da venda de Comprador 1'}).click()
+  await page.getByLabel('Nova data e horário da compra (Brasília)').fill('2026-09-18T10:30:25')
+  await page.getByLabel('Motivo da correção (obrigatório)').fill('Compra registrada em outra data')
+  await page.getByRole('button',{name:'Remarcar e sincronizar'}).click()
+  await expect(approvedCard).toContainText('18/09/2026, 10:30:25')
+  assert.equal(reschedules,1)
+  const pendingCard = board.getByRole('article',{name:'Venda de Comprador 2'})
+  await pendingCard.getByRole('button',{name:'Remarcar data da venda de Comprador 2'}).click()
+  await page.getByLabel('Nova data e horário da compra (Brasília)').fill('2026-09-17T09:15:10')
+  await page.getByLabel('Motivo da correção (obrigatório)').fill('Compra registrada no horário incorreto')
+  await page.getByRole('button',{name:'Remarcar e sincronizar'}).click()
+  await expect(pendingCard).toContainText('17/09/2026, 09:15:10')
+  assert.equal(reschedules,2)
+  await page.goto(`${origin}/executive?tab=approvals`)
+  const central = page.getByRole('region',{name:'Vendas do time'})
+  await expect(central.getByRole('button',{name:'Remarcar data da venda de QA Seller'})).toHaveCount(1)
+  await central.getByRole('tab',{name:/Aprovadas/}).click()
+  await expect(central.getByRole('button',{name:'Remarcar data da venda de QA Seller'})).toHaveCount(1)
+  await central.getByRole('tab',{name:/Rejeitadas/}).click()
+  await expect(central.getByRole('button',{name:/Remarcar data da venda/})).toHaveCount(0)
+  role = 'executive'
+  await page.goto(`${origin}/vendas`)
+  await expect(board.getByRole('article')).toHaveCount(2)
+  await expect(board.getByRole('button',{name:/Remarcar data da venda/})).toHaveCount(0)
   await board.getByRole('button',{name:'Editar venda de Comprador 1',exact:true}).click()
   await page.getByLabel('Produto',{exact:true}).selectOption(products[1].id)
   await page.getByLabel('Ticket',{exact:true}).selectOption(products[1].product_tickets[0].id)
@@ -161,12 +198,12 @@ try {
   await expect(page.getByText('Selecionada: membro.png',{exact:false})).toBeVisible()
   await page.getByRole('button',{name:'Cancelar',exact:true}).click()
   await page.getByRole('button',{name:'Excluir conta de Conta teste',exact:true}).click()
-  await expect(page.getByRole('dialog')).toContainText('Excluir conta permanentemente')
+  await expect(page.getByRole('dialog')).toContainText('Excluir conta e acesso')
   await page.getByRole('button',{name:'Cancelar',exact:true}).click()
   assert.equal(accountDeletes,0)
   await page.getByRole('button',{name:'Excluir conta de Conta teste',exact:true}).click()
   await page.getByLabel('Motivo da exclusão',{exact:true}).fill('Conta duplicada de teste')
-  await page.getByRole('button',{name:'Excluir permanentemente',exact:true}).click()
+  await page.getByRole('button',{name:'Excluir conta',exact:true}).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   assert.equal(accountDeletes,1)
   role = 'seller'
@@ -191,7 +228,7 @@ try {
   assert.equal(sales.length,1)
   assert.equal(sales[0].approval_status,'rejeitada')
   assert.deepEqual(errors,[])
-  console.log('PASS: home order/statuses; CRM athlete name, age and confirmed lead deletion; sale edit/delete + dashboard/cache sync; conflict and cancel flows; account confirmation; seller permissions and 390px layout.')
+  console.log('PASS: Super Admin reschedules pending/approved sales, Executive cannot see the action; home order/statuses; sale edit/delete + dashboard sync; CRM and account confirmations; seller permissions and mobile layout.')
 } catch(error) {
   await page.screenshot({path:'.verification.local/sales-management-failure.png',fullPage:true})
   throw error

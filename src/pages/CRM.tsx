@@ -68,7 +68,7 @@ import {
   compareLeadUrgency,
   nextLeadSchedule,
 } from "@/lib/crm-order";
-import { AUTO_REFRESH_INTERVAL_LABEL, CRM_CLOCK_INTERVAL_MS } from "@/lib/sync";
+import { CRM_CLOCK_INTERVAL_MS } from "@/lib/sync";
 
 const temperatures = [
   { value: "frio", label: "Frios" },
@@ -466,7 +466,7 @@ export default function CRM() {
     return <Navigate to="/" replace />;
   return (
     <DashboardLayout>
-      {realtimeUnavailable && <p role="status" className="mb-4 rounded-lg border p-3 text-sm text-muted-foreground">Conexão em tempo real indisponível. Verificação automática a cada {AUTO_REFRESH_INTERVAL_LABEL} e ao voltar à janela.</p>}
+      {realtimeUnavailable && <p role="status" className="mb-4 rounded-lg border p-3 text-sm text-muted-foreground">Conexão em tempo real indisponível. Use Atualizar CRM para consultar as alterações mais recentes.</p>}
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

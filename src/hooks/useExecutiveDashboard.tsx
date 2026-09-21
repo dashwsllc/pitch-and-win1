@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from './useAuth'
 import { fetchAllPages } from '@/lib/supabase-pages'
+import { millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
 import {
   buildDashboardSeries,
   createDefaultDashboardCustomRange,
@@ -61,11 +62,11 @@ export function useExecutiveDashboard(
   const customStart = customRange.start
   const customEnd = customRange.end
 
-  const fetchExecutiveDashboard = useCallback(async () => {
+  const fetchExecutiveDashboard = useCallback(async (showLoading = false) => {
     const requestId = ++latestFetch.current
     if (!user) return
 
-    setLoading(true)
+    if (showLoading) setLoading(true)
     setError(null)
 
     try {
@@ -231,8 +232,8 @@ export function useExecutiveDashboard(
   }, [customEnd, customStart, dateFilter, user])
 
   useEffect(() => {
-    fetchExecutiveDashboard()
-    const refresh = () => { void fetchExecutiveDashboard() }
+    void fetchExecutiveDashboard(true)
+    const refresh = () => { void fetchExecutiveDashboard(false) }
     window.addEventListener('dashboard-data-changed', refresh)
 
     return () => {
@@ -240,10 +241,23 @@ export function useExecutiveDashboard(
     }
   }, [fetchExecutiveDashboard])
 
+  useEffect(() => {
+    if (!user || dateFilter === 'all' || dateFilter === 'custom') return
+    let timeout: number
+    const schedule = () => {
+      timeout = window.setTimeout(() => {
+        void fetchExecutiveDashboard(false)
+        schedule()
+      }, millisecondsUntilBrasiliaMidnight() + 100)
+    }
+    schedule()
+    return () => window.clearTimeout(timeout)
+  }, [dateFilter, fetchExecutiveDashboard, user])
+
   return {
     data,
     loading,
     error,
-    refetch: fetchExecutiveDashboard
+    refetch: () => fetchExecutiveDashboard(true)
   }
 }

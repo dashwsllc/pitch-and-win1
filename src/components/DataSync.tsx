@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/integrations/supabase/client'
-import { AUTO_REFRESH_INTERVAL_MS, refreshDashboardData } from '@/lib/sync'
+import { refreshDashboardData } from '@/lib/sync'
 
 export function DataSync() {
   const { user, session } = useAuth()
@@ -20,6 +20,7 @@ export function DataSync() {
     let debounce: ReturnType<typeof setTimeout> | undefined
     let refreshing = false
     let refreshQueued = false
+    let subscribedOnce = false
 
     const refresh = () => {
       if (disposed) return
@@ -40,10 +41,6 @@ export function DataSync() {
         }
       }, 120)
     }
-    const refreshWhenVisible = () => {
-      if (!document.hidden) refresh()
-    }
-
     // The database publishes anonymous revision signals only; records and
     // customer data are fetched afterward under the current user's RLS rules.
     const channel = supabase
@@ -56,22 +53,22 @@ export function DataSync() {
 
     void supabase.realtime.setAuth(accessToken)
       .then(() => {
-        if (!disposed) channel.subscribe()
+        if (!disposed) channel.subscribe(status => {
+          if (status !== 'SUBSCRIBED') return
+          if (subscribedOnce) refresh() // Catch up once after a socket reconnect.
+          subscribedOnce = true
+        })
       })
       .catch(refresh)
 
-    const interval = window.setInterval(refreshWhenVisible, AUTO_REFRESH_INTERVAL_MS)
-    document.addEventListener('visibilitychange', refreshWhenVisible)
-    window.addEventListener('focus', refreshWhenVisible)
-    window.addEventListener('online', refreshWhenVisible)
+    // A fixed poll made monitor dashboards repeatedly re-fetch and animate.
+    // Reconnect once after network recovery; normal changes arrive by Realtime.
+    window.addEventListener('online', refresh)
 
     return () => {
       disposed = true
       window.clearTimeout(debounce)
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', refreshWhenVisible)
-      window.removeEventListener('focus', refreshWhenVisible)
-      window.removeEventListener('online', refreshWhenVisible)
+      window.removeEventListener('online', refresh)
       void supabase.removeChannel(channel)
     }
   }, [userId, accessToken, queryClient])

@@ -114,10 +114,10 @@ export function brasiliaLocalInputToIso(value: string) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null
 }
 
-export function isoToBrasiliaLocalInput(value: string | null | undefined) {
+export function isoToBrasiliaLocalInput(value: string | null | undefined, includeSeconds = false) {
   if (!value || !Number.isFinite(Date.parse(value))) return ''
-  const { year, month, day, hour, minute } = brasiliaParts(value)
-  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}`
+  const { year, month, day, hour, minute, second } = brasiliaParts(value)
+  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}${includeSeconds ? `:${pad(second)}` : ''}`
 }
 
 export function formatBrasiliaDate(value: Date | string | number, options?: Intl.DateTimeFormatOptions) {
