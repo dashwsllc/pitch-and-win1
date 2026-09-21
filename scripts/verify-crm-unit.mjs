@@ -194,13 +194,15 @@ assert.match(crmPageSource, /data-call-date-option=\{option\.value\}/)
 assert.match(crmPageSource, /<span className="shrink-0">\{option\.label\}<\/span>/)
 
 // Leads encerrados saem da lista ativa. SDR mantém subfilas explícitas para
-// atendimento, calls, fechados e negativas; a negativa também possui o
-// departamento dedicado de Remarketing.
+// atendimento, calls, fechados e negativas/remarketing. Remarketing não deve
+// aparecer como uma área principal separada do SDR.
 assert.match(crmPageSource, /const negativeStages = \["fechado_perdido", "lead_perdido"\]/)
 assert.match(crmPageSource, /\{ value: "closed", label: "Fechados" \}/)
 assert.match(crmPageSource, /\{ value: "negative", label: "Negativas \/ Remarketing" \}/)
 assert.match(crmPageSource, /if \(tab === "leads"\) return !closedStages\.includes/)
-assert.match(crmPageSource, /value="remarketing">Remarketing/)
+assert.doesNotMatch(crmPageSource, /value="remarketing">Remarketing/)
+assert.match(crmPageSource, /sdrQueue === "negative"/)
+assert.match(crmPageSource, /requestedTab === "remarketing" \? "sdr"/)
 
 const qualificationSource = readFileSync(new URL('../src/components/crm/CRMQualificationDialog.tsx', import.meta.url), 'utf8')
 const remarketingSource = readFileSync(new URL('../src/components/crm/CRMRemarketingDialog.tsx', import.meta.url), 'utf8')

@@ -169,7 +169,9 @@ export default function CRM() {
   const contextSummary = useCRMContextSummary();
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") || "leads";
+  const requestedTab = params.get("tab") || "leads";
+  // Preserve old bookmarks while consolidating Remarketing inside SDR.
+  const tab = requestedTab === "remarketing" ? "sdr" : requestedTab;
   const [search, setSearch] = useState("");
   const [temperature, setTemperature] = useState<string[]>([]);
   const [approach, setApproach] = useState<string[]>([]);
@@ -181,7 +183,9 @@ export default function CRM() {
   const [order, setOrder] = useState("newest");
   const [view, setView] = useState("list");
   const [queue, setQueue] = useState("queue");
-  const [sdrQueue, setSdrQueue] = useState("active");
+  const [sdrQueue, setSdrQueue] = useState(
+    requestedTab === "remarketing" ? "negative" : "active",
+  );
   const [readId, setReadId] = useState<string | null>(null);
   const [editor, setEditor] = useState<CRMLead | "new" | null>(null);
   const [deleting, setDeleting] = useState<CRMLead | null>(null);
@@ -272,7 +276,6 @@ export default function CRM() {
   };
   const visibleInTab = (lead: CRMLead) => {
     if (tab === "leads") return !closedStages.includes(lead.pipeline_stage);
-    if (tab === "remarketing") return negative(lead);
     if (tab === "closer") return inQueue(lead, queue);
     if (tab === "sdr") return inSdrQueue(lead, sdrQueue);
     return true;
@@ -356,7 +359,7 @@ export default function CRM() {
     });
   const mode = view;
   const groups =
-    tab === "closer" || tab === "remarketing" || mode === "list"
+    tab === "closer" || mode === "list"
       ? [{ value: "all", label: "Leads" }]
       : mode === "temperature"
         ? temperatures
@@ -369,7 +372,7 @@ export default function CRM() {
             ? sdrGroups.filter((group) => group.value !== "enviados")
             : sdrGroups;
   const groupFor = (lead: CRMLead) =>
-    tab === "closer" || tab === "remarketing" || mode === "list"
+    tab === "closer" || mode === "list"
       ? "all"
       : mode === "temperature"
         ? lead.temperature
@@ -491,7 +494,6 @@ export default function CRM() {
   const permittedTab =
     tab === "leads" ||
     (tab === "sdr" && capabilities.sdr) ||
-    (tab === "remarketing" && capabilities.sdr) ||
     (tab === "closer" && capabilities.closer) ||
     (["users", "permissions"].includes(tab) && capabilities.admin);
   const pendingSales = crm.leads.filter(
@@ -570,7 +572,6 @@ export default function CRM() {
           <TabsList className="h-auto flex flex-wrap justify-start gap-1 w-fit max-w-full">
             <TabsTrigger className="h-8 px-3 text-xs" value="leads">Leads</TabsTrigger>
             {capabilities.sdr && <TabsTrigger className="h-8 px-3 text-xs" value="sdr">SDR</TabsTrigger>}
-            {capabilities.sdr && <TabsTrigger className="h-8 px-3 text-xs" value="remarketing">Remarketing</TabsTrigger>}
             {capabilities.closer && (
               <TabsTrigger className="h-8 px-3 text-xs" value="closer">Closer</TabsTrigger>
             )}
@@ -657,22 +658,25 @@ export default function CRM() {
                       ))}
                     </TabsList>
                   </Tabs>
-                ) : tab === "remarketing" ? (
-                  <div className="rounded-lg border border-violet-400/20 bg-violet-400/[0.05] p-3 text-xs text-muted-foreground">
-                    Negativas ficam fora de “Leads ativos”. O SDR agenda, registra cada tentativa e reativa o lead quando houver nova oportunidade.
-                  </div>
                 ) : (
                   <div className="space-y-2">
                     {tab === "sdr" && (
-                      <Tabs value={sdrQueue} onValueChange={(value) => { setSdrQueue(value); setView("list"); }}>
-                        <TabsList className="h-auto flex flex-wrap justify-start gap-1">
-                          {sdrQueues.map((item) => (
-                            <TabsTrigger className="h-8 px-3 text-xs" value={item.value} key={item.value}>
-                              {item.label} <span className="ml-1">{crm.leads.filter((lead) => inSdrQueue(lead, item.value)).length}</span>
-                            </TabsTrigger>
-                          ))}
-                        </TabsList>
-                      </Tabs>
+                      <div className="space-y-2">
+                        <Tabs value={sdrQueue} onValueChange={(value) => { setSdrQueue(value); setView("list"); }}>
+                          <TabsList className="h-auto flex flex-wrap justify-start gap-1">
+                            {sdrQueues.map((item) => (
+                              <TabsTrigger className="h-8 px-3 text-xs" value={item.value} key={item.value}>
+                                {item.label} <span className="ml-1">{crm.leads.filter((lead) => inSdrQueue(lead, item.value)).length}</span>
+                              </TabsTrigger>
+                            ))}
+                          </TabsList>
+                        </Tabs>
+                        {sdrQueue === "negative" && (
+                          <div className="rounded-lg border border-violet-400/20 bg-violet-400/[0.05] p-3 text-xs text-muted-foreground">
+                            Negativas ficam fora de “Leads ativos”. Nesta fila, o SDR agenda e registra cada tentativa de remarketing ou reativa o lead quando houver uma nova oportunidade.
+                          </div>
+                        )}
+                      </div>
                     )}
                     <Tabs value={mode} onValueChange={setView}>
                       <TabsList className="h-auto flex flex-wrap justify-start gap-1">
