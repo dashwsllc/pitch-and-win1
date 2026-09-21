@@ -1,30 +1,47 @@
-import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { BarChart3, Eye, EyeOff, Lock } from 'lucide-react'
-import { supabase } from '@/integrations/supabase/client'
+import { BarChart3, Eye, EyeOff, Loader2, Lock } from 'lucide-react'
+import { hasRecoveryLink, hasRecoveryLinkError, isRecoverySession, supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { Turnstile, captchaRequired } from '@/components/security/Turnstile'
 import { emailSchema, firstIssue, publicAuthError, strongPasswordSchema } from '@/lib/auth-security'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  const { signOut } = useAuth()
   const { toast } = useToast()
-  const [searchParams] = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [requestSent, setRequestSent] = useState(false)
+  const [requestError, setRequestError] = useState<string | null>(null)
+  const [captchaKey, setCaptchaKey] = useState(0)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [view, setView] = useState<'request' | 'checking' | 'reset' | 'invalid'>(
+    hasRecoveryLink ? 'checking' : hasRecoveryLinkError ? 'invalid' : 'request'
+  )
 
-  const isResetMode = searchParams.has('access_token') || searchParams.has('code') || searchParams.get('type') === 'recovery'
+  useEffect(() => {
+    if (!hasRecoveryLink) return
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' || event === 'PASSWORD_RECOVERY') {
+        setView(isRecoverySession(session) ? 'reset' : 'invalid')
+      } else if (event === 'SIGNED_OUT') {
+        setView('invalid')
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setRequestError(null)
 
     const formData = new FormData(e.currentTarget)
     const emailResult = emailSchema.safeParse(formData.get('email'))
@@ -41,21 +58,24 @@ export default function ResetPassword() {
     }
 
     try {
-      // Send password reset email via Supabase Auth
       const { error } = await supabase.auth.resetPasswordForEmail(emailResult.data, {
         redirectTo: `${window.location.origin}/reset-password`,
         captchaToken: captchaToken ?? undefined,
       })
 
-      if (error) {
-        console.error('Error sending reset email:', error)
-      }
-
-      // Always show success to prevent email enumeration
+      if (error) throw error
+      // Supabase deliberately returns success for unknown addresses as well.
       setRequestSent(true)
     } catch (error) {
-      console.error('Error in handleForgotPassword:', error)
-      setRequestSent(true)
+      console.error('Error sending reset email:', error)
+      const status = typeof error === 'object' && error !== null && 'status' in error
+        ? Number((error as { status?: unknown }).status)
+        : 0
+      setRequestError(status === 429
+        ? 'Muitas tentativas de envio. Aguarde alguns minutos e tente novamente.'
+        : 'Não foi possível enviar o link agora. Tente novamente mais tarde ou fale com o administrador.')
+      setCaptchaToken(null)
+      setCaptchaKey(key => key + 1)
     } finally {
       setIsLoading(false)
     }
@@ -85,6 +105,11 @@ export default function ResetPassword() {
     }
 
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!isRecoverySession(session)) {
+        setView('invalid')
+        return
+      }
       const { error } = await supabase.auth.updateUser({ password: passwordResult.data })
 
       if (error) {
@@ -94,11 +119,12 @@ export default function ResetPassword() {
           variant: 'destructive'
         })
       } else {
+        await signOut()
         toast({
           title: 'Senha redefinida com sucesso!',
-          description: 'Você será redirecionado para o login'
+          description: 'Entre novamente com a nova senha.'
         })
-        setTimeout(() => navigate('/auth'), 2000)
+        navigate('/auth', { replace: true })
       }
     } catch (error: unknown) {
       toast({
@@ -123,7 +149,7 @@ export default function ResetPassword() {
           </div>
           <h1 className="text-3xl font-bold text-foreground mb-2">WS LTDA</h1>
           <p className="text-muted-foreground">
-            {isResetMode ? 'Redefinir sua senha' : 'Recuperar acesso à conta'}
+            {view === 'reset' ? 'Redefinir sua senha' : 'Recuperar acesso à conta'}
           </p>
         </div>
 
@@ -132,11 +158,23 @@ export default function ResetPassword() {
           <CardHeader className="pb-4">
             <CardTitle className="text-center text-foreground flex items-center justify-center gap-2">
               <Lock className="w-5 h-5" />
-              {isResetMode ? 'Nova Senha' : 'Esqueceu a Senha?'}
+              {view === 'reset' ? 'Nova Senha' : 'Esqueceu a Senha?'}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {isResetMode ? (
+            {view === 'checking' ? (
+              <div className="flex items-center justify-center gap-2" role="status">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Verificando link de recuperação…
+              </div>
+            ) : view === 'invalid' ? (
+              <div className="space-y-4 text-center">
+                <p role="alert">Este link de recuperação é inválido ou expirou. Solicite um novo link.</p>
+                <Button className="w-full bg-gradient-primary hover:opacity-90" onClick={() => {
+                  window.location.assign('/reset-password')
+                }}>Solicitar novo link</Button>
+              </div>
+            ) : view === 'reset' ? (
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="password">Nova Senha</Label>
@@ -224,7 +262,8 @@ export default function ResetPassword() {
                       className="w-full"
                     />
                   </div>
-                  <Turnstile onToken={setCaptchaToken} />
+                  <Turnstile key={captchaKey} onToken={setCaptchaToken} />
+                  {requestError && <p role="alert" className="text-sm text-destructive">{requestError}</p>}
                   <Button
                     type="submit"
                     className="w-full bg-gradient-primary hover:opacity-90"

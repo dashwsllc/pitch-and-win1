@@ -4,6 +4,7 @@ import {
   RefreshCcw,
   MessageSquareText,
   UserRound,
+  Upload,
 } from "lucide-react";
 import type { CRMLead } from "@/hooks/useCRM";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +16,7 @@ import { callDate } from "@/lib/crm";
 import { brasiliaDateKey } from "@/lib/brasilia-time";
 import { inRemarketing } from "@/lib/crm-results";
 import { REMARKETING_STATUS_LABELS } from "@/lib/crm-qualification";
+import { CRMRemarketingImportDialog } from "./CRMRemarketingImportDialog";
 
 export function CRMRemarketingBoard({
   leads,
@@ -37,6 +39,7 @@ export function CRMRemarketingBoard({
   const [status, setStatus] = useState("active");
   const [owner, setOwner] = useState("all");
   const [day, setDay] = useState("");
+  const [importLead, setImportLead] = useState<CRMLead | null>(null);
   const all = leads.filter((l) =>
     ["lead_perdido", "fechado_perdido"].includes(l.pipeline_stage),
   );
@@ -250,13 +253,14 @@ export function CRMRemarketingBoard({
                   Ver histórico
                 </Button>
                 {canManage && (
-                  <Button
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => onManage(lead)}
-                  >
-                    Acompanhar lead
-                  </Button>
+                  <>
+                    <Button size="sm" variant="outline" disabled={busy} onClick={() => setImportLead(lead)}>
+                      <Upload className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />Importar .txt
+                    </Button>
+                    <Button size="sm" disabled={busy} onClick={() => onManage(lead)}>
+                      Acompanhar lead
+                    </Button>
+                  </>
                 )}
               </div>
             </article>
@@ -268,6 +272,7 @@ export function CRMRemarketingBoard({
           Nenhum lead encontrado para este acompanhamento.
         </div>
       )}
+      {importLead && <CRMRemarketingImportDialog key={importLead.id} lead={importLead} onClose={() => setImportLead(null)} />}
     </section>
   );
 }

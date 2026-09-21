@@ -2,7 +2,7 @@ project_id = "mbzwchnxtskysqplqiyy"
 
 [auth]
 site_url = "https://wsltda.com"
-additional_redirect_urls = ["https://www.wsltda.com", "https://wsltda.site", "https://www.wsltda.site", "http://localhost:5173", "http://localhost:8080"]
+additional_redirect_urls = ["https://www.wsltda.com", "https://wsltda.com/reset-password", "https://www.wsltda.com/reset-password", "https://wsltda.site", "https://wsltda.site/", "https://wsltda.site/reset-password", "https://www.wsltda.site", "https://www.wsltda.site/", "https://www.wsltda.site/reset-password", "http://localhost:5173", "http://localhost:5173/reset-password", "http://localhost:8080", "http://localhost:8080/reset-password"]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10

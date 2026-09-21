@@ -70,6 +70,7 @@ await context.route('https://**/*', async route => {
   else if (resource === 'profiles') data = url.searchParams.has('user_id') ? profile : [profile]
   else if (resource === 'user_roles') data = [{ id: actor, user_id: actor, role: 'executive', crm_access: true, commission_rate: 10 }]
   else if (resource === 'crm_leads') data = leads
+  else if (resource === 'crm_lead_contexts') data = []
   else if (resource === 'crm_activities') data = calls.filter(c => !url.searchParams.has('lead_id') || c.lead_id === url.searchParams.get('lead_id').slice(3))
   else if (resource === 'crm_call_assignees') data = [
     { user_id: actor, display_name: 'Gestor QA', role: 'executive' },
@@ -78,6 +79,11 @@ await context.route('https://**/*', async route => {
   ]
   else if (resource === 'crm_result_sale_links') data = sales
   else if (resource === 'get_sales_board') data = { items: [], total: 0, summary: { pending: 0, approved: 0, rejected: 0 }, fetched_at: now }
+  else if (resource === 'crm_import_txt_context_with_media') {
+    requests.push({ resource, payload })
+    data = { id: randomUUID(), lead_id: payload.p_lead_id, content: payload.p_content,
+      file_name: payload.p_source_name.replace(/\.txt$/i, '.md'), file_content: payload.p_source_content }
+  }
   else if (resource === 'crm_transition') {
     requests.push({ resource, payload })
     data = leads.find(l => l.id === payload.p_lead_id)
@@ -184,6 +190,23 @@ try {
   await expect(board.getByRole('article')).toHaveCount(0)
   await board.getByLabel('Data do próximo contato').fill(tomorrow)
   await expect(board.getByRole('article')).toHaveCount(1)
+  await board.getByRole('article', { name: 'Remarketing de Sem agenda' }).getByRole('button', { name: 'Importar .txt' }).click()
+  dialog = page.getByRole('dialog', { name: 'Importar contexto para remarketing' })
+  await expect(dialog).toContainText('não cria leads nem altera a situação')
+  await dialog.getByLabel('Tipo do conteúdo *').selectOption('call_transcript')
+  await dialog.getByLabel('Arquivo de texto do lead *').setInputFiles({
+    name: 'conversa.txt', mimeType: 'text/plain', buffer: Buffer.from('Contato do remarketing\r\nObjeção: preço', 'utf8'),
+  })
+  await expect(dialog.getByText('conversa.txt → conversa.md pronto para importar.')).toBeVisible()
+  await checkOverflow()
+  await page.screenshot({ path: '.verification.local/crm-remarketing-import-mobile.png', fullPage: true })
+  await dialog.getByRole('button', { name: 'Importar para este lead' }).click()
+  await expect(dialog).toHaveCount(0)
+  const imported = requests.find(r => r.resource === 'crm_import_txt_context_with_media')
+  assert.equal(imported.payload.p_lead_id, byName('Sem agenda').id)
+  assert.equal(imported.payload.p_context_type, 'call_transcript')
+  assert.equal(imported.payload.p_source_name, 'conversa.txt')
+  assert.equal(imported.payload.p_source_content, 'Contato do remarketing\r\nObjeção: preço')
   await checkOverflow()
   await page.screenshot({ path: '.verification.local/crm-remarketing-mobile.png', fullPage: true })
   await page.setViewportSize({ width: 1440, height: 1050 })
@@ -206,5 +229,5 @@ try {
   await expect(secondApproval.getByText('Rejeitada', { exact: true })).toBeVisible()
   await secondPage.close()
   assert.deepEqual(errors, [])
-  console.log('PASS: Daily scheduling, editable approach, approval/seller/date filters, both result layouts, SDR/Closer returns, linked sale preservation, remarketing actions, mobile layouts and automatic synchronization in two browser clients. Browser network mocked; no live data changed.')
+  console.log('PASS: Daily scheduling, editable approach, approval/seller/date filters, both result layouts, SDR/Closer returns, linked sale preservation, remarketing TXT import and actions, mobile layouts and automatic synchronization in two browser clients. Browser network mocked; no live data changed.')
 } finally { await browser.close() }
