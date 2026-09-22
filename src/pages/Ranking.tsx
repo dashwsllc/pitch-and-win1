@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useRankingDataWithMock } from "@/hooks/useRankingDataWithMock"
 import { cn } from "@/lib/utils"
-import { AnimatedCounter } from "@/components/dashboard/AnimatedCounter"
-import { Trophy, Medal, Award, TrendingUp, Target, Crown, ChevronDown, ChevronUp, Gift, Percent, DollarSign, Flame, Star, Zap } from "lucide-react"
+import { SDRRanking } from "@/components/ranking/SDRRanking"
+import { SDRRewards } from "@/components/ranking/SDRRewards"
+import { Trophy, Medal, Award, Target, Crown, ChevronDown, ChevronUp, Gift, Percent, Star, Zap } from "lucide-react"
 import gsap from 'gsap'
 
 const avatarColors = [
@@ -23,12 +24,13 @@ const avatarColors = [
 ]
 
 export default function Ranking() {
-  const { ranking, loading, error } = useRankingDataWithMock()
+  const { ranking, sdrRanking, loading, error, sdrError } = useRankingDataWithMock()
   const [showFullRanking, setShowFullRanking] = useState(true)
   const podiumRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const rankingData = ranking.map((user, index) => ({
+    id: user.user_id,
     position: index + 1,
     name: user.name,
     avatarUrl: user.avatarUrl,
@@ -38,6 +40,7 @@ export default function Ranking() {
       currency: 'BRL' 
     }).format(user.totalVendas),
     deals: user.quantidadeVendas,
+    approaches: user.abordagens,
     conversion: `${user.conversao.toFixed(1)}%`,
     isCurrentUser: user.isCurrentUser
   }))
@@ -45,14 +48,17 @@ export default function Ranking() {
   // GSAP podium animation
   useEffect(() => {
     if (!loading && podiumRef.current) {
-      const children = podiumRef.current.children
-      if (children.length >= 3) {
-        const tl = gsap.timeline()
-        // Animate 3rd, then 2nd, then 1st (dramatic reveal)
-        tl.fromTo(children[2], { opacity: 0, y: 60, scale: 0.85 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'back.out(1.5)' })
-          .fromTo(children[0], { opacity: 0, y: 60, scale: 0.85 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'back.out(1.5)' }, '-=0.35')
-          .fromTo(children[1], { opacity: 0, y: 80, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.8, ease: 'back.out(2)' }, '-=0.35')
-      }
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+      const children = Array.from(podiumRef.current.children)
+      const revealOrder = children.length >= 3 ? [children[2], children[0], children[1]] : children
+      const context = gsap.context(() => {
+        gsap.fromTo(
+          revealOrder,
+          { opacity: 0, y: 56, scale: 0.88 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.65, stagger: 0.16, ease: 'back.out(1.6)' },
+        )
+      }, podiumRef)
+      return () => context.revert()
     }
   }, [loading])
 
@@ -104,10 +110,10 @@ export default function Ranking() {
             </div>
             <div>
               <h1 className="text-3xl font-light text-foreground tracking-tight">
-                Ranking de <span className="font-semibold">Sellers</span>
+                Ranking de <span className="font-semibold">Closers</span>
               </h1>
               <p className="text-muted-foreground mt-0.5">
-                Ranking acumulado do time · somente vendas aprovadas.
+                Somente colaboradores marcados como Closer · vendas aprovadas · Super Admins excluídos.
               </p>
             </div>
           </div>
@@ -133,9 +139,10 @@ export default function Ranking() {
                 <h3 className="text-lg font-semibold text-foreground">{rankingData[1].name}</h3>
                 {rankingData[1].isCurrentUser && <Badge variant="outline" className="border-ember/40 text-ember text-xs mt-1">Você</Badge>}
                 <p className="text-2xl font-bold text-foreground mt-3">{rankingData[1].sales}</p>
-                <div className="grid grid-cols-2 gap-3 mt-3 text-sm">
+                <div className="grid grid-cols-3 gap-3 mt-3 text-sm">
                   <div><p className="font-semibold">{rankingData[1].deals}</p><p className="text-xs text-muted-foreground">Vendas</p></div>
-                  <div><p className="font-semibold">{rankingData[1].conversion}</p><p className="text-xs text-muted-foreground">Conversão</p></div>
+                  <div><p className="font-semibold">{rankingData[1].approaches}</p><p className="text-xs text-muted-foreground">Abordagens</p></div>
+                  <div title={`${rankingData[1].deals} vendas aprovadas ÷ ${rankingData[1].approaches} abordagens`}><p className="font-semibold">{rankingData[1].conversion}</p><p className="text-xs text-muted-foreground">Conversão</p></div>
                 </div>
               </CardContent>
             </Card>
@@ -145,6 +152,7 @@ export default function Ranking() {
           {rankingData[0] && (
             <Card className={cn(
               'relative overflow-hidden border-border/30 transition-all hover:scale-[1.02] md:order-2 md:-mt-4',
+              rankingData.length === 1 && 'md:col-start-2',
               rankingData[0].isCurrentUser && 'animate-glow-ember'
             )} style={{ boxShadow: 'rgba(255, 142, 93, 0.15) 0px 0px 0px 1px inset, rgba(255, 142, 93, 0.1) 0px 4px 24px 0px' }}>
               <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-ember" />
@@ -164,9 +172,10 @@ export default function Ranking() {
                 <h3 className="text-xl font-bold text-foreground">{rankingData[0].name}</h3>
                 {rankingData[0].isCurrentUser && <Badge variant="outline" className="border-ember/40 text-ember text-xs mt-1">Você</Badge>}
                 <p className="text-3xl font-bold text-foreground mt-4">{rankingData[0].sales}</p>
-                <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+                <div className="grid grid-cols-3 gap-4 mt-4 text-sm">
                   <div><p className="text-lg font-bold">{rankingData[0].deals}</p><p className="text-xs text-muted-foreground">Vendas</p></div>
-                  <div><p className="text-lg font-bold">{rankingData[0].conversion}</p><p className="text-xs text-muted-foreground">Conversão</p></div>
+                  <div><p className="text-lg font-bold">{rankingData[0].approaches}</p><p className="text-xs text-muted-foreground">Abordagens</p></div>
+                  <div title={`${rankingData[0].deals} vendas aprovadas ÷ ${rankingData[0].approaches} abordagens`}><p className="text-lg font-bold">{rankingData[0].conversion}</p><p className="text-xs text-muted-foreground">Conversão</p></div>
                 </div>
               </CardContent>
             </Card>
@@ -190,9 +199,10 @@ export default function Ranking() {
                 <h3 className="text-lg font-semibold text-foreground">{rankingData[2].name}</h3>
                 {rankingData[2].isCurrentUser && <Badge variant="outline" className="border-ember/40 text-ember text-xs mt-1">Você</Badge>}
                 <p className="text-2xl font-bold text-foreground mt-3">{rankingData[2].sales}</p>
-                <div className="grid grid-cols-2 gap-3 mt-3 text-sm">
+                <div className="grid grid-cols-3 gap-3 mt-3 text-sm">
                   <div><p className="font-semibold">{rankingData[2].deals}</p><p className="text-xs text-muted-foreground">Vendas</p></div>
-                  <div><p className="font-semibold">{rankingData[2].conversion}</p><p className="text-xs text-muted-foreground">Conversão</p></div>
+                  <div><p className="font-semibold">{rankingData[2].approaches}</p><p className="text-xs text-muted-foreground">Abordagens</p></div>
+                  <div title={`${rankingData[2].deals} vendas aprovadas ÷ ${rankingData[2].approaches} abordagens`}><p className="font-semibold">{rankingData[2].conversion}</p><p className="text-xs text-muted-foreground">Conversão</p></div>
                 </div>
               </CardContent>
             </Card>
@@ -218,12 +228,15 @@ export default function Ranking() {
             <CollapsibleContent>
               <CardContent className="pt-0">
                 <div ref={listRef} className="space-y-2">
+                  {!error && rankingData.length === 0 && (
+                    <p className="p-5 text-center text-sm text-muted-foreground">Nenhum Closer elegível no ranking.</p>
+                  )}
                   {rankingData.map((seller) => {
                     const barWidth = (seller.salesValue / maxSales) * 100
                     
                     return (
                       <div 
-                        key={seller.position}
+                        key={seller.id}
                         className={cn(
                           'flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group',
                           seller.isCurrentUser 
@@ -293,6 +306,10 @@ export default function Ranking() {
                             <p className="text-[10px] text-muted-foreground">Vendas</p>
                           </div>
                           <div className="text-center">
+                            <p className="text-sm font-semibold">{seller.approaches}</p>
+                            <p className="text-[10px] text-muted-foreground">Abordagens</p>
+                          </div>
+                          <div className="text-center" title={`${seller.deals} vendas aprovadas ÷ ${seller.approaches} abordagens`}>
                             <p className="text-sm font-semibold">{seller.conversion}</p>
                             <p className="text-[10px] text-muted-foreground">Conversão</p>
                           </div>
@@ -312,6 +329,8 @@ export default function Ranking() {
           </Card>
         </Collapsible>
 
+        <SDRRanking ranking={sdrRanking} error={sdrError} />
+
         {/* Prêmios e Bônus */}
         <Card className="border-border/30 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-ember/30 to-transparent" />
@@ -320,13 +339,14 @@ export default function Ranking() {
           <CardHeader className="relative">
             <CardTitle className="text-xl font-light text-foreground flex items-center gap-3">
               <Gift className="w-6 h-6 text-amber-400" />
-              Prêmios e <span className="font-semibold">Bônus de Comissão</span>
+              <span className="font-semibold">Prêmios e Bônus de Comissão</span>
             </CardTitle>
             <p className="text-muted-foreground text-sm">
-              Sistema de recompensas para alta performance
+              Recompensas para colaboradores elegíveis. Super Admins não participam dos bônus.
             </p>
           </CardHeader>
           <CardContent className="relative">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">Closers</h3>
             <div className="grid gap-4 md:grid-cols-3">
               {/* Bônus Principal */}
               <Card className="border-ember/20 bg-ember/[0.03]">
@@ -340,7 +360,7 @@ export default function Ranking() {
                     Comissionamento extra para alta performance
                   </p>
                   <Badge className="bg-success/10 text-success border-success/20">
-                    Total: 22% de Comissão
+                    Conforme comissão-base individual
                   </Badge>
                 </CardContent>
               </Card>
@@ -354,7 +374,7 @@ export default function Ranking() {
                   <h3 className="text-lg font-semibold text-foreground mb-1">1º Lugar</h3>
                   <p className="text-3xl font-bold text-amber-400 mb-2">R$ 5.000</p>
                   <p className="text-xs text-muted-foreground mb-3">
-                    Prêmio em dinheiro para o Seller #1
+                    Prêmio em dinheiro para o Closer #1
                   </p>
                   <Badge className="bg-amber-400/10 text-amber-400 border-amber-400/20">
                     Closer do Mês
@@ -424,6 +444,9 @@ export default function Ranking() {
                   </ul>
                 </CardContent>
               </Card>
+            </div>
+            <div className="mt-6">
+              <SDRRewards />
             </div>
           </CardContent>
         </Card>

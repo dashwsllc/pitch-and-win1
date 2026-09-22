@@ -64,6 +64,8 @@ export function CRMLeadCard({
   sale,
   emphasizeCall = false,
   hasContext = false,
+  showContextStatus = false,
+  pipelineDate,
   onRead,
   onEdit,
   onDelete,
@@ -80,6 +82,8 @@ export function CRMLeadCard({
   sale?: { sale_id: string | null; can_open: boolean };
   emphasizeCall?: boolean;
   hasContext?: boolean;
+  showContextStatus?: boolean;
+  pipelineDate?: string | null;
   onRead: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -246,6 +250,12 @@ export function CRMLeadCard({
           {PIPELINE_STAGES.find((s) => s.value === lead.pipeline_stage)
             ?.label || lead.pipeline_stage}
         </Badge>
+        {showContextStatus && (
+          <Badge variant="outline" className={`h-5 px-2 text-[10px] ${hasContext ? 'border-primary/35 text-primary' : 'text-muted-foreground'}`}>
+            <BookOpen className="mr-1 h-3 w-3" />
+            {hasContext ? 'Contexto disponível' : 'Sem contexto'}
+          </Badge>
+        )}
         {incomplete && (
           <Badge variant="outline" className="h-5 px-2 text-[10px] text-amber-400">
             Cadastro incompleto
@@ -280,6 +290,12 @@ export function CRMLeadCard({
         )}
       </div>
       <div className="text-[11px] leading-4 text-muted-foreground">
+        {pipelineDate && (
+          <p className="flex items-center gap-1 truncate">
+            <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+            Data da etapa: {callDate(pipelineDate)}
+          </p>
+        )}
         <p className="truncate" title={`SDR: ${names[lead.sdr_id || ""] || (lead.sdr_id ? "Usuário anterior" : "Sem responsável")} · Closer: ${names[lead.closer_id || ""] || (lead.closer_id ? "Usuário anterior" : handed ? "Fila compartilhada" : "Sem responsável")}`}>
           SDR:{" "}
           {names[lead.sdr_id || ""] ||

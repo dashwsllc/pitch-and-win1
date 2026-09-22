@@ -10,8 +10,6 @@ import {
   Trash2,
   RefreshCcw,
   PhoneCall,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,7 +55,8 @@ import { CRMRemarketingDialog } from "@/components/crm/CRMRemarketingDialog";
 import { CRMResults } from "@/components/crm/CRMResults";
 import { CRMRemarketingBoard } from "@/components/crm/CRMRemarketingBoard";
 import { CRMReturnDialog } from "@/components/crm/CRMReturnDialog";
-import { leadResult, leadScheduledOn } from "@/lib/crm-results";
+import { leadResult } from "@/lib/crm-results";
+import { CRMLeadPeriodFilter } from "@/components/crm/CRMLeadPeriodFilter";
 import { CRMUserManagement } from "@/components/crm/CRMUserManagement";
 import { CRMPermissionsReport } from "@/components/crm/CRMPermissionsReport";
 import {
@@ -77,6 +76,13 @@ import {
   nextLeadSchedule,
 } from "@/lib/crm-order";
 import { CRM_CLOCK_INTERVAL_MS } from "@/lib/sync";
+import {
+  createDefaultCRMPipelineRange,
+  leadApproachReference,
+  leadMatchesPipelinePeriod,
+  resolveCRMPipelinePeriod,
+  type CRMPipelinePeriod,
+} from "@/lib/crm-pipeline-period";
 
 const temperatures = [
   { value: "frio", label: "Frios" },
@@ -87,6 +93,7 @@ const approachFilters = [
   { value: "nao_abordado", label: "Não abordado" },
   { value: "em_abordagem", label: "Em abordagem" },
   { value: "abordado", label: "Abordado" },
+  { value: "reabordado", label: "Re-abordado" },
 ];
 const closedStages = ["fechado_ganho", "fechado_perdido", "lead_perdido"];
 const negativeStages = ["fechado_perdido", "lead_perdido"];
@@ -188,7 +195,8 @@ export default function CRM() {
   const [callDateKey, setCallDateKey] = useState("");
   const [order, setOrder] = useState("newest");
   const [view, setView] = useState("list");
-  const [pipelineDay, setPipelineDay] = useState(() => brasiliaDateKey());
+  const [pipelinePeriod, setPipelinePeriod] = useState<CRMPipelinePeriod>("today");
+  const [pipelineCustomRange, setPipelineCustomRange] = useState(createDefaultCRMPipelineRange);
   const [queue, setQueue] = useState("queue");
   const [sdrQueue, setSdrQueue] = useState(
     requestedTab === "remarketing" ? "negative" : "active",
@@ -290,12 +298,14 @@ export default function CRM() {
   const showResults = tab === "results" || (tab === "closer" && queue === "closed") || (tab === "sdr" && sdrQueue === "closed");
   const showRemarketing = tab === "remarketing" || (tab === "sdr" && sdrQueue === "negative");
   const dailyPipeline = view === "pipeline" && ["leads", "sdr"].includes(tab) && !showResults && !showRemarketing;
-  const pipelineCalls = new Map<string, (string | null)[]>();
-  callsQuery.activities.filter(call => !call.is_completed).forEach(call => {
-    pipelineCalls.set(call.lead_id, [...(pipelineCalls.get(call.lead_id) || []), call.scheduled_at]);
-  });
   const todayKey = brasiliaDateKey(now);
   const tomorrowKey = addDaysToDateKey(todayKey, 1);
+  const pipelineRange = resolveCRMPipelinePeriod(pipelinePeriod, pipelineCustomRange, todayKey);
+  const pipelinePeriodLabel = pipelineRange.allTime
+    ? "todo o período"
+    : pipelineRange.startKey === pipelineRange.endKey
+      ? formatDateKey(pipelineRange.startKey || "")
+      : `${formatDateKey(pipelineRange.startKey || "")} a ${formatDateKey(pipelineRange.endKey || "")}`;
   const selectedCallDateKey =
     callDateFilter === "today"
       ? todayKey
@@ -311,9 +321,7 @@ export default function CRM() {
           .toLocaleLowerCase()
           .includes(search.toLocaleLowerCase()) &&
         (!temperature.length || temperature.includes(lead.temperature)) &&
-        (!approach.length ||
-          approach.includes(lead.approach_stage) ||
-          (approach.includes("abordado") && lead.approach_stage === "reabordado")) &&
+        (!approach.length || approach.includes(lead.approach_stage)) &&
         (pipeline === "all" || lead.pipeline_stage === pipeline) &&
         (owner === "all" ||
           lead.sdr_id === owner ||
@@ -342,10 +350,13 @@ export default function CRM() {
     .filter(
       (lead) =>
         dailyPipeline
-          ? leadScheduledOn(lead, pipelineCalls.get(lead.id) || [], pipelineDay)
+          ? leadMatchesPipelinePeriod(lead, pipelineRange)
           : callDateFilter === "all" || callMatchesDateKey(openCalls.get(lead.id), selectedCallDateKey),
     )
     .sort((a, b) => {
+      if (dailyPipeline && order === "newest") {
+        return Date.parse(leadApproachReference(b) || "") - Date.parse(leadApproachReference(a) || "") || compareLeadRecency(a, b);
+      }
       if (callDateFilter !== "all" && !dailyPipeline) {
         return (
           compareCallProximity(
@@ -380,6 +391,8 @@ export default function CRM() {
         ? temperatures
         : mode === "approach"
           ? APPROACH_STAGES
+          : mode === "pipeline"
+            ? APPROACH_STAGES
           // Na aba SDR, "Enviados ao Closer" nunca teria lead (já são
           // excluídos acima); a coluna some para não ficar sempre vazia. Na
           // aba Leads, que mostra tudo, a coluna continua aparecendo.
@@ -393,6 +406,8 @@ export default function CRM() {
         ? lead.temperature
         : mode === "approach"
           ? lead.approach_stage
+          : mode === "pipeline"
+            ? lead.approach_stage
           : sdrGroup(lead);
   const selected = crm.leads.find((l) => l.id === readId);
   const run = async (
@@ -469,6 +484,8 @@ export default function CRM() {
       sale={saleMap.get(lead.id)}
       emphasizeCall={lead.pipeline_stage === "repassado_closer"}
       hasContext={contextSummary.leadIds.has(lead.id)}
+      showContextStatus={dailyPipeline}
+      pipelineDate={dailyPipeline ? leadApproachReference(lead) : null}
       busy={busy}
       onRead={() => setReadId(lead.id)}
       onEdit={() => setEditor(lead)}
@@ -692,7 +709,10 @@ export default function CRM() {
                     )}
                     {!showResults && !showRemarketing && <Tabs value={mode} onValueChange={value => {
                       setView(value);
-                      if (value === "pipeline" && callDateFilter !== "all" && selectedCallDateKey) setPipelineDay(selectedCallDateKey);
+                      if (value === "pipeline" && callDateFilter !== "all" && selectedCallDateKey) {
+                        setPipelineCustomRange({ start: selectedCallDateKey, end: selectedCallDateKey });
+                        setPipelinePeriod("custom");
+                      }
                     }}>
                       <TabsList className="h-auto flex flex-wrap justify-start gap-1">
                         {[
@@ -713,14 +733,17 @@ export default function CRM() {
                   onRead={lead => setReadId(lead.id)} onReturn={(lead, target) => setReturning({ lead, target })} onRemarketing={setRemarketing} />
                   : showRemarketing ? <CRMRemarketingBoard leads={crm.leads} names={names} now={now} busy={busy} onRead={lead => setReadId(lead.id)} onManage={setRemarketing} />
                   : <>
-                {dailyPipeline && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
-                  <div><h2 className="font-semibold">Esteira do LEAD</h2><p className="text-xs text-muted-foreground">Calls e retornos marcados para {isValidDateKey(pipelineDay) ? formatDateKey(pipelineDay) : "a data selecionada"} · Brasília</p></div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button size="icon" variant="outline" aria-label="Dia anterior da esteira" disabled={!isValidDateKey(pipelineDay)} onClick={() => setPipelineDay(addDaysToDateKey(pipelineDay, -1))}><ChevronLeft className="h-4 w-4" /></Button>
-                    <Input type="date" aria-label="Dia da Esteira do LEAD" className="w-auto" value={pipelineDay} onChange={e => setPipelineDay(e.target.value)} />
-                    <Button size="icon" variant="outline" aria-label="Próximo dia da esteira" disabled={!isValidDateKey(pipelineDay)} onClick={() => setPipelineDay(addDaysToDateKey(pipelineDay, 1))}><ChevronRight className="h-4 w-4" /></Button>
-                    <Button variant="outline" onClick={() => setPipelineDay(todayKey)}>Hoje</Button>
+                {dailyPipeline && <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                  <div>
+                    <h2 className="font-semibold">Esteira do LEAD</h2>
+                    <p className="text-xs text-muted-foreground">Não abordados, em abordagem, abordados e re-abordados em {pipelinePeriodLabel} · data da etapa em Brasília.</p>
                   </div>
+                  <CRMLeadPeriodFilter
+                    value={pipelinePeriod}
+                    onValueChange={setPipelinePeriod}
+                    customRange={pipelineCustomRange}
+                    onCustomRangeChange={setPipelineCustomRange}
+                  />
                 </div>}
                 <div className="rounded-lg border bg-card/80 p-2.5">
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1.8fr)_repeat(5,minmax(120px,1fr))]">
@@ -848,7 +871,7 @@ export default function CRM() {
                       Somente atrasados
                     </label>
                     <span>
-                      {filtered.length} de {visibleLeadCount} leads nesta área · {dailyPipeline ? "agendados para o dia selecionado" : callDateFilter !== "all"
+                      {filtered.length} de {visibleLeadCount} leads nesta área · {dailyPipeline ? `etapa de abordagem em ${pipelinePeriodLabel}` : callDateFilter !== "all"
                         ? "calls mais próximas primeiro"
                         : order === "newest"
                           ? "mais recentes primeiro"
@@ -863,7 +886,7 @@ export default function CRM() {
                 <div
                   className={
                     groups.length > 1
-                      ? "grid items-start gap-3 xl:grid-cols-3"
+                      ? `grid items-start gap-3 ${dailyPipeline ? "lg:grid-cols-2 2xl:grid-cols-4" : "xl:grid-cols-3"}`
                       : "space-y-3"
                   }
                 >
@@ -891,7 +914,7 @@ export default function CRM() {
                           </div>
                         ) : (
                           <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-                            {dailyPipeline ? "Nenhum lead agendado para este dia com os filtros selecionados." : "Nenhum lead nesta visualização."}
+                            {dailyPipeline ? "Nenhum lead nesta etapa durante o período selecionado." : "Nenhum lead nesta visualização."}
                           </div>
                         )}
                       </section>

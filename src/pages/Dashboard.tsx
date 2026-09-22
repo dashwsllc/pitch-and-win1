@@ -46,7 +46,7 @@ export default function Dashboard() {
   const [customRange, setCustomRange] = useState(createDefaultDashboardCustomRange)
   const { user } = useAuth()
   const { metrics, loading, error, refetch } = useDashboardData(selectedFilter, customRange)
-  const { ranking } = useRankingDataWithMock()
+  const { ranking, sdrRanking } = useRankingDataWithMock()
   const { profile } = useProfile()
   const { isExecutive } = useRoles()
   const dashboardRef = useRef<HTMLDivElement>(null)
@@ -55,7 +55,11 @@ export default function Dashboard() {
   useGSAP()
 
   const userName = profile?.display_name || user?.user_metadata?.display_name || user?.email?.split('@')[0] || "Usuário"
-  const userPosition = ranking.findIndex(r => r.isCurrentUser) + 1
+  const closerPosition = ranking.findIndex(r => r.isCurrentUser) + 1
+  const sdrPosition = sdrRanking.findIndex(r => r.isCurrentUser) + 1
+  const userPosition = closerPosition || sdrPosition
+  const rankingLabel = closerPosition ? 'Closers' : sdrPosition ? 'SDRs' : ''
+  const rankingSize = closerPosition ? ranking.length : sdrRanking.length
   
   const currentTime = useLiveClock()
 
@@ -156,7 +160,7 @@ export default function Dashboard() {
               {userPosition > 0 && (
                 <Badge className="h-10 gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.045] px-3.5 text-xs font-medium text-ash hover:bg-white/[0.065]">
                   <Crown className="h-3.5 w-3.5 text-amber-400" />
-                  #{userPosition} no ranking
+                  #{userPosition} no ranking de {rankingLabel}
                 </Badge>
               )}
 
@@ -266,7 +270,7 @@ export default function Dashboard() {
           <MetricCard
             title="Posição Ranking"
             value={userPosition > 0 ? `#${userPosition}` : '—'}
-            subtitle={userPosition > 0 ? 'de ' + ranking.length + ' Sellers' : 'Ranking não iniciado'}
+            subtitle={userPosition > 0 ? `de ${rankingSize} ${rankingLabel}` : 'Ranking não iniciado'}
             icon={<Medal className="h-5 w-5" strokeWidth={1.8} />}
             accent="ember"
             loading={loading}

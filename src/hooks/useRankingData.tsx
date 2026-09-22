@@ -4,4 +4,5 @@
 export {
   useRankingDataWithMock as useRankingData,
   type RankingUser,
+  type SDRRankingUser,
 } from './useRankingDataWithMock'

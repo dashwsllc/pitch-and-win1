@@ -8,6 +8,21 @@ export interface RankingUser {
   avatarUrl: string | null
   totalVendas: number
   quantidadeVendas: number
+  abordagens: number
+  conversao: number
+  isCurrentUser?: boolean
+}
+
+export interface SDRRankingUser {
+  user_id: string
+  name: string
+  avatarUrl: string | null
+  totalLeads: number
+  leadsAbordados: number
+  abordagens: number
+  repasses: number
+  vendasOriginadas: number
+  receitaOriginada: number
   conversao: number
   isCurrentUser?: boolean
 }
@@ -25,5 +40,24 @@ export function useRankingDataWithMock() {
     },
     staleTime: 10_000,
   })
-  return { ranking: query.data ?? [], loading: query.isPending, error: query.error?.message ?? null }
+  const sdrQuery = useQuery({
+    queryKey: ['sdr-ranking', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_sdr_ranking')
+      if (error) throw error
+      return (data as unknown as SDRRankingUser[]).map(sdr => ({
+        ...sdr,
+        isCurrentUser: sdr.user_id === user?.id,
+      }))
+    },
+    staleTime: 10_000,
+  })
+  return {
+    ranking: query.data ?? [],
+    sdrRanking: sdrQuery.data ?? [],
+    loading: query.isPending || sdrQuery.isPending,
+    error: query.error?.message ?? null,
+    sdrError: sdrQuery.error?.message ?? null,
+  }
 }

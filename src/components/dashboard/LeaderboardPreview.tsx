@@ -57,7 +57,7 @@ export function LeaderboardPreview() {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base font-medium tracking-[-0.015em] text-white">
             <Trophy className="h-4 w-4 text-amber-400" strokeWidth={1.8} />
-            Top Sellers
+            Top Closers
           </CardTitle>
           <Button
             variant="ghost"
@@ -73,7 +73,7 @@ export function LeaderboardPreview() {
       
       <CardContent ref={containerRef} className="space-y-1 p-3">
         {error && <p role="alert" className="p-3 text-xs text-destructive">Não foi possível atualizar o ranking.</p>}
-        {!error && top5.length === 0 && <p className="p-5 text-center text-sm text-muted-foreground">Nenhum Seller ativo no ranking.</p>}
+        {!error && top5.length === 0 && <p className="p-5 text-center text-sm text-muted-foreground">Nenhum Closer elegível no ranking.</p>}
         {top5.map((seller, index) => {
           const barWidth = (seller.totalVendas / maxSales) * 100
           const isCurrentUser = seller.isCurrentUser

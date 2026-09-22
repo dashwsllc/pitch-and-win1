@@ -1444,6 +1444,7 @@ export type Database = {
       }
       get_sales_board: { Args: { p_status?: string; p_search?: string; p_page?: number; p_page_size?: number }; Returns: Json }
       get_team_ranking: { Args: never; Returns: Json }
+      get_sdr_ranking: { Args: never; Returns: Json }
       get_company_goal_totals: { Args: never; Returns: Json }
       executive_cancel_withdrawal: { Args: { p_id: string; p_reason: string }; Returns: undefined }
       executive_set_crm_access: { Args: { p_user_id: string; p_enabled: boolean; p_reason: string }; Returns: undefined }

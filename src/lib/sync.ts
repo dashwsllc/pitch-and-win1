@@ -30,7 +30,7 @@ export async function refreshDashboardData(client: QueryClient) {
 // A successful write refreshes both mounted consumers and cached routes.
 export async function refreshSalesData(client: QueryClient) {
   notifyDashboardDataChanged()
-  await invalidateKeys(client, ['managed-sales', 'sales-balance', 'sales-board', 'team-ranking', 'crm', 'executive-audit', 'company-goals'])
+  await invalidateKeys(client, ['managed-sales', 'sales-balance', 'sales-board', 'team-ranking', 'sdr-ranking', 'crm', 'executive-audit', 'company-goals'])
 }
 
 export async function refreshApproachData(client: QueryClient) {
@@ -40,5 +40,5 @@ export async function refreshApproachData(client: QueryClient) {
 
 export async function refreshIdentityData(client: QueryClient) {
   notifyDashboardDataChanged()
-  await invalidateKeys(client, ['executive-users', 'team-ranking', 'sales-board'])
+  await invalidateKeys(client, ['executive-users', 'team-ranking', 'sdr-ranking', 'sales-board'])
 }
