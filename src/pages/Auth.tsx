@@ -142,7 +142,7 @@ export default function Auth() {
             setSubmittedEmail(null)
           }}>{session ? 'Sair da conta' : 'Voltar para entrar'}</Button>
         </div> : loading ? <div className="auth-loading" role="status">
-          <Loader2 className="animate-spin" aria-hidden="true" /><span>Verificando seu acesso…</span>
+          <Loader2 className="animate-spin" aria-hidden="true" /><span>Verificando credenciais…</span>
         </div> : <>
           <h2 id="auth-title">Acesse sua conta</h2>
           <p className="auth-card-subtitle">Seu time. Sua operação. Em um só lugar.</p>
