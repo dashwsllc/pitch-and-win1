@@ -108,12 +108,12 @@ export interface ExecutiveUser {
   user_roles: Tables<"user_roles">[];
 }
 
-export function useAllUsers() {
+export function useAllUsers(enabled = true) {
   const { user } = useAuth();
   const { isSuperAdmin, loading: rolesLoading } = useRoles();
   const query = useQuery({
     queryKey: ["executive-users", "directory", user?.id],
-    enabled: !!user && isSuperAdmin,
+    enabled: !!user && isSuperAdmin && enabled,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("executive_list_users");
       if (error) throw error;
@@ -126,7 +126,7 @@ export function useAllUsers() {
   return {
     users: query.data?.users ?? [],
     fetchedAt: query.data?.fetched_at ?? null,
-    loading: rolesLoading || (isSuperAdmin && query.isPending),
+    loading: rolesLoading || (isSuperAdmin && enabled && query.isPending),
     error: query.error,
     isFetching: query.isFetching,
     refetch: query.refetch,

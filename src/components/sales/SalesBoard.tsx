@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, CalendarClock, Check, ChevronLeft, ChevronRight, Clock3, Eye, Loader2, RefreshCw, Search, ShieldCheck, Trash2, X } from 'lucide-react'
+import { ArrowUpRight, CalendarClock, Check, ChevronLeft, ChevronRight, Clock3, Eye, Loader2, RefreshCw, Search, ShieldCheck, Trash2, UserRoundPen, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useSalesBoard } from '@/hooks/useSalesBoard'
 import { useRoles } from '@/hooks/useRoles'
+import { useSaleAssignees } from '@/hooks/useSaleAssignees'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
@@ -22,14 +23,17 @@ export function SalesBoard({ compact = false, management = false }: { compact?: 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(0)
-  const [selected, setSelected] = useState<{ sale: TeamSale; action: 'approve' | 'reject' | 'delete' | 'view' | 'reschedule' } | null>(null)
+  const [selected, setSelected] = useState<{ sale: TeamSale; action: 'approve' | 'reject' | 'delete' | 'view' | 'reschedule' | 'reassign' } | null>(null)
   const [reason, setReason] = useState('')
   const [rescheduledAt, setRescheduledAt] = useState('')
+  const [assigneeId, setAssigneeId] = useState('')
   const [busy, setBusy] = useState(false)
   const { isExecutive, hasRole } = useRoles()
   const { user } = useAuth()
   const canManage = management && isExecutive
   const canReschedule = !compact && hasRole('super_admin')
+  const canReassign = management && hasRole('super_admin')
+  const assigneeDirectory = useSaleAssignees(canReassign && selected?.action === 'reassign')
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const pageSize = compact ? 5 : 12
@@ -47,6 +51,7 @@ export function SalesBoard({ compact = false, management = false }: { compact?: 
   const choose = (sale: TeamSale, action: NonNullable<typeof selected>['action']) => {
     setReason('')
     setRescheduledAt(action === 'reschedule' ? isoToBrasiliaLocalInput(sale.created_at, true) : '')
+    setAssigneeId(action === 'reassign' ? sale.user_id : '')
     setSelected({ sale, action })
   }
   const submit = async () => {
@@ -54,9 +59,19 @@ export function SalesBoard({ compact = false, management = false }: { compact?: 
     setBusy(true)
     try {
       const isReschedule = selected.action === 'reschedule'
+      const isReassign = selected.action === 'reassign'
       const createdAt = isReschedule ? brasiliaLocalInputToIso(rescheduledAt) : null
       if (isReschedule && !createdAt) throw new Error('Informe uma data e um horário válidos.')
-      const { error } = isReschedule
+      if (isReassign && (!assigneeId || assigneeId === selected.sale.user_id)) throw new Error('Selecione um novo responsável pela venda.')
+      const { error } = isReassign
+        ? await supabase.rpc('manage_sale', {
+            p_sale_id: selected.sale.id,
+            p_action: 'edit',
+            p_expected_updated_at: selected.sale.updated_at,
+            p_data: { user_id: assigneeId },
+            p_reason: reason.trim(),
+          })
+        : isReschedule
         ? await supabase.rpc('super_admin_reschedule_sale', {
             p_sale_id: selected.sale.id,
             p_created_at: createdAt!,
@@ -71,7 +86,7 @@ export function SalesBoard({ compact = false, management = false }: { compact?: 
             p_expected_status: selected.sale.approval_status,
           })
       if (error) throw error
-      toast({ title: selected.action === 'approve' ? 'Venda aprovada e sincronizada' : selected.action === 'delete' ? 'Venda excluída. Registro preservado na auditoria.' : selected.action === 'reschedule' ? 'Data da compra remarcada e indicadores sincronizados' : 'Venda rejeitada' })
+      toast({ title: selected.action === 'approve' ? 'Venda aprovada e sincronizada' : selected.action === 'delete' ? 'Venda excluída. Registro preservado na auditoria.' : selected.action === 'reschedule' ? 'Data da compra remarcada e indicadores sincronizados' : selected.action === 'reassign' ? 'Responsável alterado e indicadores sincronizados' : 'Venda rejeitada' })
       setSelected(null)
       await refreshSalesData(queryClient)
     } catch (error) { toast({ title: 'Ação não concluída', description: errorMessage(error), variant: 'destructive' }) }
@@ -129,6 +144,7 @@ export function SalesBoard({ compact = false, management = false }: { compact?: 
               </div>
               {canManage && <div className="flex flex-wrap gap-1.5">
                 <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => choose(sale,'view')}><Eye className="mr-1 h-3.5 w-3.5" />Detalhes</Button>
+                {canReassign && <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => choose(sale,'reassign')}><UserRoundPen className="mr-1 h-3.5 w-3.5" />Responsável</Button>}
                 {sale.approval_status==='pendente' && <><Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-rose-300" onClick={() => choose(sale,'reject')}>Rejeitar</Button><Button size="sm" className="h-8 bg-emerald-500/15 px-3 text-xs text-emerald-300 hover:bg-emerald-500/25" onClick={() => choose(sale,'approve')}><Check className="mr-1 h-3.5 w-3.5" />Aprovar</Button></>}
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-rose-300" onClick={() => choose(sale,'delete')} aria-label={`Excluir venda de ${sale.seller_name}`}><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>}
@@ -138,13 +154,14 @@ export function SalesBoard({ compact = false, management = false }: { compact?: 
       </div>
       <Dialog open={!!selected} onOpenChange={open => { if (!open && !busy) setSelected(null) }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl" data-lenis-prevent>
-          <DialogHeader><DialogTitle>{selected?.action==='delete' ? 'Excluir esta venda?' : selected?.action==='approve' ? 'Confirmar aprovação' : selected?.action==='reject' ? 'Rejeitar solicitação' : selected?.action==='reschedule' ? 'Remarcar data da compra' : 'Detalhes da venda'}</DialogTitle><DialogDescription>{selected?.sale.seller_name} · {selected?.sale.nome_produto}{selected?.sale.ticket_name ? ` / ${selected.sale.ticket_name}` : null} · {money(selected?.sale.valor_venda ?? 0)}</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{selected?.action==='delete' ? 'Excluir esta venda?' : selected?.action==='approve' ? 'Confirmar aprovação' : selected?.action==='reject' ? 'Rejeitar solicitação' : selected?.action==='reschedule' ? 'Remarcar data da compra' : selected?.action==='reassign' ? 'Alterar responsável pela venda' : 'Detalhes da venda'}</DialogTitle><DialogDescription>{selected?.sale.seller_name} · {selected?.sale.nome_produto}{selected?.sale.ticket_name ? ` / ${selected.sale.ticket_name}` : null} · {money(selected?.sale.valor_venda ?? 0)}</DialogDescription></DialogHeader>
           {selected && <div className="space-y-4"><div className="rounded-xl bg-muted/30 p-4 text-sm"><p className="font-medium">{selected.sale.nome_comprador}</p><p className="mt-1 break-all text-muted-foreground">{selected.sale.email_comprador}</p><p className="text-muted-foreground">{selected.sale.whatsapp_comprador}</p><p className="mt-3 text-xs text-muted-foreground">{selected.sale.approval_status==='pendente' ? 'A comissão será calculada com a taxa vigente ao aprovar.' : `Comissão registrada: ${money(selected.sale.commission_amount ?? 0)}`}</p>{selected.sale.reviewer_name && selected.sale.reviewed_at && <p className="mt-1 text-xs text-muted-foreground">Revisado por {selected.sale.reviewer_name} · {exactDate(selected.sale.reviewed_at)}</p>}{selected.sale.rejection_reason && <p className="mt-2 text-xs text-rose-300">{selected.sale.rejection_reason}</p>}{selected.sale.consideracoes_gerais && <p className="mt-2 text-xs text-muted-foreground">{selected.sale.consideracoes_gerais}</p>}</div>
             {selected.action==='delete' && <p className="rounded-lg border border-rose-400/20 bg-rose-400/5 p-3 text-xs leading-relaxed text-rose-200">A venda sairá das métricas, metas e ranking. A comissão será retirada do saldo. O histórico completo ficará na auditoria. Se houver comissão comprometida com saque, a exclusão será bloqueada até a regularização.</p>}
             {selected.action==='reschedule' && <div className="space-y-2"><Label htmlFor="sale-created-at">Nova data e horário da compra (Brasília)</Label><Input id="sale-created-at" type="datetime-local" step="1" max={isoToBrasiliaLocalInput(new Date().toISOString(), true)} value={rescheduledAt} onChange={e => setRescheduledAt(e.target.value)} /><p className="text-xs leading-relaxed text-muted-foreground">Registro atual: {exactDate(selected.sale.created_at)} · Brasília. A correção reposiciona esta venda nos indicadores, metas e ranking sem alterar a data da aprovação.</p></div>}
+            {selected.action==='reassign' && <div className="space-y-2"><Label htmlFor="sale-assignee">Novo responsável</Label><select id="sale-assignee" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={assigneeId} disabled={assigneeDirectory.loading || !!assigneeDirectory.error} onChange={event => setAssigneeId(event.target.value)}>{!assigneeDirectory.assignees.some(person => person.user_id === assigneeId) && <option value={assigneeId}>{selected.sale.seller_name} (responsável atual)</option>}{assigneeDirectory.assignees.map(person => <option key={person.user_id} value={person.user_id}>{person.display_name}</option>)}</select><p className="text-xs leading-relaxed text-muted-foreground">A comissão será recalculada com a taxa do novo responsável. Saldos, ranking, metas e indicadores serão atualizados automaticamente.</p>{assigneeDirectory.error && <p role="alert" className="text-sm text-destructive">Não foi possível carregar os responsáveis disponíveis.</p>}</div>}
             {selected.action!=='view' && <div className="space-y-2"><Label htmlFor="decision-reason">{selected.action==='approve' ? 'Observação da conferência (opcional)' : selected.action==='reschedule' ? 'Motivo da correção (obrigatório)' : 'Motivo obrigatório'}</Label><Textarea id="decision-reason" value={reason} onChange={e => setReason(e.target.value)} maxLength={2000} rows={3} placeholder={selected.action==='reschedule' ? 'Ex.: venda registrada no dia incorreto' : 'Registre o contexto desta decisão'} /></div>}
           </div>}
-          <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setSelected(null)}>{selected?.action==='view' ? 'Fechar' : 'Cancelar'}</Button>{selected?.action!=='view' && <Button disabled={busy || (selected?.action!=='approve' && reason.trim().length<5) || (selected?.action==='reschedule' && (!brasiliaLocalInputToIso(rescheduledAt) || Date.parse(brasiliaLocalInputToIso(rescheduledAt)!) > Date.now()))} variant={selected?.action==='delete' ? 'destructive' : 'default'} onClick={submit}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{selected?.action==='delete' ? 'Excluir e registrar na auditoria' : selected?.action==='approve' ? 'Aprovar venda' : selected?.action==='reschedule' ? 'Remarcar e sincronizar' : 'Confirmar rejeição'}</Button>}</DialogFooter>
+          <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setSelected(null)}>{selected?.action==='view' ? 'Fechar' : 'Cancelar'}</Button>{selected?.action!=='view' && <Button disabled={busy || (selected?.action!=='approve' && reason.trim().length<5) || (selected?.action==='reschedule' && (!brasiliaLocalInputToIso(rescheduledAt) || Date.parse(brasiliaLocalInputToIso(rescheduledAt)!) > Date.now())) || (selected?.action==='reassign' && (assigneeDirectory.loading || !!assigneeDirectory.error || !assigneeId || assigneeId===selected.sale.user_id))} variant={selected?.action==='delete' ? 'destructive' : 'default'} onClick={submit}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{selected?.action==='delete' ? 'Excluir e registrar na auditoria' : selected?.action==='approve' ? 'Aprovar venda' : selected?.action==='reschedule' ? 'Remarcar e sincronizar' : selected?.action==='reassign' ? 'Alterar e sincronizar' : 'Confirmar rejeição'}</Button>}</DialogFooter>
         </DialogContent>
       </Dialog>
     </section>

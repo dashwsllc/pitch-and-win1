@@ -28,6 +28,7 @@ export interface TeamSale {
   valor_venda: number
   approval_status: keyof typeof saleStatus
   created_at: string
+  updated_at: string
   reviewed_at: string | null
   nome_comprador?: string
   email_comprador?: string
