@@ -20,9 +20,10 @@ export function CRMPermissionsReport() {
       </CardHeader>
       <CardContent className="space-y-3 p-4 pt-2">
         <p className="text-xs leading-4 text-muted-foreground">
-          SDR acessa a operação SDR; Closer acessa a operação Closer; Executive
-          opera as duas áreas sem receber funções administrativas; somente Super
-          Admin gerencia contas e permissões. Contas suspensas permanecem bloqueadas.
+          SDR acessa a operação SDR; Closer também acessa a operação SDR e mantém
+          as funções de Closer. Executive opera as duas áreas sem funções
+          administrativas; somente Super Admin gerencia contas e permissões.
+          Contas suspensas permanecem bloqueadas.
         </p>
         <Input
           className="h-9"

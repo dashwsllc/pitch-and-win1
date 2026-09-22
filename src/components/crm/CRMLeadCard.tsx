@@ -503,7 +503,7 @@ export function CRMLeadCard({
                 </DropdownMenuItem>
               </>
             )}
-            {call?.call_type === "qualificacao" && !call.is_completed && capabilities.sdr && (capabilities.executive || call.assigned_to === user?.id) && (
+            {call?.call_type === "qualificacao" && !call.is_completed && capabilities.sdr && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={onQualifyCall}>

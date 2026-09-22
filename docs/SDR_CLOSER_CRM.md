@@ -24,14 +24,17 @@ Mudanças de aquecimento/abordagem preservam repasse e fechamento. Devolver ao S
 
 | Papéis ativos | Leads | SDR | Closer | Registrar venda | Administração |
 | --- | --- | --- | --- | --- | --- |
-| executive / super_admin | Sim | Sim | Sim | Sim | Sim |
+| executive | Sim | Sim | Sim | Sim | Não |
+| super_admin | Sim | Sim | Sim | Sim | Sim |
 | sdr sem seller | Sim | Sim | Não | Não | Não |
-| closer (inclusive seller + closer) | Sim | Não | Sim | Sim | Não |
-| seller | Sim | Conforme papéis acumulados* | Sim | Sim | Não |
+| closer (inclusive seller + closer) | Sim | Sim | Sim | Sim | Não |
+| seller | Sim | Conforme papéis acumulados* | Conforme papéis acumulados* | Sim | Não |
 | Cargo externo + crm_access | Sim | Não | Não | Não | Não |
 | Suspenso ou sem acesso | Não | Não | Não | Não | Não |
 
-A capacidade de registrar venda acompanha Closer para completar o fluxo solicitado. Todo `seller` ativo acessa Closer e Vendas, inclusive quando também possui `sdr`; o acesso SDR continua vindo do papel `sdr` ou do fallback do seller sem papel comercial específico. Quem tiver ambos os papéis específicos acessa ambas as áreas. `crm_access` não bloqueia papéis comerciais. Contas suspensas ficam bloqueadas. Gerenciamento usa a central executiva existente, com revisão de conta, funções e auditoria; o relatório apresenta capacidades efetivas. Nenhuma conta pessoal foi reclassificada.
+A capacidade de registrar venda acompanha Closer para completar o fluxo solicitado. Closer herda a operação SDR, incluindo o registro do resultado de qualquer call de qualificação pendente da fila compartilhada; SDR não herda a operação Closer. Todo `seller` ativo acessa Vendas. Quem tiver ambos os papéis específicos acessa ambas as áreas. `crm_access` não bloqueia papéis comerciais. Contas suspensas ficam bloqueadas. Gerenciamento usa a central executiva existente, com revisão de conta, funções e auditoria; o relatório apresenta capacidades efetivas. Nenhuma conta pessoal foi reclassificada.
+
+A migration `20260922140000_closer_inherits_sdr_qualification.sql` alinha a matriz do banco à interface. O resultado da call pode ser registrado por SDR, Closer, Executive ou Super Admin enquanto a call estiver pendente; a operação guarda o autor real, valida a revisão da call e mantém as exigências de preenchimento. Um Seller sem esses papéis não recebe a ação.
 
 ## Banco, concorrência e sincronização
 

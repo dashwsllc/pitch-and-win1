@@ -15,6 +15,8 @@ INSERT INTO public.user_roles(user_id,role,crm_access) VALUES
 ('ce000000-0000-4000-8000-000000000005','closer',true);
 CREATE TEMP TABLE crm_remarketing_qa_state(qualified_id uuid,negative_id uuid,negative_version bigint);
 GRANT ALL ON crm_remarketing_qa_state TO authenticated;
+CREATE TEMP TABLE crm_remarketing_qa_calls(id uuid,updated_at timestamptz,actor text);
+GRANT ALL ON crm_remarketing_qa_calls TO authenticated;
 
 SELECT set_config('request.jwt.claims','{"sub":"ce000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
 SET LOCAL ROLE authenticated;
@@ -73,6 +75,74 @@ BEGIN
   INSERT INTO crm_remarketing_qa_state VALUES(
     (SELECT id FROM public.crm_leads WHERE name='Responsável qualificado'),l.id,l.version
   );
+END; $$;
+RESET ROLE;
+
+-- The SDR queue is shared: another SDR and a Closer can register a pending
+-- qualification result. Neither receives administrative privileges, and SDR
+-- still cannot operate as a Closer.
+SELECT set_config('request.jwt.claims','{"sub":"ce000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE l public.crm_leads; c public.crm_activities; BEGIN
+  IF NOT public.crm_can('sdr') OR public.crm_can('closer') THEN
+    RAISE EXCEPTION 'FAIL: SDR acquired Closer capability';
+  END IF;
+  INSERT INTO public.crm_leads(name,athlete_name,phone)
+    VALUES('Qualificação compartilhada SDR','Atleta SDR','11999999993') RETURNING * INTO l;
+  c:=public.schedule_closer_call(l.id,'qualificacao',now()+interval '1 day',auth.uid());
+  INSERT INTO crm_remarketing_qa_calls VALUES(c.id,c.updated_at,'sdr');
+  INSERT INTO public.crm_leads(name,athlete_name,phone)
+    VALUES('Qualificação compartilhada Closer','Atleta Closer','11999999994') RETURNING * INTO l;
+  c:=public.schedule_closer_call(l.id,'qualificacao',now()+interval '1 day',auth.uid());
+  INSERT INTO crm_remarketing_qa_calls VALUES(c.id,c.updated_at,'closer');
+END; $$;
+RESET ROLE;
+
+SELECT set_config('request.jwt.claims','{"sub":"ce000000-0000-4000-8000-000000000006","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE call_row record; BEGIN
+  SELECT * INTO call_row FROM crm_remarketing_qa_calls WHERE actor='sdr';
+  BEGIN
+    PERFORM public.resolve_sdr_qualification_call(call_row.id,'followup_sdr',call_row.updated_at,
+      jsonb_build_object('summary','Seller tentou concluir uma call SDR',
+        'next_at',(now()+interval '2 days')::text));
+    RAISE EXCEPTION 'FAIL: Seller concluded SDR qualification';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END; $$;
+RESET ROLE;
+
+SELECT set_config('request.jwt.claims','{"sub":"ce000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE c public.crm_activities; call_row record; BEGIN
+  SELECT * INTO call_row FROM crm_remarketing_qa_calls WHERE actor='sdr';
+  c:=public.resolve_sdr_qualification_call(call_row.id,'followup_sdr',call_row.updated_at,
+    jsonb_build_object('summary','Outro SDR concluiu a qualificação da fila compartilhada',
+      'next_at',(now()+interval '2 days')::text));
+  IF NOT c.is_completed OR c.outcome<>'followup_sdr' THEN
+    RAISE EXCEPTION 'FAIL: shared SDR qualification result';
+  END IF;
+END; $$;
+RESET ROLE;
+
+SELECT set_config('request.jwt.claims','{"sub":"ce000000-0000-4000-8000-000000000005","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE c public.crm_activities; call_row record; BEGIN
+  IF NOT public.crm_can('sdr') OR NOT public.crm_can('closer')
+     OR public.crm_can('executive') OR public.crm_can('admin') THEN
+    RAISE EXCEPTION 'FAIL: Closer capability inheritance';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.crm_call_assignees()
+    WHERE user_id=auth.uid() AND role='sdr') THEN
+    RAISE EXCEPTION 'FAIL: Closer missing from SDR assignees';
+  END IF;
+  SELECT * INTO call_row FROM crm_remarketing_qa_calls WHERE actor='closer';
+  c:=public.resolve_sdr_qualification_call(call_row.id,'followup_sdr',call_row.updated_at,
+    jsonb_build_object('summary','Closer concluiu a qualificação da fila compartilhada',
+      'next_at',(now()+interval '2 days')::text));
+  IF NOT c.is_completed OR c.outcome<>'followup_sdr' THEN
+    RAISE EXCEPTION 'FAIL: Closer qualification result';
+  END IF;
 END; $$;
 RESET ROLE;
 

@@ -15,7 +15,7 @@ export function crmCapabilities(
       (executive ||
         crmAccess ||
         roles.some((role) => ["seller", "sdr", "closer"].includes(role))),
-    sdr: active && (executive || roles.includes("sdr")),
+    sdr: active && (executive || roles.includes("sdr") || roles.includes("closer")),
     closer:
       active &&
       (executive || roles.includes("closer")),

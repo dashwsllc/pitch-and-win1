@@ -3,9 +3,9 @@ import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
-const migration = readFileSync(resolve(root, 'supabase/migrations/20260921120000_crm_remarketing_sdr_qualification_permissions.sql'), 'utf8')
+const migration = readFileSync(resolve(root, 'supabase/migrations/20260922140000_closer_inherits_sdr_qualification.sql'), 'utf8')
 const tests = readFileSync(resolve(root, 'supabase/tests/crm_remarketing_qualification.sql'), 'utf8')
-const body = migration.replace(/^--[^\n]*\n(?:--[^\n]*\n)*BEGIN;\s*/, '').replace(/COMMIT;\s*$/, '')
+const body = migration.slice(migration.indexOf('BEGIN;') + 'BEGIN;'.length).replace(/COMMIT;\s*$/, '')
 const directory = resolve(root, '.verification.local')
 mkdirSync(directory, { recursive: true })
 writeFileSync(
@@ -22,5 +22,5 @@ if (result.status !== 0) {
   console.error(result.stderr || result.stdout || result.error?.message)
   process.exitCode = result.status ?? 1
 } else {
-  console.log('PASS: CRM remarketing, SDR qualification data, role boundaries, ownership, Executive override and reactivation verified; fixtures rolled back.')
+  console.log('PASS: CRM remarketing, shared SDR and Closer qualification, role hierarchy, remarketing ownership and reactivation verified; fixtures rolled back.')
 }
