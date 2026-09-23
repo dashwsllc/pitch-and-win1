@@ -175,8 +175,8 @@ export function GoalManagement({
             {configuration ? "Configurações da Arena" : "Metas e ciclos"}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Meta individual prevalece sobre a meta do cargo. Alterações criam
-            versões; ciclos encerrados permanecem intactos.
+            Metas individuais têm acompanhamento próprio para o colaborador
+            escolhido. Alterações criam versões; ciclos encerrados permanecem intactos.
           </p>
         </div>
         <Button onClick={() => edit()}>Nova meta</Button>
@@ -240,10 +240,10 @@ export function GoalManagement({
             prazo, só conta o resultado final.
           </p>
           {current.data?.cycles
-            .filter((c) => c.scope === "role")
+            .filter((c) => c.scope === "role" || c.scope === "user")
             .map((c) => (
               <div key={c.id}>
-                <h4 className="mt-3 text-sm text-ember">{c.title}</h4>
+                <h4 className="mt-3 text-sm text-ember">{c.title}{c.scope === "user" && c.result.members[0] ? ` · ${c.result.members[0].display_name}` : ""}</h4>
                 {c.result.members.map((p) => (
                   <div
                     key={p.user_id}

@@ -58,7 +58,7 @@ try {
   await expect(page.getByText('Atribuir tarefa')).toHaveCount(0)
   await page.goto(`${origin}/arena`)
   await expect(page.getByRole('heading', { name: 'Meta coletiva de teste' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Meta individual de teste' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Meta individual de teste · Closer de teste' })).toBeVisible()
   assert.deepEqual(errors, [])
   console.log('PASS: collective and assigned goals render in Minhas tarefas and Arena without executive assignment controls.')
 } finally {

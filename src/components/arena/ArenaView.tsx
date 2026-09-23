@@ -110,7 +110,10 @@ function GoalBar({ cycle, now }: { cycle: ArenaCycle; now: number }) {
   return (
     <article className={`arena-panel arena-goal arena-milestone-${effect}`}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium">{cycle.title}</h2>
+        <h2 className="text-sm font-medium">
+          {cycle.title}
+          {cycle.scope === "user" && cycle.result.members[0] && ` · ${cycle.result.members[0].display_name}`}
+        </h2>
         <span
           className={
             belowPace
