@@ -24,7 +24,7 @@ Sem dados comerciais fictícios. Validação de estabilidade por 24 horas exige 
 
 Código integrado à `main` e mantido na branch `codex/arena-comercial`; commit de implementação `5fe3fce`. Após a autorização explícita de deploy, as três migrations foram instaladas atomicamente e o frontend foi publicado em 23/09/2026. A prévia local permanece uma fotografia das consultas reais; a experiência autenticada está em [Arena publicada](https://wsltda.com/arena), que redireciona para `www.wsltda.com`.
 
-Para o monitor, entrar normalmente com `fecass1507@gmail.com`, abrir `/arena`, acionar tela cheia e ativar o sino uma vez por interação. A conta conserva suas roles existentes. Não há conta de monitor, credencial especial, bypass por e-mail ou rotina de automação adicional.
+Para o monitor, entrar normalmente com `fecass1507@gmail.com`, abrir `/arena`, acionar tela cheia e clicar no sino quando quiser tocar o som da venda. A conta conserva suas roles existentes. Não há conta de monitor, credencial especial, bypass por e-mail ou rotina de automação adicional.
 
 As barras operacionais mantêm seus ciclos próprios; os cards, gráfico, ranking do período e feed acompanham Hoje/7/30/personalizado. Os ciclos diários, semanais e mensais usam Brasília. O percentual do time é a soma dos pontos dividida pela soma das metas individuais; uma meta individual habilitada substitui a meta padrão do cargo.
 
@@ -38,7 +38,7 @@ Metas são versões imutáveis. Valor, visibilidade, recorrência e countdown po
 
 Realtime reaproveita `DataSync`. A contingência consulta um único número de revisão a cada 5 segundos enquanto a página está visível; busca os agregados somente quando a revisão mudou. O cursor inclui revisões do CRM e das abordagens. O servidor encerra ciclos pelo job `arena-cycle-deadlines`, independentemente de a TV estar aberta. A condição de ritmo exibida acompanha o tempo mesmo sem novos eventos.
 
-Os popups têm prioridade, limite de cinco itens e deduplicação. O sino depende de um INSERT novo de aprovação de Closer após o cursor de conexão confirmado pelo servidor. Consultas iniciais, refresh, backfill e eventos anteriores ao reconnect não disparam o sino. A preferência de som é local; os dados comerciais permanecem no banco.
+Os popups têm prioridade, limite de cinco itens e deduplicação. O sino sonoro toca somente pelo clique no botão da Arena ou dos dashboards; aprovações novas continuam produzindo avisos visuais, sem som automático. O volume final também depende do navegador e do dispositivo.
 
 ## Validação executada
 
@@ -79,7 +79,9 @@ Instalar, na ordem, somente as migrations revisadas `20260923100000_arena_events
 
 `node scripts/apply-arena-migrations.mjs` verifica a instalação com rollback. Após autorização de deploy, `node scripts/apply-arena-migrations.mjs --apply` instala as três migrations e seus registros de histórico em uma transação única; interrompe se alguma versão já estiver instalada. `SUPABASE_CLI` aceita o caminho do executável autenticado. Na Vercel vinculada, preparar com `deploy --prod --skip-domain`, instalar o banco e promover a versão pronta com `promote` reduz o intervalo entre as atualizações.
 
-Depois da instalação, verificar o job `arena-cycle-deadlines`, a publicação Realtime de `activity_feed`, `dashboard_events` e `arena_notifications`, e os fluxos autenticados com as roles existentes. Medir a propagação de uma operação comercial legítima entre CRM e TV, o sino único e a recuperação de conexão. Esses testes de Realtime ponta a ponta e a observação contínua de 24 horas ainda não foram realizados; o teste SQL revertido não produz eventos comprometidos para validá-los.
+A correção de vendas editadas usa a migration adicional `20260923150000_arena_current_sales.sql`, já instalada. `node scripts/check-arena-current-sales-db.mjs --deployed` valida valor, Closer, revisão e estorno em uma transação revertida; `--apply` é apenas para uma instalação ainda não migrada.
+
+Depois da instalação, verificar o job `arena-cycle-deadlines`, a publicação Realtime de `activity_feed`, `dashboard_events` e `arena_notifications`, e os fluxos autenticados com as roles existentes. Medir a propagação de uma operação comercial legítima entre CRM e TV e a recuperação de conexão. Testar o sino manualmente pelo botão. Esses testes de Realtime ponta a ponta e a observação contínua de 24 horas ainda não foram realizados; o teste SQL revertido não produz eventos comprometidos para validá-los.
 
 Verificação após o deploy: a publicação vinculada ao GitHub do commit `4274ee1` concluiu com sucesso em `wsltda.com`; `/arena` redirecionou para `www.wsltda.com/arena`, respondeu HTTP 200 e entregou o bundle novo. Sem sessão, a rota protegida redireciona ao login. As três versões constam no histórico do Supabase. As três tabelas constam na publicação Realtime. O job está ativo a cada 5 segundos e suas três últimas execuções verificadas terminaram com sucesso. A consulta autenticada por contexto SQL da conta da TV retornou acesso autorizado, três ciclos e os agregados reais. Nenhuma venda, lead ou conta de teste foi criada para publicar.
 
