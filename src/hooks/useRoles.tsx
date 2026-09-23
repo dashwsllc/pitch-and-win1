@@ -51,7 +51,7 @@ export function useRoles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_roles")
-        .select("role, crm_access, commission_rate, can_view_sales, updated_at, id")
+        .select("role, crm_access, crm_closer_access, commission_rate, can_view_sales, updated_at, id")
         .eq("user_id", user!.id);
       if (error) throw error;
       return data;
@@ -63,6 +63,7 @@ export function useRoles() {
     roles,
     !!query.data?.some((r) => r.crm_access),
     !!profile && !profile.suspended,
+    !!query.data?.some((r) => r.crm_closer_access),
   );
   const isExecutive = capabilities.executive;
   const isSuperAdmin = capabilities.admin;

@@ -26,13 +26,16 @@ Mudanças de aquecimento/abordagem preservam repasse e fechamento. Devolver ao S
 | --- | --- | --- | --- | --- | --- |
 | executive | Sim | Sim | Sim | Sim | Não |
 | super_admin | Sim | Sim | Sim | Sim | Sim |
-| sdr sem seller | Sim | Sim | Não | Não | Não |
+| sdr sem permissão especial nem seller | Sim | Sim | Não | Não | Não |
+| sdr com `crm_closer_access` | Sim | Sim | Sim | Conforme outros papéis | Não |
 | closer (inclusive seller + closer) | Sim | Sim | Sim | Sim | Não |
 | seller | Sim | Conforme papéis acumulados* | Conforme papéis acumulados* | Sim | Não |
 | Cargo externo + crm_access | Sim | Não | Não | Não | Não |
 | Suspenso ou sem acesso | Não | Não | Não | Não | Não |
 
 A capacidade de registrar venda acompanha Closer para completar o fluxo solicitado. Closer herda a operação SDR, incluindo o registro do resultado de qualquer call de qualificação pendente da fila compartilhada; SDR não herda a operação Closer. Todo `seller` ativo acessa Vendas. Quem tiver ambos os papéis específicos acessa ambas as áreas. `crm_access` não bloqueia papéis comerciais. Contas suspensas ficam bloqueadas. Gerenciamento usa a central executiva existente, com revisão de conta, funções e auditoria; o relatório apresenta capacidades efetivas. Nenhuma conta pessoal foi reclassificada.
+
+A migration `20260923190000_crm_sdr_head_closer_access.sql` concede à conta `pedro10@gmail.com` a capacidade Closer somente no CRM, mantendo os papéis Seller, SDR e BDR. A coluna `user_roles.crm_closer_access` só é efetiva numa linha SDR, é falsa por padrão e não altera a atribuição de vendas ou pontos da Arena. O relatório de permissões mostra a capacidade efetiva. A concessão consta na auditoria administrativa. Validar com `node scripts/check-crm-sdr-head-closer-access.mjs`, instalar com `--apply` e conferir com `--deployed` antes de publicar o frontend.
 
 A migration `20260922140000_closer_inherits_sdr_qualification.sql` alinha a matriz do banco à interface. O resultado da call pode ser registrado por SDR, Closer, Executive ou Super Admin enquanto a call estiver pendente; a operação guarda o autor real, valida a revisão da call e mantém as exigências de preenchimento. Um Seller sem esses papéis não recebe a ação.
 

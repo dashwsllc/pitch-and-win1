@@ -1155,6 +1155,7 @@ export type Database = {
           commission_rate: number
           created_at: string
           crm_access: boolean
+          crm_closer_access: boolean
           granted_at: string | null
           granted_by: string | null
           id: string
@@ -1167,6 +1168,7 @@ export type Database = {
           commission_rate?: number
           created_at?: string
           crm_access?: boolean
+          crm_closer_access?: boolean
           granted_at?: string | null
           granted_by?: string | null
           id?: string
@@ -1179,6 +1181,7 @@ export type Database = {
           commission_rate?: number
           created_at?: string
           crm_access?: boolean
+          crm_closer_access?: boolean
           granted_at?: string | null
           granted_by?: string | null
           id?: string

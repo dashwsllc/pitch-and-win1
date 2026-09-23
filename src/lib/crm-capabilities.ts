@@ -3,6 +3,7 @@ export function crmCapabilities(
   roles: readonly string[],
   crmAccess = false,
   active = true,
+  crmCloserAccess = false,
 ) {
   const admin = active && roles.includes("super_admin");
   const executive =
@@ -18,7 +19,7 @@ export function crmCapabilities(
     sdr: active && (executive || roles.includes("sdr") || roles.includes("closer")),
     closer:
       active &&
-      (executive || roles.includes("closer")),
+      (executive || roles.includes("closer") || (roles.includes("sdr") && crmCloserAccess)),
     sales:
       active &&
       (executive || roles.some((role) => ["seller", "closer"].includes(role))),

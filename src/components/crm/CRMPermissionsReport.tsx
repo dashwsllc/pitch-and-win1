@@ -54,6 +54,7 @@ export function CRMPermissionsReport() {
                 roles,
                 u.user_roles.some((r) => r.crm_access),
                 !u.suspended,
+                u.user_roles.some((r) => r.crm_closer_access),
               );
               return (
                 <article
