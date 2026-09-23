@@ -95,7 +95,8 @@ export function CRMLeadCard({
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { capabilities } = useRoles();
+  const { capabilities, hasRole } = useRoles();
+  const canCreateClosing = capabilities.executive || hasRole('sdr');
   const closed = ["fechado_ganho", "fechado_perdido", "lead_perdido"].includes(
     lead.pipeline_stage,
   );
@@ -409,7 +410,7 @@ export function CRMLeadCard({
       )}
       <div className="flex items-center gap-1.5 border-t border-border/40 pt-2">
         {!closed && !handed && capabilities.sdr && (
-          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onSchedule(primaryIntent)}>
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy || (primaryIntent === 'handoff' && !canCreateClosing)} onClick={() => onSchedule(primaryIntent)}>
             {qualificationCall
               ? "Reagendar call SDR"
               : primaryIntent === "handoff"
@@ -456,7 +457,7 @@ export function CRMLeadCard({
                 </DropdownMenuItem>
               </>
             )}
-            {canSchedule && !call && handed && (
+            {!closed && canCreateClosing && !call && handed && (
               <DropdownMenuItem onSelect={() => onSchedule("closer")}>
                 <PhoneCall className="mr-2 h-4 w-4" /> Agendar call do Closer
               </DropdownMenuItem>
@@ -466,9 +467,9 @@ export function CRMLeadCard({
                 <DropdownMenuItem onSelect={() => onSchedule("qualification")}>
                   <PhoneCall className="mr-2 h-4 w-4" /> Agendar call de qualificação SDR
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onSchedule("handoff")}>
+                {canCreateClosing && <DropdownMenuItem onSelect={() => onSchedule("handoff")}>
                   <CalendarClock className="mr-2 h-4 w-4" /> Agendar fechamento e enviar ao Closer
-                </DropdownMenuItem>
+                </DropdownMenuItem>}
               </>
             )}
             {!closed && !handed && capabilities.sdr && (

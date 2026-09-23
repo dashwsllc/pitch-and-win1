@@ -16,6 +16,8 @@ export const saleStatus = {
   pendente: { label: 'Pendente', color: 'bg-amber-400/10 text-amber-300 border-amber-400/15' },
   aprovada: { label: 'Aprovado', color: 'bg-emerald-400/10 text-emerald-300 border-emerald-400/15' },
   rejeitada: { label: 'Rejeitado', color: 'bg-rose-400/10 text-rose-300 border-rose-400/15' },
+  cancelada: { label: 'Cancelada', color: 'bg-rose-400/10 text-rose-300 border-rose-400/15' },
+  estornada: { label: 'Estornada', color: 'bg-amber-400/10 text-amber-300 border-amber-400/15' },
 } as const
 
 export interface TeamSale {

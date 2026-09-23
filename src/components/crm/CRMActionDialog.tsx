@@ -43,6 +43,7 @@ export function CRMActionDialog({
   const [note, setNote] = useState("");
   const [assigned, setAssigned] = useState(lead.closer_id || "");
   const [outcome, setOutcome] = useState("");
+  const [callPerformed, setCallPerformed] = useState(false);
   const [negativeReason, setNegativeReason] = useState("");
   const [when, setWhen] = useState("");
   const [failure, setFailure] = useState("");
@@ -68,6 +69,7 @@ export function CRMActionDialog({
         outcome,
         negative_reason: negativeReason,
         next_at: nextAt,
+        ...(action === "close" ? { call_performed: callPerformed } : {}),
       })
     )
       onClose();
@@ -133,6 +135,10 @@ export function CRMActionDialog({
                   <option value="followup">Follow-up necessário</option>
                   <option value="devolvido_sdr">Devolver ao SDR</option>
                 </select>
+                <label className="flex items-center gap-2 pt-2 text-xs">
+                  <input type="checkbox" checked={callPerformed} onChange={(event) => setCallPerformed(event.target.checked)} />
+                  A call de fechamento agendada foi realizada
+                </label>
               </div>
             )}
             {sendingRemarketing && (

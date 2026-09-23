@@ -2,6 +2,7 @@ import { ReactNode } from "react"
 import { ExecutiveAppSidebar } from "./ExecutiveAppSidebar"
 import { UserProfile } from "@/components/dashboard/UserProfile"
 import { useRoles } from "@/hooks/useRoles"
+import { ArenaSoundButton, NotificationInbox } from '@/components/arena/ArenaNotifications'
 
 interface DashboardLayoutProps {
   children: ReactNode
@@ -27,7 +28,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </h1>
             </div>
             
-            <UserProfile />
+            <div className="flex items-center gap-2"><NotificationInbox /><ArenaSoundButton /><UserProfile /></div>
           </div>
         </header>
         

@@ -2,12 +2,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DataSync } from "@/components/DataSync";
+import { SaleAlerts } from "@/components/arena/ArenaNotifications";
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
 const EmailConfirmation = lazy(() => import("./pages/EmailConfirmation"));
@@ -22,7 +23,9 @@ const Configuracoes = lazy(() => import("./pages/Configuracoes"));
 const Saques = lazy(() => import("./pages/Saques"));
 const CRM = lazy(() => import("./pages/CRM"));
 const MinhasVendas = lazy(() => import("./pages/MinhasVendas"));
-const VendasTime = lazy(() => import("./pages/VendasTime"));
+const Arena = lazy(() => import("./pages/Arena"));
+const Metas = lazy(() => import("./pages/Metas"));
+const Trafego = lazy(() => import("./pages/Trafego"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -39,6 +42,7 @@ const App = () => (
     <ThemeProvider>
       <AuthProvider>
         <DataSync />
+        <SaleAlerts />
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -81,7 +85,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/clientes" element={
-                <ProtectedRoute>
+                <ProtectedRoute superAdminOnly>
                   <Clientes />
                 </ProtectedRoute>
               } />
@@ -110,7 +114,10 @@ const App = () => (
                   <MinhasVendas />
                 </ProtectedRoute>
               } />
-              <Route path="/vendas-time" element={<ProtectedRoute><VendasTime /></ProtectedRoute>} />
+              <Route path="/arena" element={<ProtectedRoute arenaOnly><Arena /></ProtectedRoute>} />
+              <Route path="/metas" element={<ProtectedRoute><Metas /></ProtectedRoute>} />
+              <Route path="/trafego" element={<ProtectedRoute trafficOnly><Trafego /></ProtectedRoute>} />
+              <Route path="/vendas-time" element={<Navigate to="/metas?tab=vendas" replace />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
               </Routes>

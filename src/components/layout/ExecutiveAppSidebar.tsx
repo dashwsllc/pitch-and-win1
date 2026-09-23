@@ -1,7 +1,8 @@
 import { 
   BarChart3, 
   Home,
-  MessageSquare,
+  Monitor,
+  Megaphone,
   DollarSign,
   Trophy,
   Users,
@@ -15,12 +16,14 @@ import {
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
 import { useRoles } from '@/hooks/useRoles'
+import { canAccessArena, canAccessTraffic } from '@/lib/arena'
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Executive", url: "/executive", icon: Shield },
-  { title: "Vendas do time", url: "/vendas-time", icon: ListChecks },
-  { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
+  { title: "Arena Comercial", url: "/arena", icon: Monitor },
+  { title: "Metas", url: "/metas", icon: ListChecks },
+  { title: "Tráfego", url: "/trafego", icon: Megaphone },
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
   { title: "Ranking", url: "/ranking", icon: Trophy },
@@ -33,8 +36,9 @@ const menuItems = [
 
 const sellerMenuItems = [
   { title: "Dashboard", url: "/", icon: Home },
-  { title: "Vendas do time", url: "/vendas-time", icon: ListChecks },
-  { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
+  { title: "Arena Comercial", url: "/arena", icon: Monitor },
+  { title: "Metas", url: "/metas", icon: ListChecks },
+  { title: "Tráfego", url: "/trafego", icon: Megaphone },
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
   { title: "Ranking", url: "/ranking", icon: Trophy },
@@ -50,8 +54,11 @@ interface AppSidebarProps {
 }
 
 export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
-  const { capabilities } = useRoles()
-  const items = (isExecutive ? menuItems : sellerMenuItems).filter(item => (item.url !== '/crm' || capabilities.leads) && (item.url !== '/vendas' || capabilities.sales))
+  const { capabilities, roles, isSuperAdmin } = useRoles()
+  const items = (isExecutive ? menuItems : sellerMenuItems).filter(item =>
+    (item.url !== '/crm' || capabilities.leads) && (item.url !== '/vendas' || capabilities.sales) &&
+    (item.url !== '/clientes' || isSuperAdmin) && (item.url !== '/arena' || canAccessArena(roles)) &&
+    (item.url !== '/trafego' || canAccessTraffic(roles)))
   
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-dvh w-16 flex-col overflow-y-auto border-r border-white/[0.055] bg-[#0c0715]/92 backdrop-blur-xl sm:w-[72px]" data-lenis-prevent>

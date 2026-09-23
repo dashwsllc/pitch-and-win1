@@ -3,12 +3,15 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useRoles } from "@/hooks/useRoles";
+import { canAccessArena, canAccessTraffic } from '@/lib/arena';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   executiveOnly?: boolean;
   superAdminOnly?: boolean;
   salesOnly?: boolean;
+  arenaOnly?: boolean;
+  trafficOnly?: boolean;
 }
 
 export function ProtectedRoute({
@@ -16,6 +19,8 @@ export function ProtectedRoute({
   executiveOnly = false,
   superAdminOnly = false,
   salesOnly = false,
+  arenaOnly = false,
+  trafficOnly = false,
 }: ProtectedRouteProps) {
   const { user, loading: authLoading, signOut } = useAuth();
   const { profile, loading: profileLoading, error, refetch } = useProfile();
@@ -23,6 +28,7 @@ export function ProtectedRoute({
     isExecutive,
     isSuperAdmin,
     capabilities,
+    roles,
     loading: rolesLoading,
     error: rolesError,
     refetch: retryRoles,
@@ -37,7 +43,7 @@ export function ProtectedRoute({
 
   if (
     authLoading ||
-    (user && (profileLoading || ((executiveOnly || superAdminOnly || salesOnly) && rolesLoading)))
+    (user && (profileLoading || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly) && rolesLoading)))
   ) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -54,7 +60,7 @@ export function ProtectedRoute({
     return <Navigate to="/auth" replace />;
   }
 
-  if (error || ((executiveOnly || superAdminOnly || salesOnly) && rolesError)) {
+  if (error || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly) && rolesError)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-6 text-center">
         <p>Não foi possível verificar seu acesso.</p>
@@ -73,6 +79,8 @@ export function ProtectedRoute({
   if (executiveOnly && !isExecutive) return <Navigate to="/" replace />;
   if (superAdminOnly && !isSuperAdmin) return <Navigate to="/" replace />;
   if (salesOnly && !capabilities.sales) return <Navigate to="/" replace />;
+  if (arenaOnly && !canAccessArena(roles)) return <Navigate to="/" replace />;
+  if (trafficOnly && !canAccessTraffic(roles)) return <Navigate to="/" replace />;
 
   return <>{children}</>;
 }

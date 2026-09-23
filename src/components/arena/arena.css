@@ -1,0 +1,97 @@
+.arena-shell {
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse at 10% 0%, #47223830, transparent 45%), #0e0918;
+  color: #f4f1f8;
+  padding: clamp(14px, 1.1vw, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.arena-panel {
+  border: 1px solid #ffffff0b;
+  border-radius: 16px;
+  background: #ffffff03;
+  padding: 12px 14px;
+}
+.arena-goal {
+  font-size: 11px;
+  height: 100%;
+}
+.arena-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #0003;
+}
+.arena-tabs button {
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 11px;
+  color: #a9a1b4;
+}
+.arena-tabs button[aria-pressed="true"] {
+  background: #ffffff12;
+  color: #fff;
+}
+.arena-milestone-25 {
+  animation: arena-subtle 800ms ease-out;
+}
+.arena-milestone-50 {
+  animation: arena-glow 1.4s ease-out;
+}
+.arena-milestone-90 {
+  animation: arena-glow 1.8s ease-out;
+  border-color: #ff8e5d66;
+}
+.arena-milestone-100 {
+  animation: arena-celebrate 2s ease-out;
+}
+.arena-milestone-101 {
+  animation: arena-celebrate 2s ease-out;
+  border-color: #c4a3ff80;
+}
+@keyframes arena-subtle {
+  50% {
+    border-color: #ff8e5d88;
+  }
+}
+@keyframes arena-glow {
+  40% {
+    box-shadow: 0 0 22px #ff8e5d30;
+  }
+}
+@keyframes arena-celebrate {
+  25% {
+    box-shadow: 0 0 38px #a381ff55;
+    transform: translateY(-2px);
+  }
+  70% {
+    border-color: #c4a3ff;
+  }
+}
+@media (min-width: 1280px) and (max-height: 850px) {
+  .arena-shell {
+    padding: 14px 20px;
+    gap: 8px;
+  }
+  .arena-panel {
+    padding: 8px 12px;
+  }
+  .arena-chart { height: 150px; }
+  .arena-person { padding-block: 5px; }
+  .arena-feed-item { padding-block: 3px; }
+  .arena-person:nth-child(n+3), .arena-feed-item:nth-child(n+3) { display: none; }
+  .arena-goal .my-2 { margin-block: 4px; }
+  .arena-goal .mt-2 { margin-top: 4px; }
+  .arena-goal .text-2xl { font-size: 20px; line-height: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arena-shell *,
+  .arena-shell *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -10,14 +10,14 @@ import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { useDailyGoalsManagement, useBrasiliaToday, type DailyGoalTask } from '@/hooks/useGoals'
-import { useAllUsers } from '@/hooks/useRoles'
+import { useArenaAssignees } from '@/hooks/useArena'
 import { formatDateKey } from '@/lib/brasilia-time'
 import { safePlainText, sanitizePlainText } from '@/lib/plain-text'
 import { errorMessage } from '@/lib/sales'
 import { cn } from '@/lib/utils'
 
 export function ExecutiveGoalsManagement() {
-  const { users, loading: usersLoading, error: usersError, refetch: refetchUsers } = useAllUsers()
+  const { data: users = [], isLoading: usersLoading, error: usersError, refetch: refetchUsers } = useArenaAssignees()
   const today = useBrasiliaToday()
   const collaborators = useMemo(
     () => users.filter((user) => !user.suspended).sort((a, b) =>
@@ -111,7 +111,7 @@ export function ExecutiveGoalsManagement() {
               <SelectContent>
                 {collaborators.map((user) => (
                   <SelectItem key={user.user_id} value={user.user_id}>
-                    {user.display_name || user.email || user.user_id}
+                    {user.display_name || user.user_id}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -138,7 +138,7 @@ export function ExecutiveGoalsManagement() {
               <div>
                 <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <UserRound className="h-4 w-4 text-electric" />
-                  {selected?.display_name || selected?.email || 'Colaborador'}
+                  {selected?.display_name || 'Colaborador'}
                 </p>
                 <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                   <CalendarDays className="h-3.5 w-3.5" />

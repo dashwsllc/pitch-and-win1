@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { arenaRpc } from '@/lib/arena-api';
 import { errorMessage } from "@/lib/sales";
 import { brasiliaLocalInputToIso, isoToBrasiliaLocalInput } from "@/lib/brasilia-time";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ export function CRMCallScheduler({
   onClose: () => void;
 }) {
   const { user } = useAuth();
-  const { capabilities } = useRoles();
+  const { capabilities, hasRole } = useRoles();
   const assignees = useCRMAssignees();
   const client = useQueryClient();
   const { toast } = useToast();
@@ -67,6 +68,9 @@ export function CRMCallScheduler({
   const [context, setContext] = useState("");
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const canCreateClosing = capabilities.executive || hasRole('sdr');
   const candidates = (assignees.data || [])
     .filter((a) =>
       [
@@ -76,14 +80,7 @@ export function CRMCallScheduler({
       ].includes(a.role),
     )
     .filter((a, i, all) => all.findIndex((b) => b.user_id === a.user_id) === i)
-    .filter(
-      (a) =>
-        isSdrHandoff ||
-        type !== "fechamento_closer" ||
-        !!lead.closer_id ||
-        capabilities.executive ||
-        a.user_id === user?.id,
-    );
+    .filter(a => !!call || type !== 'fechamento_closer' || a.user_id !== user?.id);
   const assignedName = candidates.find((a) => a.user_id === assigned)?.display_name;
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +93,7 @@ export function CRMCallScheduler({
     setSaving(true);
     setFailure("");
     try {
+      if (!call && type === 'fechamento_closer' && !canCreateClosing) throw new Error('O SDR agenda a call de fechamento para o Closer.');
       const { error } = call
         ? await supabase.rpc("reschedule_crm_call", {
             p_activity_id: call.id,
@@ -134,6 +132,15 @@ export function CRMCallScheduler({
       setSaving(false);
     }
   };
+  const cancelCall = async () => {
+    if (!call || saving) return;
+    setSaving(true); setFailure('');
+    try {
+      await arenaRpc('arena_cancel_call', { p_id: call.id, p_revision: call.updated_at, p_reason: cancelReason });
+      await client.invalidateQueries({ queryKey: ['crm'] });
+      toast({ title: 'Agendamento cancelado e pontuação atualizada' }); onClose();
+    } catch (cause) { setFailure(errorMessage(cause)); } finally { setSaving(false); }
+  };
   return (
     <Dialog
       open
@@ -171,6 +178,8 @@ export function CRMCallScheduler({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="space-y-3">
+          {call && <div className="space-y-2">{cancelling ? <><Label htmlFor="call-cancel-reason">Motivo do cancelamento</Label><Input id="call-cancel-reason" value={cancelReason} onChange={e => setCancelReason(e.target.value)} /><Button type="button" variant="destructive" disabled={saving || cancelReason.trim().length < 5} onClick={cancelCall}>Confirmar cancelamento da call</Button></> : <Button type="button" variant="ghost" className="text-rose-300" onClick={() => setCancelling(true)}>Cancelar este agendamento</Button>}</div>}
+          {!call && type === 'fechamento_closer' && !canCreateClosing && <p role="alert" className="text-sm text-amber-300">O SDR deve agendar esta call para o Closer.</p>}
           {!call && (
             <>
               <div className="space-y-1">
@@ -258,7 +267,7 @@ export function CRMCallScheduler({
             <Button
               className="h-9"
               disabled={
-                saving ||
+                saving || cancelling || (!call && type === 'fechamento_closer' && !canCreateClosing) ||
                 (!call &&
                   (assignees.isPending ||
                     assignees.isError ||

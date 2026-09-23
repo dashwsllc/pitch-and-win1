@@ -26,7 +26,8 @@ import { ExecutiveRegistrationRequests } from '@/components/executive/ExecutiveR
 import { ExecutivePasswordRequests } from '@/components/executive/ExecutivePasswordRequests'
 import { ExecutiveSellerDetails } from '@/components/executive/ExecutiveSellerDetails'
 import { ExecutiveSalesApproval } from '@/components/executive/ExecutiveSalesApproval'
-import { ExecutiveGoalsManagement } from '@/components/executive/ExecutiveGoalsManagement'
+import { GoalManagement } from '@/components/arena/GoalManagement'
+import { GoalTasks } from '@/components/arena/GoalTasks'
 import { ExecutiveAudit } from '@/components/executive/ExecutiveAudit'
 import { ExecutiveWithdrawals } from '@/components/executive/ExecutiveWithdrawals'
 import { ExecutiveProducts } from '@/components/executive/ExecutiveProducts'
@@ -212,7 +213,7 @@ export default function ExecutiveDashboard() {
           </TabsContent>
 
           <TabsContent value="goals">
-            <ExecutiveGoalsManagement />
+            <div className="space-y-8"><GoalManagement /><GoalTasks /></div>
           </TabsContent>
           <TabsContent value="audit"><ExecutiveAudit /></TabsContent>
           <TabsContent value="withdrawals"><ExecutiveWithdrawals /></TabsContent>
