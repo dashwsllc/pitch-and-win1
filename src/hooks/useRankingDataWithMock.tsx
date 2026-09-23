@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { useBrasiliaToday } from '@/hooks/useGoals'
 
 export interface RankingUser {
   user_id: string
@@ -27,11 +28,13 @@ export interface SDRRankingUser {
   isCurrentUser?: boolean
 }
 
-// Kept as a compatible export for existing pages; all entries now come from approved sales.
+// Kept as a compatible export for existing pages. The Closer ranking uses the
+// same current Brasília month and sale facts as the Arena's monthly cycle.
 export function useRankingDataWithMock() {
   const { user } = useAuth()
+  const month = useBrasiliaToday().slice(0, 7)
   const query = useQuery({
-    queryKey: ['team-ranking', user?.id],
+    queryKey: ['team-ranking', user?.id, month],
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_team_ranking')

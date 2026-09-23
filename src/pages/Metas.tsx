@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SalesBoard } from "@/components/sales/SalesBoard";
 import { GoalTasks } from "@/components/arena/GoalTasks";
+import { GoalOverview } from "@/components/arena/GoalOverview";
 import { GoalManagement } from "@/components/arena/GoalManagement";
 import { EventAudit } from "@/components/arena/EventAudit";
 import { useRoles } from "@/hooks/useRoles";
@@ -161,7 +162,7 @@ export default function Metas() {
           ))}
         </nav>
         {tab === "vendas" && <SalesBoard management={isExecutive} />}
-        {tab === "atribuicoes" && <GoalTasks />}
+        {tab === "atribuicoes" && <><GoalOverview /><GoalTasks /></>}
         {tab === "gestao" && <GoalManagement />}
         {tab === "configuracoes" && <GoalManagement configuration />}
         {tab === "historico" && <GoalRecords key="history" tab="history" />}

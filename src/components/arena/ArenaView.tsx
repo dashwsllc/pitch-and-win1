@@ -340,9 +340,8 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
   const closer = data?.cycles.find(
     (c) => c.scope === "role" && c.role === "closer" && c.period === "weekly",
   );
-  const global = data?.cycles.find(
-    (c) => c.scope === "global" && c.period === "monthly",
-  );
+  const collectiveGoals = data?.cycles.filter((c) => c.scope !== "user") ?? [];
+  const personalGoals = data?.cycles.filter((c) => c.scope === "user") ?? [];
   const cards = [
     ["revenue", "Faturamento bruto", "money"],
     ["sales", "Vendas aprovadas", "number"],
@@ -623,13 +622,16 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
               </div>
             </section>
             <div className="grid gap-3 sm:grid-cols-2">
-              {sdr && <GoalBar cycle={sdr} now={now} />}
-              {closer && <GoalBar cycle={closer} now={now} />}
-              {global && (
-                <div className="sm:col-span-2">
-                  <GoalBar cycle={global} now={now} />
+              {collectiveGoals.map((cycle) => (
+                <div key={cycle.id} className={cycle.scope === "global" ? "sm:col-span-2" : undefined}>
+                  <GoalBar cycle={cycle} now={now} />
                 </div>
-              )}
+              ))}
+              {personalGoals.map((cycle) => (
+                <div className="sm:col-span-2" key={cycle.id}>
+                  <GoalBar cycle={cycle} now={now} />
+                </div>
+              ))}
             </div>
           </div>
           <div className="grid gap-3 lg:grid-cols-2">

@@ -139,6 +139,7 @@ export function GoalManagement({
       await Promise.all([
         query.refetch(),
         client.invalidateQueries({ queryKey: ["arena"] }),
+        client.invalidateQueries({ queryKey: ["visible-goals"] }),
       ]);
       setOpen(false);
       toast.success("Nova versão da meta salva");

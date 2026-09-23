@@ -57,7 +57,7 @@ export function LeaderboardPreview() {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base font-medium tracking-[-0.015em] text-white">
             <Trophy className="h-4 w-4 text-amber-400" strokeWidth={1.8} />
-            Top Closers
+            Top Closers · mês atual
           </CardTitle>
           <Button
             variant="ghost"

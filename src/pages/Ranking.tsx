@@ -113,7 +113,7 @@ export default function Ranking() {
                 Ranking de <span className="font-semibold">Closers</span>
               </h1>
               <p className="text-muted-foreground mt-0.5">
-                Somente colaboradores marcados como Closer · vendas aprovadas · Super Admins excluídos.
+                Mês atual de Brasília · vendas aprovadas na Arena · Super Admins excluídos.
               </p>
             </div>
           </div>

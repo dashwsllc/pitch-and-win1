@@ -1,5 +1,13 @@
 # Arena Comercial
 
+## Alinhamento de metas e ranking — 23/09/2026
+
+A migration `20260923210000_arena_goals_ranking_alignment.sql` restringe metas individuais ao executivo e ao colaborador escolhido. Metas coletivas ficam disponíveis a todos os colaboradores aprovados pela consulta `arena_visible_goals`; o resultado coletivo usa o alvo do cargo e não revela metas individuais de outras pessoas. As notificações de metas individuais seguem o mesmo escopo. A leitura direta dos snapshots de ciclos foi fechada porque versões antigas podem conter alvos individuais.
+
+O ranking principal de Closers usa o mês civil corrente de Brasília e a mesma função de vendas da Arena. A virada do mês muda a chave da consulta, e os sinais de revisão existentes atualizam a ordem após alterações nas vendas. Todas as metas ativas aparecem na Arena e na aba “Minhas tarefas”; a meta individual aparece ao colaborador atribuído.
+
+`node scripts/check-goals-ranking-db.mjs` executa a migration e verifica permissões, metas coletivas, notificações e atualização do ranking usando `ROLLBACK`. `--deployed` repete a verificação após instalar a versão. `node scripts/verify-goals-ranking-ui.mjs` confere a renderização local. TypeScript, ESLint, build e os dois testes de interface de ranking/metas passaram. A migration foi instalada no Supabase vinculado e passou novamente com `--deployed`.
+
 Implementação autorizada por `EXECUTAR`. A TV usa a conta normal fecass1507@gmail.com, sem exceção de RBAC.
 
 ## Contratos

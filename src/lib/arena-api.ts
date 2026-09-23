@@ -15,6 +15,7 @@ type ExtraFunctions = {
   arena_live_cursor: FunctionDef<Record<string, never>>;
   arena_revision: FunctionDef<Record<string, never>>;
   arena_dashboard: FunctionDef<{ p_start: string; p_end: string }>;
+  arena_visible_goals: FunctionDef<Record<string, never>>;
   arena_management: FunctionDef<{ p_tab: string; p_offset?: number }>;
   arena_assignees: FunctionDef<Record<string, never>>;
   arena_save_goal: FunctionDef<{
