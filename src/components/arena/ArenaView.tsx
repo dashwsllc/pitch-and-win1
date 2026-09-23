@@ -374,7 +374,7 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <span
             title={
               query.checkedAt
@@ -387,7 +387,7 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             {query.connected && data ? "LIVE" : "RECONECTANDO"}
           </span>
           {toolbar}
-          <SaleSoundPreviewButton />
+          <SaleSoundPreviewButton labeled />
           <Button
             variant="ghost"
             size="icon"
