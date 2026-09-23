@@ -9,7 +9,7 @@ import { EventAudit } from "@/components/arena/EventAudit";
 import { useRoles } from "@/hooks/useRoles";
 import { arenaRpc } from "@/lib/arena-api";
 import type { ArenaResult } from "@/lib/arena";
-import { stateLabels } from "@/lib/arena";
+import { progressPercent, stateLabels } from "@/lib/arena";
 import { errorMessage, exactDate } from "@/lib/sales";
 import { Button } from "@/components/ui/button";
 
@@ -60,15 +60,14 @@ function GoalRecords({ tab }: { tab: "history" | "audit" }) {
                 {exactDate(row.starts_at)} → {exactDate(row.ends_at)}
               </p>
               <p className="mt-2 tabular-nums">
-                {row.result.actual.toLocaleString("pt-BR")} /{" "}
-                {row.result.target.toLocaleString("pt-BR")}
+                {progressPercent(row.result.actual, row.result.target).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% da meta
               </p>
               <details className="mt-3 text-sm">
                 <summary>Resultados individuais e ranking preservado</summary>
                 <div className="mt-2 space-y-1">
                   {row.result.members.map((p) => (
                     <p key={p.user_id}>
-                      {p.display_name} · {p.actual} / {p.target} ·{" "}
+                      {p.display_name} · {progressPercent(p.actual, p.target).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% da meta ·{" "}
                       {stateLabels[p.state]}
                     </p>
                   ))}
@@ -76,7 +75,7 @@ function GoalRecords({ tab }: { tab: "history" | "audit" }) {
                     row.result[role]?.map((p, i) => (
                       <p key={`${role}:${p.user_id}`}>
                         {role === "sdrs" ? "SDR" : "Closer"} · {i + 1}. {p.name}{" "}
-                        · {p.score} p.p.
+                        · {role === "sdrs" ? `${p.repasses ?? 0} repasses` : `${p.quantidadeVendas ?? 0} vendas`}
                       </p>
                     )),
                   )}

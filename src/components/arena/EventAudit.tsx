@@ -133,7 +133,7 @@ export function EventAudit() {
               </p>
               <p className="text-xs text-muted-foreground">
                 {exactDate(row.occurred_at)} · {row.score_delta > 0 ? "+" : ""}
-                {row.score_delta} p.p. · {money(row.revenue_delta)}
+                {row.score_delta} pontos internos · {money(row.revenue_delta)}
               </p>
             </div>
             <Button
@@ -192,7 +192,7 @@ export function EventAudit() {
           {selected ? (
             <>
               <Label htmlFor="score-delta">
-                Ajuste (p.p., negativo para desconto)
+                Ajuste em pontos internos (negativo para desconto)
               </Label>
               <Input
                 id="score-delta"

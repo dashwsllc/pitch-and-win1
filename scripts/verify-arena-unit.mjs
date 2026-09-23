@@ -17,6 +17,8 @@ for (const role of ["seller", "bdr", "traffic_manager"])
 assert.equal(canAccessTraffic(["traffic_manager"]), true);
 assert.equal(canAccessTraffic(["sdr"]), false);
 assert.equal(progressPercent(125, 100), 125, "Excess must remain visible");
+assert.equal(progressPercent(25, 50), 50, "An individual target must still end at 100%");
+assert.equal(progressPercent(25, 200), 12.5, "The same score must reflect the configured target");
 assert.equal(
   progressPercent(-0.2, 100),
   -0.2,

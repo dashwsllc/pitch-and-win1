@@ -22,7 +22,7 @@ import {
   createDefaultDashboardCustomRange,
   resolveDashboardPeriod,
 } from "@/lib/dashboard-period";
-import { stateLabels } from "@/lib/arena";
+import { progressPercent, stateLabels } from "@/lib/arena";
 
 const emptyGoal = {
   title: "",
@@ -192,7 +192,7 @@ export function GoalManagement({
             <p className="text-2xl text-ember">
               {goal.metric === "revenue"
                 ? money(goal.target)
-                : `${goal.target} p.p.`}
+                : `${goal.target.toLocaleString("pt-BR")} pontos = 100%`}
             </p>
             <p className="text-sm text-muted-foreground">
               {goal.scope === "global"
@@ -242,8 +242,7 @@ export function GoalManagement({
                   >
                     <span>{p.display_name}</span>
                     <span>
-                      {p.actual.toLocaleString("pt-BR")} /{" "}
-                      {p.target.toLocaleString("pt-BR")} ·{" "}
+                      {progressPercent(p.actual, p.target).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% da meta ·{" "}
                       {stateLabels[p.state]}
                     </span>
                   </div>
@@ -315,7 +314,7 @@ export function GoalManagement({
               <div>
                 <Label htmlFor="goal-target">
                   Meta{" "}
-                  {form.scope === "global" ? "(R$)" : "(pontos percentuais)"}
+                  {form.scope === "global" ? "(R$)" : "(pontos necessários para 100%)"}
                 </Label>
                 <Input
                   id="goal-target"

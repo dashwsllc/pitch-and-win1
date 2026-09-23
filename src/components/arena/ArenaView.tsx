@@ -51,6 +51,7 @@ import "@/components/arena/arena.css";
 
 const number = (n: number) =>
   n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+const PACE_UPDATE_MS = 5 * 60 * 1000;
 function PersonAvatar({ name, url }: { name: string; url?: string | null }) {
   return (
     <Avatar className="h-9 w-9 shrink-0">
@@ -67,6 +68,7 @@ function PersonAvatar({ name, url }: { name: string; url?: string | null }) {
 }
 function GoalBar({ cycle, now }: { cycle: ArenaCycle; now: number }) {
   const { actual, target } = cycle.result;
+  const isRevenue = cycle.metric === "revenue";
   const state = cycleState(actual, target, cycle.starts_at, cycle.ends_at, now);
   const percent = progressPercent(actual, target);
   const previous = useRef<{ id: string; level: number }>();
@@ -81,22 +83,26 @@ function GoalBar({ cycle, now }: { cycle: ArenaCycle; now: number }) {
     previous.current = { id: cycle.id, level };
     return () => clearTimeout(timer);
   }, [cycle.id, cycle.title, level]);
-  const format =
-    cycle.metric === "revenue"
-      ? money
-      : (value: number) => `${number(value)} p.p.`;
+  const format = isRevenue
+    ? money
+    : (value: number) => target > 0 ? `${number(progressPercent(value, target))}%` : "—";
+  const startsAt = Date.parse(cycle.starts_at);
+  const endsAt = Date.parse(cycle.ends_at);
+  const paceNow =
+    now >= endsAt
+      ? now
+      : Math.max(startsAt, Math.floor(now / PACE_UPDATE_MS) * PACE_UPDATE_MS);
   const elapsed = Math.min(
     1,
     Math.max(
       0,
-      (now - Date.parse(cycle.starts_at)) /
-        (Date.parse(cycle.ends_at) - Date.parse(cycle.starts_at)),
+      (paceNow - startsAt) / (endsAt - startsAt),
     ),
   );
   const needed = Math.max(0, target - actual);
   const remainingHours = Math.max(
     0,
-    (Date.parse(cycle.ends_at) - now) / 3600000,
+    (endsAt - paceNow) / 3600000,
   );
   const remainingUnits =
     cycle.period === "daily" ? remainingHours : remainingHours / 24;
@@ -119,27 +125,33 @@ function GoalBar({ cycle, now }: { cycle: ArenaCycle; now: number }) {
         <p className="text-2xl font-medium tabular-nums">
           {format(actual)}{" "}
           <span className="text-xs font-normal text-muted-foreground">
-            / {format(target)}
+            {target > 0 ? `/ ${format(target)}` : "sem participantes"}
           </span>
         </p>
-        <strong className="text-xl text-ember tabular-nums">
-          {number(percent)}%
-        </strong>
+        {isRevenue && (
+          <strong className="text-xl text-ember tabular-nums">
+            {number(percent)}%
+          </strong>
+        )}
       </div>
       <Progress value={Math.min(100, Math.max(0, percent))} className="h-2" />
       <div className="mt-2 flex flex-wrap justify-between gap-1 text-xs text-muted-foreground">
         <span>
-          Faltam {format(needed)} · ritmo {number(elapsed * 100)}% do ciclo
+          {target > 0
+            ? `Faltam ${format(needed)} · ritmo ${number(elapsed * 100)}% do ciclo`
+            : "Sem participantes neste ciclo"}
         </span>
         {cycle.show_countdown && (
           <time className="tabular-nums">{countdown(cycle.ends_at, now)}</time>
         )}
       </div>
       <p className="mt-1 text-[10px] text-muted-foreground">
-        {remainingUnits > 0
-          ? `${format(needed / remainingUnits)}/${cycle.period === "daily" ? "hora" : "dia"} necessários`
-          : "Prazo encerrado"}
-        {projection != null && ` · projeção linear ${format(projection)}`}
+        {target <= 0
+          ? ""
+          : remainingUnits > 0
+            ? `${format(needed / remainingUnits)}/${cycle.period === "daily" ? "hora" : "dia"} necessários`
+            : "Prazo encerrado"}
+        {target > 0 && projection != null && ` · projeção linear ${format(projection)}`}
       </p>
     </article>
   );
@@ -229,14 +241,13 @@ function RankingList({
               </div>
               <div className="text-right">
                 <p className="text-sm tabular-nums text-ember">
-                  {number(person.score)} p.p.
+                  {member
+                    ? `${number(progressPercent(member.actual, member.target))}%`
+                    : "—"}
                 </p>
-                {member && (
-                  <p className="text-[10px] text-muted-foreground">
-                    ciclo:{" "}
-                    {number(progressPercent(member.actual, member.target))}%
-                  </p>
-                )}
+                <p className="text-[10px] text-muted-foreground">
+                  {member ? "da meta atual" : "sem meta atual"}
+                </p>
               </div>
             </div>
           );
@@ -250,15 +261,21 @@ function RankingList({
     </section>
   );
 }
-function Feed({ role, events }: { role: string; events: ArenaEvent[] }) {
+function Feed({ role, events, cycle }: { role: string; events: ArenaEvent[]; cycle?: ArenaCycle }) {
   const rows = events.filter((e) => e.responsible_role === role).slice(0, 3);
   return (
     <section className="arena-panel">
       <h2 className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">
         {role === "sdr" ? "SDRs" : "Closers"} · últimos movimentos
       </h2>
-      {rows.map((event) => (
-        <div key={event.id} className="arena-feed-item flex items-center gap-3 py-1.5">
+      {rows.map((event) => {
+        const member = cycle?.result.members.find((m) => m.user_id === event.responsible_id);
+        const occurredAt = Date.parse(event.occurred_at);
+        const inCycle = cycle && occurredAt >= Date.parse(cycle.starts_at) && occurredAt < Date.parse(cycle.ends_at);
+        const impact = member && inCycle && event.score_delta !== 0
+          ? progressPercent(event.score_delta, member.target)
+          : null;
+        return <div key={event.id} className="arena-feed-item flex items-center gap-3 py-1.5">
           <PersonAvatar name={event.responsible_name} url={event.avatar_url} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm">{event.responsible_name}</p>
@@ -266,14 +283,14 @@ function Feed({ role, events }: { role: string; events: ArenaEvent[] }) {
               {eventLabels[event.action_type] || event.action_type}
             </p>
           </div>
-          <span
-            className={`text-sm tabular-nums ${event.score_delta < 0 ? "text-rose-300" : "text-emerald-300"}`}
-          >
-            {event.score_delta > 0 ? "+" : ""}
-            {number(event.score_delta)}%
-          </span>
-        </div>
-      ))}
+          {impact !== null && (
+            <span className={`text-right text-sm tabular-nums ${impact < 0 ? "text-rose-300" : "text-emerald-300"}`}>
+              {impact > 0 ? "+" : ""}{number(impact)}%
+              <small className="block text-[10px] text-muted-foreground">da meta</small>
+            </span>
+          )}
+        </div>;
+      })}
       {!rows.length && (
         <p className="py-3 text-xs text-muted-foreground">
           Nenhum evento no período selecionado.
@@ -627,8 +644,8 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             <RankingList title="Closers" people={data.closers} cycle={closer} />
           </div>
           <footer className="grid gap-3 lg:grid-cols-2">
-            <Feed role="sdr" events={data.feed} />
-            <Feed role="closer" events={data.feed} />
+            <Feed role="sdr" events={data.feed} cycle={sdr} />
+            <Feed role="closer" events={data.feed} cycle={closer} />
           </footer>
         </>
       )}

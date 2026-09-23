@@ -4,7 +4,7 @@ Implementação autorizada por `EXECUTAR`. A TV usa a conta normal fecass1507@gm
 
 ## Contratos
 
-- Pontos percentuais fixos: SDR 0,2 / 0,4 / 0,5; Closer 10. Metas padrão de pontuação: 100.
+- Pontos internos fixos por evento: SDR 0,2 / 0,4 / 0,5; Closer 10. Metas padrão de pontuação: 100 pontos para 100% de avanço. A interface mostra o percentual calculado como pontos realizados / meta vigente × 100, inclusive quando uma meta individual substitui o padrão.
 - Faturamento bruto pela data da aprovação, preservado após estorno. Conversão mantém vendas / registros de abordagem. Ticket é calculado; 2.997 é somente referência.
 - `activity_feed` registra fatos reais imutáveis, com responsável, autor, origem e chave única. Não registra contatos de clientes.
 - `company_goals` contém versões; `goal_cycles` preserva resultados encerrados. Brasília define dias, semanas e meses.
@@ -27,6 +27,8 @@ Código integrado à `main` e mantido na branch `codex/arena-comercial`; commit 
 Para o monitor, entrar normalmente com `fecass1507@gmail.com`, abrir `/arena`, acionar tela cheia e ativar o sino uma vez por interação. A conta conserva suas roles existentes. Não há conta de monitor, credencial especial, bypass por e-mail ou rotina de automação adicional.
 
 As barras operacionais mantêm seus ciclos próprios; os cards, gráfico, ranking do período e feed acompanham Hoje/7/30/personalizado. Os ciclos diários, semanais e mensais usam Brasília. O percentual do time é a soma dos pontos dividida pela soma das metas individuais; uma meta individual habilitada substitui a meta padrão do cargo.
+
+O tempo usado nas estimativas de ritmo e do valor ainda necessário avança em intervalos de cinco minutos; novas ações registradas alteram o realizado imediatamente. O contador regressivo continua em segundos. Nos rankings da Arena e nos ciclos, a pontuação aparece como avanço da meta até 100% e pode ultrapassar 100% quando o alvo é excedido. O feed mostra o impacto percentual de eventos do ciclo aberto para a meta individual aplicável; para períodos anteriores, mantém o fato sem inferir um percentual a partir da meta atual.
 
 O gráfico usa faturamento bruto historicamente aprovado. Cancelar, estornar ou excluir uma venda aprovada reverte uma única vez os pontos originais; não elimina o faturamento aprovado. Remarcação de compra ou troca posterior do vendedor preserva o fato original na Arena. Ajustes de pontuação exigem um evento existente, motivo e confirmação administrativa.
 
