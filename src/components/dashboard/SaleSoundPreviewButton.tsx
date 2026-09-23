@@ -10,8 +10,8 @@ export function SaleSoundPreviewButton() {
       variant="outline"
       size="icon"
       className="h-10 w-10 rounded-lg"
-      title="Ouvir som de venda"
-      aria-label="Ouvir som de venda"
+      title="Tocar sino de venda"
+      aria-label="Tocar sino de venda"
       onClick={() => void previewSaleBell().catch(() => toast.error('Não foi possível reproduzir o som de venda.'))}
     >
       <Bell className="h-4 w-4" />

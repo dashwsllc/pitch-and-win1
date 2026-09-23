@@ -30,7 +30,7 @@ As barras operacionais mantêm seus ciclos próprios; os cards, gráfico, rankin
 
 O tempo usado nas estimativas de ritmo e do valor ainda necessário avança em intervalos de cinco minutos; novas ações registradas alteram o realizado imediatamente. O contador regressivo continua em segundos. Nos rankings da Arena e nos ciclos, a pontuação aparece como avanço da meta até 100% e pode ultrapassar 100% quando o alvo é excedido. O feed mostra o impacto percentual de eventos do ciclo aberto para a meta individual aplicável; para períodos anteriores, mantém o fato sem inferir um percentual a partir da meta atual.
 
-O gráfico usa faturamento bruto historicamente aprovado. Cancelar, estornar ou excluir uma venda aprovada reverte uma única vez os pontos originais; não elimina o faturamento aprovado. Remarcação de compra ou troca posterior do vendedor preserva o fato original na Arena. Ajustes de pontuação exigem um evento existente, motivo e confirmação administrativa.
+O gráfico usa faturamento bruto historicamente aprovado. Editar o valor ou o responsável de uma venda ainda aprovada atualiza os indicadores, ranking e metas dos ciclos abertos; a aprovação original permanece no histórico. Cancelar, estornar ou excluir a venda reverte os pontos ativos e preserva no faturamento bruto o último valor aprovado. Ciclos encerrados não são recalculados. Ajustes de pontuação exigem um evento existente, motivo e confirmação administrativa.
 
 A realização de Call Q é registrada na resolução da qualificação. O fechamento tem confirmação explícita de que a call agendada ocorreu. Encerramentos automáticos não presumem presença. Registros antigos sem evidência de realização não recebem retrospectivamente os 0,5 pontos de qualificação realizada.
 

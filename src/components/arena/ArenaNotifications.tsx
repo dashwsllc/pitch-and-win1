@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Volume2, VolumeX } from "lucide-react";
+import { Bell } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,13 +12,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { arenaClient, arenaRpc } from "@/lib/arena-api";
 import type { ArenaEvent, ArenaNotification } from "@/lib/arena";
 import { exactDate, errorMessage, money } from "@/lib/sales";
-import {
-  playSaleBell,
-  soundEnabled,
-  subscribeSound,
-  toggleSound,
-  unlockSound,
-} from "@/lib/arena-sound";
 import { addPopup, type ArenaPopup } from "@/lib/arena-popups";
 
 export function SaleAlerts() {
@@ -59,7 +52,6 @@ export function SaleAlerts() {
         id: event.id,
         duration: 4500,
       });
-      if (event.sound) playSaleBell();
       timer = setTimeout(next, 5000);
     };
     const receive = (raw: Event) => {
@@ -77,7 +69,7 @@ export function SaleAlerts() {
         title: `${event.responsible_name} · venda aprovada`,
         description: `${money(event.revenue_delta)} · meta do Closer atualizada`,
         priority: 3,
-        sound: true,
+        sound: false,
         receivedAt: Date.now(),
       });
       if (!active) next();
@@ -99,54 +91,16 @@ export function SaleAlerts() {
       });
       if (!active) next();
     };
-    const unlock = () => {
-      void unlockSound().catch(() => undefined);
-    };
     window.addEventListener("arena-fresh-event", receive);
     window.addEventListener("arena-fresh-notification", notification);
-    window.addEventListener("pointerdown", unlock);
-    window.addEventListener("keydown", unlock);
     return () => {
       clearTimeout(timer);
       queue.current = [];
       window.removeEventListener("arena-fresh-event", receive);
       window.removeEventListener("arena-fresh-notification", notification);
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
     };
   }, [userId]);
   return null;
-}
-export function ArenaSoundButton() {
-  const enabled = useSyncExternalStore(
-    subscribeSound,
-    soundEnabled,
-    () => false,
-  );
-  const toggle = () => {
-    void toggleSound().catch((cause) => toast.error(errorMessage(cause)));
-  };
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={toggle}
-      aria-label={
-        enabled ? "Desativar sino de vendas" : "Ativar sino de vendas"
-      }
-      title={
-        enabled
-          ? "Sino ativo após interação com a tela"
-          : "Ativar sino de aprovação de vendas"
-      }
-    >
-      {enabled ? (
-        <Volume2 className="h-4 w-4" />
-      ) : (
-        <VolumeX className="h-4 w-4" />
-      )}
-    </Button>
-  );
 }
 export function NotificationInbox() {
   const { user } = useAuth();

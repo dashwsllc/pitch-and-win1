@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/integrations/supabase/client'
-import { refreshDashboardData } from '@/lib/sync'
+import { DASHBOARD_SALES_CHANNEL, refreshDashboardData } from '@/lib/sync'
 import { arenaRpc } from '@/lib/arena-api'
 import type { ArenaEvent, ArenaNotification } from '@/lib/arena'
 
@@ -25,6 +25,8 @@ export function DataSync() {
     let subscribedOnce = false
     let liveAfter: number | null = null
     let connectionGeneration = 0
+    let lastRevision: string | undefined
+    let checkingRevision = false
 
     const refresh = () => {
       if (disposed) return
@@ -44,6 +46,22 @@ export function DataSync() {
           refreshing = false
         }
       }, 120)
+    }
+    // Realtime can miss a change while another route, tab or browser is asleep.
+    // Check only the lightweight revision cursor; fetch records only when it moves.
+    const checkRevision = async () => {
+      if (disposed || checkingRevision || document.hidden) return
+      checkingRevision = true
+      try {
+        const { data, error } = await supabase.from('dashboard_events')
+          .select('topic, revision').order('topic')
+        if (disposed || error || !data) return
+        const revision = data.map(row => `${row.topic}:${row.revision}`).join('|')
+        if (lastRevision !== undefined && revision !== lastRevision) refresh()
+        lastRevision = revision
+      } finally {
+        checkingRevision = false
+      }
     }
     // The database publishes anonymous revision signals only; records and
     // customer data are fetched afterward under the current user's RLS rules.
@@ -81,6 +99,14 @@ export function DataSync() {
       })
       .catch(refresh)
 
+    void checkRevision().catch(() => undefined)
+    const revisionTimer = window.setInterval(() => { void checkRevision().catch(() => undefined) }, 30_000)
+    const checkWhenVisible = () => { if (!document.hidden) void checkRevision().catch(() => undefined) }
+    document.addEventListener('visibilitychange', checkWhenVisible)
+    window.addEventListener('focus', checkWhenVisible)
+    const crossTab = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(DASHBOARD_SALES_CHANNEL) : null
+    if (crossTab) crossTab.onmessage = refresh
+
     // A fixed poll made monitor dashboards repeatedly re-fetch and animate.
     // Reconnect once after network recovery; normal changes arrive by Realtime.
     window.addEventListener('online', refresh)
@@ -88,6 +114,10 @@ export function DataSync() {
     return () => {
       disposed = true
       window.clearTimeout(debounce)
+      window.clearInterval(revisionTimer)
+      document.removeEventListener('visibilitychange', checkWhenVisible)
+      window.removeEventListener('focus', checkWhenVisible)
+      crossTab?.close()
       window.removeEventListener('online', refresh)
       void supabase.removeChannel(channel)
     }

@@ -44,9 +44,7 @@ import {
   type ArenaDashboard,
 } from "@/lib/arena";
 import { exactDate, money, errorMessage } from "@/lib/sales";
-import {
-  ArenaSoundButton,
-} from "@/components/arena/ArenaNotifications";
+import { SaleSoundPreviewButton } from "@/components/dashboard/SaleSoundPreviewButton";
 import "@/components/arena/arena.css";
 
 const number = (n: number) =>
@@ -395,7 +393,7 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             {query.connected && data ? "LIVE" : "RECONECTANDO"}
           </span>
           {toolbar}
-          <ArenaSoundButton />
+          <SaleSoundPreviewButton />
           <Button
             variant="ghost"
             size="icon"

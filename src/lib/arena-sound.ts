@@ -1,67 +1,49 @@
-const KEY = "arena-sale-sound";
-let context: AudioContext | undefined;
-let preference: boolean | undefined;
-const listeners = new Set<() => void>();
-export const subscribeSound = (listener: () => void) => {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-};
-export const soundEnabled = () => {
-  if (preference === undefined) {
-    try {
-      preference = localStorage.getItem(KEY) === "enabled";
-    } catch {
-      preference = false;
-    }
-  }
-  return preference;
-};
-export async function toggleSound() {
-  const enabled = !soundEnabled();
-  if (enabled) {
-    context ??= new AudioContext();
-    await context.resume();
-  }
-  preference = enabled;
-  try {
-    localStorage.setItem(KEY, enabled ? "enabled" : "disabled");
-  } catch {
-    // Keep the preference for this session when browser storage is unavailable.
-  }
-  listeners.forEach((listener) => listener());
-}
-export async function unlockSound() {
-  if (!soundEnabled()) return;
-  context ??= new AudioContext();
-  if (context.state === "suspended") await context.resume();
-}
-function ringSaleBell(audio: AudioContext) {
-  // Short additive bell; every oscillator disconnects after its envelope.
-  [880, 1320, 1760].forEach((frequency, index) => {
-    const oscillator = audio.createOscillator();
-    const gain = audio.createGain();
-    const start = audio.currentTime;
-    oscillator.frequency.value = frequency;
-    gain.gain.setValueAtTime(0, start);
-    gain.gain.linearRampToValueAtTime(0.14 / (index + 1), start + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.001, start + 1.8);
-    oscillator.connect(gain).connect(audio.destination);
-    oscillator.start(start);
-    oscillator.stop(start + 1.85);
-    oscillator.onended = () => {
-      oscillator.disconnect();
-      gain.disconnect();
-    };
-  });
-}
-export function playSaleBell() {
-  if (!soundEnabled() || !context || context.state !== "running") return;
-  ringSaleBell(context);
-}
+let context: AudioContext | undefined
+
+// Browsers cannot override the device's volume. Keep the generated signal
+// close to full scale without clipping, and run it only from a click.
 export async function previewSaleBell() {
-  context ??= new AudioContext();
-  if (context.state === "suspended") await context.resume();
-  ringSaleBell(context);
+  context ??= new AudioContext()
+  if (context.state === 'suspended') await context.resume()
+
+  const audio = context
+  const compressor = audio.createDynamicsCompressor()
+  compressor.threshold.value = -9
+  compressor.knee.value = 3
+  compressor.ratio.value = 12
+  compressor.attack.value = 0.003
+  compressor.release.value = 0.22
+
+  const master = audio.createGain()
+  master.gain.value = 0.95
+  compressor.connect(master).connect(audio.destination)
+
+  const frequencies = [880, 1320, 1760]
+  const volumes = [0.62, 0.35, 0.2]
+  const start = audio.currentTime
+  let remaining = frequencies.length * 2
+
+  for (const offset of [0, 0.27]) {
+    frequencies.forEach((frequency, index) => {
+      const oscillator = audio.createOscillator()
+      const gain = audio.createGain()
+      const at = start + offset
+      oscillator.frequency.value = frequency
+      gain.gain.setValueAtTime(0.001, at)
+      gain.gain.exponentialRampToValueAtTime(volumes[index], at + 0.012)
+      gain.gain.exponentialRampToValueAtTime(0.001, at + 1.65)
+      oscillator.connect(gain).connect(compressor)
+      oscillator.start(at)
+      oscillator.stop(at + 1.7)
+      oscillator.onended = () => {
+        oscillator.disconnect()
+        gain.disconnect()
+        remaining -= 1
+        if (remaining === 0) {
+          compressor.disconnect()
+          master.disconnect()
+        }
+      }
+    })
+  }
 }

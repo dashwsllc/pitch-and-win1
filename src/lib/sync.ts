@@ -10,6 +10,7 @@ export const AUTO_REFRESH_INTERVAL_LABEL = `${AUTO_REFRESH_INTERVAL_MS / 1000} s
 export const LIVE_CLOCK_INTERVAL_MS = 1_000
 export const CRM_CLOCK_INTERVAL_MS = 15_000
 export const RECENT_SALES_AUTOPLAY_INTERVAL_MS = 6_000
+export const DASHBOARD_SALES_CHANNEL = 'dashboard-sales-changed'
 
 export function notifyDashboardDataChanged() {
   window.dispatchEvent(new Event('dashboard-data-changed'))
@@ -30,6 +31,11 @@ export async function refreshDashboardData(client: QueryClient) {
 // A successful write refreshes both mounted consumers and cached routes.
 export async function refreshSalesData(client: QueryClient) {
   notifyDashboardDataChanged()
+  if (typeof BroadcastChannel !== 'undefined') {
+    const channel = new BroadcastChannel(DASHBOARD_SALES_CHANNEL)
+    channel.postMessage('sale-updated')
+    channel.close()
+  }
   await invalidateKeys(client, ['managed-sales', 'sales-balance', 'sales-board', 'team-ranking', 'sdr-ranking', 'crm', 'executive-audit', 'company-goals', 'arena'])
 }
 
