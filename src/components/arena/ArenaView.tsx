@@ -45,6 +45,7 @@ import {
 } from "@/lib/arena";
 import { exactDate, money, errorMessage } from "@/lib/sales";
 import { SaleSoundPreviewButton } from "@/components/dashboard/SaleSoundPreviewButton";
+import { PersonGoalProgress } from "@/components/arena/PersonGoalProgress";
 import "@/components/arena/arena.css";
 
 const number = (n: number) =>
@@ -215,39 +216,32 @@ function RankingList({
             <div
               key={person.user_id}
               data-person={person.user_id}
-              className="arena-person flex items-center gap-3 rounded-xl bg-white/[0.025] px-3 py-2"
+              className="arena-person rounded-xl px-3 py-2.5"
             >
-              <span
-                className={`w-4 text-sm tabular-nums ${i === 0 ? "text-ember" : "text-muted-foreground"}`}
-              >
-                {i + 1}
-              </span>
-              <PersonAvatar name={person.name} url={person.avatarUrl} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">
-                  {person.name}
-                  {person.suspended && (
-                    <span className="ml-2 text-[10px] text-muted-foreground">
-                      inativo
-                    </span>
-                  )}
-                </p>
-                <p className="truncate text-xs text-muted-foreground" title={person.repasses != null ? `${person.no_handoff ?? 0} sem avanço · ${person.cancelled ?? 0} cancelamentos` : undefined}>
-                  {person.repasses != null
-                    ? `Q ${person.scheduled} · realizadas ${person.performed} · repasses ${person.repasses} · sem avanço ${person.no_handoff ?? 0} · canc. ${person.cancelled ?? 0}`
-                    : `${person.quantidadeVendas} vendas · ${money(person.totalVendas ?? 0)}`}
-                </p>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`w-4 text-sm tabular-nums ${i === 0 ? "text-ember" : "text-muted-foreground"}`}
+                >
+                  {i + 1}
+                </span>
+                <PersonAvatar name={person.name} url={person.avatarUrl} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm">
+                    {person.name}
+                    {person.suspended && (
+                      <span className="ml-2 text-[10px] text-muted-foreground">
+                        inativo
+                      </span>
+                    )}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground" title={person.repasses != null ? `${person.no_handoff ?? 0} sem avanço · ${person.cancelled ?? 0} cancelamentos` : undefined}>
+                    {person.repasses != null
+                      ? `Q ${person.scheduled} · realizadas ${person.performed} · repasses ${person.repasses} · sem avanço ${person.no_handoff ?? 0} · canc. ${person.cancelled ?? 0}`
+                      : `${person.quantidadeVendas} vendas · ${money(person.totalVendas ?? 0)}`}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm tabular-nums text-ember">
-                  {member
-                    ? `${number(progressPercent(member.actual, member.target))}%`
-                    : "—"}
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  {member ? "da meta atual" : "sem meta atual"}
-                </p>
-              </div>
+              <PersonGoalProgress name={person.name} member={member} period={cycle?.period} />
             </div>
           );
         })}
