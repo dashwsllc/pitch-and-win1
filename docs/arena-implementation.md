@@ -22,7 +22,7 @@ Sem dados comerciais fictícios. Validação de estabilidade por 24 horas exige 
 
 ## Entrega e operação
 
-Código na branch `codex/arena-comercial`. As três migrations foram verificadas juntas com `ROLLBACK`; não foram instaladas permanentemente e o frontend não foi publicado. A prévia local apresenta fotografias das consultas reais, sem autenticação simulada, sem gravar eventos e sem receber Realtime. Ela não substitui `/arena` autenticada.
+Código na branch `codex/arena-comercial`, commit de implementação `5fe3fce`, enviado ao GitHub. Após a autorização explícita de deploy, as três migrations foram instaladas atomicamente e o frontend foi publicado em 23/09/2026. A prévia local permanece uma fotografia das consultas reais; a experiência autenticada está em [Arena publicada](https://pitch-and-win1-five.vercel.app/arena).
 
 Para o monitor, entrar normalmente com `fecass1507@gmail.com`, abrir `/arena`, acionar tela cheia e ativar o sino uma vez por interação. A conta conserva suas roles existentes. Não há conta de monitor, credencial especial, bypass por e-mail ou rotina de automação adicional.
 
@@ -71,12 +71,14 @@ node scripts/check-arena-db.mjs
 
 O último comando requer Supabase CLI autenticado; `SUPABASE_CLI` pode indicar o executável local. Ele roda apenas a verificação anterior à instalação, sem commit. O teste de prazo altera temporariamente o fim de um ciclo real e verifica seu fechamento; toda a transação é revertida. Não cria pessoas, leads, vendas ou valores comerciais fictícios.
 
-## Ativação pendente
+## Publicação e verificações operacionais
 
 Instalar, na ordem, somente as migrations revisadas `20260923100000_arena_events.sql`, `20260923110000_arena_goals.sql` e `20260923120000_arena_operations.sql`, registrando cada versão no histórico de migrations. O repositório possui migrations antigas aplicadas por scripts próprios; não executar um push indiscriminado de todo o histórico. Publicar o frontend após o banco.
 
 `node scripts/apply-arena-migrations.mjs` verifica a instalação com rollback. Após autorização de deploy, `node scripts/apply-arena-migrations.mjs --apply` instala as três migrations e seus registros de histórico em uma transação única; interrompe se alguma versão já estiver instalada. `SUPABASE_CLI` aceita o caminho do executável autenticado. Na Vercel vinculada, preparar com `deploy --prod --skip-domain`, instalar o banco e promover a versão pronta com `promote` reduz o intervalo entre as atualizações.
 
 Depois da instalação, verificar o job `arena-cycle-deadlines`, a publicação Realtime de `activity_feed`, `dashboard_events` e `arena_notifications`, e os fluxos autenticados com as roles existentes. Medir a propagação de uma operação comercial legítima entre CRM e TV, o sino único e a recuperação de conexão. Esses testes de Realtime ponta a ponta e a observação contínua de 24 horas ainda não foram realizados; o teste SQL revertido não produz eventos comprometidos para validá-los.
+
+Verificação após o deploy: Vercel `dpl_8Z9WHUMJ5FAEA2rvHWiWXFU3czi7` em estado Ready e promovido ao domínio de produção; `/arena` respondeu HTTP 200 com o bundle novo e redirecionou corretamente ao login sem sessão. As três versões constam no histórico do Supabase. As três tabelas constam na publicação Realtime. O job está ativo a cada 5 segundos e suas três últimas execuções verificadas terminaram com sucesso. A consulta autenticada por contexto SQL da conta da TV retornou acesso autorizado, três ciclos e os agregados reais. Nenhuma venda, lead ou conta de teste foi criada para publicar.
 
 As duas vendas históricas excluídas com motivo “Recusada.” aparecem para decisão explícita em `/metas?tab=auditoria`. Sua classificação não foi inferida. O arquivo mensal consolidado passa a existir a partir da instalação; não foram inventados snapshots de meses anteriores.
