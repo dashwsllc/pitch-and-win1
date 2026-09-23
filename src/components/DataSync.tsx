@@ -22,7 +22,6 @@ export function DataSync() {
     let debounce: number | undefined
     let refreshing = false
     let refreshQueued = false
-    let subscribedOnce = false
     let liveAfter: number | null = null
     let connectionGeneration = 0
     let lastRevision: string | undefined
@@ -57,7 +56,9 @@ export function DataSync() {
           .select('topic, revision').order('topic')
         if (disposed || error || !data) return
         const revision = data.map(row => `${row.topic}:${row.revision}`).join('|')
-        if (lastRevision !== undefined && revision !== lastRevision) refresh()
+        // A change can land between the first page request and subscription.
+        // The initial cursor read also refreshes the page to close that gap.
+        if (lastRevision === undefined || revision !== lastRevision) refresh()
         lastRevision = revision
       } finally {
         checkingRevision = false
@@ -93,14 +94,13 @@ export function DataSync() {
           const generation = ++connectionGeneration
           if (status !== 'SUBSCRIBED') return
           void arenaRpc<string>('arena_live_cursor', {}).then(time => { if (!disposed && generation === connectionGeneration) liveAfter = Date.parse(time) }).catch(() => undefined)
-          if (subscribedOnce) refresh() // Catch up once after a socket reconnect.
-          subscribedOnce = true
+          refresh() // Catch up on first subscribe and every reconnect.
         })
       })
       .catch(refresh)
 
     void checkRevision().catch(() => undefined)
-    const revisionTimer = window.setInterval(() => { void checkRevision().catch(() => undefined) }, 30_000)
+    const revisionTimer = window.setInterval(() => { void checkRevision().catch(() => undefined) }, 10_000)
     const checkWhenVisible = () => { if (!document.hidden) void checkRevision().catch(() => undefined) }
     document.addEventListener('visibilitychange', checkWhenVisible)
     window.addEventListener('focus', checkWhenVisible)
