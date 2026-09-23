@@ -22,7 +22,7 @@ Sem dados comerciais fictícios. Validação de estabilidade por 24 horas exige 
 
 ## Entrega e operação
 
-Código na branch `codex/arena-comercial`, commit de implementação `5fe3fce`, enviado ao GitHub. Após a autorização explícita de deploy, as três migrations foram instaladas atomicamente e o frontend foi publicado em 23/09/2026. A prévia local permanece uma fotografia das consultas reais; a experiência autenticada está em [Arena publicada](https://pitch-and-win1-five.vercel.app/arena).
+Código integrado à `main` e mantido na branch `codex/arena-comercial`; commit de implementação `5fe3fce`. Após a autorização explícita de deploy, as três migrations foram instaladas atomicamente e o frontend foi publicado em 23/09/2026. A prévia local permanece uma fotografia das consultas reais; a experiência autenticada está em [Arena publicada](https://wsltda.com/arena), que redireciona para `www.wsltda.com`.
 
 Para o monitor, entrar normalmente com `fecass1507@gmail.com`, abrir `/arena`, acionar tela cheia e ativar o sino uma vez por interação. A conta conserva suas roles existentes. Não há conta de monitor, credencial especial, bypass por e-mail ou rotina de automação adicional.
 
@@ -79,6 +79,6 @@ Instalar, na ordem, somente as migrations revisadas `20260923100000_arena_events
 
 Depois da instalação, verificar o job `arena-cycle-deadlines`, a publicação Realtime de `activity_feed`, `dashboard_events` e `arena_notifications`, e os fluxos autenticados com as roles existentes. Medir a propagação de uma operação comercial legítima entre CRM e TV, o sino único e a recuperação de conexão. Esses testes de Realtime ponta a ponta e a observação contínua de 24 horas ainda não foram realizados; o teste SQL revertido não produz eventos comprometidos para validá-los.
 
-Verificação após o deploy: Vercel `dpl_8Z9WHUMJ5FAEA2rvHWiWXFU3czi7` em estado Ready e promovido ao domínio de produção; `/arena` respondeu HTTP 200 com o bundle novo e redirecionou corretamente ao login sem sessão. As três versões constam no histórico do Supabase. As três tabelas constam na publicação Realtime. O job está ativo a cada 5 segundos e suas três últimas execuções verificadas terminaram com sucesso. A consulta autenticada por contexto SQL da conta da TV retornou acesso autorizado, três ciclos e os agregados reais. Nenhuma venda, lead ou conta de teste foi criada para publicar.
+Verificação após o deploy: a publicação vinculada ao GitHub do commit `4274ee1` concluiu com sucesso em `wsltda.com`; `/arena` redirecionou para `www.wsltda.com/arena`, respondeu HTTP 200 e entregou o bundle novo. Sem sessão, a rota protegida redireciona ao login. As três versões constam no histórico do Supabase. As três tabelas constam na publicação Realtime. O job está ativo a cada 5 segundos e suas três últimas execuções verificadas terminaram com sucesso. A consulta autenticada por contexto SQL da conta da TV retornou acesso autorizado, três ciclos e os agregados reais. Nenhuma venda, lead ou conta de teste foi criada para publicar.
 
 As duas vendas históricas excluídas com motivo “Recusada.” aparecem para decisão explícita em `/metas?tab=auditoria`. Sua classificação não foi inferida. O arquivo mensal consolidado passa a existir a partir da instalação; não foram inventados snapshots de meses anteriores.
