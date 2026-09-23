@@ -8,6 +8,7 @@ DECLARE
   v_start timestamp without time zone;
   v_end timestamp without time zone;
   v_sale public.vendas;
+  v_task public.daily_goal_tasks;
   v_before numeric;
   v_after numeric;
 BEGIN
@@ -19,7 +20,7 @@ BEGIN
   SELECT r.user_id INTO v_assignee FROM public.user_roles r
   JOIN public.profiles p USING(user_id)
   WHERE r.role::text='closer' AND NOT p.suspended
-    AND NOT EXISTS(SELECT 1 FROM public.user_roles x WHERE x.user_id=r.user_id AND x.role::text='super_admin')
+    AND NOT EXISTS(SELECT 1 FROM public.user_roles x WHERE x.user_id=r.user_id AND x.role::text IN ('executive','super_admin'))
     AND EXISTS(SELECT 1 FROM public.registration_requests q WHERE q.user_id=r.user_id AND q.status='approved')
   ORDER BY r.user_id LIMIT 1;
   SELECT r.user_id INTO v_other FROM public.user_roles r
@@ -57,6 +58,9 @@ BEGIN
   IF v_after IS DISTINCT FROM v_before+1 THEN
     RAISE EXCEPTION 'Venda editada não atualizou o ranking mensal';
   END IF;
+  v_task:=public.executive_create_daily_goal_task(v_assignee,
+    (now() AT TIME ZONE 'America/Sao_Paulo')::date,
+    'Verificação transitória de tarefa individual');
 
   v_goal:=public.arena_save_goal(jsonb_build_object(
     'title','Verificação transitória de meta individual',
@@ -73,6 +77,17 @@ BEGIN
 
   EXECUTE 'SET LOCAL ROLE authenticated';
   PERFORM set_config('request.jwt.claim.sub',v_assignee::text,true);
+  IF NOT EXISTS(SELECT 1 FROM public.daily_goal_tasks WHERE id=v_task.id) THEN
+    RAISE EXCEPTION 'Colaborador não vê a própria tarefa';
+  END IF;
+  v_task:=public.set_daily_goal_task_completed(v_task.id,true,v_task.version);
+  IF NOT v_task.is_completed THEN RAISE EXCEPTION 'Colaborador não concluiu a tarefa'; END IF;
+  BEGIN
+    PERFORM public.executive_create_daily_goal_task(v_assignee,
+      (now() AT TIME ZONE 'America/Sao_Paulo')::date,'Criação indevida');
+    RAISE EXCEPTION 'Colaborador criou tarefa sem permissão';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   IF NOT EXISTS(SELECT 1 FROM public.company_goals WHERE id=v_goal) OR
      NOT EXISTS(SELECT 1 FROM jsonb_array_elements(public.arena_visible_goals()) x
        WHERE x->>'goal_id'=v_goal::text) OR
@@ -82,6 +97,14 @@ BEGIN
     RAISE EXCEPTION 'Colaborador escolhido não vê a própria meta';
   END IF;
   PERFORM set_config('request.jwt.claim.sub',v_other::text,true);
+  IF EXISTS(SELECT 1 FROM public.daily_goal_tasks WHERE id=v_task.id) THEN
+    RAISE EXCEPTION 'Outro colaborador viu tarefa individual';
+  END IF;
+  BEGIN
+    PERFORM public.arena_complete_task(v_task.id,false,v_task.version,'');
+    RAISE EXCEPTION 'Outro colaborador alterou tarefa individual';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   IF EXISTS(SELECT 1 FROM public.company_goals WHERE id=v_goal) OR
      EXISTS(SELECT 1 FROM jsonb_array_elements(public.arena_visible_goals()) x
        WHERE x->>'goal_id'=v_goal::text) OR
