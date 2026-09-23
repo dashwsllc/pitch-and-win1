@@ -387,7 +387,7 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             {query.connected && data ? "LIVE" : "RECONECTANDO"}
           </span>
           {toolbar}
-          <SaleSoundPreviewButton labeled />
+          <SaleSoundPreviewButton moneyIcon />
           <Button
             variant="ghost"
             size="icon"
