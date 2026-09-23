@@ -37,9 +37,7 @@ export async function unlockSound() {
   context ??= new AudioContext();
   if (context.state === "suspended") await context.resume();
 }
-export function playSaleBell() {
-  if (!soundEnabled() || !context || context.state !== "running") return;
-  const audio = context;
+function ringSaleBell(audio: AudioContext) {
   // Short additive bell; every oscillator disconnects after its envelope.
   [880, 1320, 1760].forEach((frequency, index) => {
     const oscillator = audio.createOscillator();
@@ -57,4 +55,13 @@ export function playSaleBell() {
       gain.disconnect();
     };
   });
+}
+export function playSaleBell() {
+  if (!soundEnabled() || !context || context.state !== "running") return;
+  ringSaleBell(context);
+}
+export async function previewSaleBell() {
+  context ??= new AudioContext();
+  if (context.state === "suspended") await context.resume();
+  ringSaleBell(context);
 }

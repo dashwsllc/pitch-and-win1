@@ -26,14 +26,14 @@ import { progressPercent, stateLabels } from "@/lib/arena";
 
 const emptyGoal = {
   title: "",
-  target: 100,
+  target: "100",
   scope: "role",
   target_role: "sdr",
   assignee_id: "",
   period: "daily",
   recurring: true,
   show_countdown: true,
-  ticket_reference: 2997,
+  ticket_reference: "2997",
   enabled: true,
 };
 export function GoalManagement({
@@ -77,14 +77,14 @@ export function GoalManagement({
       goal
         ? {
             title: goal.title,
-            target: goal.target,
+            target: String(goal.target),
             scope: goal.scope,
             target_role: goal.target_role || "",
             assignee_id: goal.assignee_id || "",
             period: goal.period,
             recurring: goal.recurring,
             show_countdown: goal.show_countdown,
-            ticket_reference: goal.ticket_reference,
+            ticket_reference: String(goal.ticket_reference),
             enabled: goal.enabled,
           }
         : emptyGoal,
@@ -102,6 +102,12 @@ export function GoalManagement({
     event.preventDefault();
     setBusy(true);
     try {
+      const target = Number(form.target);
+      const ticketReference = Number(form.ticket_reference);
+      if (!form.target.trim() || !Number.isFinite(target) || target <= 0 || target > 100000000)
+        throw new Error("Informe uma meta válida maior que zero.");
+      if (!form.ticket_reference.trim() || !Number.isFinite(ticketReference) || ticketReference <= 0)
+        throw new Error("Informe um ticket de referência válido maior que zero.");
       if (!!starts !== !!ends)
         throw new Error("Informe início e fim do ciclo personalizado.");
       if (
@@ -117,6 +123,8 @@ export function GoalManagement({
       await arenaRpc("arena_save_goal", {
         p_data: {
           ...form,
+          target,
+          ticket_reference: ticketReference,
           effective_at: effective ? brasiliaLocalInputToIso(effective) : null,
           ...(starts && (!previous || ends !== originalEnd)
             ? {
@@ -325,7 +333,7 @@ export function GoalManagement({
                   step="0.01"
                   value={form.target}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, target: Number(e.target.value) }))
+                    setForm((f) => ({ ...f, target: e.target.value }))
                   }
                 />
               </div>
@@ -423,7 +431,7 @@ export function GoalManagement({
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      ticket_reference: Number(e.target.value),
+                      ticket_reference: e.target.value,
                     }))
                   }
                 />

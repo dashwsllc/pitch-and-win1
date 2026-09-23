@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client'
 import type { Tables } from '@/integrations/supabase/types'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
-import { brasiliaDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
+import { addDaysToDateKey, brasiliaDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { sanitizePlainText } from '@/lib/plain-text'
 
@@ -45,6 +45,7 @@ export function useBrasiliaToday() {
 export function useDailyGoals() {
   const { user } = useAuth()
   const today = useBrasiliaToday()
+  const yesterday = addDaysToDateKey(today, -1)
   const client = useQueryClient()
   const key = ['daily-goals', 'mine', user?.id, today]
   const query = useQuery({
@@ -65,6 +66,22 @@ export function useDailyGoals() {
     refetchOnWindowFocus: false,
     retry: 1,
   })
+  const previousQuery = useQuery({
+    queryKey: ['daily-goals', 'mine', user?.id, yesterday],
+    enabled: !!user,
+    queryFn: async () => fetchAllPages((from, to) => supabase
+      .from('daily_goal_tasks')
+      .select('*')
+      .eq('assignee_id', user!.id)
+      .eq('task_date', yesterday)
+      .order('position')
+      .order('created_at')
+      .order('id')
+      .range(from, to)),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  })
 
   const setCompleted = async (task: DailyGoalTask, completed: boolean) => {
     const { data, error } = await supabase.rpc('set_daily_goal_task_completed', {
@@ -82,6 +99,9 @@ export function useDailyGoals() {
 
   return {
     tasks: query.data ?? [],
+    yesterday,
+    previousTasks: previousQuery.data ?? [],
+    previousError: previousQuery.error,
     today,
     loading: query.isLoading,
     refreshing: query.isFetching,

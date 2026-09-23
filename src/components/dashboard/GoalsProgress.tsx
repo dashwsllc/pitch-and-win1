@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { useDailyGoals, type DailyGoalTask } from '@/hooks/useGoals'
 import { useLiveClock } from '@/hooks/useLiveClock'
-import { formatDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
+import { brasiliaDayBounds, brasiliaLocalToDate, brasiliaParts, formatDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
 import { safePlainText } from '@/lib/plain-text'
 import { errorMessage } from '@/lib/sales'
 import { cn } from '@/lib/utils'
@@ -21,14 +21,25 @@ function countdownLabel(milliseconds: number) {
 }
 
 export function GoalsProgress() {
-  const { tasks, today, loading, error, refreshing, refetch, setCompleted } = useDailyGoals()
+  const { tasks, today, yesterday, previousTasks, previousError, loading, error, refreshing, refetch, setCompleted } = useDailyGoals()
   const { toast } = useToast()
   const now = useLiveClock()
+  const paceNow = useLiveClock(5 * 60 * 1000)
   const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set())
 
   const completed = tasks.filter((task) => task.is_completed).length
   const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0
   const allCompleted = tasks.length > 0 && completed === tasks.length
+  const { start, end } = brasiliaDayBounds(today)
+  const elapsedDayPercent = Math.min(100, Math.max(0, ((paceNow.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100))
+  const { hour, minute, second } = brasiliaParts(paceNow)
+  const previousCutoff = brasiliaLocalToDate(yesterday, `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`).getTime()
+  const comparableTasks = previousTasks.filter((task) => Date.parse(task.created_at) <= previousCutoff)
+  const previousProgress = !previousError && comparableTasks.length
+    ? Math.round((comparableTasks.filter((task) => task.is_completed && task.completed_at && Date.parse(task.completed_at) <= previousCutoff).length / comparableTasks.length) * 100)
+    : null
+  const behindYesterday = previousProgress !== null && progress < previousProgress
+  const belowPace = !allCompleted && (progress < elapsedDayPercent || behindYesterday)
   const remainingMs = millisecondsUntilBrasiliaMidnight(now)
   const urgency = remainingMs <= 2 * 60 * 60 * 1000
     ? 'critical'
@@ -109,8 +120,9 @@ export function GoalsProgress() {
     <Card className={cn(
       'surface-inset-glow overflow-hidden rounded-2xl border-0 transition-shadow',
       allCompleted && 'shadow-[rgba(52,211,153,0.18)_0_0_0_1px_inset]',
-      !allCompleted && urgency === 'critical' && 'shadow-[rgba(244,63,94,0.22)_0_0_0_1px_inset]',
-      !allCompleted && urgency === 'attention' && 'shadow-[rgba(251,191,36,0.18)_0_0_0_1px_inset]',
+      belowPace && 'shadow-[rgba(244,63,94,0.22)_0_0_0_1px_inset]',
+      !belowPace && !allCompleted && urgency === 'critical' && 'shadow-[rgba(244,63,94,0.22)_0_0_0_1px_inset]',
+      !belowPace && !allCompleted && urgency === 'attention' && 'shadow-[rgba(251,191,36,0.18)_0_0_0_1px_inset]',
     )}>
       <CardContent className="p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -120,9 +132,10 @@ export function GoalsProgress() {
               <span className="text-xs tabular-nums text-muted-foreground">{completed}/{tasks.length} concluídas</span>
             </div>
             <div className="mt-3 flex items-center gap-3">
-              <Progress value={progress} className="h-2 flex-1" aria-label={`${progress}% das metas concluídas`} />
-              <span className="w-10 text-right text-sm font-medium tabular-nums text-white">{progress}%</span>
+              <Progress value={progress} className="h-2 flex-1" indicatorClassName={belowPace ? 'bg-rose-500' : undefined} aria-label={`${progress}% das metas concluídas${belowPace ? ', abaixo do ritmo' : ''}`} />
+              <span className={cn('w-10 text-right text-sm font-medium tabular-nums text-white', belowPace && 'text-rose-300')}>{progress}%</span>
             </div>
+            {belowPace && <p className="mt-2 text-xs text-rose-300">Abaixo do ritmo · esperado neste horário: {Math.round(elapsedDayPercent)}%{behindYesterday ? ` · ontem: ${previousProgress}%` : ''}</p>}
           </div>
           <div className={cn(
             'flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs tabular-nums',

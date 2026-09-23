@@ -70,6 +70,7 @@ function GoalBar({ cycle, now }: { cycle: ArenaCycle; now: number }) {
   const { actual, target } = cycle.result;
   const isRevenue = cycle.metric === "revenue";
   const state = cycleState(actual, target, cycle.starts_at, cycle.ends_at, now);
+  const belowPace = state === "at_risk" || state === "below" || state === "failed";
   const percent = progressPercent(actual, target);
   const previous = useRef<{ id: string; level: number }>();
   const [effect, setEffect] = useState(0);
@@ -113,7 +114,7 @@ function GoalBar({ cycle, now }: { cycle: ArenaCycle; now: number }) {
         <h2 className="text-sm font-medium">{cycle.title}</h2>
         <span
           className={
-            state === "below" || state === "failed"
+            belowPace
               ? "text-rose-300"
               : "text-emerald-300"
           }
@@ -134,7 +135,7 @@ function GoalBar({ cycle, now }: { cycle: ArenaCycle; now: number }) {
           </strong>
         )}
       </div>
-      <Progress value={Math.min(100, Math.max(0, percent))} className="h-2" />
+      <Progress value={Math.min(100, Math.max(0, percent))} className="h-2" indicatorClassName={belowPace ? "bg-rose-500" : undefined} aria-label={`${number(percent)}% da meta${belowPace ? ", abaixo do ritmo" : ""}`} />
       <div className="mt-2 flex flex-wrap justify-between gap-1 text-xs text-muted-foreground">
         <span>
           {target > 0

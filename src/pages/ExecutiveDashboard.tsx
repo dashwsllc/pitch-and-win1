@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useExecutiveDashboard } from '@/hooks/useExecutiveDashboard'
 import { MetricCard } from '@/components/dashboard/MetricCard'
+import { SaleSoundPreviewButton } from '@/components/dashboard/SaleSoundPreviewButton'
 import { SalesChart } from '@/components/dashboard/SalesChart'
 import { FilterTabs } from '@/components/dashboard/FilterTabs'
 import { ExecutiveUserManagement } from '@/components/executive/ExecutiveUserManagement'
@@ -66,6 +67,7 @@ export default function ExecutiveDashboard() {
             <p className="mt-2 text-sm text-muted-foreground">Visão da operação e controle de cada decisão comercial.</p>
           </div>
           <div className="flex items-center gap-3">
+            <SaleSoundPreviewButton />
             <Button onClick={refetch} variant="outline" size="sm" disabled={loading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
