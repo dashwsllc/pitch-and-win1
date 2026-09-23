@@ -68,14 +68,14 @@ export function useDashboardData(
         fetchAllPages((from, to) => {
           let request = supabase
             .from('vendas')
-            .select('id, nome_produto, valor_venda, created_at')
+            .select('id, nome_produto, valor_venda, updated_at')
             .eq('approval_status', 'aprovada')
           if (period.start && period.end) {
             request = request
-              .gte('created_at', period.start.toISOString())
-              .lt('created_at', period.end.toISOString())
+              .gte('updated_at', period.start.toISOString())
+              .lt('updated_at', period.end.toISOString())
           }
-          request = request.order('created_at').order('id')
+          request = request.order('updated_at').order('id')
           if (!isExecutive) request = request.eq('user_id', userId)
           return request.range(from, to)
         }),
@@ -103,7 +103,7 @@ export function useDashboardData(
 
       // Short ranges stay daily; long and all-time ranges are aggregated so
       // the commercial evolution remains readable.
-      const vendasMes = buildDashboardSeries(vendas, abordagens, period)
+      const vendasMes = buildDashboardSeries(vendas.map(venda => ({ created_at: venda.updated_at })), abordagens, period)
 
       // Top products
       const produtosCont = new Map<string, { quantidade: number; valor: number }>()

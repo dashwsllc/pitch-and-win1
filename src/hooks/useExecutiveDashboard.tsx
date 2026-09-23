@@ -100,15 +100,15 @@ export function useExecutiveDashboard(
       const salesData = await fetchAllPages((from, to) => {
         let request = supabase
           .from('vendas')
-          .select('id, user_id, nome_produto, valor_venda, created_at')
+          .select('id, user_id, nome_produto, valor_venda, updated_at')
           .eq('approval_status', 'aprovada')
         if (period.start && period.end) {
           request = request
-            .gte('created_at', period.start.toISOString())
-            .lt('created_at', period.end.toISOString())
+            .gte('updated_at', period.start.toISOString())
+            .lt('updated_at', period.end.toISOString())
         }
         return request
-          .order('created_at', { ascending: false })
+          .order('updated_at', { ascending: false })
           .order('id')
           .range(from, to)
       })
@@ -143,7 +143,7 @@ export function useExecutiveDashboard(
       const activeSubscriptions = subscriptionsData?.filter(sub => sub.status === 'ativa').length || 0
       const conversionRate = totalApproaches > 0 ? (totalSales / totalApproaches) * 100 : 0
 
-      const salesByPeriod = buildDashboardSeries(salesData, approachesData, period)
+      const salesByPeriod = buildDashboardSeries(salesData.map(sale => ({ created_at: sale.updated_at })), approachesData, period)
 
       // Top sellers - use profileMap for real names
       const sellerStats = new Map<string, {
@@ -197,7 +197,7 @@ export function useExecutiveDashboard(
           type: 'sale' as const,
           seller_name: profileMap.get(sale.user_id) || `Seller ${sale.user_id.substring(0, 8)}`,
           details: `Venda de ${sale.nome_produto} - R$ ${Number(sale.valor_venda).toLocaleString('pt-BR')}`,
-          created_at: sale.created_at
+          created_at: sale.updated_at
         })) || []),
         ...(approachesData?.slice(0, 5).map(approach => ({
           type: 'approach' as const,

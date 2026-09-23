@@ -5,7 +5,7 @@ Implementação autorizada por `EXECUTAR`. A TV usa a conta normal fecass1507@gm
 ## Contratos
 
 - Pontos internos fixos por evento: SDR 0,2 / 0,4 / 0,5; Closer 10. Metas padrão de pontuação: 100 pontos para 100% de avanço. A interface mostra o percentual calculado como pontos realizados / meta vigente × 100, inclusive quando uma meta individual substitui o padrão.
-- Faturamento bruto pela data da aprovação, preservado após estorno. Conversão mantém vendas / registros de abordagem. Ticket é calculado; 2.997 é somente referência.
+- Vendas ainda aprovadas contam para o responsável atual na data da última atualização, inclusive após troca de responsável ou valor. Conversão mantém vendas / registros de abordagem. Ticket é calculado; 2.997 é somente referência. O fato original permanece no histórico após estorno.
 - `activity_feed` registra fatos reais imutáveis, com responsável, autor, origem e chave única. Não registra contatos de clientes.
 - `company_goals` contém versões; `goal_cycles` preserva resultados encerrados. Brasília define dias, semanas e meses.
 - Duas exclusões históricas de vendas aprovadas com motivo “Recusada.” exigem classificação administrativa; não entram automaticamente no faturamento.
@@ -30,7 +30,7 @@ As barras operacionais mantêm seus ciclos próprios; os cards, gráfico, rankin
 
 O tempo usado nas estimativas de ritmo e do valor ainda necessário avança em intervalos de cinco minutos; novas ações registradas alteram o realizado imediatamente. O contador regressivo continua em segundos. Nos rankings da Arena e nos ciclos, a pontuação aparece como avanço da meta até 100% e pode ultrapassar 100% quando o alvo é excedido. O feed mostra o impacto percentual de eventos do ciclo aberto para a meta individual aplicável; para períodos anteriores, mantém o fato sem inferir um percentual a partir da meta atual.
 
-O gráfico usa faturamento bruto historicamente aprovado. Editar o valor ou o responsável de uma venda ainda aprovada atualiza os indicadores, ranking e metas dos ciclos abertos; a aprovação original permanece no histórico. Cancelar, estornar ou excluir a venda reverte os pontos ativos e preserva no faturamento bruto o último valor aprovado. Ciclos encerrados não são recalculados. Ajustes de pontuação exigem um evento existente, motivo e confirmação administrativa.
+O gráfico atribui cada venda ainda aprovada à data da última atualização e ao responsável atual. Editar o valor ou o responsável move a venda para esse período nos indicadores, ranking e metas dos ciclos abertos; a aprovação original permanece no histórico. Cancelar, estornar ou excluir a venda reverte os pontos ativos e preserva no faturamento bruto o último valor aprovado. Ciclos encerrados não são recalculados. Ajustes de pontuação exigem um evento existente, motivo e confirmação administrativa.
 
 A realização de Call Q é registrada na resolução da qualificação. O fechamento tem confirmação explícita de que a call agendada ocorreu. Encerramentos automáticos não presumem presença. Registros antigos sem evidência de realização não recebem retrospectivamente os 0,5 pontos de qualificação realizada.
 

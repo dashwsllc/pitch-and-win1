@@ -19,6 +19,7 @@ export const eventLabels: Record<string, string> = {
   "closing.no_sale": "Venda não concluída",
   "call.cancelled": "Agendamento cancelado",
   "sale.approved": "Venda aprovada",
+  "sale.updated": "Venda atualizada",
   "sale.reversed": "Venda cancelada / estornada",
   "score.adjusted": "Pontuação corrigida",
 };

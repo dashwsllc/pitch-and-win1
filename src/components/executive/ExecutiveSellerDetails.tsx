@@ -30,7 +30,7 @@ interface SellerSale {
   id: string
   nome_produto: string
   valor_venda: number
-  created_at: string
+  updated_at: string
 }
 
 interface SellerApproach {
@@ -93,10 +93,10 @@ export function ExecutiveSellerDetails() {
       const [sales, approaches, subscriptions] = await Promise.all([
         fetchAllPages((from, to) => supabase
           .from('vendas')
-          .select('id, nome_produto, valor_venda, created_at')
+          .select('id, nome_produto, valor_venda, updated_at')
           .eq('user_id', sellerId)
           .eq('approval_status', 'aprovada')
-          .order('created_at', { ascending: false })
+          .order('updated_at', { ascending: false })
           .order('id')
           .range(from, to)),
         fetchAllPages((from, to) => supabase
@@ -125,7 +125,7 @@ export function ExecutiveSellerDetails() {
       const today = brasiliaDateKey()
       const salesByDay = Array.from({ length: 7 }, (_, index) => {
         const dateKey = addDaysToDateKey(today, index - 6)
-        const daySales = sales.filter((sale) => brasiliaDateKey(sale.created_at) === dateKey)
+        const daySales = sales.filter((sale) => brasiliaDateKey(sale.updated_at) === dateKey)
         const dayApproaches = approaches.filter((approach) => brasiliaDateKey(approach.created_at) === dateKey)
         return {
           period: formatDateKey(dateKey, { day: '2-digit', month: '2-digit', year: undefined }),
@@ -326,7 +326,7 @@ export function ExecutiveSellerDetails() {
                           <div>
                             <p className="font-medium text-sm">{sale.nome_produto}</p>
                             <p className="text-xs text-muted-foreground">
-                              {formatBrasiliaDate(sale.created_at)}
+                              {formatBrasiliaDate(sale.updated_at)}
                             </p>
                           </div>
                           <p className="font-semibold text-foreground">
