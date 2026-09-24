@@ -7,7 +7,6 @@ import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FilterTabs } from "@/components/dashboard/FilterTabs"
 import { GoalsProgress } from "@/components/dashboard/GoalsProgress"
 import { ShiftApproachGoals } from "@/components/arena/ShiftApproachGoals"
-import { SaleSoundPreviewButton } from "@/components/dashboard/SaleSoundPreviewButton"
 import { LeaderboardPreview } from "@/components/dashboard/LeaderboardPreview"
 import { RecentSales } from "@/components/dashboard/RecentSales"
 import { SalesBoard } from "@/components/sales/SalesBoard"
@@ -161,7 +160,6 @@ export default function Dashboard() {
             </div>
 
             <div data-hero-item className="flex flex-wrap items-center gap-2.5">
-              <SaleSoundPreviewButton />
               {userPosition > 0 && (
                 <Badge className="h-10 gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.045] px-3.5 text-xs font-medium text-ash hover:bg-white/[0.065]">
                   <Crown className="h-3.5 w-3.5 text-amber-400" />

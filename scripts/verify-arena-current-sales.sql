@@ -23,8 +23,8 @@ BEGIN
     AND EXISTS(SELECT 1 FROM public.user_roles r WHERE r.user_id=v.user_id AND r.role::text='closer')
     ORDER BY COALESCE(v.reviewed_at,v.created_at) DESC LIMIT 1;
   IF s.id IS NULL THEN RAISE EXCEPTION 'No approved Closer sale for rollback verification'; END IF;
-  v_start:=COALESCE(s.reviewed_at,s.created_at)-interval '1 second';
-  v_end:=COALESCE(s.reviewed_at,s.created_at)+interval '1 second';
+  v_start:=s.created_at-interval '1 second';
+  v_end:=s.created_at+interval '1 second';
   v_before:=(public.arena_period_metrics(v_start,v_end)->>'revenue')::numeric;
   SELECT (x->>'totalVendas')::numeric INTO v_old_sales
   FROM jsonb_array_elements(public.arena_team_ranking(v_start,v_end)) x
@@ -68,8 +68,8 @@ BEGIN
   PERFORM set_config('dashboard.sale_decision',s.id::text,true);
   UPDATE public.vendas SET approval_status='estornada' WHERE id=s.id;
   PERFORM set_config('dashboard.sale_decision','',true);
-  IF (public.arena_period_metrics(v_start,v_end)->>'revenue')::numeric IS DISTINCT FROM v_after THEN
-    RAISE EXCEPTION 'Reversal erased or duplicated historical gross revenue';
+  IF (public.arena_period_metrics(v_start,v_end)->>'revenue')::numeric IS DISTINCT FROM v_after-(s.valor_venda+1) THEN
+    RAISE EXCEPTION 'Reversed sale remains in active Arena revenue';
   END IF;
   IF EXISTS(SELECT 1 FROM public.arena_sale_facts WHERE sale_id=s.id AND active) THEN
     RAISE EXCEPTION 'Reversed sale still counted as active';

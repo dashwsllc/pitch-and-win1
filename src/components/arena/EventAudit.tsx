@@ -190,7 +190,7 @@ export function EventAudit() {
             <DialogDescription>
               {selected
                 ? `${selected.responsible_name} · ${eventLabels[selected.action_type]}. Registre somente o acréscimo ou desconto necessário.`
-                : "Uma aprovação válida preserva o faturamento bruto. Uma aprovação registrada por engano permanece fora dos indicadores."}
+                : "A aprovação e o cancelamento permanecem na auditoria. Somente vendas atualmente aprovadas entram no faturamento da Arena."}
             </DialogDescription>
           </DialogHeader>
           {selected ? (

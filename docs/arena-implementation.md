@@ -34,13 +34,13 @@ Sem dados comerciais fictícios. Validação de estabilidade por 24 horas exige 
 
 Código integrado à `main` e mantido na branch `codex/arena-comercial`; commit de implementação `5fe3fce`. Após a autorização explícita de deploy, as três migrations foram instaladas atomicamente e o frontend foi publicado em 23/09/2026. A prévia local permanece uma fotografia das consultas reais; a experiência autenticada está em [Arena publicada](https://wsltda.com/arena), que redireciona para `www.wsltda.com`.
 
-Para o monitor, entrar normalmente com `fecass1507@gmail.com`, abrir `/arena`, acionar tela cheia e clicar no sino quando quiser tocar o som da venda. A conta conserva suas roles existentes. Não há conta de monitor, credencial especial, bypass por e-mail ou rotina de automação adicional.
+Para o monitor, entrar com a conta autorizada, abrir `/arena` e acionar tela cheia. A conta conserva suas roles existentes. Não há conta de monitor, credencial especial, bypass por e-mail ou rotina de automação adicional. O som de venda está desativado.
 
 As barras operacionais mantêm seus ciclos próprios; os cards, gráfico, ranking do período e feed acompanham Hoje/7/30/personalizado. Os ciclos diários, semanais e mensais usam Brasília. O percentual do time é a soma dos pontos dividida pela soma das metas individuais; uma meta individual habilitada substitui a meta padrão do cargo.
 
 O tempo usado nas estimativas de ritmo e do valor ainda necessário avança em intervalos de cinco minutos; novas ações registradas alteram o realizado imediatamente. O contador regressivo continua em segundos. Nos rankings da Arena e nos ciclos, a pontuação aparece como avanço da meta até 100% e pode ultrapassar 100% quando o alvo é excedido. O feed mostra o impacto percentual de eventos do ciclo aberto para a meta individual aplicável; para períodos anteriores, mantém o fato sem inferir um percentual a partir da meta atual.
 
-O gráfico atribui cada venda ainda aprovada à data da compra (`created_at`) e ao responsável atual. Editar o valor ou o responsável atualiza os indicadores, ranking e metas do período da compra sem registrar uma nova venda no dia da edição; a aprovação original permanece no histórico. Corrigir a data da compra move a venda para o período corrigido. Cancelar, estornar ou excluir uma venda reduz a quantidade ativa, a posição do Closer, a conversão e os pontos do ciclo aberto. O faturamento bruto histórico ainda preserva o último valor aprovado; o ticket médio usa apenas vendas ativas. Cancelar uma Call Q ou uma call de fechamento, ou remover seu lead pelo painel administrativo, retira o agendamento dos totais e seus pontos da meta SDR aberta, inclusive quando a remoção ocorre em outro período. O repasse e o marco de qualificação deixam de contar quando não há call de fechamento ativa. Os eventos originais e as reversões permanecem na auditoria. Ciclos encerrados não são recalculados. Ajustes de pontuação exigem um evento existente, motivo e confirmação administrativa.
+O gráfico atribui cada venda ainda aprovada à data da compra (`created_at`) e ao responsável atual. Editar o valor ou o responsável atualiza os indicadores, ranking e metas do período da compra sem registrar uma nova venda no dia da edição; a aprovação original permanece no histórico. Corrigir a data da compra move a venda para o período corrigido. Cancelar, estornar ou excluir uma venda reduz a quantidade ativa, o faturamento dos períodos abertos, a posição do Closer, a conversão e os pontos do ciclo aberto. O ticket médio usa apenas vendas ativas. Cancelar uma Call Q ou uma call de fechamento, ou remover seu lead pelo painel administrativo, retira o agendamento dos totais e seus pontos da meta SDR aberta, inclusive quando a remoção ocorre em outro período. O repasse e o marco de qualificação deixam de contar quando não há call de fechamento ativa. Os eventos originais e as reversões permanecem na auditoria. Ciclos encerrados não são recalculados. Ajustes de pontuação exigem um evento existente, motivo e confirmação administrativa.
 
 A realização de Call Q é registrada na resolução da qualificação. O fechamento tem confirmação explícita de que a call agendada ocorreu. Encerramentos automáticos não presumem presença. Registros antigos sem evidência de realização não recebem retrospectivamente os 0,5 pontos de qualificação realizada.
 
@@ -54,7 +54,7 @@ Tarefas operacionais são atribuídas a exatamente uma pessoa. O banco rejeita u
 
 A tarefa de 24/09 “Abordar 50 LEAD's da lista” foi corrigida na migração `20260924160000_correct_pedro_task_assignment.sql`: somente Pedro Iago permanece como destinatário; os dois registros e avisos indevidos foram removidos, com evento de auditoria de sistema. `scripts/verify-pedro-task-assignment.sql` valida o resultado sem alterar dados.
 
-Os popups têm prioridade, limite de cinco itens e deduplicação. O sino sonoro toca somente pelo clique no botão da Arena ou dos dashboards; aprovações novas continuam produzindo avisos visuais, sem som automático. O volume final também depende do navegador e do dispositivo.
+Os popups têm prioridade, limite de cinco itens e deduplicação. Aprovações novas produzem avisos visuais, sem som. O controle manual de sino foi removido dos dashboards e da Arena em 24/09/2026 após relato de reprodução inesperada.
 
 ## Validação executada
 
@@ -67,7 +67,7 @@ Os popups têm prioridade, limite de cinco itens e deduplicação. O sino sonoro
 | Varredura de segredos do repositório | Aprovada |
 | Três migrations no banco vinculado, em uma transação revertida | Aprovadas |
 | Permissões/RLS para cada perfil real; conta da TV | Aprovadas |
-| Feed imutável, repetição de evento, estorno único e receita preservada | Aprovados com registros reais |
+| Feed imutável, repetição de evento e estorno único | Aprovados com registros reais na validação anterior; a nova regra de receita ativa requer validação da migration de 24/09 |
 | Reagendamento neutro, cancelamento único, versões e prazo de meta | Aprovados em transação revertida |
 | Encerramento pelo servidor, ranking mensal congelado e ciclo fechado imutável | Aprovados em transação revertida |
 | Consulta de revisão após sinal de abordagens; worker ocioso sem invalidar | Aprovados |
@@ -97,7 +97,7 @@ Instalar, na ordem, somente as migrations revisadas `20260923100000_arena_events
 
 A correção de vendas editadas usa a migration adicional `20260923150000_arena_current_sales.sql`, já instalada. `node scripts/check-arena-current-sales-db.mjs --deployed` valida valor, Closer, revisão e estorno em uma transação revertida; `--apply` é apenas para uma instalação ainda não migrada.
 
-Depois da instalação, verificar o job `arena-cycle-deadlines`, a publicação Realtime de `activity_feed`, `dashboard_events` e `arena_notifications`, e os fluxos autenticados com as roles existentes. Medir a propagação de uma operação comercial legítima entre CRM e TV e a recuperação de conexão. Testar o sino manualmente pelo botão. Esses testes de Realtime ponta a ponta e a observação contínua de 24 horas ainda não foram realizados; o teste SQL revertido não produz eventos comprometidos para validá-los.
+Depois da instalação, verificar o job `arena-cycle-deadlines`, a publicação Realtime de `activity_feed`, `dashboard_events` e `arena_notifications`, e os fluxos autenticados com as roles existentes. Medir a propagação de uma operação comercial legítima entre CRM e TV e a recuperação de conexão. Confirmar que não há controle nem reprodução de som nos fluxos de venda. Esses testes de Realtime ponta a ponta e a observação contínua de 24 horas ainda não foram realizados; o teste SQL revertido não produz eventos comprometidos para validá-los.
 
 Verificação após o deploy: a publicação vinculada ao GitHub do commit `4274ee1` concluiu com sucesso em `wsltda.com`; `/arena` redirecionou para `www.wsltda.com/arena`, respondeu HTTP 200 e entregou o bundle novo. Sem sessão, a rota protegida redireciona ao login. As três versões constam no histórico do Supabase. As três tabelas constam na publicação Realtime. O job está ativo a cada 5 segundos e suas três últimas execuções verificadas terminaram com sucesso. A consulta autenticada por contexto SQL da conta da TV retornou acesso autorizado, três ciclos e os agregados reais. Nenhuma venda, lead ou conta de teste foi criada para publicar.
 

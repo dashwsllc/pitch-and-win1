@@ -17,6 +17,7 @@ DECLARE
  v_count numeric;
  v_appointments numeric;
  v_sales numeric;
+ v_revenue numeric;
  v_revision bigint;
  v_removed_appointments numeric;
  v_sdr_cycle uuid;
@@ -109,6 +110,7 @@ BEGIN
  SELECT (x->>'score')::numeric,(x->>'quantidadeVendas')::numeric INTO v_score,v_count
  FROM jsonb_array_elements(public.arena_team_ranking(v_start,v_end)) x WHERE x->>'user_id'=s.user_id::text;
  v_sales:=(public.arena_period_metrics(v_start,v_end)->>'sales')::numeric;
+ v_revenue:=(public.arena_period_metrics(v_start,v_end)->>'revenue')::numeric;
  v_cycle_actual:=(public.arena_cycle_result(v_closer_cycle)->>'actual')::numeric;
  PERFORM public.arena_reverse_sale(s.id,'estornada','Verificação transacional da Arena',s.updated_at);
  IF (SELECT (x->>'score')::numeric FROM jsonb_array_elements(public.arena_team_ranking(v_start,v_end)) x
@@ -119,6 +121,8 @@ BEGIN
    RAISE EXCEPTION 'Reversed sale remains in Closer total'; END IF;
  IF (public.arena_period_metrics(v_start,v_end)->>'sales')::numeric IS DISTINCT FROM v_sales-1 THEN
    RAISE EXCEPTION 'Reversed sale remains in dashboard sales count'; END IF;
+ IF (public.arena_period_metrics(v_start,v_end)->>'revenue')::numeric IS DISTINCT FROM v_revenue-s.valor_venda THEN
+   RAISE EXCEPTION 'Reversed sale remains in Arena revenue'; END IF;
  IF (public.arena_cycle_result(v_closer_cycle)->>'actual')::numeric IS DISTINCT FROM v_cycle_actual-10 THEN
    RAISE EXCEPTION 'Closer goal percentage did not fall after sale reversal'; END IF;
 END $$;

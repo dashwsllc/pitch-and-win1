@@ -44,7 +44,6 @@ import {
   type ArenaDashboard,
 } from "@/lib/arena";
 import { exactDate, money, errorMessage } from "@/lib/sales";
-import { SaleSoundPreviewButton } from "@/components/dashboard/SaleSoundPreviewButton";
 import { PersonGoalProgress } from "@/components/arena/PersonGoalProgress";
 import "@/components/arena/arena.css";
 
@@ -348,7 +347,7 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
   const collectiveGoals = data?.cycles.filter((c) => c.scope !== "user") ?? [];
   const personalGoals = data?.cycles.filter((c) => c.scope === "user") ?? [];
   const cards = [
-    ["revenue", "Faturamento bruto", "money"],
+    ["revenue", "Faturamento de vendas ativas", "money"],
     ["sales", "Vendas aprovadas", "number"],
     ["ticket", "Ticket médio", "money"],
     ["conversion", "Conversão de vendas", "percent"],
@@ -391,7 +390,6 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             {query.connected && data ? "LIVE" : "RECONECTANDO"}
           </span>
           {toolbar}
-          <SaleSoundPreviewButton moneyIcon />
           <Button
             variant="ghost"
             size="icon"
