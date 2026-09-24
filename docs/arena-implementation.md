@@ -52,6 +52,8 @@ A sincronização geral também reconcilia as telas visíveis a cada dois minuto
 
 Tarefas operacionais são atribuídas a exatamente uma pessoa. O banco rejeita uma seleção de cargo ou de vários destinatários nesse fluxo; metas coletivas permanecem nos ciclos da Arena. Metas de abordagens por turno também têm um único destinatário, uma quantidade alvo, início em Brasília e duração de até 24 horas. O Executive escolhe uma única fonte de contagem: abordagens individuais em `abordagens` ou eventos de CRM `lead.approached`, evitando somar duas vezes um contato lançado nos dois lugares. O Executive pode converter uma tarefa pendente em meta de turno, definir seu prazo e cancelá-la com auditoria. A barra aparece para o colaborador em Metas e no dashboard e se atualiza pelos sinais de revisão da base.
 
+A tarefa de 24/09 “Abordar 50 LEAD's da lista” foi corrigida na migração `20260924160000_correct_pedro_task_assignment.sql`: somente Pedro Iago permanece como destinatário; os dois registros e avisos indevidos foram removidos, com evento de auditoria de sistema. `scripts/verify-pedro-task-assignment.sql` valida o resultado sem alterar dados.
+
 Os popups têm prioridade, limite de cinco itens e deduplicação. O sino sonoro toca somente pelo clique no botão da Arena ou dos dashboards; aprovações novas continuam produzindo avisos visuais, sem som automático. O volume final também depende do navegador e do dispositivo.
 
 ## Validação executada
