@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +47,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useAllUsers } from '@/hooks/useRoles'
 import { Textarea } from '@/components/ui/textarea'
 import { firstIssue, strongPasswordSchema } from '@/lib/auth-security'
+import { refreshDashboardMutation } from '@/lib/sync'
 
 interface PasswordRequest {
   id: string
@@ -57,6 +59,7 @@ interface PasswordRequest {
 }
 
 export function ExecutivePasswordRequests() {
+  const queryClient = useQueryClient()
   const [requests, setRequests] = useState<PasswordRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState<string | null>(null)
@@ -121,7 +124,7 @@ export function ExecutivePasswordRequests() {
           : 'A rejeição foi registrada.'
       })
 
-      void fetchRequests()
+      await refreshDashboardMutation(queryClient)
     } catch (error) {
       console.error('Error processing request:', error)
       toast({
@@ -177,7 +180,7 @@ export function ExecutivePasswordRequests() {
       setSelectedUser('')
       setNewPassword('')
       setResetReason('')
-      window.dispatchEvent(new Event('dashboard-data-changed'))
+      await refreshDashboardMutation(queryClient)
     } catch (error) {
       console.error('Error resetting password:', error)
       toast({

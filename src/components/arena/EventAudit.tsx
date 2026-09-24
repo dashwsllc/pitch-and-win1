@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { arenaRpc } from "@/lib/arena-api";
+import { useAuth } from "@/hooks/useAuth";
 import { eventLabels, type ArenaEvent } from "@/lib/arena";
 import { money, exactDate, errorMessage } from "@/lib/sales";
 
@@ -24,10 +25,12 @@ interface Legacy {
   created_at: string;
 }
 export function EventAudit() {
+  const { user } = useAuth();
   const client = useQueryClient();
   const [page, setPage] = useState(0);
   const query = useQuery({
-    queryKey: ["arena-events", page],
+    queryKey: ["arena-events", user?.id, page],
+    enabled: !!user,
     queryFn: () =>
       arenaRpc<ArenaEvent[]>("arena_management", {
         p_tab: "events",
@@ -35,7 +38,8 @@ export function EventAudit() {
       }),
   });
   const legacy = useQuery({
-    queryKey: ["arena-legacy"],
+    queryKey: ["arena-legacy", user?.id],
+    enabled: !!user,
     queryFn: () =>
       arenaRpc<Legacy[]>("arena_management", { p_tab: "reconciliation" }),
   });

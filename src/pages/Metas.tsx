@@ -8,6 +8,7 @@ import { GoalOverview } from "@/components/arena/GoalOverview";
 import { GoalManagement } from "@/components/arena/GoalManagement";
 import { EventAudit } from "@/components/arena/EventAudit";
 import { useRoles } from "@/hooks/useRoles";
+import { useAuth } from "@/hooks/useAuth";
 import { arenaRpc } from "@/lib/arena-api";
 import type { ArenaResult } from "@/lib/arena";
 import { progressPercent, stateLabels } from "@/lib/arena";
@@ -31,10 +32,12 @@ type Audit = {
   created_at: string;
 };
 function GoalRecords({ tab }: { tab: "history" | "audit" }) {
+  const { user } = useAuth();
   const [page, setPage] = useState(0);
   const size = tab === "history" ? 30 : 50;
   const query = useQuery({
-    queryKey: ["arena-records", tab, page],
+    queryKey: ["arena-records", user?.id, tab, page],
+    enabled: !!user,
     queryFn: () =>
       arenaRpc<(History & Audit)[]>("arena_management", {
         p_tab: tab,

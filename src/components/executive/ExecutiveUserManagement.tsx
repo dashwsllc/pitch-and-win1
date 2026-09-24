@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { errorMessage, exactDate } from '@/lib/sales'
 import { avatarObjectPath, validateAvatarFile } from '@/lib/avatar'
 import { firstIssue, strongPasswordSchema } from '@/lib/auth-security'
+import { refreshDashboardMutation } from '@/lib/sync'
 
 interface AccountForm {
   display_name: string
@@ -141,12 +142,7 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
       }
       toast({ title: 'Conta atualizada', description: 'Dados, acesso e histórico administrativo sincronizados.' })
       setEditing(null); setForm(null); setAvatarFile(null); setAvatarRemoved(false)
-      await queryClient.invalidateQueries({ queryKey: ['executive-users'] })
-      void queryClient.invalidateQueries({ queryKey: ['profile', editing.user_id] })
-      void queryClient.invalidateQueries({ queryKey: ['executive-audit'] })
-      void queryClient.invalidateQueries({ queryKey: ['team-ranking'] })
-      void queryClient.invalidateQueries({ queryKey: ['sales-board'] })
-      window.dispatchEvent(new Event('dashboard-data-changed'))
+      await refreshDashboardMutation(queryClient)
       if (editing.user_id === actor?.id) await supabase.auth.refreshSession()
     } catch (err) {
       if (uploadedAvatarPath && !accountUpdated) {
@@ -177,10 +173,7 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
       toast({ title: 'Conta excluída', description: 'Acesso removido e histórico de vendas, abordagens e saques preservado.' })
       setDeleting(null)
       setDeleteReason('')
-      await queryClient.invalidateQueries({ queryKey: ['executive-users'] })
-      void queryClient.invalidateQueries({ queryKey: ['executive-audit'] })
-      void queryClient.invalidateQueries({ queryKey: ['team-ranking'] })
-      window.dispatchEvent(new Event('dashboard-data-changed'))
+      await refreshDashboardMutation(queryClient)
     } catch (err) { toast({ title: 'Exclusão não concluída', description: errorMessage(err), variant: 'destructive' }) }
     finally { setDeleteBusy(false) }
   }

@@ -10,6 +10,7 @@ import { useAllUsers } from '@/hooks/useRoles'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { money, exactDate, errorMessage } from '@/lib/sales'
+import { refreshDashboardMutation } from '@/lib/sync'
 
 export function ExecutiveWithdrawals() {
   const { user } = useAuth()
@@ -35,9 +36,7 @@ export function ExecutiveWithdrawals() {
       if (error) throw error
       setSelected(null); setReason('')
       toast({title:'Saque rejeitado e reserva liberada',description:'O motivo foi registrado para o Seller e na auditoria.'})
-      void client.invalidateQueries({queryKey:['executive-withdrawals']})
-      void client.invalidateQueries({queryKey:['executive-audit']})
-      window.dispatchEvent(new Event('dashboard-data-changed'))
+      await refreshDashboardMutation(client)
     } catch (error) { toast({title:'Não foi possível regularizar',description:errorMessage(error),variant:'destructive'}) }
     finally { setSaving(false) }
   }

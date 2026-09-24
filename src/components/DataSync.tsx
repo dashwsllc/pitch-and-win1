@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/integrations/supabase/client'
-import { DASHBOARD_SALES_CHANNEL, refreshDashboardData } from '@/lib/sync'
+import { DASHBOARD_SALES_CHANNEL, refreshDashboardData, shouldRefreshDashboardRevision } from '@/lib/sync'
 import { arenaRpc } from '@/lib/arena-api'
 import type { ArenaEvent, ArenaNotification } from '@/lib/arena'
 
@@ -26,6 +26,7 @@ export function DataSync() {
     let connectionGeneration = 0
     let lastRevision: string | undefined
     let checkingRevision = false
+    let lastRefreshStartedAt = 0
 
     const refresh = () => {
       if (disposed) return
@@ -39,8 +40,13 @@ export function DataSync() {
         try {
           do {
             refreshQueued = false
+            lastRefreshStartedAt = Date.now()
             await refreshDashboardData(queryClient)
           } while (refreshQueued && !disposed)
+        } catch (error) {
+          // Keep the revision fallback alive after a transient fetch failure.
+          lastRefreshStartedAt = 0
+          console.warn('Dashboard synchronization retry scheduled', error)
         } finally {
           refreshing = false
         }
@@ -58,7 +64,7 @@ export function DataSync() {
         const revision = data.map(row => `${row.topic}:${row.revision}`).join('|')
         // A change can land between the first page request and subscription.
         // The initial cursor read also refreshes the page to close that gap.
-        if (lastRevision === undefined || revision !== lastRevision) refresh()
+        if (shouldRefreshDashboardRevision(lastRevision, revision, lastRefreshStartedAt, Date.now())) refresh()
         lastRevision = revision
       } finally {
         checkingRevision = false
@@ -107,8 +113,8 @@ export function DataSync() {
     const crossTab = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(DASHBOARD_SALES_CHANNEL) : null
     if (crossTab) crossTab.onmessage = refresh
 
-    // A fixed poll made monitor dashboards repeatedly re-fetch and animate.
-    // Reconnect once after network recovery; normal changes arrive by Realtime.
+    // Network recovery starts a refresh immediately. The revision loop above
+    // also reconciles periodically if a prior screen read failed silently.
     window.addEventListener('online', refresh)
 
     return () => {

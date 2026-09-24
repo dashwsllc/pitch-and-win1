@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -31,6 +31,7 @@ export default function Clientes() {
   const [assinaturas, setAssinaturas] = useState<Assinatura[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const latestFetch = useRef(0)
   
   // Formulário
   const [nomeProduto, setNomeProduto] = useState("")
@@ -53,6 +54,7 @@ export default function Clientes() {
   // Carregar assinaturas
   const fetchAssinaturas = useCallback(async () => {
     if (!user) return
+    const requestId = ++latestFetch.current
 
     try {
       const data = await fetchAllPages((from, to) => supabase
@@ -62,17 +64,19 @@ export default function Clientes() {
         .order('created_at', { ascending: false })
         .order('id')
         .range(from, to))
-      setAssinaturas(data as Assinatura[])
+      if (requestId === latestFetch.current) setAssinaturas(data as Assinatura[])
     } catch (error) {
+      if (requestId !== latestFetch.current) return
       console.error('Erro ao carregar assinaturas:', error)
       toast.error('Erro ao carregar clientes')
     } finally {
-      setLoading(false)
+      if (requestId === latestFetch.current) setLoading(false)
     }
   }, [user])
 
   useEffect(() => {
     void fetchAssinaturas()
+    return () => { latestFetch.current += 1 }
   }, [fetchAssinaturas])
 
   useEffect(() => {

@@ -42,6 +42,14 @@ export function useBrasiliaToday() {
   return today
 }
 
+// An untouched date field follows Brasilia's day rollover. Once a person
+// chooses a date (including when editing an older record), preserve it.
+export function useBrasiliaDateSelection() {
+  const today = useBrasiliaToday()
+  const [selectedDate, setDate] = useState<string | null>(null)
+  return { today, date: selectedDate ?? today, setDate }
+}
+
 export function useDailyGoals() {
   const { user } = useAuth()
   const today = useBrasiliaToday()

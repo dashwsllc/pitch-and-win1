@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { arenaRpc } from "@/lib/arena-api";
+import { useAuth } from "@/hooks/useAuth";
 import { useArenaAssignees } from "@/hooks/useArena";
 import type { ArenaGoal } from "@/lib/arena";
 import { errorMessage, exactDate, money } from "@/lib/sales";
@@ -41,8 +42,10 @@ export function GoalManagement({
 }: {
   configuration?: boolean;
 }) {
+  const { user } = useAuth();
   const query = useQuery({
-    queryKey: ["company-goals", "arena"],
+    queryKey: ["company-goals", "arena", user?.id],
+    enabled: !!user,
     queryFn: () =>
       arenaRpc<ArenaGoal[]>("arena_management", { p_tab: "goals" }),
   });

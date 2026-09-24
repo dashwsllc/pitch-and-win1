@@ -7,13 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { arenaClient, arenaRpc } from "@/lib/arena-api";
 import { useAuth } from "@/hooks/useAuth";
-import { useBrasiliaToday } from "@/hooks/useGoals";
+import { useBrasiliaDateSelection } from "@/hooks/useGoals";
 import { errorMessage, money } from "@/lib/sales";
 
 export default function Trafego() {
   const { user } = useAuth();
-  const today = useBrasiliaToday();
-  const [date, setDate] = useState(today);
+  const { today, date, setDate } = useBrasiliaDateSelection();
   const [campaign, setCampaign] = useState("");
   const [platform, setPlatform] = useState("meta");
   const [spend, setSpend] = useState("");

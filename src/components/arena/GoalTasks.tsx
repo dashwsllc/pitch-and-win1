@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
-import { useBrasiliaToday, type DailyGoalTask } from "@/hooks/useGoals";
+import { useBrasiliaDateSelection, type DailyGoalTask } from "@/hooks/useGoals";
 import { useArenaAssignees } from "@/hooks/useArena";
 import { supabase } from "@/integrations/supabase/client";
 import { arenaRpc } from "@/lib/arena-api";
@@ -27,8 +27,7 @@ type Task = DailyGoalTask & {
 export function GoalTasks() {
   const { user } = useAuth();
   const { isExecutive } = useRoles();
-  const today = useBrasiliaToday();
-  const [date, setDate] = useState(today);
+  const { today, date, setDate } = useBrasiliaDateSelection();
   const [person, setPerson] = useState("");
   const [title, setTitle] = useState("");
   const [people, setPeople] = useState<string[]>([]);
