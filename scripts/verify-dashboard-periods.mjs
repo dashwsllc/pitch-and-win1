@@ -8,6 +8,7 @@ const actor = 'ce110000-0000-4000-8000-000000000099'
 const now = new Date().toISOString()
 const profile = { id: actor, user_id: actor, display_name: 'QA Períodos', avatar_url: null, suspended: false, created_at: now, updated_at: now, last_seen_at: now }
 const role = { id: actor, user_id: actor, role: 'seller', crm_access: false, commission_rate: 10, can_view_sales: false, updated_at: now }
+const historicalSale = { id: 'ce110000-0000-4000-8000-000000000100', nome_produto: 'Premium', valor_venda: 2997, created_at: '2026-08-10T15:00:00.000Z', updated_at: now }
 const dashboardSalesRequests = []
 const errors = []
 
@@ -30,6 +31,12 @@ await context.route('https://**/*', async route => {
   else if (resource === 'user_roles') data = [role]
   else if (resource === 'get_team_ranking') data = []
   else if (resource === 'get_sales_board') data = { items: [], total: 0, summary: { pending: 0, approved: 0, rejected: 0, pending_value: 0, approved_value: 0, overdue: 0 }, fetched_at: now }
+  else if (resource === 'vendas' && selectedFields.includes('nome_produto') && selectedFields.includes('valor_venda')) {
+    const timestamp = url.searchParams.has('updated_at') ? historicalSale.updated_at : historicalSale.created_at
+    const dateColumn = url.searchParams.has('updated_at') ? 'updated_at' : 'created_at'
+    const filters = url.searchParams.getAll(dateColumn)
+    data = filters.every(filter => filter.startsWith('gte.') ? timestamp >= filter.slice(4) : filter.startsWith('lt.') ? timestamp < filter.slice(3) : true) ? [historicalSale] : []
+  }
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(data) })
 })
 await context.addInitScript(({ actor, project }) => {
@@ -49,6 +56,8 @@ try {
   await page.goto(origin)
   await expect(page.getByRole('tab', { name: 'Tempo personalizado', exact: true })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Todo o período', exact: true })).toBeVisible()
+  const revenueCard = page.locator('[data-dashboard-section="commercial-indicators"]').getByText('Total de Vendas', { exact: true }).locator('..')
+  await expect(revenueCard).toContainText('R$ 0,00')
 
   await page.getByRole('tab', { name: 'Tempo personalizado', exact: true }).click()
   await expect(page.getByRole('form', { name: 'Selecionar tempo personalizado' })).toBeVisible()
@@ -58,6 +67,7 @@ try {
   dashboardSalesRequests.length = 0
   await page.getByRole('button', { name: 'Aplicar período', exact: true }).click()
   await expect(page.getByText(/Período aplicado: 01\/08\/2026 a 15\/08\/2026/)).toBeVisible()
+  await expect(revenueCard).toContainText('R$ 2.997,00')
   await expect.poll(() => dashboardSalesRequests.some(url => {
     const filters = url.searchParams.getAll('created_at')
     return filters.includes('gte.2026-08-01T03:00:00.000Z') && filters.includes('lt.2026-08-16T03:00:00.000Z')

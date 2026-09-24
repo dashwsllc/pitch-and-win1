@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAllUsers } from '@/hooks/useRoles'
+import { useBrasiliaToday } from '@/hooks/useGoals'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { SalesChart } from '@/components/dashboard/SalesChart'
 import { errorMessage } from '@/lib/sales'
@@ -30,7 +31,7 @@ interface SellerSale {
   id: string
   nome_produto: string
   valor_venda: number
-  updated_at: string
+  created_at: string
 }
 
 interface SellerApproach {
@@ -62,6 +63,7 @@ interface SellerStats {
 
 export function ExecutiveSellerDetails() {
   const { users, loading: usersLoading } = useAllUsers()
+  const today = useBrasiliaToday()
   const [selectedSeller, setSelectedSeller] = useState<string>('')
   const [stats, setStats] = useState<SellerStats>({
     totalSales: 0,
@@ -93,10 +95,10 @@ export function ExecutiveSellerDetails() {
       const [sales, approaches, subscriptions] = await Promise.all([
         fetchAllPages((from, to) => supabase
           .from('vendas')
-          .select('id, nome_produto, valor_venda, updated_at')
+          .select('id, nome_produto, valor_venda, created_at')
           .eq('user_id', sellerId)
           .eq('approval_status', 'aprovada')
-          .order('updated_at', { ascending: false })
+          .order('created_at', { ascending: false })
           .order('id')
           .range(from, to)),
         fetchAllPages((from, to) => supabase
@@ -122,10 +124,9 @@ export function ExecutiveSellerDetails() {
       const conversionRate = totalApproaches > 0 ? (totalSales / totalApproaches) * 100 : 0
 
       // Vendas dos últimos 7 dias
-      const today = brasiliaDateKey()
       const salesByDay = Array.from({ length: 7 }, (_, index) => {
         const dateKey = addDaysToDateKey(today, index - 6)
-        const daySales = sales.filter((sale) => brasiliaDateKey(sale.updated_at) === dateKey)
+        const daySales = sales.filter((sale) => brasiliaDateKey(sale.created_at) === dateKey)
         const dayApproaches = approaches.filter((approach) => brasiliaDateKey(approach.created_at) === dateKey)
         return {
           period: formatDateKey(dateKey, { day: '2-digit', month: '2-digit', year: undefined }),
@@ -155,7 +156,7 @@ export function ExecutiveSellerDetails() {
     } finally {
       if (requestId === latestRequest.current) setLoading(false)
     }
-  }, [])
+  }, [today])
 
   useEffect(() => {
     if (selectedSeller) {
@@ -326,7 +327,7 @@ export function ExecutiveSellerDetails() {
                           <div>
                             <p className="font-medium text-sm">{sale.nome_produto}</p>
                             <p className="text-xs text-muted-foreground">
-                              {formatBrasiliaDate(sale.updated_at)}
+                              {formatBrasiliaDate(sale.created_at)}
                             </p>
                           </div>
                           <p className="font-semibold text-foreground">
