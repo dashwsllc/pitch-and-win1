@@ -8,7 +8,10 @@ import { useArenaAssignees } from "@/hooks/useArena";
 import { supabase } from "@/integrations/supabase/client";
 import { arenaRpc } from "@/lib/arena-api";
 import { operationalLabels } from "@/lib/arena";
+import { ShiftApproachGoals } from "@/components/arena/ShiftApproachGoals";
 import { errorMessage, exactDate } from "@/lib/sales";
+import { brasiliaLocalInputToIso, isoToBrasiliaLocalInput } from "@/lib/brasilia-time";
+import { refreshDashboardMutation } from "@/lib/sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,19 +33,23 @@ export function GoalTasks() {
   const { today, date, setDate } = useBrasiliaDateSelection();
   const [person, setPerson] = useState("");
   const [title, setTitle] = useState("");
-  const [people, setPeople] = useState<string[]>([]);
-  const [roles, setRoles] = useState<string[]>([]);
+  const [assignee, setAssignee] = useState("");
   const [status, setStatus] = useState("not_scheduled");
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Task | null>(null);
   const [comment, setComment] = useState("");
   const [editing, setEditing] = useState<{ task: Task; remove: boolean } | null>(null);
   const [editedTitle, setEditedTitle] = useState("");
+  const [converting, setConverting] = useState<Task | null>(null);
+  const [convertStart, setConvertStart] = useState("");
+  const [convertDuration, setConvertDuration] = useState("480");
+  const [convertTarget, setConvertTarget] = useState("50");
+  const [convertSource, setConvertSource] = useState<"crm" | "manual">("crm");
   const [page, setPage] = useState(0);
   const assignees = useArenaAssignees();
   const client = useQueryClient();
   const query = useQuery({
-    queryKey: ["daily-goals", "arena", user?.id, date, person, page],
+    queryKey: ["daily-goals", "arena", user?.id, isExecutive, date, person, page],
     enabled: !!user,
     queryFn: async () => {
       let request = supabase
@@ -67,11 +74,12 @@ export function GoalTasks() {
       const count = await arenaRpc<number>("arena_assign_tasks", {
         p_title: title,
         p_date: date,
-        p_people: people,
-        p_roles: roles,
+        p_people: [assignee],
+        p_roles: [],
         p_status: status,
       });
       setTitle("");
+      setAssignee("");
       await refresh();
       toast.success(`Tarefa atribuída a ${count} colaboradores`);
     } catch (cause) {
@@ -128,6 +136,42 @@ export function GoalTasks() {
       setBusy(false);
     }
   };
+  const openConversion = (task: Task) => {
+    setConverting(task);
+    setConvertStart(task.task_date === today ? isoToBrasiliaLocalInput(new Date().toISOString()) : `${task.task_date}T09:00`);
+    setConvertTarget(task.title.match(/\b\d+\b/)?.[0] ?? "50");
+    setConvertDuration("480");
+    setConvertSource("crm");
+  };
+  const convert = async () => {
+    if (!converting || busy) return;
+    const start = brasiliaLocalInputToIso(convertStart);
+    const target = Number(convertTarget);
+    const duration = Number(convertDuration);
+    if (!start || !Number.isInteger(target) || target < 1 || target > 100000
+      || !Number.isInteger(duration) || duration < 1 || duration > 1440) {
+      toast.error("Informe quantidade, início e duração válidos.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await arenaRpc("arena_convert_task_to_shift_goal", {
+        p_task_id: converting.id,
+        p_expected_version: converting.version,
+        p_starts_at: start,
+        p_duration_minutes: duration,
+        p_target_approaches: target,
+        p_source: convertSource,
+      });
+      setConverting(null);
+      await refreshDashboardMutation(client);
+      toast.success("Tarefa convertida em meta de turno individual");
+    } catch (cause) {
+      toast.error(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="space-y-5">
       <div>
@@ -177,22 +221,17 @@ export function GoalTasks() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label htmlFor="task-people">
-                Colaboradores (seleção múltipla)
-              </Label>
+              <Label htmlFor="task-people">Colaborador específico</Label>
               <select
                 id="task-people"
-                multiple
-                className="mt-2 h-28 w-full rounded-lg border bg-background p-2"
-                value={people}
-                onChange={(e) =>
-                  setPeople(
-                    Array.from(e.target.selectedOptions).map((o) => o.value),
-                  )
-                }
+                required
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-3"
+                value={assignee}
+                onChange={(e) => setAssignee(e.target.value)}
               >
+                <option value="">Selecione uma pessoa</option>
                 {assignees.data
                   ?.filter((p) => !p.suspended)
                   .map((p) => (
@@ -201,30 +240,6 @@ export function GoalTasks() {
                     </option>
                   ))}
               </select>
-            </div>
-            <div>
-              <Label>Cargos</Label>
-              <div className="mt-2 flex gap-5">
-                {["sdr", "closer"].map((role) => (
-                  <label key={role} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={roles.includes(role)}
-                      onChange={(e) =>
-                        setRoles((r) =>
-                          e.target.checked
-                            ? [...r, role]
-                            : r.filter((x) => x !== role),
-                        )
-                      }
-                    />
-                    {role.toUpperCase()}
-                  </label>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Atribuição nominal preservada mesmo se o cargo mudar depois.
-              </p>
             </div>
             <div>
               <Label htmlFor="task-status">Estado operacional inicial</Label>
@@ -242,7 +257,7 @@ export function GoalTasks() {
               </select>
             </div>
           </div>
-          <Button disabled={busy || date < today}>Atribuir</Button>
+          <Button disabled={busy || date < today || !assignee}>Atribuir</Button>
         </form>
       )}
       {query.isError && (
@@ -300,6 +315,7 @@ export function GoalTasks() {
               ))}
             </select>
             {isExecutive && date >= today && <div className="flex gap-1">
+              {!task.is_completed && <Button size="sm" variant="outline" disabled={busy} onClick={() => openConversion(task)}>Definir turno</Button>}
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setEditedTitle(task.title); setEditing({task, remove:false}); }}>Editar</Button>
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditing({task, remove:true})}>Remover</Button>
             </div>}
@@ -323,6 +339,18 @@ export function GoalTasks() {
           </DialogHeader>
           {!editing?.remove && <><Label htmlFor="task-edit-title">Título</Label><Input id="task-edit-title" maxLength={280} value={editedTitle} onChange={(event) => setEditedTitle(event.target.value)} /></>}
           <Button disabled={busy || (!editing?.remove && !editedTitle.trim())} variant={editing?.remove ? "destructive" : "default"} onClick={saveEdit}>Confirmar {editing?.remove ? "remoção" : "alteração"}</Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!converting} onOpenChange={(open) => { if (!open && !busy) setConverting(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Definir turno e meta individual</DialogTitle><DialogDescription>{converting?.title}. O Executive define quando começa, quanto dura e quantas abordagens a pessoa deve registrar.</DialogDescription></DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><Label htmlFor="convert-target">Quantidade de abordagens</Label><Input id="convert-target" type="number" min={1} max={100000} step={1} value={convertTarget} onChange={(event) => setConvertTarget(event.target.value)} /></div>
+            <div><Label htmlFor="convert-duration">Duração em minutos</Label><Input id="convert-duration" type="number" min={1} max={1440} step={1} value={convertDuration} onChange={(event) => setConvertDuration(event.target.value)} /></div>
+            <div className="sm:col-span-2"><Label htmlFor="convert-start">Início do turno · Brasília</Label><Input id="convert-start" type="datetime-local" value={convertStart} onChange={(event) => setConvertStart(event.target.value)} /></div>
+            <div className="sm:col-span-2"><Label htmlFor="convert-source">Fonte das abordagens</Label><select id="convert-source" className="mt-2 h-10 w-full rounded-lg border bg-background px-3" value={convertSource} onChange={(event) => setConvertSource(event.target.value as "crm" | "manual")}><option value="crm">CRM</option><option value="manual">Registros de Abordagens</option></select></div>
+          </div>
+          <Button disabled={busy || !convertStart || !convertTarget || !convertDuration} onClick={() => void convert()}>Salvar meta de turno</Button>
         </DialogContent>
       </Dialog>
       <Dialog
@@ -354,6 +382,7 @@ export function GoalTasks() {
           </Button>
         </DialogContent>
       </Dialog>
+      <ShiftApproachGoals date={date} person={person} management={isExecutive} />
     </div>
   );
 }

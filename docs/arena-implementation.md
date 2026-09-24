@@ -50,6 +50,8 @@ Realtime reaproveita `DataSync`. A primeira assinatura, as reconexões e a prime
 
 A sincronização geral também reconcilia as telas visíveis a cada dois minutos para recuperar leituras que tenham falhado depois de um sinal de revisão. Alterações feitas na aba atual avisam imediatamente as outras abas sem gerar um ciclo de retransmissões; todas as consultas dependentes são invalidadas. As consultas administrativas da Arena usam a identidade na chave do cache. Campos de data ainda não editados acompanham a virada do dia em Brasília; uma data escolhida manualmente permanece intacta. O roteiro `scripts/verify-dashboard-sync-schema.sql` verifica sinais e publicação Realtime sem alterar dados.
 
+Tarefas operacionais são atribuídas a exatamente uma pessoa. O banco rejeita uma seleção de cargo ou de vários destinatários nesse fluxo; metas coletivas permanecem nos ciclos da Arena. Metas de abordagens por turno também têm um único destinatário, uma quantidade alvo, início em Brasília e duração de até 24 horas. O Executive escolhe uma única fonte de contagem: abordagens individuais em `abordagens` ou eventos de CRM `lead.approached`, evitando somar duas vezes um contato lançado nos dois lugares. O Executive pode converter uma tarefa pendente em meta de turno, definir seu prazo e cancelá-la com auditoria. A barra aparece para o colaborador em Metas e no dashboard e se atualiza pelos sinais de revisão da base.
+
 Os popups têm prioridade, limite de cinco itens e deduplicação. O sino sonoro toca somente pelo clique no botão da Arena ou dos dashboards; aprovações novas continuam produzindo avisos visuais, sem som automático. O volume final também depende do navegador e do dispositivo.
 
 ## Validação executada

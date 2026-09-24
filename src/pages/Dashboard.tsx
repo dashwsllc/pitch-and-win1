@@ -6,6 +6,7 @@ import { ProductsRanking } from "@/components/dashboard/ProductsRanking"
 import { QuickActions } from "@/components/dashboard/QuickActions"
 import { FilterTabs } from "@/components/dashboard/FilterTabs"
 import { GoalsProgress } from "@/components/dashboard/GoalsProgress"
+import { ShiftApproachGoals } from "@/components/arena/ShiftApproachGoals"
 import { SaleSoundPreviewButton } from "@/components/dashboard/SaleSoundPreviewButton"
 import { LeaderboardPreview } from "@/components/dashboard/LeaderboardPreview"
 import { RecentSales } from "@/components/dashboard/RecentSales"
@@ -19,6 +20,7 @@ import { useProfile } from "@/hooks/useProfile"
 import { useRoles } from "@/hooks/useRoles"
 import { useGSAP } from "@/hooks/useGSAP"
 import { useLiveClock } from "@/hooks/useLiveClock"
+import { useBrasiliaToday } from "@/hooks/useGoals"
 import { 
   CircleDollarSign,
   ShoppingBag,
@@ -46,6 +48,7 @@ export default function Dashboard() {
   const [selectedFilter, setSelectedFilter] = useState<DashboardDateFilter>("hoje")
   const [customRange, setCustomRange] = useState(createDefaultDashboardCustomRange)
   const { user } = useAuth()
+  const today = useBrasiliaToday()
   const { metrics, loading, error, refetch } = useDashboardData(selectedFilter, customRange)
   const { ranking, sdrRanking } = useRankingDataWithMock()
   const { profile } = useProfile()
@@ -292,6 +295,7 @@ export default function Dashboard() {
             <span className="hidden text-xs text-muted-foreground sm:block">Sincroniza quando os dados mudam</span>
           </div>
           <GoalsProgress />
+          <ShiftApproachGoals date={today} />
         </section>
 
         <section data-dashboard-section="commercial-evolution" data-scroll-reveal>

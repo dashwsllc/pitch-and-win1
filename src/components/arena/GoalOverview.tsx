@@ -16,7 +16,7 @@ export function GoalOverview() {
     staleTime: 8_000,
   });
   const goals = query.data?.filter((cycle) =>
-    cycle.scope !== "user" || cycle.result.members.some((member) => member.user_id === user?.id),
+    cycle.scope === "global" || cycle.result.members.some((member) => member.user_id === user?.id),
   ) ?? [];
 
   return (

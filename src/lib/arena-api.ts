@@ -49,6 +49,29 @@ type ExtraFunctions = {
     p_roles: string[];
     p_status?: string;
   }>;
+  arena_create_shift_approach_goals: FunctionDef<{
+    p_title: string;
+    p_people: string[];
+    p_roles: string[];
+    p_starts_at: string;
+    p_duration_minutes: number;
+    p_target_approaches: number;
+    p_source: "crm" | "manual";
+  }>;
+  arena_convert_task_to_shift_goal: FunctionDef<{
+    p_task_id: string;
+    p_expected_version: number;
+    p_starts_at: string;
+    p_duration_minutes: number;
+    p_target_approaches: number;
+    p_source: "crm" | "manual";
+  }>;
+  arena_shift_approach_progress: FunctionDef<{
+    p_day: string;
+    p_person?: string | null;
+    p_offset?: number;
+  }>;
+  arena_cancel_shift_approach_goal: FunctionDef<{ p_id: string; p_reason: string }>;
   arena_task_status: FunctionDef<{
     p_id: string;
     p_version: number;
