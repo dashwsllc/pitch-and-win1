@@ -163,10 +163,12 @@ function RankingList({
   title,
   people,
   cycle,
+  linkLabel = "Ver ranking",
 }: {
   title: string;
   people: ArenaPerson[];
   cycle?: ArenaCycle;
+  linkLabel?: string;
 }) {
   const list = useRef<HTMLDivElement>(null);
   const positions = useRef(new Map<string, number>());
@@ -207,7 +209,7 @@ function RankingList({
           {title}
         </h2>
         <Link className="text-xs text-muted-foreground" to="/ranking">
-          Individual ↗
+          {linkLabel} ↗
         </Link>
       </div>
       <div ref={list} className="space-y-2">
@@ -266,8 +268,8 @@ function Feed({ role, events, cycle }: { role: string; events: ArenaEvent[]; cyc
       </h2>
       {rows.map((event) => {
         const member = cycle?.result.members.find((m) => m.user_id === event.responsible_id);
-        const occurredAt = Date.parse(event.occurred_at);
-        const inCycle = cycle && occurredAt >= Date.parse(cycle.starts_at) && occurredAt < Date.parse(cycle.ends_at);
+        const creditedAt = Date.parse(event.cycle_at ?? event.occurred_at);
+        const inCycle = cycle && creditedAt >= Date.parse(cycle.starts_at) && creditedAt < Date.parse(cycle.ends_at);
         const impact = member && inCycle && event.score_delta !== 0
           ? progressPercent(event.score_delta, member.target)
           : null;
@@ -289,7 +291,7 @@ function Feed({ role, events, cycle }: { role: string; events: ArenaEvent[]; cyc
       })}
       {!rows.length && (
         <p className="py-3 text-xs text-muted-foreground">
-          Nenhum evento no período selecionado.
+          Nenhum evento no ciclo atual.
         </p>
       )}
     </section>
@@ -419,26 +421,29 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
         </div>
       </header>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="arena-tabs">
-          {(
-            [
-              ["hoje", "Hoje"],
-              ["7dias", "7 dias"],
-              ["30dias", "30 dias"],
-              ["custom", "Personalizado"],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              aria-pressed={filter === key}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">Indicadores:</span>
+          <div className="arena-tabs">
+            {(
+              [
+                ["hoje", "Hoje"],
+                ["7dias", "7 dias"],
+                ["30dias", "30 dias"],
+                ["custom", "Personalizado"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                aria-pressed={filter === key}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Receita pela aprovação · conversão por abordagem · CPL por dia
+          Rankings: SDR hoje · Closer semana
         </p>
       </div>
       {filter === "custom" && (
@@ -638,8 +643,8 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             </div>
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
-            <RankingList title="SDRs" people={data.sdrs} cycle={sdr} />
-            <RankingList title="Closers" people={data.closers} cycle={closer} />
+            <RankingList title="SDRs · hoje" people={data.sdrs} cycle={sdr} />
+            <RankingList title="Closers · semana" people={data.closers} cycle={closer} linkLabel="Ranking mensal" />
           </div>
           <footer className="grid gap-3 lg:grid-cols-2">
             <Feed role="sdr" events={data.feed} cycle={sdr} />

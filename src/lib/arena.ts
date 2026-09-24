@@ -139,6 +139,7 @@ export interface ArenaEvent {
   score_delta: number;
   revenue_delta: number;
   occurred_at: string;
+  cycle_at?: string;
   avatar_url?: string | null;
   provenance: string;
 }

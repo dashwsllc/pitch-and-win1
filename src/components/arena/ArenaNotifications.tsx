@@ -67,7 +67,7 @@ export function SaleAlerts() {
       queue.current = addPopup(queue.current, {
         id: event.id,
         title: `${event.responsible_name} · venda aprovada`,
-        description: `${money(event.revenue_delta)} · meta do Closer atualizada`,
+        description: `${money(event.revenue_delta)} · crédito na meta semanal do Closer`,
         priority: 3,
         sound: false,
         receivedAt: Date.now(),
