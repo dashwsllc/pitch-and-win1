@@ -239,10 +239,12 @@ export type Database = {
       daily_goal_tasks: {
         Row: {
           assignee_id: string
+          checklist_items: Json
           completed_at: string | null
           completed_by: string | null
           created_at: string
           created_by: string | null
+          deadline_at: string | null
           id: string
           is_completed: boolean
           position: number
@@ -253,10 +255,12 @@ export type Database = {
         }
         Insert: {
           assignee_id: string
+          checklist_items?: Json
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
           created_by?: string | null
+          deadline_at?: string | null
           id?: string
           is_completed?: boolean
           position?: number
@@ -267,10 +271,12 @@ export type Database = {
         }
         Update: {
           assignee_id?: string
+          checklist_items?: Json
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
           created_by?: string | null
+          deadline_at?: string | null
           id?: string
           is_completed?: boolean
           position?: number

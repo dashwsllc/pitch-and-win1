@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CheckCircle2, Clock3, Flame, RefreshCw, Sparkles, Target } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -111,6 +112,7 @@ export function GoalsProgress() {
           <p className="mt-1 text-xs text-muted-foreground">
             O Executive pode cadastrar seu checklist de {formatDateKey(today)}.
           </p>
+          <Link to="/metas?tab=atribuicoes" className="mt-3 inline-block text-xs text-ember">Ver tarefas individuais em Metas ↗</Link>
         </CardContent>
       </Card>
     )
@@ -182,6 +184,7 @@ export function GoalsProgress() {
             )
           })}
         </div>
+        <Link to="/metas?tab=atribuicoes" className="mt-4 inline-block text-xs text-ember">Ver tarefas individuais com prazo ↗</Link>
       </CardContent>
     </Card>
   )

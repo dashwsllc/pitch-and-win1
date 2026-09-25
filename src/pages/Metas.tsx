@@ -7,6 +7,7 @@ import { GoalTasks } from "@/components/arena/GoalTasks";
 import { GoalOverview } from "@/components/arena/GoalOverview";
 import { GoalManagement } from "@/components/arena/GoalManagement";
 import { EventAudit } from "@/components/arena/EventAudit";
+import { NotificationInbox } from "@/components/arena/ArenaNotifications";
 import { useRoles } from "@/hooks/useRoles";
 import { useAuth } from "@/hooks/useAuth";
 import { arenaRpc } from "@/lib/arena-api";
@@ -151,6 +152,7 @@ export default function Metas() {
               Vendas, compromissos e resultados do time.
             </p>
           </div>
+          {isExecutive && <NotificationInbox />}
         </header>
         <nav className="flex flex-wrap gap-2" aria-label="Central de metas">
           {allowed.map(([key, label]) => (

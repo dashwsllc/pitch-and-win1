@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,7 +7,6 @@ import { useBrasiliaDateSelection, type DailyGoalTask } from "@/hooks/useGoals";
 import { useArenaAssignees } from "@/hooks/useArena";
 import { supabase } from "@/integrations/supabase/client";
 import { arenaRpc } from "@/lib/arena-api";
-import { operationalLabels } from "@/lib/arena";
 import { ShiftApproachGoals } from "@/components/arena/ShiftApproachGoals";
 import { errorMessage, exactDate } from "@/lib/sales";
 import { brasiliaLocalInputToIso, isoToBrasiliaLocalInput } from "@/lib/brasilia-time";
@@ -15,6 +14,8 @@ import { refreshDashboardMutation } from "@/lib/sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { taskChecklistItems, taskTimeRemaining } from "@/lib/task-checklist";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +25,6 @@ import {
 } from "@/components/ui/dialog";
 
 type Task = DailyGoalTask & {
-  operational_status: string;
   completion_comment: string | null;
 };
 export function GoalTasks() {
@@ -34,7 +34,9 @@ export function GoalTasks() {
   const [person, setPerson] = useState("");
   const [title, setTitle] = useState("");
   const [assignee, setAssignee] = useState("");
-  const [status, setStatus] = useState("not_scheduled");
+  const [deadlineTime, setDeadlineTime] = useState("18:00");
+  const [draftItems, setDraftItems] = useState([""]);
+  const [clock, setClock] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Task | null>(null);
   const [comment, setComment] = useState("");
@@ -48,6 +50,10 @@ export function GoalTasks() {
   const [page, setPage] = useState(0);
   const assignees = useArenaAssignees();
   const client = useQueryClient();
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const query = useQuery({
     queryKey: ["daily-goals", "arena", user?.id, isExecutive, date, person, page],
     enabled: !!user,
@@ -55,35 +61,61 @@ export function GoalTasks() {
       let request = supabase
         .from("daily_goal_tasks")
         .select("*")
-        .eq("task_date", date)
+        .order("deadline_at", { ascending: true, nullsFirst: false })
         .order("position")
         .order("id")
         .range(page * 50, page * 50 + 49);
+      if (date === today) {
+        const dayStart = brasiliaLocalInputToIso(`${today}T00:00`);
+        request = request.or(`task_date.eq.${date},and(deadline_at.not.is.null,is_completed.eq.false),and(deadline_at.not.is.null,completed_at.gte.${dayStart})`);
+      } else request = request.eq("task_date", date);
       if (!isExecutive || person)
         request = request.eq("assignee_id", isExecutive ? person : user!.id);
       const { data, error } = await request;
       if (error) throw error;
       return data as Task[];
     },
+    refetchInterval: 30_000,
   });
   const refresh = () => client.invalidateQueries({ queryKey: ["daily-goals"] });
   const assign = async (event: React.FormEvent) => {
     event.preventDefault();
+    const deadline = brasiliaLocalInputToIso(`${date}T${deadlineTime}`);
+    const items = draftItems.map((item) => item.trim());
+    if (!deadline || Date.parse(deadline) <= Date.now() + 60_000 ||
+      !items.length || items.some((item) => item.length < 2 || item.length > 200)) {
+      toast.error("Informe prazo futuro e itens de checklist com pelo menos 2 caracteres.");
+      return;
+    }
     setBusy(true);
     try {
-      const count = await arenaRpc<number>("arena_assign_tasks", {
+      await arenaRpc("arena_assign_checklist_task", {
         p_title: title,
-        p_date: date,
-        p_people: [assignee],
-        p_roles: [],
-        p_status: status,
+        p_assignee: assignee,
+        p_deadline_at: deadline,
+        p_items: items,
       });
       setTitle("");
-      setAssignee("");
-      await refresh();
-      toast.success(`Tarefa atribuída a ${count} colaboradores`);
+      setDraftItems([""]);
+      await refreshDashboardMutation(client);
+      toast.success("Checklist atribuído ao colaborador");
     } catch (cause) {
       toast.error(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toggleChecklistItem = async (task: Task, itemId: string, done: boolean) => {
+    if (task.assignee_id !== user?.id || busy) return;
+    setBusy(true);
+    try {
+      await arenaRpc("arena_toggle_task_checklist", {
+        p_id: task.id, p_item_id: itemId, p_done: done, p_version: task.version,
+      });
+      await refreshDashboardMutation(client);
+    } catch (cause) {
+      toast.error(errorMessage(cause));
+      await refresh();
     } finally {
       setBusy(false);
     }
@@ -104,18 +136,6 @@ export function GoalTasks() {
       toast.error(errorMessage(cause));
     } finally {
       setBusy(false);
-    }
-  };
-  const changeStatus = async (task: Task, value: string) => {
-    try {
-      await arenaRpc("arena_task_status", {
-        p_id: task.id,
-        p_version: task.version,
-        p_status: value,
-      });
-      await refresh();
-    } catch (cause) {
-      toast.error(errorMessage(cause));
     }
   };
   const saveEdit = async () => {
@@ -175,17 +195,16 @@ export function GoalTasks() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg">Tarefas operacionais</h2>
+        <h2 className="text-lg">Tarefas e checklists</h2>
         <p className="text-sm text-muted-foreground">
-          O checklist é manual. Calls, aprovações e pontuação vêm
-          automaticamente do CRM e das vendas.
+          Cada colaborador marca seus itens. O progresso e o prazo são sincronizados com o Executive.
         </p>
       </div>
       <div className="flex flex-wrap gap-3">
         <Input
           className="w-44"
           type="date"
-          aria-label="Dia das tarefas"
+          aria-label="Data do prazo ou histórico das tarefas"
           value={date}
           onChange={(e) => { setDate(e.target.value); setPage(0); }}
         />
@@ -211,7 +230,7 @@ export function GoalTasks() {
           onSubmit={assign}
           className="surface-panel space-y-4 rounded-xl p-5"
         >
-          <h3 className="font-medium">Atribuir tarefa · {date}</h3>
+          <h3 className="font-medium">Atribuir checklist individual</h3>
           <Input
             required
             minLength={2}
@@ -242,22 +261,28 @@ export function GoalTasks() {
               </select>
             </div>
             <div>
-              <Label htmlFor="task-status">Estado operacional inicial</Label>
-              <select
-                id="task-status"
-                className="mt-2 w-full rounded-lg border bg-background p-2"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
-                {Object.entries(operationalLabels).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
+              <Label htmlFor="task-deadline-time">Prazo · horário de Brasília</Label>
+              <Input id="task-deadline-time" className="mt-2" type="time" required value={deadlineTime}
+                onChange={(event) => setDeadlineTime(event.target.value)} />
             </div>
           </div>
-          <Button disabled={busy || date < today || !assignee}>Atribuir</Button>
+          <div className="space-y-2">
+            <Label>Checklist do colaborador</Label>
+            {draftItems.map((item, index) => (
+              <div className="flex gap-2" key={index}>
+                <Input aria-label={`Item ${index + 1} do checklist`} value={item} maxLength={200}
+                  placeholder={`Etapa ${index + 1}`}
+                  onChange={(event) => setDraftItems((items) => items.map((value, position) => position === index ? event.target.value : value))} />
+                {draftItems.length > 1 && <Button type="button" variant="ghost" size="sm"
+                  aria-label={`Remover item ${index + 1}`}
+                  onClick={() => setDraftItems((items) => items.filter((_, position) => position !== index))}>Remover</Button>}
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" disabled={draftItems.length >= 20}
+              onClick={() => setDraftItems((items) => [...items, ""])}>Adicionar item</Button>
+          </div>
+          <Button disabled={busy || date < today || !assignee || !deadlineTime ||
+            draftItems.some((item) => item.trim().length < 2)}>Atribuir</Button>
         </form>
       )}
       {query.isError && (
@@ -266,12 +291,16 @@ export function GoalTasks() {
         </p>
       )}
       <div className="space-y-2">
-        {query.data?.map((task) => (
+        {query.data?.map((task) => {
+          const items = taskChecklistItems(task.checklist_items);
+          const completedItems = items.filter((item) => item.done).length;
+          const progress = items.length ? Math.round(completedItems * 100 / items.length) : 0;
+          return (
           <article
             key={task.id}
-            className="surface-panel flex flex-wrap items-center gap-4 rounded-xl p-4"
+            className="surface-panel flex flex-wrap items-start gap-4 rounded-xl p-4"
           >
-            <input
+            {!task.deadline_at && <input
               type="checkbox"
               aria-label={`Concluir ${task.title}`}
               checked={task.is_completed}
@@ -280,7 +309,7 @@ export function GoalTasks() {
                 setComment('');
                 setSelected(task);
               }}
-            />
+            />}
             <div className="min-w-0 flex-1">
               <p className={task.is_completed ? "line-through opacity-60" : ""}>
                 {task.title}
@@ -291,36 +320,42 @@ export function GoalTasks() {
                 ·{" "}
                 {task.is_completed
                   ? `Concluída em ${exactDate(task.completed_at)}`
+                  : task.deadline_at
+                    ? Date.parse(task.deadline_at) < clock ? "Atrasada" : "Em andamento"
                   : date < today
                     ? "Expirada"
                     : "Pendente"}
               </p>
               {task.completion_comment && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {task.completion_comment}
+                {task.completion_comment}
                 </p>
               )}
+              {task.deadline_at && <>
+                <p className={`mt-2 text-xs tabular-nums ${!task.is_completed && Date.parse(task.deadline_at) < clock ? "text-rose-300" : "text-muted-foreground"}`}>
+                  Prazo: {exactDate(task.deadline_at)} · {task.is_completed ? "Concluída" : taskTimeRemaining(task.deadline_at, clock)}
+                </p>
+                <div className="mt-2 flex items-center gap-3">
+                  <Progress value={progress} className="h-2 flex-1" aria-label={`${progress}% do checklist concluído`} />
+                  <span className="text-xs tabular-nums text-muted-foreground">{completedItems}/{items.length} · {progress}%</span>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {items.map((item) => <label key={item.id} className="flex items-start gap-2 text-sm">
+                    <input type="checkbox" className="mt-1" checked={item.done}
+                      disabled={busy || task.assignee_id !== user?.id}
+                      onChange={() => void toggleChecklistItem(task, item.id, !item.done)} />
+                    <span className={item.done ? "text-muted-foreground line-through" : ""}>{item.text}</span>
+                  </label>)}
+                </div>
+              </>}
             </div>
-            <select
-              className="rounded-lg border bg-background p-2 text-xs"
-              aria-label={`Estado operacional de ${task.title}`}
-              value={task.operational_status}
-              disabled={date < today}
-              onChange={(e) => changeStatus(task, e.target.value)}
-            >
-              {Object.entries(operationalLabels).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-            {isExecutive && date >= today && <div className="flex gap-1">
-              {!task.is_completed && <Button size="sm" variant="outline" disabled={busy} onClick={() => openConversion(task)}>Definir turno</Button>}
+            {isExecutive && task.task_date >= today && <div className="flex gap-1">
+              {!task.deadline_at && !task.is_completed && <Button size="sm" variant="outline" disabled={busy} onClick={() => openConversion(task)}>Definir turno</Button>}
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setEditedTitle(task.title); setEditing({task, remove:false}); }}>Editar</Button>
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditing({task, remove:true})}>Remover</Button>
             </div>}
           </article>
-        ))}
+        );})}
         {!query.isLoading && !query.data?.length && (
           <p className="p-6 text-center text-muted-foreground">
             Nenhuma tarefa atribuída para esta seleção.

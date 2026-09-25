@@ -51,6 +51,18 @@ type ExtraFunctions = {
     p_roles: string[];
     p_status?: string;
   }>;
+  arena_assign_checklist_task: FunctionDef<{
+    p_title: string;
+    p_assignee: string;
+    p_deadline_at: string;
+    p_items: string[];
+  }>;
+  arena_toggle_task_checklist: FunctionDef<{
+    p_id: string;
+    p_item_id: string;
+    p_done: boolean;
+    p_version: number;
+  }>;
   arena_create_shift_approach_goals: FunctionDef<{
     p_title: string;
     p_people: string[];
