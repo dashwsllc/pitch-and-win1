@@ -63,6 +63,11 @@ type ExtraFunctions = {
     p_done: boolean;
     p_version: number;
   }>;
+  arena_set_task_checklist_completion: FunctionDef<{
+    p_id: string;
+    p_completed: boolean;
+    p_version: number;
+  }>;
   arena_create_shift_approach_goals: FunctionDef<{
     p_title: string;
     p_people: string[];

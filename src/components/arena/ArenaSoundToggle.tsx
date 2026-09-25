@@ -1,8 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { Volume2, VolumeX } from "lucide-react";
+import { BellRing, Volume2, VolumeX } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import type { ArenaEvent } from "@/lib/arena";
+
+function playSaleBell(context: AudioContext) {
+  const started = context.currentTime;
+  for (const [frequency, offset] of [[660, 0], [880, 0.13]]) {
+    const note = context.createOscillator();
+    const gain = context.createGain();
+    note.type = "sine";
+    note.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.0001, started + offset);
+    gain.gain.exponentialRampToValueAtTime(0.12, started + offset + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, started + offset + 0.24);
+    note.connect(gain).connect(context.destination);
+    note.start(started + offset);
+    note.stop(started + offset + 0.25);
+  }
+}
 
 export function ArenaSoundToggle() {
   const { user } = useAuth();
@@ -44,19 +61,7 @@ export function ArenaSoundToggle() {
       if (seen.current.size > 500) seen.current.delete(seen.current.values().next().value!);
       const context = audio.current;
       if (!context || context.state !== "running") return;
-      const started = context.currentTime;
-      for (const [frequency, offset] of [[660, 0], [880, 0.13]]) {
-        const note = context.createOscillator();
-        const gain = context.createGain();
-        note.type = "sine";
-        note.frequency.value = frequency;
-        gain.gain.setValueAtTime(0.0001, started + offset);
-        gain.gain.exponentialRampToValueAtTime(0.12, started + offset + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, started + offset + 0.24);
-        note.connect(gain).connect(context.destination);
-        note.start(started + offset);
-        note.stop(started + offset + 0.25);
-      }
+      playSaleBell(context);
     };
     window.addEventListener("arena-fresh-event", receive);
     return () => window.removeEventListener("arena-fresh-event", receive);
@@ -84,13 +89,30 @@ export function ArenaSoundToggle() {
     }
   };
 
-  return <Button type="button" variant="outline" size="sm" onClick={toggle}
+  const triggerBell = async () => {
+    try {
+      audio.current ??= new AudioContext();
+      await audio.current.resume();
+      if (audio.current.state !== "running") throw new Error("Áudio indisponível");
+      playSaleBell(audio.current);
+      window.dispatchEvent(new Event("arena-manual-sale-bell"));
+    } catch {
+      toast.error("Não foi possível tocar o sino. Verifique o áudio do navegador.");
+    }
+  };
+
+  return <><Button type="button" variant="outline" size="sm" onClick={() => void triggerBell()}
+    className="shrink-0 gap-2 border-ember/40 bg-ember/10 px-3 font-medium text-ember hover:bg-ember/20 hover:text-ember"
+    aria-label="Soar o sino de venda manualmente" title="Soar sino de venda">
+    <BellRing aria-hidden="true" />
+    <span>Soar sino</span>
+  </Button><Button type="button" variant="outline" size="sm" onClick={toggle}
     className={`shrink-0 gap-2 border px-3 font-medium ${enabled
       ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100"
       : "border-white/25 bg-white/[0.07] text-white hover:bg-white/[0.13] hover:text-white"}`}
-    aria-label={enabled ? "Desligar som de vendas da Arena" : "Ligar som de vendas da Arena"}
-    aria-pressed={enabled} title={enabled ? "Som de vendas ligado" : "Som de vendas desligado"}>
+    aria-label={enabled ? "Desligar avisos sonoros automáticos da Arena" : "Ligar avisos sonoros automáticos da Arena"}
+    aria-pressed={enabled} title={enabled ? "Avisos automáticos ligados" : "Avisos automáticos desligados"}>
     {enabled ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
-    <span>Som {enabled ? "ligado" : "desligado"}</span>
-  </Button>;
+    <span>Som auto {enabled ? "ligado" : "desligado"}</span>
+  </Button></>;
 }

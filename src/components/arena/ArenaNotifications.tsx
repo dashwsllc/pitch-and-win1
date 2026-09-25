@@ -91,13 +91,26 @@ export function SaleAlerts() {
       });
       if (!active) next();
     };
+    const manualBell = () => {
+      queue.current = addPopup(queue.current, {
+        id: `manual-bell:${Date.now()}:${Math.random()}`,
+        title: "🔔 Venda!",
+        description: "Sino acionado manualmente · sem lançar venda ou alterar metas",
+        priority: 3,
+        sound: false,
+        receivedAt: Date.now(),
+      });
+      if (!active) next();
+    };
     window.addEventListener("arena-fresh-event", receive);
     window.addEventListener("arena-fresh-notification", notification);
+    window.addEventListener("arena-manual-sale-bell", manualBell);
     return () => {
       clearTimeout(timer);
       queue.current = [];
       window.removeEventListener("arena-fresh-event", receive);
       window.removeEventListener("arena-fresh-notification", notification);
+      window.removeEventListener("arena-manual-sale-bell", manualBell);
     };
   }, [userId]);
   return null;
