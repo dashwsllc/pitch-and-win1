@@ -171,9 +171,10 @@ function RankingList({
   cycle?: ArenaCycle;
   linkLabel?: string;
   // A meta de SDR é um único alvo diluído entre o time (mesmos 100 pontos
-  // somados por todos); "faltam X%" deve ser igual para cada SDR, refletindo
-  // o total do time, não a fatia individual de cada um. Closer mantém meta
-  // integral por pessoa, então continua mostrando o progresso individual.
+  // somados por todos); só a legenda "Faltam X%" de cada card passa a usar
+  // esse total do time (igual para todo mundo). O número grande, a barra e o
+  // humor continuam vindo do desempenho individual de cada SDR. Closer
+  // mantém meta integral por pessoa, sem nenhuma parte compartilhada.
   sharedGoal?: boolean;
 }) {
   const list = useRef<HTMLDivElement>(null);
@@ -220,11 +221,9 @@ function RankingList({
       </div>
       <div ref={list} className="space-y-2">
         {people.slice(0, 4).map((person, i) => {
-          const member = sharedGoal
-            ? cycle?.result
-            : cycle?.result.members.find(
-                (m) => m.user_id === person.user_id,
-              );
+          const member = cycle?.result.members.find(
+            (m) => m.user_id === person.user_id,
+          );
           return (
             <div
               key={person.user_id}
@@ -256,7 +255,12 @@ function RankingList({
                   </p>
                 </div>
               </div>
-              <PersonGoalProgress name={person.name} member={member} period={cycle?.period} />
+              <PersonGoalProgress
+                name={person.name}
+                member={member}
+                shared={sharedGoal ? cycle?.result : undefined}
+                period={cycle?.period}
+              />
             </div>
           );
         })}

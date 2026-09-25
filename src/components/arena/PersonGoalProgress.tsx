@@ -16,13 +16,20 @@ const states = {
 const periods = { daily: "Meta de hoje", weekly: "Meta da semana", monthly: "Meta do mês" };
 const format = (value: number) => value.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
-export function PersonGoalProgress({ name, member, period }: {
+export function PersonGoalProgress({ name, member, shared, period }: {
   name: string;
   member?: GoalProgressSource;
+  // Total do time (mesmo para todo mundo). Usado só na legenda "Faltam X%";
+  // o número grande, a barra e o humor continuam vindo do desempenho
+  // individual de member, mudando conforme a pessoa performa.
+  shared?: GoalProgressSource;
   period?: ArenaCycle["period"];
 }) {
   const hasGoal = !!member && member.target > 0;
   const percent = hasGoal ? progressPercent(member.actual, member.target) : 0;
+  const remainingPercent = shared && shared.target > 0
+    ? progressPercent(shared.actual, shared.target)
+    : percent;
   const state = !hasGoal ? "unassigned"
     : percent > 100 ? "exceeded"
       : percent >= 100 ? "achieved"
@@ -57,10 +64,10 @@ export function PersonGoalProgress({ name, member, period }: {
         </div>
         <div className="arena-progress-caption">
           <span>{hasGoal ? goalLabel : "Aguardando uma meta"}</span>
-          {hasGoal && <span>{percent > 100
-            ? `+${format(percent - 100)}% além da meta`
-            : percent >= 100 ? "Objetivo conquistado"
-              : `Faltam ${format(100 - percent)}%`}</span>}
+          {hasGoal && <span>{remainingPercent > 100
+            ? `+${format(remainingPercent - 100)}% além da meta`
+            : remainingPercent >= 100 ? "Objetivo conquistado"
+              : `Faltam ${format(100 - remainingPercent)}%`}</span>}
         </div>
       </div>
     </div>
