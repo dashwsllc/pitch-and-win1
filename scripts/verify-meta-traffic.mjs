@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict'
+import { aggregateMeta, buildImportRows, defaultCsvMapping, parseCsv } from '../src/lib/meta-traffic.ts'
+
+const csv = 'Reporting starts;Account ID;Campaign ID;Campaign name;Amount spent (BRL);Leads;Purchases;Purchases conversion value;Impressions;Link clicks\n'
+  + '24/09/2026;act_1;123;"Campanha; vendas";1.234,50;10;2;4.000,00;1000;50\n'
+const { headers, values } = parseCsv(csv)
+assert.equal(values[0][3], 'Campanha; vendas')
+const mapping = defaultCsvMapping(headers)
+const [row] = buildImportRows(values, headers, mapping, 'campaign', '2026-09-24', '7 dias clique')
+assert.equal(row.spend, 1234.5)
+assert.equal(row.purchase_value, 4000)
+assert.equal(row.date, '2026-09-24')
+assert.equal(row.attribution_window, '7 dias clique')
+const totals = aggregateMeta([{ ...row, id: 'test', updated_at: '' }])
+assert.equal(totals.cpl, 123.45)
+assert.equal(totals.cpa, 617.25)
+assert.equal(totals.roas, 4000 / 1234.5)
+assert.equal(totals.ctr, 5)
+assert.throws(() => buildImportRows([['31/02/2026', ...values[0].slice(1)]], headers, mapping, 'campaign', '2026-09-24', ''), /Data inválida/)
+assert.throws(() => buildImportRows([...values, ...values], headers, mapping, 'campaign', '2026-09-24', ''), /duplicada/)
+const withoutPurchases = parseCsv('Date;Account ID;Campaign ID;Campaign name;Amount spent (BRL);Leads;Currency\n2026-09-24;act_1;123;Leads;100;5;BRL')
+const [leadRow] = buildImportRows(withoutPurchases.values, withoutPurchases.headers, defaultCsvMapping(withoutPurchases.headers), 'campaign', '2026-09-24', '')
+assert.equal(leadRow.purchases, 0)
+assert.equal(aggregateMeta([{ ...leadRow, id: 'lead', updated_at: '' }]).cpa, null)
+const wrongCurrency = parseCsv('Date;Account ID;Campaign ID;Campaign name;Amount spent;Currency\n2026-09-24;act_1;123;Leads;100;USD')
+assert.throws(() => buildImportRows(wrongCurrency.values, wrongCurrency.headers, defaultCsvMapping(wrongCurrency.headers), 'campaign', '2026-09-24', ''), /moeda diferente de BRL/)
+console.log('CSV Meta, datas e indicadores verificados')

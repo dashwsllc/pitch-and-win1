@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import type { ArenaNotification, ArenaEvent } from "./arena";
+import type { MetaDailyRow } from "./meta-traffic";
 
 // Additive contract until the generated project schema is refreshed after the
 // migration. This is the SAME authenticated Supabase client and auth session.
@@ -98,6 +99,10 @@ type ExtraFunctions = {
     p_leads: number;
     p_revision?: string | null;
   }>;
+  meta_import_daily: FunctionDef<{ p_filename: string; p_rows: Json }>;
+  traffic_create_suggestion: FunctionDef<{ p_subject: string; p_body: string; p_campaign_id?: string | null }>;
+  traffic_reply_suggestion: FunctionDef<{ p_id: string; p_body: string }>;
+  traffic_set_suggestion_status: FunctionDef<{ p_id: string; p_status: string }>;
 };
 type ReadTable<Row> = {
   Row: { [K in keyof Row]: Row[K] };
@@ -111,6 +116,10 @@ type ArenaDatabase = Omit<Database, "public"> & {
     Tables: Database["public"]["Tables"] & {
       arena_notifications: ReadTable<ArenaNotification>;
       activity_feed: ReadTable<ArenaEvent>;
+      meta_traffic_daily: ReadTable<MetaDailyRow>;
+      traffic_suggestions: ReadTable<{ id: string; author_id: string; author_name: string; subject: string; body: string; campaign_id: string | null; status: string; created_at: string; updated_at: string }>;
+      traffic_suggestion_replies: ReadTable<{ id: string; suggestion_id: string; author_id: string; author_name: string; body: string; created_at: string }>;
+      meta_import_batches: ReadTable<{ id: string; imported_by: string; filename: string; row_count: number; created_at: string }>;
     };
   };
 };
