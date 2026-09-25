@@ -8,7 +8,7 @@ import { useArenaAssignees } from "@/hooks/useArena";
 import { supabase } from "@/integrations/supabase/client";
 import { arenaRpc } from "@/lib/arena-api";
 import { errorMessage, exactDate } from "@/lib/sales";
-import { addDaysToDateKey, brasiliaLocalInputToIso, formatDateKey, isValidDateKey, isoToBrasiliaLocalInput } from "@/lib/brasilia-time";
+import { addDaysToDateKey, addMonthsToMonthKey, brasiliaLocalInputToIso, formatDateKey, isValidDateKey, isoToBrasiliaLocalInput } from "@/lib/brasilia-time";
 import { refreshDashboardMutation } from "@/lib/sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,7 @@ export function GoalTasks() {
     ? "Informe um período válido, com início anterior ou igual ao fim."
     : null;
   const rangeEnd = period === "ontem" ? addDaysToDateKey(today, -1)
+    : period === "mes" ? addDaysToDateKey(`${addMonthsToMonthKey(today.slice(0, 7), 1)}-01`, -1)
     : period === "custom" ? customEnd : today;
   const rangeStart = period === "7dias" ? addDaysToDateKey(today, -6)
     : period === "mes" ? `${today.slice(0, 7)}-01`
