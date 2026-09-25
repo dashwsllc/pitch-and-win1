@@ -167,13 +167,34 @@ export function CRMLeadCard({
     quente: "bg-orange-600/15 text-orange-400",
   }[lead.temperature];
   const qualificationCall = call?.call_type === "qualificacao";
-  const primaryIntent: CRMCallIntent = !canScheduleQualificationCall
-    ? "handoff"
-    : qualificationCall
-      ? "qualification"
-      : lead.pipeline_stage === "pronto_closer"
-        ? "handoff"
-        : "qualification";
+  const readyForCloser = lead.pipeline_stage === "pronto_closer";
+  const qualificationDue =
+    qualificationCall && (callState === "now" || callState === "overdue");
+  // Pronto pro Closer sempre tem prioridade sobre uma call de qualificação
+  // ainda pendente: sem isso, um lead já qualificado ficava travado em
+  // "Reagendar call SDR" sem nenhum caminho visível pra marcar o repasse.
+  const primary: { label: string; onClick: () => void; disabled?: boolean } | null =
+    closed || handed || !capabilities.sdr
+      ? null
+      : readyForCloser
+        ? {
+            label: "Agendar e enviar ao Closer",
+            onClick: () => onSchedule("handoff"),
+            disabled: !canCreateClosing,
+          }
+        : qualificationDue
+          ? { label: "Registrar resultado da qualificação", onClick: onQualifyCall }
+          : qualificationCall
+            ? canScheduleQualificationCall
+              ? { label: "Reagendar call SDR", onClick: () => onSchedule("qualification") }
+              : null
+            : !canScheduleQualificationCall
+              ? {
+                  label: "Agendar e enviar ao Closer",
+                  onClick: () => onSchedule("handoff"),
+                  disabled: !canCreateClosing,
+                }
+              : { label: "Agendar qualificação", onClick: () => onSchedule("qualification") };
   return (
     <article
       aria-label={`Lead ${athleteLabel}`}
@@ -411,13 +432,9 @@ export function CRMLeadCard({
         </div>
       )}
       <div className="flex items-center gap-1.5 border-t border-border/40 pt-2">
-        {!closed && !handed && capabilities.sdr && (!qualificationCall || canScheduleQualificationCall) && (
-          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy || (primaryIntent === 'handoff' && !canCreateClosing)} onClick={() => onSchedule(primaryIntent)}>
-            {qualificationCall
-              ? "Reagendar call SDR"
-              : primaryIntent === "handoff"
-                ? "Agendar e enviar ao Closer"
-                : "Agendar qualificação"}
+        {primary && (
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy || primary.disabled} onClick={primary.onClick}>
+            {primary.label}
           </Button>
         )}
         {negative && capabilities.sdr && (capabilities.executive || !lead.sdr_id || lead.sdr_id === user?.id) && (

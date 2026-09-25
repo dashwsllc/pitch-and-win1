@@ -494,7 +494,14 @@ export default function CRM() {
       onTransition={(name, data) => {
         void transition(lead, name, data);
       }}
-      onSchedule={(intent) => setSchedule({ lead, call: openCalls.get(lead.id), intent })}
+      onSchedule={(intent) =>
+        // O repasse (handoff) sempre cria um novo agendamento com o Closer; uma
+        // call de qualificação ainda pendente não pode ser tratada como "a call
+        // a reagendar" aqui, senão o envio ao Closer vira só um reagendamento
+        // da qualificação. O backend já encerra a qualificação pendente ao
+        // criar o repasse.
+        setSchedule({ lead, call: intent === "handoff" ? undefined : openCalls.get(lead.id), intent })
+      }
       onQualifyCall={() => {
         const call = openCalls.get(lead.id);
         if (call) setQualification({ lead, call });
