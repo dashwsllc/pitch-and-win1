@@ -26,6 +26,11 @@ import {
 import { progressPercent, stateLabels } from "@/lib/arena";
 
 type ArenaScoreWeight = { action_type: string; label: string; weight: number };
+// input[type=number] só aceita ponto decimal e descarta zero à direita (0.10
+// vira 0.1 no value do DOM); manter 2 casas na exibição evita a falsa
+// impressão de que o valor digitado mudou, sem alterar o número salvo.
+const displayWeight = (weight: number) =>
+  Number.isInteger(weight) ? String(weight) : weight.toFixed(2);
 function ScoreWeights() {
   const { user } = useAuth();
   const query = useQuery({
@@ -41,7 +46,7 @@ function ScoreWeights() {
     if (!query.data || busy) return;
     const values: Record<string, number> = {};
     for (const w of query.data) {
-      const raw = overrides[w.action_type] ?? String(w.weight);
+      const raw = overrides[w.action_type] ?? displayWeight(w.weight);
       const n = Number(raw);
       if (!raw.trim() || !Number.isFinite(n) || n < 0 || n > 100000) {
         toast.error(`Valor inválido para "${w.label}".`);
@@ -93,7 +98,7 @@ function ScoreWeights() {
               step="0.1"
               className="w-28 shrink-0"
               aria-label={`Pontos para ${w.label}`}
-              value={overrides[w.action_type] ?? String(w.weight)}
+              value={overrides[w.action_type] ?? displayWeight(w.weight)}
               onChange={(e) =>
                 setOverrides((o) => ({ ...o, [w.action_type]: e.target.value }))
               }
