@@ -101,11 +101,10 @@ export function ArenaSoundToggle() {
     }
   };
 
-  return <><Button type="button" variant="outline" size="sm" onClick={() => void triggerBell()}
-    className="shrink-0 gap-2 border-ember/40 bg-ember/10 px-3 font-medium text-ember hover:bg-ember/20 hover:text-ember"
+  return <><Button type="button" variant="outline" size="icon" onClick={() => void triggerBell()}
+    className="shrink-0 border-ember/40 bg-ember/10 text-ember hover:bg-ember/20 hover:text-ember"
     aria-label="Soar o sino de venda manualmente" title="Soar sino de venda">
     <BellRing aria-hidden="true" />
-    <span>Soar sino</span>
   </Button><Button type="button" variant="outline" size="sm" onClick={toggle}
     className={`shrink-0 gap-2 border px-3 font-medium ${enabled
       ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100"

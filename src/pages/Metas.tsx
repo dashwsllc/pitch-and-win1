@@ -5,6 +5,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SalesBoard } from "@/components/sales/SalesBoard";
 import { GoalTasks } from "@/components/arena/GoalTasks";
 import { GoalOverview } from "@/components/arena/GoalOverview";
+import { GoalHistory } from "@/components/arena/GoalHistory";
 import { ShiftApproachGoals } from "@/components/arena/ShiftApproachGoals";
 import { GoalManagement } from "@/components/arena/GoalManagement";
 import { EventAudit } from "@/components/arena/EventAudit";
@@ -14,21 +15,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBrasiliaDateSelection } from "@/hooks/useGoals";
 import { useArenaAssignees } from "@/hooks/useArena";
 import { arenaRpc } from "@/lib/arena-api";
-import type { ArenaResult } from "@/lib/arena";
-import { progressPercent, stateLabels } from "@/lib/arena";
 import { errorMessage, exactDate } from "@/lib/sales";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type History = {
-  id: string;
-  title: string;
-  starts_at: string;
-  ends_at: string;
-  closed_at: string;
-  result: ArenaResult;
-};
 type Audit = {
   id: string;
   actor_name: string;
@@ -62,73 +53,28 @@ function ShiftGoalsSection({ isExecutive }: { isExecutive: boolean }) {
     </div>
   );
 }
-function GoalRecords({ tab }: { tab: "history" | "audit" }) {
+function AuditRecords() {
   const { user } = useAuth();
   const [page, setPage] = useState(0);
-  const size = tab === "history" ? 30 : 50;
+  const size = 50;
   const query = useQuery({
-    queryKey: ["arena-records", user?.id, tab, page],
+    queryKey: ["arena-records", user?.id, "audit", page],
     enabled: !!user,
     queryFn: () =>
-      arenaRpc<(History & Audit)[]>("arena_management", {
-        p_tab: tab,
+      arenaRpc<Audit[]>("arena_management", {
+        p_tab: "audit",
         p_offset: page * size,
       }),
   });
   return (
     <section className="space-y-4">
-      <h2 className="text-lg">
-        {tab === "history" ? "Ciclos consolidados" : "Auditoria de ações"}
-      </h2>
+      <h2 className="text-lg">Auditoria de ações</h2>
       {query.isError && <p role="alert">{errorMessage(query.error)}</p>}
       {query.data?.map((row) => (
         <article className="surface-panel rounded-xl p-4" key={row.id}>
-          {tab === "history" ? (
-            <>
-              <div className="flex justify-between gap-3">
-                <h3>{row.title}</h3>
-                <span className="text-sm text-ember">
-                  {stateLabels[row.result.state]}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {exactDate(row.starts_at)} → {exactDate(row.ends_at)}
-              </p>
-              <p className="mt-2 tabular-nums">
-                {progressPercent(row.result.actual, row.result.target).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% da meta
-              </p>
-              <details className="mt-3 text-sm">
-                <summary>Resultados individuais e ranking preservado</summary>
-                <div className="mt-2 space-y-1">
-                  {row.result.members.map((p) => (
-                    <p key={p.user_id}>
-                      {p.display_name} · {progressPercent(p.actual, p.target).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% da meta ·{" "}
-                      {stateLabels[p.state]}
-                    </p>
-                  ))}
-                  {(["sdrs", "closers"] as const).map((role) =>
-                    row.result[role]?.map((p, i) => (
-                      <p key={`${role}:${p.user_id}`}>
-                        {role === "sdrs" ? "SDR" : "Closer"} · {i + 1}. {p.name}{" "}
-                        · {role === "sdrs" ? `${p.repasses ?? 0} repasses` : `${p.quantidadeVendas ?? 0} vendas`}
-                      </p>
-                    )),
-                  )}
-                </div>
-              </details>
-            </>
-          ) : (
-            <>
-              <p>
-                {row.target_label} ·{" "}
-                <span className="text-ember">{row.action}</span>
-              </p>
-              <p className="mt-1 text-sm">{row.reason}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {row.actor_name} · {exactDate(row.created_at)}
-              </p>
-            </>
-          )}
+          <p>{row.target_label} · <span className="text-ember">{row.action}</span></p>
+          <p className="mt-1 text-sm">{row.reason}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{row.actor_name} · {exactDate(row.created_at)}</p>
         </article>
       ))}
       {!query.isLoading && !query.data?.length && (
@@ -161,10 +107,10 @@ export default function Metas() {
   const allowed = [
     ["vendas", "Vendas do time"],
     ["atribuicoes", "Minhas tarefas"],
+    ["historico", "Histórico de metas"],
     ...(isExecutive
       ? [
           ["gestao", "Gestão de metas"],
-          ["historico", "Histórico"],
           ["auditoria", "Auditoria"],
           ["configuracoes", "Configurações"],
         ]
@@ -200,11 +146,11 @@ export default function Metas() {
         {tab === "atribuicoes" && <><GoalOverview /><ShiftGoalsSection isExecutive={isExecutive} /><GoalTasks /></>}
         {tab === "gestao" && <GoalManagement />}
         {tab === "configuracoes" && <GoalManagement configuration />}
-        {tab === "historico" && <GoalRecords key="history" tab="history" />}
+        {tab === "historico" && <GoalHistory management={isExecutive} />}
         {tab === "auditoria" && (
           <div className="space-y-8">
             <EventAudit />
-            <GoalRecords key="audit" tab="audit" />
+            <AuditRecords />
           </div>
         )}
       </div>

@@ -19,11 +19,26 @@ type ExtraFunctions = {
   arena_dashboard: FunctionDef<{ p_start: string; p_end: string }>;
   arena_visible_goals: FunctionDef<Record<string, never>>;
   arena_management: FunctionDef<{ p_tab: string; p_offset?: number }>;
+  arena_goal_history: FunctionDef<{
+    p_person?: string | null;
+    p_outcome?: "all" | "achieved" | "failed" | "unassigned";
+    p_offset?: number;
+    p_limit?: number;
+  }>;
   arena_assignees: FunctionDef<Record<string, never>>;
   arena_save_goal: FunctionDef<{
     p_data: Json;
     p_reason: string;
     p_previous?: string;
+  }>;
+  arena_delete_goal: FunctionDef<{
+    p_family_id: string;
+    p_reason: string;
+  }>;
+  arena_score_weights: FunctionDef<Record<string, never>>;
+  arena_save_score_weights: FunctionDef<{
+    p_weights: Json;
+    p_reason: string;
   }>;
   arena_adjust_score: FunctionDef<{
     p_person: string;

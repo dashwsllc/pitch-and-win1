@@ -25,6 +25,103 @@ import {
 } from "@/lib/dashboard-period";
 import { progressPercent, stateLabels } from "@/lib/arena";
 
+type ArenaScoreWeight = { action_type: string; label: string; weight: number };
+function ScoreWeights() {
+  const { user } = useAuth();
+  const query = useQuery({
+    queryKey: ["arena-score-weights", user?.id],
+    enabled: !!user,
+    queryFn: () => arenaRpc<ArenaScoreWeight[]>("arena_score_weights", {}),
+  });
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!query.data || busy) return;
+    const values: Record<string, number> = {};
+    for (const w of query.data) {
+      const raw = overrides[w.action_type] ?? String(w.weight);
+      const n = Number(raw);
+      if (!raw.trim() || !Number.isFinite(n) || n < 0 || n > 100000) {
+        toast.error(`Valor inválido para "${w.label}".`);
+        return;
+      }
+      values[w.action_type] = n;
+    }
+    setBusy(true);
+    try {
+      await arenaRpc("arena_save_score_weights", { p_weights: values, p_reason: reason });
+      setOverrides({});
+      setReason("");
+      await query.refetch();
+      toast.success("Pontuação da Arena atualizada");
+    } catch (cause) {
+      toast.error(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="surface-panel space-y-3 rounded-xl p-5">
+      <div>
+        <h3 className="font-medium">Pontuação por evento</h3>
+        <p className="text-xs text-muted-foreground">
+          Quanto cada evento vale em pontos na Arena. Vale só para eventos novos a partir de
+          agora; o que já foi registrado no histórico não muda.
+        </p>
+      </div>
+      {query.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          {errorMessage(query.error)}
+        </p>
+      )}
+      <form onSubmit={save} className="space-y-3">
+        {query.data?.map((w) => (
+          <div
+            key={w.action_type}
+            className="flex items-center justify-between gap-3 border-t border-white/5 py-2"
+          >
+            <div className="min-w-0">
+              <p className="text-sm">{w.label}</p>
+              <p className="text-xs text-muted-foreground">{w.action_type}</p>
+            </div>
+            <Input
+              type="number"
+              min="0"
+              max="100000"
+              step="0.1"
+              className="w-28 shrink-0"
+              aria-label={`Pontos para ${w.label}`}
+              value={overrides[w.action_type] ?? String(w.weight)}
+              onChange={(e) =>
+                setOverrides((o) => ({ ...o, [w.action_type]: e.target.value }))
+              }
+            />
+          </div>
+        ))}
+        {!query.isLoading && !query.data?.length && (
+          <p className="text-sm text-muted-foreground">
+            Nenhuma métrica configurável encontrada.
+          </p>
+        )}
+        <div>
+          <Label htmlFor="weights-reason">Motivo da alteração</Label>
+          <Input
+            id="weights-reason"
+            required
+            minLength={5}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </div>
+        <Button type="submit" disabled={busy || !query.data?.length}>
+          Salvar pontuação
+        </Button>
+      </form>
+    </section>
+  );
+}
 const emptyGoal = {
   title: "",
   target: "100",
@@ -73,6 +170,10 @@ export function GoalManagement({
     id: string;
     name: string;
     hidden: boolean;
+  }>();
+  const [deleting, setDeleting] = useState<{
+    family_id: string;
+    title: string;
   }>();
   const edit = (goal?: ArenaGoal) => {
     setPrevious(goal?.id);
@@ -152,6 +253,27 @@ export function GoalManagement({
       setBusy(false);
     }
   };
+  const removeGoal = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await arenaRpc("arena_delete_goal", {
+        p_family_id: deleting.family_id,
+        p_reason: reason,
+      });
+      setDeleting(undefined);
+      await Promise.all([
+        query.refetch(),
+        client.invalidateQueries({ queryKey: ["arena"] }),
+        client.invalidateQueries({ queryKey: ["visible-goals"] }),
+      ]);
+      toast.success("Meta removida: desativada e ciclo aberto encerrado");
+    } catch (cause) {
+      toast.error(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
   const changeVisibility = async () => {
     if (!visibility) return;
     setBusy(true);
@@ -225,12 +347,27 @@ export function GoalManagement({
               {goal.recurring ? "Recorrente" : "Ciclo único"} ·{" "}
               {goal.enabled ? "Ativa" : "Desativada"}
             </p>
-            <Button size="sm" variant="outline" onClick={() => edit(goal)}>
-              Alterar com nova versão
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => edit(goal)}>
+                Alterar com nova versão
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-rose-300"
+                disabled={!goal.enabled}
+                onClick={() => {
+                  setReason("");
+                  setDeleting({ family_id: goal.family_id, title: goal.title });
+                }}
+              >
+                Remover
+              </Button>
+            </div>
           </article>
         ))}
       </div>
+      {!configuration && <ScoreWeights />}
       {!configuration && (
         <section
           className="surface-panel space-y-3 rounded-xl p-5"
@@ -541,6 +678,35 @@ export function GoalManagement({
             onClick={changeVisibility}
           >
             Confirmar
+          </Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!deleting}
+        onOpenChange={(open) => {
+          if (!open && !busy) setDeleting(undefined);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remover {deleting?.title}?</DialogTitle>
+            <DialogDescription>
+              A meta é desativada e o ciclo em aberto é encerrado imediatamente.
+              Ciclos já fechados e o histórico de resultados permanecem intactos.
+            </DialogDescription>
+          </DialogHeader>
+          <Label htmlFor="delete-goal-reason">Motivo</Label>
+          <Input
+            id="delete-goal-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <Button
+            disabled={busy || reason.trim().length < 5}
+            variant="destructive"
+            onClick={removeGoal}
+          >
+            Confirmar remoção
           </Button>
         </DialogContent>
       </Dialog>

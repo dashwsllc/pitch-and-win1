@@ -411,7 +411,15 @@ export function CRMLeadCard({
         </div>
       )}
       <div className="flex items-center gap-1.5 border-t border-border/40 pt-2">
-        {!closed && !handed && capabilities.sdr && (!qualificationCall || canScheduleQualificationCall) && (
+        {/* A call de qualificação vencida trava o lead em "Reagendar call SDR" mesmo
+            já pronto pro Closer. Registrar o resultado é o próximo passo real: ele
+            decide o direcionamento (avançou/não avançou) e libera o repasse. */}
+        {!closed && !handed && capabilities.sdr && qualificationCall && (callState === "now" || callState === "overdue") && (
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={onQualifyCall}>
+            Registrar resultado da qualificação
+          </Button>
+        )}
+        {!closed && !handed && capabilities.sdr && !(qualificationCall && (callState === "now" || callState === "overdue")) && (!qualificationCall || canScheduleQualificationCall) && (
           <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy || (primaryIntent === 'handoff' && !canCreateClosing)} onClick={() => onSchedule(primaryIntent)}>
             {qualificationCall
               ? "Reagendar call SDR"
