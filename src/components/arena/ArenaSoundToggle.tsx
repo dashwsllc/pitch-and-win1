@@ -84,9 +84,13 @@ export function ArenaSoundToggle() {
     }
   };
 
-  return <Button type="button" variant="ghost" size="icon" onClick={toggle}
+  return <Button type="button" variant="outline" size="sm" onClick={toggle}
+    className={`shrink-0 gap-2 border px-3 font-medium ${enabled
+      ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100"
+      : "border-white/25 bg-white/[0.07] text-white hover:bg-white/[0.13] hover:text-white"}`}
     aria-label={enabled ? "Desligar som de vendas da Arena" : "Ligar som de vendas da Arena"}
     aria-pressed={enabled} title={enabled ? "Som de vendas ligado" : "Som de vendas desligado"}>
-    {enabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+    {enabled ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
+    <span>Som {enabled ? "ligado" : "desligado"}</span>
   </Button>;
 }

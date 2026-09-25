@@ -392,8 +392,8 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             <i className="h-1.5 w-1.5 rounded-full bg-current" />
             {query.connected && data ? "LIVE" : "RECONECTANDO"}
           </span>
-          {toolbar}
           <ArenaSoundToggle />
+          {toolbar}
           <Button
             variant="ghost"
             size="icon"
