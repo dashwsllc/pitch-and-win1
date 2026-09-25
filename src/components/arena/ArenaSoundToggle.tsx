@@ -116,10 +116,10 @@ export function ArenaSoundToggle() {
       className={`shrink-0 gap-2 border px-3 font-medium ${enabled
         ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100"
         : "border-white/25 bg-white/[0.07] text-white hover:bg-white/[0.13] hover:text-white"}`}
-      aria-label={enabled ? "Desligar avisos sonoros automáticos da Arena" : "Ligar avisos sonoros automáticos da Arena"}
-      aria-pressed={enabled} title={enabled ? "Avisos automáticos ligados" : "Avisos automáticos desligados"}>
+      aria-label={enabled ? "Mutar som da Arena" : "Desmutar som da Arena"}
+      aria-pressed={enabled} title={enabled ? "Som alto ligado — clique para mutar" : "Som mutado — clique para desmutar"}>
       {enabled ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
-      <span>Som auto {enabled ? "ligado" : "desligado"}</span>
+      <span>Som</span>
     </Button>
   </>;
 }
