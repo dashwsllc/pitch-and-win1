@@ -367,7 +367,7 @@ export function GoalManagement({
           </article>
         ))}
       </div>
-      {!configuration && <ScoreWeights />}
+      {configuration && <ScoreWeights />}
       {!configuration && (
         <section
           className="surface-panel space-y-3 rounded-xl p-5"
