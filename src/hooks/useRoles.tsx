@@ -58,6 +58,16 @@ export function useRoles() {
     },
     staleTime: 15_000,
   });
+  const callPolicy = useQuery({
+    queryKey: ["crm", "qualification-call-policy", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("crm_can_schedule_qualification_call");
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 60_000,
+  });
   const roles: UserRole[] = query.data?.map((row) => row.role) ?? [];
   const capabilities = crmCapabilities(
     roles,
@@ -73,6 +83,7 @@ export function useRoles() {
     isExecutive,
     isSuperAdmin,
     capabilities,
+    canScheduleQualificationCall: callPolicy.data === true,
     hasCRMAccess: capabilities.leads,
     canViewSales: isExecutive || !!query.data?.some((r) => r.can_view_sales),
     // executive_review_sale congela a taxa da linha escolhida por

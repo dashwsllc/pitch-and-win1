@@ -240,7 +240,9 @@ function RankingList({
                   </p>
                   <p className="truncate text-xs text-muted-foreground" title={person.repasses != null ? `${person.no_handoff ?? 0} sem avanço · ${person.cancelled ?? 0} cancelamentos` : undefined}>
                     {person.repasses != null
-                      ? `Q ${person.scheduled} · realizadas ${person.performed} · repasses ${person.repasses} · sem avanço ${person.no_handoff ?? 0} · canc. ${person.cancelled ?? 0}`
+                      ? person.qualificationCallsDisabled
+                        ? `Calls para Closer ${person.repasses} · canc. ${person.cancelled ?? 0}`
+                        : `Q ${person.scheduled} · realizadas ${person.performed} · repasses ${person.repasses} · sem avanço ${person.no_handoff ?? 0} · canc. ${person.cancelled ?? 0}`
                       : `${person.quantidadeVendas} vendas · ${money(person.totalVendas ?? 0)}`}
                   </p>
                 </div>

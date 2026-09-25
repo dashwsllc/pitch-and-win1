@@ -95,7 +95,7 @@ export function CRMLeadCard({
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { capabilities, hasRole } = useRoles();
+  const { capabilities, hasRole, canScheduleQualificationCall } = useRoles();
   const canCreateClosing = capabilities.executive || hasRole('sdr');
   const closed = ["fechado_ganho", "fechado_perdido", "lead_perdido"].includes(
     lead.pipeline_stage,
@@ -167,11 +167,13 @@ export function CRMLeadCard({
     quente: "bg-orange-600/15 text-orange-400",
   }[lead.temperature];
   const qualificationCall = call?.call_type === "qualificacao";
-  const primaryIntent: CRMCallIntent = qualificationCall
-    ? "qualification"
-    : lead.pipeline_stage === "pronto_closer"
-      ? "handoff"
-      : "qualification";
+  const primaryIntent: CRMCallIntent = !canScheduleQualificationCall
+    ? "handoff"
+    : qualificationCall
+      ? "qualification"
+      : lead.pipeline_stage === "pronto_closer"
+        ? "handoff"
+        : "qualification";
   return (
     <article
       aria-label={`Lead ${athleteLabel}`}
@@ -409,7 +411,7 @@ export function CRMLeadCard({
         </div>
       )}
       <div className="flex items-center gap-1.5 border-t border-border/40 pt-2">
-        {!closed && !handed && capabilities.sdr && (
+        {!closed && !handed && capabilities.sdr && (!qualificationCall || canScheduleQualificationCall) && (
           <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy || (primaryIntent === 'handoff' && !canCreateClosing)} onClick={() => onSchedule(primaryIntent)}>
             {qualificationCall
               ? "Reagendar call SDR"
@@ -450,7 +452,7 @@ export function CRMLeadCard({
                 </DropdownMenuItem>
               </>
             )}
-            {canSchedule && call && (
+            {canSchedule && call && (!qualificationCall || canScheduleQualificationCall) && (
               <>
                 <DropdownMenuItem onSelect={() => onSchedule(qualificationCall ? "qualification" : "closer")}>
                   <PhoneCall className="mr-2 h-4 w-4" /> Reagendar call
@@ -464,9 +466,9 @@ export function CRMLeadCard({
             )}
             {!closed && !handed && capabilities.sdr && !call && (
               <>
-                <DropdownMenuItem onSelect={() => onSchedule("qualification")}>
+                {canScheduleQualificationCall && <DropdownMenuItem onSelect={() => onSchedule("qualification")}>
                   <PhoneCall className="mr-2 h-4 w-4" /> Agendar call de qualificação SDR
-                </DropdownMenuItem>
+                </DropdownMenuItem>}
                 {canCreateClosing && <DropdownMenuItem onSelect={() => onSchedule("handoff")}>
                   <CalendarClock className="mr-2 h-4 w-4" /> Agendar fechamento e enviar ao Closer
                 </DropdownMenuItem>}

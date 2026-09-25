@@ -39,7 +39,7 @@ export function CRMCallScheduler({
   onClose: () => void;
 }) {
   const { user } = useAuth();
-  const { capabilities, hasRole } = useRoles();
+  const { capabilities, hasRole, canScheduleQualificationCall } = useRoles();
   const assignees = useCRMAssignees();
   const client = useQueryClient();
   const { toast } = useToast();
@@ -93,6 +93,7 @@ export function CRMCallScheduler({
     setSaving(true);
     setFailure("");
     try {
+      if (type === 'qualificacao' && !canScheduleQualificationCall) throw new Error('Esta conta agenda apenas calls para o Closer.');
       if (!call && type === 'fechamento_closer' && !canCreateClosing) throw new Error('O SDR agenda a call de fechamento para o Closer.');
       const { error } = call
         ? await supabase.rpc("reschedule_crm_call", {

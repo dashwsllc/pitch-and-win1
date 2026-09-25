@@ -1343,6 +1343,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      crm_can_schedule_qualification_call: { Args: Record<PropertyKey, never>; Returns: boolean }
       manage_sale: {
         Args: { p_sale_id: string; p_action: string; p_expected_updated_at: string; p_data?: Json; p_reason?: string }
         Returns: Database["public"]["Tables"]["vendas"]["Row"]

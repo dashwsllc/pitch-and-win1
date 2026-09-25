@@ -99,6 +99,7 @@ export interface ArenaPerson {
   performed?: number;
   cancelled?: number;
   no_handoff?: number;
+  qualificationCallsDisabled?: boolean;
 }
 export interface ArenaMember {
   user_id: string;
