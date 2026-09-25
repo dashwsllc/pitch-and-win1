@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { BellRing, Volume2, VolumeX } from "lucide-react";
-import { toast } from "sonner";
+import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import type { ArenaEvent } from "@/lib/arena";
+import { isParallelFunnelSale, type ArenaEvent } from "@/lib/arena";
 
 function playSaleBell(context: AudioContext) {
   const started = context.currentTime;
@@ -54,8 +53,11 @@ export function ArenaSoundToggle() {
   useEffect(() => {
     const receive = (raw: Event) => {
       const event = (raw as CustomEvent<ArenaEvent>).detail;
+      // Toca para vendas fechadas por Closer e também para vendas avulsas
+      // (funil paralelo, sem lead do CRM), não só para o funil SDR → Closer.
       if (!enabledRef.current || event.action_type !== "sale.approved" ||
-        event.responsible_role !== "closer" || event.provenance !== "live" ||
+        event.provenance !== "live" ||
+        (event.responsible_role !== "closer" && !isParallelFunnelSale(event)) ||
         seen.current.has(event.id)) return;
       seen.current.add(event.id);
       if (seen.current.size > 500) seen.current.delete(seen.current.values().next().value!);
@@ -89,24 +91,7 @@ export function ArenaSoundToggle() {
     }
   };
 
-  const triggerBell = async () => {
-    try {
-      audio.current ??= new AudioContext();
-      await audio.current.resume();
-      if (audio.current.state !== "running") throw new Error("Áudio indisponível");
-      playSaleBell(audio.current);
-      window.dispatchEvent(new Event("arena-manual-sale-bell"));
-    } catch {
-      toast.error("Não foi possível tocar o sino. Verifique o áudio do navegador.");
-    }
-  };
-
-  return <><Button type="button" variant="outline" size="sm" onClick={() => void triggerBell()}
-    className="shrink-0 gap-2 border-ember/40 bg-ember/10 px-3 font-medium text-ember hover:bg-ember/20 hover:text-ember"
-    aria-label="Soar o sino de venda manualmente" title="Soar sino de venda">
-    <BellRing aria-hidden="true" />
-    <span>Soar sino</span>
-  </Button><Button type="button" variant="outline" size="sm" onClick={toggle}
+  return <Button type="button" variant="outline" size="sm" onClick={toggle}
     className={`shrink-0 gap-2 border px-3 font-medium ${enabled
       ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100"
       : "border-white/25 bg-white/[0.07] text-white hover:bg-white/[0.13] hover:text-white"}`}
@@ -114,5 +99,5 @@ export function ArenaSoundToggle() {
     aria-pressed={enabled} title={enabled ? "Avisos automáticos ligados" : "Avisos automáticos desligados"}>
     {enabled ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
     <span>Som auto {enabled ? "ligado" : "desligado"}</span>
-  </Button></>;
+  </Button>;
 }

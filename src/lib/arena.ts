@@ -143,6 +143,16 @@ export interface ArenaEvent {
   cycle_at?: string;
   avatar_url?: string | null;
   provenance: string;
+  // Realtime já entrega esta coluna de activity_feed mesmo sem estar no SELECT
+  // das RPCs; venda avulsa (fora do funil de leads do CRM) chega com null.
+  lead_id?: string | null;
+}
+
+// Venda avulsa/pessoal: aprovada sem vínculo com um lead do CRM (funil
+// paralelo ao SDR → Closer). O sino automático da Arena também soa para ela,
+// além das vendas de Closer.
+export function isParallelFunnelSale(event: Pick<ArenaEvent, "lead_id">) {
+  return event.lead_id == null;
 }
 export interface ArenaDashboard {
   server_time: string;
