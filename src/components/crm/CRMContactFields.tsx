@@ -7,10 +7,12 @@ export function CRMContactFields({
   value,
   onChange,
   prefix,
+  requireComplete = false,
 }: {
   value: ContactForm;
   onChange: (value: ContactForm) => void;
   prefix: string;
+  requireComplete?: boolean;
 }) {
   const field = (
     key: keyof ContactForm,
@@ -58,7 +60,7 @@ export function CRMContactFields({
       <div className="grid gap-2.5 sm:grid-cols-2">
         {field("name", "Nome do responsável", "text", true)}
         {field("phone", "WhatsApp", "tel", true)}
-        {field("email", "E-mail (opcional)", "email")}
+        {field("email", requireComplete ? "E-mail" : "E-mail (opcional)", "email", requireComplete)}
         {field("city_state", "Cidade / UF")}
       </div>
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dados do atleta</p>
@@ -68,7 +70,7 @@ export function CRMContactFields({
           "athlete_birth_date",
           "Data de nascimento",
           "date",
-          false,
+          requireComplete,
           "1900-01-01",
         )}
         <div className="space-y-1">
@@ -105,6 +107,7 @@ export function CRMContactFields({
           <Label className="text-xs" htmlFor={`${prefix}-position`}>Posição em campo</Label>
           <select
             id={`${prefix}-position`}
+            required={requireComplete}
             value={value.athlete_position}
             onChange={(e) =>
               onChange({ ...value, athlete_position: e.target.value })
@@ -133,8 +136,9 @@ export function CRMContactFields({
         "url",
       )}
       <p className="text-[11px] leading-4 text-muted-foreground">
-        Somente responsável, atleta e WhatsApp são obrigatórios. Complete os
-        demais dados quando estiverem disponíveis.
+        {requireComplete
+          ? "Para importar no CRM, complete responsável, WhatsApp, e-mail, atleta, nascimento e posição."
+          : "Somente responsável, atleta e WhatsApp são obrigatórios. Complete os demais dados quando estiverem disponíveis."}
       </p>
     </div>
   );

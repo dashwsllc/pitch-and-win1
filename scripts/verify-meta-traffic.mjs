@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { aggregateMeta, buildImportRows, defaultCsvMapping, parseCsv } from '../src/lib/meta-traffic.ts'
 
-const csv = 'Reporting starts;Account ID;Campaign ID;Campaign name;Amount spent (BRL);Leads;Purchases;Purchases conversion value;Impressions;Link clicks\n'
-  + '24/09/2026;act_1;123;"Campanha; vendas";1.234,50;10;2;4.000,00;1000;50\n'
+const csv = 'Reporting starts;Account ID;Campaign ID;Campaign name;Amount spent (BRL);Leads;Purchases;Purchases conversion value;Impressions;Link clicks;Messaging conversations started\n'
+  + '24/09/2026;act_1;123;"Campanha; vendas";1.234,50;10;2;4.000,00;1000;50;5\n'
 const { headers, values } = parseCsv(csv)
 assert.equal(values[0][3], 'Campanha; vendas')
 const mapping = defaultCsvMapping(headers)
@@ -16,6 +16,9 @@ assert.equal(totals.cpl, 123.45)
 assert.equal(totals.cpa, 617.25)
 assert.equal(totals.roas, 4000 / 1234.5)
 assert.equal(totals.ctr, 5)
+assert.equal(totals.cpc, 1234.5 / 50)
+assert.equal(totals.messagesStarted, 5)
+assert.equal(totals.costPerMessage, 1234.5 / 5)
 assert.throws(() => buildImportRows([['31/02/2026', ...values[0].slice(1)]], headers, mapping, 'campaign', '2026-09-24', ''), /Data inválida/)
 assert.throws(() => buildImportRows([...values, ...values], headers, mapping, 'campaign', '2026-09-24', ''), /duplicada/)
 const withoutPurchases = parseCsv('Date;Account ID;Campaign ID;Campaign name;Amount spent (BRL);Leads;Currency\n2026-09-24;act_1;123;Leads;100;5;BRL')

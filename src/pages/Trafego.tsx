@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -36,7 +36,7 @@ function median(values: number[]) {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
 }
 
-function ImportPanel({ today, onImported }: { today: string; onImported: () => Promise<unknown> }) {
+function ImportPanel({ today, onImported }: { today: string; onImported: (selection: { level: MetaLevel; start: string; end: string }) => Promise<unknown> }) {
   const [fileName, setFileName] = useState('')
   const [headers, setHeaders] = useState<string[]>([])
   const [values, setValues] = useState<string[][]>([])
@@ -51,6 +51,7 @@ function ImportPanel({ today, onImported }: { today: string; onImported: () => P
     try { return buildImportRows(values, headers, mapping, level, today, attribution) }
     catch (cause) { return errorMessage(cause) }
   }, [values, headers, mapping, level, today, attribution])
+  const previewTotals = Array.isArray(preview) ? aggregateMeta(preview) : null
   const load = async (file?: File) => {
     if (!file) return
     try {
@@ -65,14 +66,15 @@ function ImportPanel({ today, onImported }: { today: string; onImported: () => P
     setBusy(true)
     try {
       await arenaRpc('meta_import_daily', { p_filename: fileName, p_rows: preview })
-      await onImported()
+      const dates = preview.map(row => row.date).sort()
+      await onImported({ level, start: dates[0], end: dates[dates.length - 1] })
       toast.success(preview.length + ' linhas da Meta importadas.')
       setValues([]); setMapping(null); setFileName(''); setBrlConfirmed(false)
     } catch (cause) { toast.error(errorMessage(cause)) }
     finally { setBusy(false) }
   }
   return <section className="surface-panel space-y-5 rounded-2xl p-5 sm:p-6">
-    <div><h2 className="text-lg font-medium">Importar relatório da Meta</h2><p className="mt-1 text-sm text-muted-foreground">Exporte dados diários do Gerenciador de Anúncios em CSV, com moeda BRL. Inclua IDs, gasto e, quando disponíveis, leads e compras.</p></div>
+    <div><h2 className="text-lg font-medium">Importar</h2><p className="mt-1 text-sm text-muted-foreground">Exporte dados diários do Gerenciador de Anúncios da Meta em CSV, com moeda BRL. Inclua IDs, gasto e as colunas de resultados disponíveis: leads, compras, impressões, cliques no link e conversas por mensagem iniciadas.</p></div>
     <div className="grid gap-4 sm:grid-cols-2">
       <div><Label htmlFor="meta-file">Arquivo CSV</Label><Input key={fileName || 'empty'} id="meta-file" type="file" accept=".csv,text/csv" onChange={event => void load(event.target.files?.[0])} /></div>
       <div><Label htmlFor="meta-level">Nível da exportação</Label><select id="meta-level" className={selectClass} value={level} onChange={event => setLevel(event.target.value as MetaLevel)}><option value="campaign">Campanha</option><option value="adset">Conjunto de anúncios</option><option value="ad">Anúncio</option></select></div>
@@ -81,7 +83,7 @@ function ImportPanel({ today, onImported }: { today: string; onImported: () => P
     {fileError && <p role="alert" className="text-sm text-destructive">{fileError}</p>}
     {mapping && <><div><h3 className="font-medium">Conferir colunas · {fileName}</h3><p className="text-xs text-muted-foreground">Campos opcionais sem coluna serão tratados como zero.</p></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{csvFields.map(field => <div key={field.key}><Label htmlFor={'map-' + field.key}>{field.label}{field.required ? ' *' : ''}</Label><select id={'map-' + field.key} className={selectClass} value={mapping[field.key]} onChange={event => setMapping({ ...mapping, [field.key]: event.target.value })}><option value="">Sem coluna</option>{headers.map((header, index) => <option key={index} value={header}>{header}</option>)}</select></div>)}</div>
-      {typeof preview === 'string' ? <p role="alert" className="text-sm text-destructive">{preview}</p> : preview && <p className="rounded-lg border border-border/60 p-4 text-sm"><strong>{preview.length} linhas prontas.</strong> A importação atualiza dados com os mesmos IDs e datas. Confirme que leads e compras usam a mesma atribuição.</p>}
+      {typeof preview === 'string' ? <p role="alert" className="text-sm text-destructive">{preview}</p> : preview && previewTotals && <div className="rounded-lg border border-border/60 p-4 text-sm"><strong>{preview.length} linhas prontas.</strong> A importação atualiza dados com os mesmos IDs e datas.<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground"><span>Gasto: {money(previewTotals.spend)}</span><span>Leads: {previewTotals.leads}</span><span>Compras: {previewTotals.purchases}</span><span>Cliques no link: {previewTotals.linkClicks}</span><span>Conversas iniciadas: {previewTotals.messagesStarted}</span></div><p className="mt-2 text-xs text-muted-foreground">Revise o mapeamento e a janela de atribuição antes de confirmar. Em registros novos, colunas não exportadas ficam em zero; na reimportação, métricas omitidas são preservadas.</p></div>}
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={brlConfirmed} onChange={event => setBrlConfirmed(event.target.checked)} /> Confirmo que o valor gasto e o valor de compras estão em BRL.</label>
       <Button disabled={busy || !brlConfirmed || !Array.isArray(preview) || !preview.length} onClick={() => void submit()}>{busy ? 'Importando…' : 'Confirmar importação'}</Button>
     </>}
@@ -124,7 +126,9 @@ function Suggestions({ campaigns }: { campaigns: { id: string; name: string }[] 
 
 export default function Trafego() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const today = useBrasiliaToday()
+  const [tab, setTab] = useState('performance')
   const [period, setPeriod] = useState('30')
   const [customStart, setCustomStart] = useState(shiftDate(today, -29))
   const [customEnd, setCustomEnd] = useState(today)
@@ -147,19 +151,24 @@ export default function Trafego() {
   const cplMedian = median(byCampaign.flatMap(item => item.cpl === null ? [] : [item.cpl]))
   const cpaMedian = median(byCampaign.flatMap(item => item.cpa === null ? [] : [item.cpa]))
   const attributionWindows = [...new Set(rows.map(row => row.attribution_window))]
-  const imported = async () => { await Promise.all([query.refetch(), batchQuery.refetch()]) }
+  const imported = async (selection: { level: MetaLevel; start: string; end: string }) => {
+    setLevel(selection.level); setPeriod('custom'); setCustomStart(selection.start); setCustomEnd(selection.end)
+    setAccount(''); setCampaign(''); setTab('performance')
+    await Promise.all([queryClient.invalidateQueries({ queryKey: ['meta-traffic'] }), batchQuery.refetch()])
+  }
   return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6"><header><h1 className="text-3xl font-light">Tráfego</h1><p className="mt-2 text-sm text-muted-foreground">Desempenho da Meta Ads para decisões de investimento, aquisição e otimização.</p></header>
-    <Tabs defaultValue="performance" className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import">Importar Meta</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
+    <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import">Importar</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
       <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
         {!validRange && <p role="alert" className="text-sm text-destructive">Escolha um período válido até hoje.</p>}{query.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(query.error)}</p>}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{([
-          ['Investimento', format(total.spend, 'money')], ['Leads Meta', format(total.leads, 'count')], ['CPL · custo por lead', format(total.cpl, 'money')], ['Compras Meta', format(total.purchases, 'count')], ['CPA · custo por compra', format(total.cpa, 'money')],
-          ['Valor de compras', format(total.purchaseValue, 'money')], ['ROAS', format(total.roas, 'ratio')], ['CPM', format(total.cpm, 'money')], ['CPC link', format(total.cpc, 'money')], ['CTR link', format(total.ctr, 'percent')],
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{([
+          ['CPL · custo por lead', format(total.cpl, 'money')], ['CPA · custo por aquisição', format(total.cpa, 'money')], ['CTR · cliques no link', format(total.ctr, 'percent')], ['Custo por mensagem iniciada', format(total.costPerMessage, 'money')],
+          ['Investimento', format(total.spend, 'money')], ['Leads Meta', format(total.leads, 'count')], ['Aquisições Meta (compras)', format(total.purchases, 'count')], ['Conversas iniciadas', format(total.messagesStarted, 'count')],
+          ['Cliques no link', format(total.linkClicks, 'count')], ['CPC · custo por clique no link', format(total.cpc, 'money')], ['Impressões', format(total.impressions, 'count')], ['ROAS', format(total.roas, 'ratio')],
         ] as [string, string][]).map(([label, value]) => <article className="surface-panel rounded-xl p-4" key={label}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold">{query.isLoading ? '…' : value}</p></article>)}</div>
-        <p className="text-xs text-muted-foreground">CPL = investimento ÷ leads. CPA = investimento ÷ compras reportadas pela Meta. ROAS = valor de compras ÷ investimento. Os números seguem a janela de atribuição da exportação e não equivalem a vendas confirmadas no CRM. “—” indica denominador zero. Cada nível é analisado separadamente para evitar contagem dupla.</p>
+        <p className="text-xs text-muted-foreground">CPL = gasto ÷ leads. CPA = gasto ÷ compras reportadas pela Meta. CTR = cliques no link ÷ impressões × 100; custo por clique é o CPC, exibido separadamente. Custo por mensagem iniciada = gasto ÷ conversas iniciadas. Os resultados seguem a atribuição da exportação e não equivalem a vendas confirmadas no CRM. “—” indica denominador zero. Cada nível é analisado separadamente para evitar contagem dupla.</p>
         {!!rows.length && <section className="surface-panel space-y-3 rounded-2xl p-5"><h2 className="font-medium">Referência das próprias campanhas</h2><p className="text-sm text-muted-foreground">Medianas no período e conta selecionados: CPL {format(cplMedian, 'money')} · CPA {format(cpaMedian, 'money')}. Use como comparação interna; campanha, público e objetivo influenciam o resultado.</p><p className="text-xs text-muted-foreground">Atribuição: {attributionWindows.join(' · ')}</p>{attributionWindows.length > 1 && <p className="text-sm text-amber-400">Há janelas de atribuição diferentes neste recorte. Compare campanhas com cautela.</p>}</section>}
         <section className="surface-panel rounded-2xl p-5"><h2 className="mb-4 font-medium">Investimento e resultados por dia</h2>{daily.length ? <div className="h-72" role="img" aria-label="Gráfico diário de investimento, leads e compras"><ResponsiveContainer width="100%" height="100%"><AreaChart data={daily}><CartesianGrid strokeDasharray="3 3" opacity={0.2} /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis yAxisId="brl" tick={{ fontSize: 11 }} tickFormatter={value => `R$ ${value}`} /><YAxis yAxisId="count" orientation="right" tick={{ fontSize: 11 }} /><Tooltip formatter={(value: number, name: string) => name === 'Investimento' ? money(value) : value} /><Legend /><Area yAxisId="brl" type="monotone" dataKey="spend" name="Investimento" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.18} /><Area yAxisId="count" type="monotone" dataKey="leads" name="Leads" stroke="#22c55e" fill="#22c55e" fillOpacity={0.08} /><Area yAxisId="count" type="monotone" dataKey="purchases" name="Compras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.08} /></AreaChart></ResponsiveContainer></div> : <p className="py-10 text-center text-sm text-muted-foreground">Nenhum dado da Meta neste filtro. Importe um CSV para começar.</p>}</section>
-        <section className="surface-panel overflow-hidden rounded-2xl"><div className="p-5"><h2 className="font-medium">Campanhas</h2><p className="text-xs text-muted-foreground">Ordenadas por investimento no período.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-y border-border/60 text-xs text-muted-foreground"><tr>{['Campanha', 'Gasto', 'Leads', 'CPL', 'Compras', 'CPA', 'ROAS', 'CTR'].map(label => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{byCampaign.map(item => <tr className="border-b border-border/40" key={item.id}><td className="px-4 py-3">{item.name}</td><td className="px-4 py-3">{format(item.spend, 'money')}</td><td className="px-4 py-3">{item.leads}</td><td className="px-4 py-3">{format(item.cpl, 'money')}</td><td className="px-4 py-3">{item.purchases}</td><td className="px-4 py-3">{format(item.cpa, 'money')}</td><td className="px-4 py-3">{format(item.roas, 'ratio')}</td><td className="px-4 py-3">{format(item.ctr, 'percent')}</td></tr>)}</tbody></table></div>{!byCampaign.length && <p className="p-5 text-sm text-muted-foreground">Sem campanhas para exibir.</p>}</section>
+        <section className="surface-panel overflow-hidden rounded-2xl"><div className="p-5"><h2 className="font-medium">Campanhas</h2><p className="text-xs text-muted-foreground">Ordenadas por investimento no período.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="border-y border-border/60 text-xs text-muted-foreground"><tr>{['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisições', 'CPA', 'CTR link', 'CPC link', 'Conversas', 'Custo por mensagem'].map(label => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{byCampaign.map(item => <tr className="border-b border-border/40" key={item.id}><td className="px-4 py-3">{item.name}</td><td className="px-4 py-3">{format(item.spend, 'money')}</td><td className="px-4 py-3">{item.leads}</td><td className="px-4 py-3">{format(item.cpl, 'money')}</td><td className="px-4 py-3">{item.purchases}</td><td className="px-4 py-3">{format(item.cpa, 'money')}</td><td className="px-4 py-3">{format(item.ctr, 'percent')}</td><td className="px-4 py-3">{format(item.cpc, 'money')}</td><td className="px-4 py-3">{item.messagesStarted}</td><td className="px-4 py-3">{format(item.costPerMessage, 'money')}</td></tr>)}</tbody></table></div>{!byCampaign.length && <p className="p-5 text-sm text-muted-foreground">Sem campanhas para exibir.</p>}</section>
       </TabsContent>
       <TabsContent value="import" className="space-y-5"><ImportPanel today={today} onImported={imported} /><section className="surface-panel rounded-2xl p-5"><h2 className="font-medium">Importações recentes</h2>{batchQuery.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(batchQuery.error)}</p>}{batchQuery.data?.slice(0, 10).map(item => <p key={item.id} className="border-b border-border/40 py-3 text-sm">{item.filename} · {item.row_count} linhas · {new Date(item.created_at).toLocaleString('pt-BR')}</p>)}{!batchQuery.isLoading && !batchQuery.data?.length && <p className="mt-3 text-sm text-muted-foreground">Nenhuma importação registrada.</p>}</section></TabsContent>
       <TabsContent value="suggestions"><Suggestions campaigns={campaigns} /></TabsContent>

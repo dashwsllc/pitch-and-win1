@@ -12,6 +12,7 @@ interface ProtectedRouteProps {
   salesOnly?: boolean;
   arenaOnly?: boolean;
   trafficOnly?: boolean;
+  leadInboxOnly?: boolean;
 }
 
 export function ProtectedRoute({
@@ -21,6 +22,7 @@ export function ProtectedRoute({
   salesOnly = false,
   arenaOnly = false,
   trafficOnly = false,
+  leadInboxOnly = false,
 }: ProtectedRouteProps) {
   const { user, loading: authLoading, signOut } = useAuth();
   const { profile, loading: profileLoading, error, refetch } = useProfile();
@@ -43,7 +45,7 @@ export function ProtectedRoute({
 
   if (
     authLoading ||
-    (user && (profileLoading || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly) && rolesLoading)))
+    (user && (profileLoading || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly || leadInboxOnly) && rolesLoading)))
   ) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -60,7 +62,7 @@ export function ProtectedRoute({
     return <Navigate to="/auth" replace />;
   }
 
-  if (error || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly) && rolesError)) {
+  if (error || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly || leadInboxOnly) && rolesError)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-6 text-center">
         <p>Não foi possível verificar seu acesso.</p>
@@ -81,6 +83,7 @@ export function ProtectedRoute({
   if (salesOnly && !capabilities.sales) return <Navigate to="/" replace />;
   if (arenaOnly && !canAccessArena(roles)) return <Navigate to="/" replace />;
   if (trafficOnly && !canAccessTraffic(roles)) return <Navigate to="/" replace />;
+  if (leadInboxOnly && !roles.some(role => ['sdr', 'executive', 'super_admin'].includes(role))) return <Navigate to="/" replace />;
 
   return <>{children}</>;
 }

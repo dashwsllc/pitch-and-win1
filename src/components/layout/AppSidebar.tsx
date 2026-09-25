@@ -15,7 +15,7 @@ const menuItems = [
   { title: "Abordagens", url: "/abordagens", icon: MessageSquare },
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Ranking", url: "/ranking", icon: Trophy },
-  { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "Leads", url: "/leads", icon: Users },
   { title: "Perfil", url: "/perfil", icon: User },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ]

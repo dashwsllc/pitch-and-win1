@@ -18,6 +18,7 @@ const Ranking = lazy(() => import("./pages/Ranking"));
 const NovaAbordagem = lazy(() => import("./pages/NovaAbordagem"));
 const RegistrarVenda = lazy(() => import("./pages/RegistrarVenda"));
 const Clientes = lazy(() => import("./pages/Clientes"));
+const Leads = lazy(() => import("./pages/Leads"));
 const Perfil = lazy(() => import("./pages/Perfil"));
 const Configuracoes = lazy(() => import("./pages/Configuracoes"));
 const Saques = lazy(() => import("./pages/Saques"));
@@ -85,6 +86,14 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/clientes" element={
+                <Navigate to="/leads" replace />
+              } />
+              <Route path="/leads" element={
+                <ProtectedRoute leadInboxOnly>
+                  <Leads />
+                </ProtectedRoute>
+              } />
+              <Route path="/assinaturas" element={
                 <ProtectedRoute superAdminOnly>
                   <Clientes />
                 </ProtectedRoute>

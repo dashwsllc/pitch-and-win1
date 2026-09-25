@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import type { ArenaNotification, ArenaEvent } from "./arena";
 import type { MetaDailyRow } from "./meta-traffic";
+import type { MetaFormLead } from "./meta-leads";
 
 // Additive contract until the generated project schema is refreshed after the
 // migration. This is the SAME authenticated Supabase client and auth session.
@@ -103,6 +104,8 @@ type ExtraFunctions = {
   traffic_create_suggestion: FunctionDef<{ p_subject: string; p_body: string; p_campaign_id?: string | null }>;
   traffic_reply_suggestion: FunctionDef<{ p_id: string; p_body: string }>;
   traffic_set_suggestion_status: FunctionDef<{ p_id: string; p_status: string }>;
+  meta_promote_form_lead: FunctionDef<{ p_id: string; p_contact: Json }>;
+  meta_ignore_form_lead: FunctionDef<{ p_id: string; p_reason: string }>;
 };
 type ReadTable<Row> = {
   Row: { [K in keyof Row]: Row[K] };
@@ -120,6 +123,7 @@ type ArenaDatabase = Omit<Database, "public"> & {
       traffic_suggestions: ReadTable<{ id: string; author_id: string; author_name: string; subject: string; body: string; campaign_id: string | null; status: string; created_at: string; updated_at: string }>;
       traffic_suggestion_replies: ReadTable<{ id: string; suggestion_id: string; author_id: string; author_name: string; body: string; created_at: string }>;
       meta_import_batches: ReadTable<{ id: string; imported_by: string; filename: string; row_count: number; created_at: string }>;
+      meta_form_leads: ReadTable<MetaFormLead>;
     };
   };
 };

@@ -21,14 +21,16 @@ export interface MetaDailyRow {
   impressions: number
   reach: number
   link_clicks: number
+  messaging_conversations_started: number
   updated_at: string
 }
 
-export type ImportRow = Omit<MetaDailyRow, 'id' | 'updated_at'>
+export type ImportRow = Omit<MetaDailyRow, 'id' | 'updated_at'> & { present_metrics?: string[] }
 export type CsvField = keyof Pick<ImportRow,
   'date' | 'account_id' | 'account_name' | 'campaign_id' | 'campaign_name' |
   'adset_id' | 'adset_name' | 'ad_id' | 'ad_name' | 'spend' | 'leads' |
-  'purchases' | 'purchase_value' | 'impressions' | 'reach' | 'link_clicks' | 'currency'>
+  'purchases' | 'purchase_value' | 'impressions' | 'reach' | 'link_clicks' | 'currency' |
+  'messaging_conversations_started'>
 export type CsvMapping = Record<CsvField, string>
 
 export const csvFields: { key: CsvField; label: string; required: boolean }[] = [
@@ -49,6 +51,7 @@ export const csvFields: { key: CsvField; label: string; required: boolean }[] = 
   { key: 'impressions', label: 'Impressões', required: false },
   { key: 'reach', label: 'Alcance', required: false },
   { key: 'link_clicks', label: 'Cliques no link', required: false },
+  { key: 'messaging_conversations_started', label: 'Conversas por mensagem iniciadas', required: false },
 ]
 
 const aliases: Record<CsvField, string[]> = {
@@ -69,6 +72,12 @@ const aliases: Record<CsvField, string[]> = {
   impressions: ['impressions', 'impressoes'],
   reach: ['reach', 'alcance'],
   link_clicks: ['link clicks', 'cliques no link', 'inline link clicks'],
+  messaging_conversations_started: [
+    'messaging conversations started', 'new messaging conversations',
+    'messaging conversations started 7d', 'novas conversas por mensagem iniciadas',
+    'conversas por mensagem iniciadas', 'conversas iniciadas por mensagem',
+    'novas conversas por mensagem', 'conversas por mensagem iniciadas no periodo',
+  ],
 }
 
 function normalizeHeader(value: string) {
@@ -174,6 +183,9 @@ export function buildImportRows(values: string[][], headers: string[], mapping: 
         purchases: csvNumber(get('purchases'), true), purchase_value: csvNumber(get('purchase_value'), false),
         impressions: csvNumber(get('impressions'), true), reach: csvNumber(get('reach'), true),
         link_clicks: csvNumber(get('link_clicks'), true),
+        messaging_conversations_started: csvNumber(get('messaging_conversations_started'), true),
+        present_metrics: ['leads','purchases','purchase_value','impressions','reach','link_clicks','messaging_conversations_started']
+          .filter(field => !!mapping[field as CsvField]),
       }
     } catch (error) { throw new Error(`Linha ${index + 2}: ${error instanceof Error ? error.message : 'inválida'}`) }
   })
@@ -183,12 +195,14 @@ export function cost(numerator: number, denominator: number) {
   return denominator > 0 ? numerator / denominator : null
 }
 
-export function aggregateMeta(rows: MetaDailyRow[]) {
-  const sum = (field: keyof MetaDailyRow) => rows.reduce((total, row) => total + Number(row[field] || 0), 0)
+export function aggregateMeta(rows: Array<MetaDailyRow | ImportRow>) {
+  const sum = (field: keyof ImportRow) => rows.reduce((total, row) => total + Number(row[field] || 0), 0)
   const spend = sum('spend'), leads = sum('leads'), purchases = sum('purchases')
   const purchaseValue = sum('purchase_value'), impressions = sum('impressions'), linkClicks = sum('link_clicks')
-  return { spend, leads, purchases, purchaseValue, impressions, linkClicks,
+  const messagesStarted = sum('messaging_conversations_started')
+  return { spend, leads, purchases, purchaseValue, impressions, linkClicks, messagesStarted,
     cpl: cost(spend, leads), cpa: cost(spend, purchases), roas: cost(purchaseValue, spend),
     cpm: cost(spend * 1000, impressions), cpc: cost(spend, linkClicks),
+    costPerMessage: cost(spend, messagesStarted),
     ctr: cost(linkClicks * 100, impressions) }
 }

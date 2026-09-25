@@ -27,7 +27,8 @@ const menuItems = [
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
   { title: "Ranking", url: "/ranking", icon: Trophy },
-  { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "Leads", url: "/leads", icon: Users },
+  { title: "Assinaturas", url: "/assinaturas", icon: ShoppingBag },
   { title: "CRM", url: "/crm", icon: Target },
   { title: "Saques", url: "/saques", icon: Wallet },
   { title: "Perfil", url: "/perfil", icon: User },
@@ -42,7 +43,8 @@ const sellerMenuItems = [
   { title: "Vendas", url: "/vendas", icon: DollarSign },
   { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
   { title: "Ranking", url: "/ranking", icon: Trophy },
-  { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "Leads", url: "/leads", icon: Users },
+  { title: "Assinaturas", url: "/assinaturas", icon: ShoppingBag },
   { title: "CRM", url: "/crm", icon: Target },
   { title: "Saques", url: "/saques", icon: Wallet },
   { title: "Perfil", url: "/perfil", icon: User },
@@ -57,7 +59,8 @@ export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
   const { capabilities, roles, isSuperAdmin } = useRoles()
   const items = (isExecutive ? menuItems : sellerMenuItems).filter(item =>
     (item.url !== '/crm' || capabilities.leads) && (item.url !== '/vendas' || capabilities.sales) &&
-    (item.url !== '/clientes' || isSuperAdmin) && (item.url !== '/arena' || canAccessArena(roles)) &&
+    (item.url !== '/leads' || roles.some(role => ['sdr','executive','super_admin'].includes(role))) &&
+    (item.url !== '/assinaturas' || isSuperAdmin) && (item.url !== '/arena' || canAccessArena(roles)) &&
     (item.url !== '/trafego' || canAccessTraffic(roles)))
   
   return (
