@@ -1,5 +1,10 @@
 import { progressPercent, type ArenaCycle, type ArenaMember } from "@/lib/arena";
 
+// Só actual/target são usados aqui; aceitar um recorte permite reaproveitar
+// tanto o progresso individual (ArenaMember) quanto o total compartilhado do
+// ciclo (ArenaResult) sem inventar os demais campos de ArenaMember.
+type GoalProgressSource = Pick<ArenaMember, "actual" | "target">;
+
 const states = {
   low: { label: "Vamos acelerar", emoji: "😔" },
   middle: { label: "No caminho", emoji: "😐" },
@@ -13,7 +18,7 @@ const format = (value: number) => value.toLocaleString("pt-BR", { maximumFractio
 
 export function PersonGoalProgress({ name, member, period }: {
   name: string;
-  member?: ArenaMember;
+  member?: GoalProgressSource;
   period?: ArenaCycle["period"];
 }) {
   const hasGoal = !!member && member.target > 0;

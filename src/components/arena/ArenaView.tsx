@@ -164,11 +164,17 @@ function RankingList({
   people,
   cycle,
   linkLabel = "Ver ranking",
+  sharedGoal = false,
 }: {
   title: string;
   people: ArenaPerson[];
   cycle?: ArenaCycle;
   linkLabel?: string;
+  // A meta de SDR é um único alvo diluído entre o time (mesmos 100 pontos
+  // somados por todos); "faltam X%" deve ser igual para cada SDR, refletindo
+  // o total do time, não a fatia individual de cada um. Closer mantém meta
+  // integral por pessoa, então continua mostrando o progresso individual.
+  sharedGoal?: boolean;
 }) {
   const list = useRef<HTMLDivElement>(null);
   const positions = useRef(new Map<string, number>());
@@ -214,9 +220,11 @@ function RankingList({
       </div>
       <div ref={list} className="space-y-2">
         {people.slice(0, 4).map((person, i) => {
-          const member = cycle?.result.members.find(
-            (m) => m.user_id === person.user_id,
-          );
+          const member = sharedGoal
+            ? cycle?.result
+            : cycle?.result.members.find(
+                (m) => m.user_id === person.user_id,
+              );
           return (
             <div
               key={person.user_id}
@@ -645,7 +653,7 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             </div>
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
-            <RankingList title="SDRs · hoje" people={data.sdrs} cycle={sdr} />
+            <RankingList title="SDRs · hoje" people={data.sdrs} cycle={sdr} sharedGoal />
             <RankingList title="Closers · semana" people={data.closers} cycle={closer} linkLabel="Ranking mensal" />
           </div>
           <footer className="grid gap-3 lg:grid-cols-2">
