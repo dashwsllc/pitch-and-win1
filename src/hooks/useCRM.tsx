@@ -41,6 +41,20 @@ export const LEAD_SOURCES = [
   "email_marketing",
   "outro",
 ];
+export const LEAD_SOURCE_LABELS: Record<string, string> = {
+  instagram: "Instagram",
+  facebook: "Facebook",
+  linkedin: "LinkedIn",
+  indicacao: "Indicação",
+  cold_outreach: "Prospecção ativa",
+  evento: "Evento",
+  site: "Site",
+  whatsapp: "WhatsApp",
+  google_ads: "Google Ads",
+  email_marketing: "E-mail marketing",
+  outro: "Outro",
+  meta_ads_form: "Meta Ads (Formulário)",
+};
 export const CALL_OUTCOMES: Record<string, string> = {
   avancou: "Avançou",
   lead_perdido: "Lead perdido",

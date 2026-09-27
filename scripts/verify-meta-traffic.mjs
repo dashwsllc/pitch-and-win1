@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { aggregateMeta, buildImportRows, defaultCsvMapping, parseCsv } from '../src/lib/meta-traffic.ts'
+import { aggregateMeta, buildImportRows, classifyObjective, defaultCsvMapping, parseCsv, summarizeObjectives } from '../src/lib/meta-traffic.ts'
 
 const csv = 'Reporting starts;Account ID;Campaign ID;Campaign name;Amount spent (BRL);Leads;Purchases;Purchases conversion value;Impressions;Link clicks;Messaging conversations started\n'
   + '24/09/2026;act_1;123;"Campanha; vendas";1.234,50;10;2;4.000,00;1000;50;5\n'
@@ -27,4 +27,26 @@ assert.equal(leadRow.purchases, 0)
 assert.equal(aggregateMeta([{ ...leadRow, id: 'lead', updated_at: '' }]).cpa, null)
 const wrongCurrency = parseCsv('Date;Account ID;Campaign ID;Campaign name;Amount spent;Currency\n2026-09-24;act_1;123;Leads;100;USD')
 assert.throws(() => buildImportRows(wrongCurrency.values, wrongCurrency.headers, defaultCsvMapping(wrongCurrency.headers), 'campaign', '2026-09-24', ''), /moeda diferente de BRL/)
+
+assert.equal(classifyObjective('Geração de cadastro'), 'leads')
+assert.equal(classifyObjective('Conversions'), 'vendas')
+assert.equal(classifyObjective(''), 'nao_informado')
+assert.equal(classifyObjective('Objetivo desconhecido xyz'), 'outro')
+const base = { ...row, id: 'base', updated_at: '' }
+const single = summarizeObjectives([{ ...base, objective: 'Leads' }])
+assert.equal(single.dominant, 'leads')
+assert.equal(single.mixed, false)
+const mixed = summarizeObjectives([{ ...base, objective: 'Leads' }, { ...base, objective: 'Sales' }])
+assert.equal(mixed.dominant, null)
+assert.equal(mixed.mixed, true)
+const none = summarizeObjectives([{ ...base, objective: '' }])
+assert.equal(none.dominant, null)
+assert.equal(none.mixed, false)
+const unknownAlone = summarizeObjectives([{ ...base, objective: 'Objetivo desconhecido xyz' }])
+assert.equal(unknownAlone.dominant, null)
+assert.equal(unknownAlone.mixed, false)
+const unknownWithReal = summarizeObjectives([{ ...base, objective: 'Leads' }, { ...base, objective: 'Objetivo desconhecido xyz' }])
+assert.equal(unknownWithReal.dominant, null)
+assert.equal(unknownWithReal.mixed, true)
+
 console.log('CSV Meta, datas e indicadores verificados')

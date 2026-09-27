@@ -9,6 +9,7 @@ import { useRankingDataWithMock } from "@/hooks/useRankingDataWithMock"
 import { cn } from "@/lib/utils"
 import { SDRRanking } from "@/components/ranking/SDRRanking"
 import { SDRRewards } from "@/components/ranking/SDRRewards"
+import { DailyCallsRanking } from "@/components/ranking/DailyCallsRanking"
 import { Trophy, Medal, Award, Target, Crown, ChevronDown, ChevronUp, Gift, Percent, Star, Zap } from "lucide-react"
 import gsap from 'gsap'
 
@@ -24,7 +25,7 @@ const avatarColors = [
 ]
 
 export default function Ranking() {
-  const { ranking, sdrRanking, loading, error, sdrError } = useRankingDataWithMock()
+  const { ranking, sdrRanking, callRanking, loading, error, sdrError, callError } = useRankingDataWithMock()
   const [showFullRanking, setShowFullRanking] = useState(true)
   const podiumRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -330,6 +331,8 @@ export default function Ranking() {
         </Collapsible>
 
         <SDRRanking ranking={sdrRanking} error={sdrError} />
+
+        <DailyCallsRanking data={callRanking} error={callError} />
 
         {/* Prêmios e Bônus */}
         <Card className="border-border/30 relative overflow-hidden">

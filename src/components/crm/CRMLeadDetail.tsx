@@ -12,6 +12,7 @@ import {
   CRMLead,
   PIPELINE_STAGES,
   APPROACH_LABELS,
+  LEAD_SOURCE_LABELS,
   useCRMActivities,
 } from "@/hooks/useCRM";
 import { callDate } from "@/lib/crm";
@@ -75,7 +76,7 @@ export function CRMLeadDetail({
     ["Posição", lead.athlete_position],
     ["Altura (cm)", lead.athlete_height_cm],
     ["Peso (kg)", lead.athlete_weight_kg],
-    ["Origem", lead.lead_source],
+    ["Origem", lead.lead_source ? (LEAD_SOURCE_LABELS[lead.lead_source] || lead.lead_source) : null],
     ["Valor estimado", lead.estimated_deal_value],
     ["Prioridade", lead.priority],
     ["Observações", lead.observations],

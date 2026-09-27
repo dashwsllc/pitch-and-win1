@@ -138,6 +138,8 @@ type ExtraFunctions = {
   traffic_set_suggestion_status: FunctionDef<{ p_id: string; p_status: string }>;
   meta_promote_form_lead: FunctionDef<{ p_id: string; p_contact: Json }>;
   meta_ignore_form_lead: FunctionDef<{ p_id: string; p_reason: string }>;
+  meta_crm_attribution_daily: FunctionDef<{ p_start: string; p_end: string }>;
+  meta_traffic_lead_reconciliation: FunctionDef<{ p_start: string; p_end: string }>;
 };
 type ReadTable<Row> = {
   Row: { [K in keyof Row]: Row[K] };

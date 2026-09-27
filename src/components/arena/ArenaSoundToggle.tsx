@@ -5,20 +5,71 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { isParallelFunnelSale, type ArenaEvent } from "@/lib/arena";
 
-function playSaleBell(context: AudioContext) {
-  const started = context.currentTime;
-  for (const [frequency, offset] of [[660, 0], [880, 0.13]]) {
-    const note = context.createOscillator();
-    const gain = context.createGain();
-    note.type = "sine";
-    note.frequency.value = frequency;
-    gain.gain.setValueAtTime(0.0001, started + offset);
-    gain.gain.exponentialRampToValueAtTime(0.12, started + offset + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, started + offset + 0.24);
-    note.connect(gain).connect(context.destination);
-    note.start(started + offset);
-    note.stop(started + offset + 0.25);
+const HORN_SECONDS = 10;
+let stopActiveHorn: (() => void) | null = null;
+
+function saturation(amount: number) {
+  const curve = new Float32Array(2048);
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1;
+    curve[i] = Math.tanh(amount * x) / Math.tanh(amount);
   }
+  return curve;
+}
+
+// Buzina de ar sintetizada: acorde de sawtooths saturado. A saturação fica no
+// fim da cadeia para manter o volume no máximo sem clipar a saída.
+function playSaleBell(context: AudioContext) {
+  stopActiveHorn?.();
+  const start = context.currentTime + 0.01;
+  const end = start + HORN_SECONDS;
+
+  const body = context.createBiquadFilter();
+  body.type = "peaking";
+  body.frequency.value = 1100;
+  body.Q.value = 1.1;
+  body.gain.value = 9;
+  const drive = context.createWaveShaper();
+  drive.curve = saturation(4);
+  drive.oversample = "4x";
+  const tone = context.createBiquadFilter();
+  tone.type = "lowpass";
+  tone.frequency.value = 4800;
+  const master = context.createGain();
+  master.gain.setValueAtTime(0.0001, start);
+  master.gain.exponentialRampToValueAtTime(0.95, start + 0.03);
+  master.gain.setValueAtTime(0.95, end - 0.3);
+  master.gain.exponentialRampToValueAtTime(0.0001, end);
+  body.connect(tone).connect(drive).connect(master).connect(context.destination);
+
+  const oscillators: OscillatorNode[] = [];
+  for (const frequency of [311.13, 369.99, 466.16]) {
+    for (const detune of [-7, 7]) {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sawtooth";
+      oscillator.detune.value = detune;
+      oscillator.frequency.setValueAtTime(frequency * 0.86, start);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency, start + 0.12);
+      oscillator.frequency.setValueAtTime(frequency, end - 0.4);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.94, end);
+      gain.gain.value = 0.17;
+      oscillator.connect(gain).connect(body);
+      oscillator.start(start);
+      oscillator.stop(end + 0.05);
+      oscillators.push(oscillator);
+    }
+  }
+
+  const stop = () => {
+    const now = context.currentTime;
+    master.gain.cancelScheduledValues(now);
+    master.gain.setValueAtTime(Math.max(master.gain.value, 0.0001), now);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+    for (const oscillator of oscillators) oscillator.stop(now + 0.06);
+  };
+  stopActiveHorn = stop;
+  oscillators[0].onended = () => { if (stopActiveHorn === stop) stopActiveHorn = null; };
 }
 
 export function ArenaSoundToggle() {
@@ -88,6 +139,7 @@ export function ArenaSoundToggle() {
         void audio.current.resume();
       } catch { /* The icon remains available to retry after device recovery. */ }
     } else if (audio.current) {
+      stopActiveHorn?.();
       void audio.current.suspend();
     }
   };
@@ -105,8 +157,7 @@ export function ArenaSoundToggle() {
   };
 
   return <>
-    {/* Somente o ícone: sem o texto "Soar sino" ao lado, mas com o mesmo
-        clique e som de antes. */}
+    {/* Somente o ícone: sem o texto "Soar sino" ao lado. */}
     <Button type="button" variant="outline" size="icon" onClick={() => void triggerBell()}
       className="h-9 w-9 shrink-0 border-ember/40 bg-ember/10 text-ember hover:bg-ember/20 hover:text-ember"
       aria-label="Soar o sino de venda manualmente" title="Soar sino de venda">

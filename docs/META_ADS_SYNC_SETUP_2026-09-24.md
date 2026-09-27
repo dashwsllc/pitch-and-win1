@@ -9,7 +9,9 @@
 
 ### CSV manual de desempenho
 
-No Gerenciador de Anúncios, escolha o período, **distribuição diária** e o nível campanha (ou conjunto/anúncio, mas um nível por arquivo). Adicione data do relatório, IDs e nomes de conta/campanha, gasto, leads, compras, impressões, cliques no link e conversas por mensagem iniciadas; inclua valor de compras para ROAS. Exporte CSV na moeda BRL. Em **Tráfego → Importar**, selecione o arquivo, confira o mapeamento sugerido e a janela de atribuição, confirme a moeda e importe. A tela abre automaticamente o nível e o período importados.
+No Gerenciador de Anúncios, escolha o período, **distribuição diária** e o nível campanha (ou conjunto/anúncio, mas um nível por arquivo). Adicione data do relatório, IDs e nomes de conta/campanha, gasto, leads, compras, impressões, cliques no link e conversas por mensagem iniciadas; inclua valor de compras para ROAS. Inclua também a coluna **Objetivo da campanha** (opcional) — ela alimenta o destaque automático das métricas mais relevantes por objetivo na aba Desempenho; sem essa coluna, a tela continua mostrando todas as métricas, como hoje. Exporte CSV na moeda BRL. Em **Tráfego → Importar**, selecione o arquivo, confira o mapeamento sugerido e a janela de atribuição, confirme a moeda e importe. A tela abre automaticamente o nível e o período importados.
+
+A categorização de objetivo (leads/vendas/mensagens/reconhecimento) é feita por uma heurística de palavra-chave no texto da coluna — ainda não foi validada contra uma exportação real com essa coluna preenchida. Ver `docs/TRAFEGO_METRICAS_ESSENCIAIS_SYNC_2026-09-27.md` antes de confiar no destaque automático para decisão de investimento.
 
 ## Dados e acessos que o responsável precisa fornecer
 

@@ -28,11 +28,29 @@ export interface SDRRankingUser {
   isCurrentUser?: boolean
 }
 
+export interface DailyCallRankingUser {
+  user_id: string
+  name: string
+  avatarUrl: string | null
+  sdrCalls: number
+  closerCalls: number
+  total: number
+  isCurrentUser?: boolean
+}
+
+export interface DailyCallRanking {
+  day: string
+  sdrCalls: number
+  closerCalls: number
+  ranking: DailyCallRankingUser[]
+}
+
 // Kept as a compatible export for existing pages. The Closer ranking uses the
 // same current Brasília month and sale facts as the Arena's monthly cycle.
 export function useRankingDataWithMock() {
   const { user } = useAuth()
-  const month = useBrasiliaToday().slice(0, 7)
+  const today = useBrasiliaToday()
+  const month = today.slice(0, 7)
   const query = useQuery({
     queryKey: ['team-ranking', user?.id, month],
     enabled: !!user,
@@ -56,11 +74,27 @@ export function useRankingDataWithMock() {
     },
     staleTime: 10_000,
   })
+  const callQuery = useQuery({
+    queryKey: ['daily-call-ranking', user?.id, today],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_daily_call_ranking')
+      if (error) throw error
+      const result = data as unknown as DailyCallRanking
+      return {
+        ...result,
+        ranking: result.ranking.map(item => ({ ...item, isCurrentUser: item.user_id === user?.id })),
+      }
+    },
+    staleTime: 10_000,
+  })
   return {
     ranking: query.data ?? [],
     sdrRanking: sdrQuery.data ?? [],
+    callRanking: callQuery.data ?? null,
     loading: query.isPending || sdrQuery.isPending,
     error: query.error?.message ?? null,
     sdrError: sdrQuery.error?.message ?? null,
+    callError: callQuery.error?.message ?? null,
   }
 }

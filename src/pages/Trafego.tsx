@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { arenaClient, arenaRpc } from '@/lib/arena-api'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { useBrasiliaToday } from '@/hooks/useGoals'
 import { useAuth } from '@/hooks/useAuth'
-import { aggregateMeta, buildImportRows, csvFields, defaultCsvMapping, parseCsv, type CsvMapping, type MetaDailyRow, type MetaLevel } from '@/lib/meta-traffic'
+import { aggregateMeta, buildImportRows, cost, csvFields, defaultCsvMapping, parseCsv, summarizeObjectives, type CsvMapping, type MetaDailyRow, type MetaLevel, type PromotableObjective } from '@/lib/meta-traffic'
 import { errorMessage, money } from '@/lib/sales'
 
 type Suggestion = { id: string; author_name: string; subject: string; body: string; campaign_id: string | null; status: string; created_at: string; updated_at: string }
@@ -34,6 +35,23 @@ function median(values: number[]) {
   const sorted = [...values].sort((a, b) => a - b)
   const middle = Math.floor(sorted.length / 2)
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
+}
+const essentialMetricsByCategory: Record<PromotableObjective, string[]> = {
+  leads: ['spend', 'leads', 'cpl', 'ctr'],
+  vendas: ['spend', 'purchases', 'cpa', 'roas'],
+  mensagens: ['spend', 'messagesStarted', 'costPerMessage', 'ctr'],
+  reconhecimento: ['spend', 'impressions', 'cpm', 'ctr'],
+}
+function toCsvValue(value: string | number) {
+  const text = String(value)
+  return /[";\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text
+}
+function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+  const content = '﻿' + [headers, ...rows].map(row => row.map(toCsvValue).join(';')).join('\r\n')
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }))
+  const anchor = document.createElement('a')
+  anchor.href = url; anchor.download = filename; anchor.click()
+  URL.revokeObjectURL(url)
 }
 
 function ImportPanel({ today, onImported }: { today: string; onImported: (selection: { level: MetaLevel; start: string; end: string }) => Promise<unknown> }) {
@@ -74,7 +92,7 @@ function ImportPanel({ today, onImported }: { today: string; onImported: (select
     finally { setBusy(false) }
   }
   return <section className="surface-panel space-y-5 rounded-2xl p-5 sm:p-6">
-    <div><h2 className="text-lg font-medium">Importar</h2><p className="mt-1 text-sm text-muted-foreground">Exporte dados diários do Gerenciador de Anúncios da Meta em CSV, com moeda BRL. Inclua IDs, gasto e as colunas de resultados disponíveis: leads, compras, impressões, cliques no link e conversas por mensagem iniciadas.</p></div>
+    <div><h2 className="text-lg font-medium">Importar</h2><p className="mt-1 text-sm text-muted-foreground">Exporte dados diários do Gerenciador de Anúncios da Meta em CSV, com moeda BRL. Inclua IDs, gasto e as colunas de resultados disponíveis: leads, compras, impressões, cliques no link, conversas por mensagem iniciadas e objetivo da campanha (opcional, usado para destacar as métricas mais relevantes no topo da tela).</p></div>
     <div className="grid gap-4 sm:grid-cols-2">
       <div><Label htmlFor="meta-file">Arquivo CSV</Label><Input key={fileName || 'empty'} id="meta-file" type="file" accept=".csv,text/csv" onChange={event => void load(event.target.files?.[0])} /></div>
       <div><Label htmlFor="meta-level">Nível da exportação</Label><select id="meta-level" className={selectClass} value={level} onChange={event => setLevel(event.target.value as MetaLevel)}><option value="campaign">Campanha</option><option value="adset">Conjunto de anúncios</option><option value="ad">Anúncio</option></select></div>
@@ -146,11 +164,23 @@ export default function Trafego() {
   const campaigns = useMemo(() => [...new Map(accountRows.map(row => [row.campaign_id, { id: row.campaign_id, name: row.campaign_name }])).values()], [accountRows])
   const rows = campaign ? accountRows.filter(row => row.campaign_id === campaign) : accountRows
   const total = aggregateMeta(rows)
+  const objectiveSummary = useMemo(() => summarizeObjectives(rows), [rows])
+  const [showAllMetrics, setShowAllMetrics] = useState(false)
   const daily = useMemo(() => [...new Set(rows.map(row => row.date))].sort().map(date => ({ date: formatDate(date), ...aggregateMeta(rows.filter(row => row.date === date)) })), [rows])
   const byCampaign = useMemo(() => campaigns.map(item => ({ ...item, ...aggregateMeta(accountRows.filter(row => row.campaign_id === item.id)) })).sort((a, b) => b.spend - a.spend), [campaigns, accountRows])
   const cplMedian = median(byCampaign.flatMap(item => item.cpl === null ? [] : [item.cpl]))
   const cpaMedian = median(byCampaign.flatMap(item => item.cpa === null ? [] : [item.cpa]))
   const attributionWindows = [...new Set(rows.map(row => row.attribution_window))]
+  const reconciliationQuery = useQuery({ queryKey: ['meta-lead-reconciliation', user?.id, start, end], enabled: !!user && validRange && level === 'campaign',
+    queryFn: () => arenaRpc<{ campaign_id: string; campaign_name: string; form_leads_count: number }[]>('meta_traffic_lead_reconciliation', { p_start: start, p_end: end }) })
+  const attributionQuery = useQuery({ queryKey: ['meta-crm-attribution', user?.id, start, end], enabled: !!user && validRange && level === 'campaign',
+    queryFn: () => arenaRpc<{ campaign_id: string; campaign_name: string; confirmed_sales: number; confirmed_revenue: number }[]>('meta_crm_attribution_daily', { p_start: start, p_end: end }) })
+  const attributionRows = (attributionQuery.data || []).filter(row => campaigns.some(item => item.id === row.campaign_id) && (!campaign || row.campaign_id === campaign))
+  const confirmedSales = attributionRows.reduce((sum, row) => sum + row.confirmed_sales, 0)
+  const confirmedRevenue = attributionRows.reduce((sum, row) => sum + row.confirmed_revenue, 0)
+  const cpaReal = cost(total.spend, confirmedSales)
+  const roasReal = cost(confirmedRevenue, total.spend)
+  const reconciliationRows = (reconciliationQuery.data || []).filter(row => campaigns.some(item => item.id === row.campaign_id))
   const imported = async (selection: { level: MetaLevel; start: string; end: string }) => {
     setLevel(selection.level); setPeriod('custom'); setCustomStart(selection.start); setCustomEnd(selection.end)
     setAccount(''); setCampaign(''); setTab('performance')
@@ -160,15 +190,40 @@ export default function Trafego() {
     <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import">Importar</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
       <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
         {!validRange && <p role="alert" className="text-sm text-destructive">Escolha um período válido até hoje.</p>}{query.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(query.error)}</p>}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{([
-          ['CPL · custo por lead', format(total.cpl, 'money')], ['CPA · custo por aquisição', format(total.cpa, 'money')], ['CTR · cliques no link', format(total.ctr, 'percent')], ['Custo por mensagem iniciada', format(total.costPerMessage, 'money')],
-          ['Investimento', format(total.spend, 'money')], ['Leads Meta', format(total.leads, 'count')], ['Aquisições Meta (compras)', format(total.purchases, 'count')], ['Conversas iniciadas', format(total.messagesStarted, 'count')],
-          ['Cliques no link', format(total.linkClicks, 'count')], ['CPC · custo por clique no link', format(total.cpc, 'money')], ['Impressões', format(total.impressions, 'count')], ['ROAS', format(total.roas, 'ratio')],
-        ] as [string, string][]).map(([label, value]) => <article className="surface-panel rounded-xl p-4" key={label}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold">{query.isLoading ? '…' : value}</p></article>)}</div>
-        <p className="text-xs text-muted-foreground">CPL = gasto ÷ leads. CPA = gasto ÷ compras reportadas pela Meta. CTR = cliques no link ÷ impressões × 100; custo por clique é o CPC, exibido separadamente. Custo por mensagem iniciada = gasto ÷ conversas iniciadas. Os resultados seguem a atribuição da exportação e não equivalem a vendas confirmadas no CRM. “—” indica denominador zero. Cada nível é analisado separadamente para evitar contagem dupla.</p>
+        {(() => {
+          const metricCards: [string, string, string][] = [
+            ['cpl', 'CPL · custo por lead', format(total.cpl, 'money')],
+            ['cpa', 'CPA · custo por aquisição', format(total.cpa, 'money')],
+            ['ctr', 'CTR · cliques no link', format(total.ctr, 'percent')],
+            ['costPerMessage', 'Custo por mensagem iniciada', format(total.costPerMessage, 'money')],
+            ['spend', 'Investimento', format(total.spend, 'money')],
+            ['leads', 'Leads Meta', format(total.leads, 'count')],
+            ['purchases', 'Aquisições Meta (compras)', format(total.purchases, 'count')],
+            ['messagesStarted', 'Conversas iniciadas', format(total.messagesStarted, 'count')],
+            ['linkClicks', 'Cliques no link', format(total.linkClicks, 'count')],
+            ['cpc', 'CPC · custo por clique no link', format(total.cpc, 'money')],
+            ['impressions', 'Impressões', format(total.impressions, 'count')],
+            ['roas', 'ROAS', format(total.roas, 'ratio')],
+            ['cpm', 'CPM · custo por mil impressões', format(total.cpm, 'money')],
+          ]
+          const essentialKeys = objectiveSummary.dominant ? essentialMetricsByCategory[objectiveSummary.dominant] : null
+          const essentialCards = essentialKeys ? essentialKeys.map(key => metricCards.find(([cardKey]) => cardKey === key)!) : metricCards
+          const card = ([key, label, value]: [string, string, string]) => <article className="surface-panel rounded-xl p-4" key={key}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold">{query.isLoading ? '…' : value}</p></article>
+          return <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{essentialCards.map(card)}</div>
+            {essentialKeys && <Collapsible open={showAllMetrics} onOpenChange={setShowAllMetrics}>
+              <CollapsibleTrigger asChild><Button variant="outline" size="sm">{showAllMetrics ? 'Ocultar todas as métricas' : 'Ver todas as métricas'}</Button></CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{metricCards.map(card)}</CollapsibleContent>
+            </Collapsible>}
+            {objectiveSummary.mixed && <p className="text-sm text-amber-400">Este recorte mistura campanhas com objetivos diferentes (ex.: leads e vendas). Mostrando todas as métricas para evitar leitura enviesada.</p>}
+          </>
+        })()}
+        <p className="text-xs text-muted-foreground">CPL = gasto ÷ leads. CPA = gasto ÷ compras reportadas pela Meta. CTR = cliques no link ÷ impressões × 100; custo por clique é o CPC, exibido separadamente. Custo por mensagem iniciada = gasto ÷ conversas iniciadas. CPM = gasto ÷ impressões × 1000. Os resultados seguem a atribuição da exportação e não equivalem a vendas confirmadas no CRM. “—” indica denominador zero. Cada nível é analisado separadamente para evitar contagem dupla.</p>
+        {level === 'campaign' && <section className="surface-panel grid gap-3 rounded-2xl p-5 sm:grid-cols-2"><article><p className="text-xs text-muted-foreground">CPA real (CRM) · vendas aprovadas</p><p className="mt-2 text-xl font-semibold">{attributionQuery.isLoading ? '…' : format(cpaReal, 'money')}</p></article><article><p className="text-xs text-muted-foreground">ROAS real (CRM) · vendas aprovadas</p><p className="mt-2 text-xl font-semibold">{attributionQuery.isLoading ? '…' : format(roasReal, 'ratio')}</p></article><p className="text-xs text-muted-foreground sm:col-span-2">Baseado em vendas aprovadas no CRM vinculadas a leads de formulário Meta gerados no período (coorte pela data de geração do lead, não pela data do relatório). Cancelamentos e estornos saem do cálculo automaticamente. Diferente do CPA/ROAS acima, que seguem a atribuição declarada pela própria Meta.</p></section>}
         {!!rows.length && <section className="surface-panel space-y-3 rounded-2xl p-5"><h2 className="font-medium">Referência das próprias campanhas</h2><p className="text-sm text-muted-foreground">Medianas no período e conta selecionados: CPL {format(cplMedian, 'money')} · CPA {format(cpaMedian, 'money')}. Use como comparação interna; campanha, público e objetivo influenciam o resultado.</p><p className="text-xs text-muted-foreground">Atribuição: {attributionWindows.join(' · ')}</p>{attributionWindows.length > 1 && <p className="text-sm text-amber-400">Há janelas de atribuição diferentes neste recorte. Compare campanhas com cautela.</p>}</section>}
-        <section className="surface-panel rounded-2xl p-5"><h2 className="mb-4 font-medium">Investimento e resultados por dia</h2>{daily.length ? <div className="h-72" role="img" aria-label="Gráfico diário de investimento, leads e compras"><ResponsiveContainer width="100%" height="100%"><AreaChart data={daily}><CartesianGrid strokeDasharray="3 3" opacity={0.2} /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis yAxisId="brl" tick={{ fontSize: 11 }} tickFormatter={value => `R$ ${value}`} /><YAxis yAxisId="count" orientation="right" tick={{ fontSize: 11 }} /><Tooltip formatter={(value: number, name: string) => name === 'Investimento' ? money(value) : value} /><Legend /><Area yAxisId="brl" type="monotone" dataKey="spend" name="Investimento" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.18} /><Area yAxisId="count" type="monotone" dataKey="leads" name="Leads" stroke="#22c55e" fill="#22c55e" fillOpacity={0.08} /><Area yAxisId="count" type="monotone" dataKey="purchases" name="Compras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.08} /></AreaChart></ResponsiveContainer></div> : <p className="py-10 text-center text-sm text-muted-foreground">Nenhum dado da Meta neste filtro. Importe um CSV para começar.</p>}</section>
-        <section className="surface-panel overflow-hidden rounded-2xl"><div className="p-5"><h2 className="font-medium">Campanhas</h2><p className="text-xs text-muted-foreground">Ordenadas por investimento no período.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="border-y border-border/60 text-xs text-muted-foreground"><tr>{['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisições', 'CPA', 'CTR link', 'CPC link', 'Conversas', 'Custo por mensagem'].map(label => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{byCampaign.map(item => <tr className="border-b border-border/40" key={item.id}><td className="px-4 py-3">{item.name}</td><td className="px-4 py-3">{format(item.spend, 'money')}</td><td className="px-4 py-3">{item.leads}</td><td className="px-4 py-3">{format(item.cpl, 'money')}</td><td className="px-4 py-3">{item.purchases}</td><td className="px-4 py-3">{format(item.cpa, 'money')}</td><td className="px-4 py-3">{format(item.ctr, 'percent')}</td><td className="px-4 py-3">{format(item.cpc, 'money')}</td><td className="px-4 py-3">{item.messagesStarted}</td><td className="px-4 py-3">{format(item.costPerMessage, 'money')}</td></tr>)}</tbody></table></div>{!byCampaign.length && <p className="p-5 text-sm text-muted-foreground">Sem campanhas para exibir.</p>}</section>
+        <section className="surface-panel rounded-2xl p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="font-medium">Investimento e resultados por dia</h2>{!!daily.length && <Button variant="outline" size="sm" onClick={() => downloadCsv('trafego_diario_' + start + '_a_' + end + '.csv', ['Data', 'Investimento', 'Leads', 'Compras', 'Conversas iniciadas'], daily.map(item => [item.date, item.spend.toFixed(2), item.leads, item.purchases, item.messagesStarted]))}>Exportar CSV</Button>}</div>{daily.length ? <div className="h-72" role="img" aria-label="Gráfico diário de investimento, leads e compras"><ResponsiveContainer width="100%" height="100%"><AreaChart data={daily}><CartesianGrid strokeDasharray="3 3" opacity={0.2} /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis yAxisId="brl" tick={{ fontSize: 11 }} tickFormatter={value => `R$ ${value}`} /><YAxis yAxisId="count" orientation="right" tick={{ fontSize: 11 }} /><Tooltip formatter={(value: number, name: string) => name === 'Investimento' ? money(value) : value} /><Legend /><Area yAxisId="brl" type="monotone" dataKey="spend" name="Investimento" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.18} /><Area yAxisId="count" type="monotone" dataKey="leads" name="Leads" stroke="#22c55e" fill="#22c55e" fillOpacity={0.08} /><Area yAxisId="count" type="monotone" dataKey="purchases" name="Compras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.08} /></AreaChart></ResponsiveContainer></div> : <p className="py-10 text-center text-sm text-muted-foreground">Nenhum dado da Meta neste filtro. Importe um CSV para começar.</p>}</section>
+        <section className="surface-panel overflow-hidden rounded-2xl"><div className="flex flex-wrap items-center justify-between gap-2 p-5"><div><h2 className="font-medium">Campanhas</h2><p className="text-xs text-muted-foreground">Ordenadas por investimento no período.</p></div>{!!byCampaign.length && <Button variant="outline" size="sm" onClick={() => downloadCsv('campanhas_trafego_' + start + '_a_' + end + '.csv', ['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisicoes', 'CPA', 'CTR link (%)', 'CPC link', 'Conversas', 'Custo por mensagem'], byCampaign.map(item => [item.name, item.spend.toFixed(2), item.leads, item.cpl ?? '', item.purchases, item.cpa ?? '', item.ctr ?? '', item.cpc ?? '', item.messagesStarted, item.costPerMessage ?? '']))}>Exportar CSV</Button>}</div><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="border-y border-border/60 text-xs text-muted-foreground"><tr>{['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisições', 'CPA', 'CTR link', 'CPC link', 'Conversas', 'Custo por mensagem'].map(label => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{byCampaign.map(item => <tr className="border-b border-border/40" key={item.id}><td className="px-4 py-3">{item.name}</td><td className="px-4 py-3">{format(item.spend, 'money')}</td><td className="px-4 py-3">{item.leads}</td><td className="px-4 py-3">{format(item.cpl, 'money')}</td><td className="px-4 py-3">{item.purchases}</td><td className="px-4 py-3">{format(item.cpa, 'money')}</td><td className="px-4 py-3">{format(item.ctr, 'percent')}</td><td className="px-4 py-3">{format(item.cpc, 'money')}</td><td className="px-4 py-3">{item.messagesStarted}</td><td className="px-4 py-3">{format(item.costPerMessage, 'money')}</td></tr>)}</tbody></table></div>{!byCampaign.length && <p className="p-5 text-sm text-muted-foreground">Sem campanhas para exibir.</p>}</section>
+        {level === 'campaign' && !!byCampaign.length && <section className="surface-panel space-y-3 rounded-2xl p-5"><h2 className="font-medium">Leads: CSV agregado vs. fila de formulários</h2><p className="text-xs text-muted-foreground">Divergência é esperada: o CSV é o relatório agregado da Meta (pode incluir tipos de ação que contam como "lead" além do formulário); a fila individual só recebe formulários (Lead Ads) e pode ter atraso de sincronização.</p><table className="w-full text-left text-sm"><thead className="text-xs text-muted-foreground"><tr><th className="py-1">Campanha</th><th className="py-1">Leads (CSV)</th><th className="py-1">Leads (fila)</th></tr></thead><tbody>{byCampaign.map(item => <tr key={item.id} className="border-t border-border/40"><td className="py-1">{item.name}</td><td className="py-1">{item.leads}</td><td className="py-1">{reconciliationRows.find(row => row.campaign_id === item.id)?.form_leads_count ?? 0}</td></tr>)}</tbody></table></section>}
       </TabsContent>
       <TabsContent value="import" className="space-y-5"><ImportPanel today={today} onImported={imported} /><section className="surface-panel rounded-2xl p-5"><h2 className="font-medium">Importações recentes</h2>{batchQuery.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(batchQuery.error)}</p>}{batchQuery.data?.slice(0, 10).map(item => <p key={item.id} className="border-b border-border/40 py-3 text-sm">{item.filename} · {item.row_count} linhas · {new Date(item.created_at).toLocaleString('pt-BR')}</p>)}{!batchQuery.isLoading && !batchQuery.data?.length && <p className="mt-3 text-sm text-muted-foreground">Nenhuma importação registrada.</p>}</section></TabsContent>
       <TabsContent value="suggestions"><Suggestions campaigns={campaigns} /></TabsContent>

@@ -22,6 +22,7 @@ export interface MetaDailyRow {
   reach: number
   link_clicks: number
   messaging_conversations_started: number
+  objective: string
   updated_at: string
 }
 
@@ -30,7 +31,7 @@ export type CsvField = keyof Pick<ImportRow,
   'date' | 'account_id' | 'account_name' | 'campaign_id' | 'campaign_name' |
   'adset_id' | 'adset_name' | 'ad_id' | 'ad_name' | 'spend' | 'leads' |
   'purchases' | 'purchase_value' | 'impressions' | 'reach' | 'link_clicks' | 'currency' |
-  'messaging_conversations_started'>
+  'messaging_conversations_started' | 'objective'>
 export type CsvMapping = Record<CsvField, string>
 
 export const csvFields: { key: CsvField; label: string; required: boolean }[] = [
@@ -52,6 +53,7 @@ export const csvFields: { key: CsvField; label: string; required: boolean }[] = 
   { key: 'reach', label: 'Alcance', required: false },
   { key: 'link_clicks', label: 'Cliques no link', required: false },
   { key: 'messaging_conversations_started', label: 'Conversas por mensagem iniciadas', required: false },
+  { key: 'objective', label: 'Objetivo da campanha', required: false },
 ]
 
 const aliases: Record<CsvField, string[]> = {
@@ -78,6 +80,7 @@ const aliases: Record<CsvField, string[]> = {
     'conversas por mensagem iniciadas', 'conversas iniciadas por mensagem',
     'novas conversas por mensagem', 'conversas por mensagem iniciadas no periodo',
   ],
+  objective: ['objective', 'objetivo', 'campaign objective', 'objetivo da campanha'],
 }
 
 function normalizeHeader(value: string) {
@@ -184,7 +187,8 @@ export function buildImportRows(values: string[][], headers: string[], mapping: 
         impressions: csvNumber(get('impressions'), true), reach: csvNumber(get('reach'), true),
         link_clicks: csvNumber(get('link_clicks'), true),
         messaging_conversations_started: csvNumber(get('messaging_conversations_started'), true),
-        present_metrics: ['leads','purchases','purchase_value','impressions','reach','link_clicks','messaging_conversations_started']
+        objective: get('objective'),
+        present_metrics: ['leads','purchases','purchase_value','impressions','reach','link_clicks','messaging_conversations_started','objective']
           .filter(field => !!mapping[field as CsvField]),
       }
     } catch (error) { throw new Error(`Linha ${index + 2}: ${error instanceof Error ? error.message : 'inválida'}`) }
@@ -205,4 +209,36 @@ export function aggregateMeta(rows: Array<MetaDailyRow | ImportRow>) {
     cpm: cost(spend * 1000, impressions), cpc: cost(spend, linkClicks),
     costPerMessage: cost(spend, messagesStarted),
     ctr: cost(linkClicks * 100, impressions) }
+}
+
+export type ObjectiveCategory = 'leads' | 'vendas' | 'mensagens' | 'reconhecimento' | 'nao_informado' | 'outro'
+export type PromotableObjective = Exclude<ObjectiveCategory, 'nao_informado' | 'outro'>
+
+// Heurística por palavra-chave normalizada — a Meta não garante uma taxonomia
+// única de objetivo entre contas/exportações. Precisa ser validada contra um
+// export real com a coluna "Objetivo" antes de confiar no destaque automático.
+const objectiveKeywords: [PromotableObjective, string[]][] = [
+  ['vendas', ['sales', 'conversions', 'conversion', 'catalog sales', 'vendas', 'conversao', 'conversoes', 'compras']],
+  ['leads', ['leads', 'lead generation', 'geracao de cadastros', 'cadastro', 'cadastros']],
+  ['mensagens', ['messages', 'mensagens', 'engagement messages', 'conversas']],
+  ['reconhecimento', ['awareness', 'reconhecimento', 'reach', 'alcance', 'brand awareness']],
+]
+
+export function classifyObjective(rawObjective: string): ObjectiveCategory {
+  const value = normalizeHeader(rawObjective || '')
+  if (!value) return 'nao_informado'
+  for (const [category, keywords] of objectiveKeywords)
+    if (keywords.some(keyword => value.includes(keyword))) return category
+  return 'outro'
+}
+
+function isPromotable(category: ObjectiveCategory): category is PromotableObjective {
+  return category !== 'nao_informado' && category !== 'outro'
+}
+
+export function summarizeObjectives(rows: Array<MetaDailyRow | ImportRow>) {
+  const distinct = [...new Set(rows.map(row => classifyObjective(row.objective)))]
+  const mixed = distinct.filter(category => category !== 'nao_informado').length > 1
+  const promotable = distinct.filter(isPromotable)
+  return { dominant: !mixed && promotable.length === 1 ? promotable[0] : null, mixed }
 }
