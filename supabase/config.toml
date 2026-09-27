@@ -1,8 +1,8 @@
 project_id = "mbzwchnxtskysqplqiyy"
 
 [auth]
-site_url = "https://wsltda.site"
-additional_redirect_urls = ["https://www.wsltda.site", "http://localhost:5173", "http://localhost:8080"]
+site_url = "https://wsltda.com"
+additional_redirect_urls = ["https://www.wsltda.com", "https://wsltda.site", "https://www.wsltda.site", "http://localhost:5173", "http://localhost:8080"]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10

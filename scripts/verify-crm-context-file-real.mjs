@@ -7,7 +7,7 @@ import { chromium, expect as baseExpect } from '../.verification.local/node_modu
 
 if (!process.argv.includes('--run-disposable-check')) throw Error('Use --run-disposable-check to create and remove one temporary CRM account and lead.')
 const project = 'mbzwchnxtskysqplqiyy'
-const origin = 'https://wsltda.site'
+const origin = 'https://wsltda.com'
 const url = `https://${project}.supabase.co`
 const keyCommand = spawnSync('npx', ['supabase','projects','api-keys','--project-ref',project,'--output','json'], {
   shell: process.platform === 'win32', encoding: 'utf8', maxBuffer: 1024 * 1024,
