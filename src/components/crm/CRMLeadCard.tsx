@@ -170,6 +170,12 @@ export function CRMLeadCard({
   const readyForCloser = lead.pipeline_stage === "pronto_closer";
   const qualificationDue =
     qualificationCall && (callState === "now" || callState === "overdue");
+  // O repasse ao Closer precisa estar sempre acessível, tenha o SDR feito
+  // call de qualificação ou não: o backend já encerra a call pendente como
+  // parte do handoff, então a UI não pode travar essa opção atrás de "!call".
+  const canHandoffToCloser = !closed && !handed && capabilities.sdr && canCreateClosing;
+  const primaryIsHandoff =
+    canHandoffToCloser && (readyForCloser || (!qualificationCall && !canScheduleQualificationCall));
   // Pronto pro Closer sempre tem prioridade sobre uma call de qualificação
   // ainda pendente: sem isso, um lead já qualificado ficava travado em
   // "Reagendar call SDR" sem nenhum caminho visível pra marcar o repasse.
@@ -481,15 +487,15 @@ export function CRMLeadCard({
                 <PhoneCall className="mr-2 h-4 w-4" /> Agendar Call c/ Closer
               </DropdownMenuItem>
             )}
-            {!closed && !handed && capabilities.sdr && !call && (
-              <>
-                {canScheduleQualificationCall && <DropdownMenuItem onSelect={() => onSchedule("qualification")}>
-                  <PhoneCall className="mr-2 h-4 w-4" /> Agendar call de qualificação SDR
-                </DropdownMenuItem>}
-                {canCreateClosing && <DropdownMenuItem onSelect={() => onSchedule("handoff")}>
-                  <CalendarClock className="mr-2 h-4 w-4" /> Agendar Call c/ Closer
-                </DropdownMenuItem>}
-              </>
+            {!closed && !handed && capabilities.sdr && !call && canScheduleQualificationCall && (
+              <DropdownMenuItem onSelect={() => onSchedule("qualification")}>
+                <PhoneCall className="mr-2 h-4 w-4" /> Agendar call de qualificação SDR
+              </DropdownMenuItem>
+            )}
+            {canHandoffToCloser && !primaryIsHandoff && (
+              <DropdownMenuItem onSelect={() => onSchedule("handoff")}>
+                <CalendarClock className="mr-2 h-4 w-4" /> Agendar Call c/ Closer
+              </DropdownMenuItem>
             )}
             {!closed && !handed && capabilities.sdr && (
               <>
