@@ -88,7 +88,7 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
     for (const stage of ['em_abordagem', 'abordado', 'reabordado', 'nao_abordado', 'abordado']) {
       await page.getByLabel(`Abordagem de ${name}`, { exact: true }).selectOption(stage)
       await expect.poll(async () => (await leadBy(leadId)).approach_stage).toBe(stage)
-      await expect(card.getByRole('button', { name: 'Agendar e enviar ao Closer', exact: true })).toBeEnabled()
+      await expect(card.getByRole('button', { name: 'Agendar Call c/ Closer', exact: true })).toBeEnabled()
     }
     lead = await leadBy(leadId)
     assert.equal(lead.pipeline_stage, 'pronto_closer')
@@ -111,8 +111,8 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
       realtime.subscribe(status => { if (status === 'SUBSCRIBED') { clearTimeout(timer); resolve() } else if (status === 'CHANNEL_ERROR') { clearTimeout(timer); reject(Error('Realtime subscription failed')) } })
     })
     // This session has polling disabled, so cross-session UI update proves Realtime.
-    await card.getByRole('button', { name: 'Agendar e enviar ao Closer', exact: true }).click()
-    dialog = page.getByRole('dialog', { name: 'Agendar call e enviar ao Closer', exact: true })
+    await card.getByRole('button', { name: 'Agendar Call c/ Closer', exact: true }).click()
+    dialog = page.getByRole('dialog', { name: 'Agendar Call c/ Closer', exact: true })
     await expect(dialog.getByLabel('Responsável', { exact: true })).toHaveValue('')
     await dialog.getByLabel('Responsável', { exact: true }).selectOption(actor('second'))
     await dialog.getByLabel('Data e hora (horário local)', { exact: true }).fill(future(1))

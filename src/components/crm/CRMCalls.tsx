@@ -158,10 +158,10 @@ export function CRMCallScheduler({
             {call
               ? "Reagendar call"
               : isSdrHandoff
-                ? "Agendar call e enviar ao Closer"
+                ? "Agendar Call c/ Closer"
                 : type === "qualificacao"
                   ? "Agendar call de qualificação do SDR"
-                  : "Agendar call do Closer"}
+                  : "Agendar Call c/ Closer"}
           </DialogTitle>
           <DialogDescription>
             {lead.athlete_name || "Atleta não informado"} · {lead.name}

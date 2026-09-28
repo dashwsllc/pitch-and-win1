@@ -178,7 +178,7 @@ export function CRMLeadCard({
       ? null
       : readyForCloser
         ? {
-            label: "Agendar e enviar ao Closer",
+            label: "Agendar Call c/ Closer",
             onClick: () => onSchedule("handoff"),
             disabled: !canCreateClosing,
           }
@@ -190,7 +190,7 @@ export function CRMLeadCard({
               : null
             : !canScheduleQualificationCall
               ? {
-                  label: "Agendar e enviar ao Closer",
+                  label: "Agendar Call c/ Closer",
                   onClick: () => onSchedule("handoff"),
                   disabled: !canCreateClosing,
                 }
@@ -478,7 +478,7 @@ export function CRMLeadCard({
             )}
             {!closed && canCreateClosing && !call && handed && (
               <DropdownMenuItem onSelect={() => onSchedule("closer")}>
-                <PhoneCall className="mr-2 h-4 w-4" /> Agendar call do Closer
+                <PhoneCall className="mr-2 h-4 w-4" /> Agendar Call c/ Closer
               </DropdownMenuItem>
             )}
             {!closed && !handed && capabilities.sdr && !call && (
@@ -487,7 +487,7 @@ export function CRMLeadCard({
                   <PhoneCall className="mr-2 h-4 w-4" /> Agendar call de qualificação SDR
                 </DropdownMenuItem>}
                 {canCreateClosing && <DropdownMenuItem onSelect={() => onSchedule("handoff")}>
-                  <CalendarClock className="mr-2 h-4 w-4" /> Agendar fechamento e enviar ao Closer
+                  <CalendarClock className="mr-2 h-4 w-4" /> Agendar Call c/ Closer
                 </DropdownMenuItem>}
               </>
             )}
