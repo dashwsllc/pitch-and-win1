@@ -170,37 +170,23 @@ export function CRMLeadCard({
   const readyForCloser = lead.pipeline_stage === "pronto_closer";
   const qualificationDue =
     qualificationCall && (callState === "now" || callState === "overdue");
-  // O repasse ao Closer precisa estar sempre acessível, tenha o SDR feito
-  // call de qualificação ou não: o backend já encerra a call pendente como
-  // parte do handoff, então a UI não pode travar essa opção atrás de "!call".
-  const canHandoffToCloser = !closed && !handed && capabilities.sdr && canCreateClosing;
-  const primaryIsHandoff =
-    canHandoffToCloser && (readyForCloser || (!qualificationCall && !canScheduleQualificationCall));
-  // Pronto pro Closer sempre tem prioridade sobre uma call de qualificação
-  // ainda pendente: sem isso, um lead já qualificado ficava travado em
-  // "Reagendar call SDR" sem nenhum caminho visível pra marcar o repasse.
-  const primary: { label: string; onClick: () => void; disabled?: boolean } | null =
-    closed || handed || !capabilities.sdr
+  // Dois botões sempre lado a lado pro SDR: um pra call de qualificação
+  // (agendar, reagendar ou registrar resultado, conforme o estado), outro
+  // fixo pro repasse ao Closer. Não é mais um botão único que alterna entre
+  // os dois — os dois ficam visíveis ao mesmo tempo sempre que aplicável.
+  const sdrCallButton: { label: string; onClick: () => void } | null =
+    closed || handed || !capabilities.sdr || readyForCloser || !canScheduleQualificationCall
       ? null
-      : readyForCloser
-        ? {
-            label: "Agendar Call c/ Closer",
-            onClick: () => onSchedule("handoff"),
-            disabled: !canCreateClosing,
-          }
-        : qualificationDue
-          ? { label: "Registrar resultado da qualificação", onClick: onQualifyCall }
-          : qualificationCall
-            ? canScheduleQualificationCall
-              ? { label: "Reagendar call SDR", onClick: () => onSchedule("qualification") }
-              : null
-            : !canScheduleQualificationCall
-              ? {
-                  label: "Agendar Call c/ Closer",
-                  onClick: () => onSchedule("handoff"),
-                  disabled: !canCreateClosing,
-                }
-              : { label: "Agendar qualificação", onClick: () => onSchedule("qualification") };
+      : qualificationDue
+        ? { label: "Registrar resultado da qualificação", onClick: onQualifyCall }
+        : qualificationCall
+          ? { label: "Reagendar call SDR", onClick: () => onSchedule("qualification") }
+          : { label: "Agendar call SDR", onClick: () => onSchedule("qualification") };
+  // O repasse ao Closer fica sempre disponível pro SDR, tenha ele feito a
+  // call de qualificação ou não: a RPC handoff_and_schedule_closer_call já
+  // encerra sozinha qualquer call de qualificação ainda pendente como parte
+  // do handoff, então a UI não precisa exigir isso antes.
+  const canHandoffToCloser = !closed && !handed && capabilities.sdr && canCreateClosing;
   return (
     <article
       aria-label={`Lead ${athleteLabel}`}
@@ -437,10 +423,15 @@ export function CRMLeadCard({
           </label>
         </div>
       )}
-      <div className="flex items-center gap-1.5 border-t border-border/40 pt-2">
-        {primary && (
-          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy || primary.disabled} onClick={primary.onClick}>
-            {primary.label}
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-2">
+        {sdrCallButton && (
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={sdrCallButton.onClick}>
+            {sdrCallButton.label}
+          </Button>
+        )}
+        {canHandoffToCloser && (
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onSchedule("handoff")}>
+            Agendar Call c/ Closer
           </Button>
         )}
         {negative && capabilities.sdr && (capabilities.executive || !lead.sdr_id || lead.sdr_id === user?.id) && (
@@ -475,26 +466,14 @@ export function CRMLeadCard({
                 </DropdownMenuItem>
               </>
             )}
-            {canSchedule && call && (!qualificationCall || canScheduleQualificationCall) && (
-              <>
-                <DropdownMenuItem onSelect={() => onSchedule(qualificationCall ? "qualification" : "closer")}>
-                  <PhoneCall className="mr-2 h-4 w-4" /> Reagendar call
-                </DropdownMenuItem>
-              </>
+            {handed && canSchedule && call && (
+              <DropdownMenuItem onSelect={() => onSchedule("closer")}>
+                <PhoneCall className="mr-2 h-4 w-4" /> Reagendar call
+              </DropdownMenuItem>
             )}
             {!closed && canCreateClosing && !call && handed && (
               <DropdownMenuItem onSelect={() => onSchedule("closer")}>
                 <PhoneCall className="mr-2 h-4 w-4" /> Agendar Call c/ Closer
-              </DropdownMenuItem>
-            )}
-            {!closed && !handed && capabilities.sdr && !call && canScheduleQualificationCall && (
-              <DropdownMenuItem onSelect={() => onSchedule("qualification")}>
-                <PhoneCall className="mr-2 h-4 w-4" /> Agendar call de qualificação SDR
-              </DropdownMenuItem>
-            )}
-            {canHandoffToCloser && !primaryIsHandoff && (
-              <DropdownMenuItem onSelect={() => onSchedule("handoff")}>
-                <CalendarClock className="mr-2 h-4 w-4" /> Agendar Call c/ Closer
               </DropdownMenuItem>
             )}
             {!closed && !handed && capabilities.sdr && (
