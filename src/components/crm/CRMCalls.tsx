@@ -160,7 +160,7 @@ export function CRMCallScheduler({
               : isSdrHandoff
                 ? "Agendar Call c/ Closer"
                 : type === "qualificacao"
-                  ? "Agendar call de qualificação do SDR"
+                  ? "Agendar Call c/ SDR"
                   : "Agendar Call c/ Closer"}
           </DialogTitle>
           <DialogDescription>

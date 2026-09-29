@@ -38,7 +38,7 @@ const callsSource = readFileSync(new URL('../src/components/crm/CRMCalls.tsx', i
 const cardSource = readFileSync(new URL('../src/components/crm/CRMLeadCard.tsx', import.meta.url), 'utf8')
 assert.match(callsSource, /isSdrHandoff[\s\S]*handoff_and_schedule_closer_call/)
 assert.match(callsSource, /O lead só será enviado ao Closer depois que o agendamento for/)
-assert.match(cardSource, /Agendar call SDR/)
+assert.match(cardSource, /Agendar Call c\/ SDR/)
 assert.match(cardSource, /Agendar Call c\/ Closer/)
 assert.match(cardSource, /call\?\.call_type === "qualificacao" && !call\.is_completed && capabilities\.sdr && \(/)
 assert.doesNotMatch(cardSource, /onAction\("handoff"\)/)

@@ -181,7 +181,7 @@ export function CRMLeadCard({
         ? { label: "Registrar resultado da qualificação", onClick: onQualifyCall }
         : qualificationCall
           ? { label: "Reagendar call SDR", onClick: () => onSchedule("qualification") }
-          : { label: "Agendar call SDR", onClick: () => onSchedule("qualification") };
+          : { label: "Agendar Call c/ SDR", onClick: () => onSchedule("qualification") };
   // O repasse ao Closer fica sempre disponível pro SDR, tenha ele feito a
   // call de qualificação ou não: a RPC handoff_and_schedule_closer_call já
   // encerra sozinha qualquer call de qualificação ainda pendente como parte
