@@ -165,13 +165,20 @@ try {
     await expect(card.locator('svg.lucide-lock')).toHaveCount(1)
   }
 
-  // Grafico de XP acumulado (2 pontos de historico validos -> chartData.length >= 2).
+  // Grafico de XP acumulado: 2 pontos de historico (27/09, 28/09) + 1 ponto
+  // "hoje" sempre adicionado com o XP total atual (342, ja incluindo o ciclo
+  // ao vivo) -- 3 pontos no eixo X.
   await expect(page.locator('.recharts-responsive-container')).toBeVisible()
-  // 32 XP (27/09) -> 212 XP (28/09) num eixo 0-220: a curva tem que terminar
-  // perto do topo (y pequeno), nao no meio -- confere a geometria real do SVG,
-  // nao uma leitura visual do screenshot.
+  const xTicks = await page.locator('.recharts-xAxis .recharts-cartesian-axis-tick-value').allTextContents()
+  assert.equal(xTicks.length, 3, `esperava 3 pontos no eixo X (historico + hoje), veio ${JSON.stringify(xTicks)}`)
+  // 32 XP -> 342 XP: a curva tem que terminar perto do topo (y pequeno), nao
+  // no meio -- confere a geometria real do SVG a partir do primeiro e do
+  // ultimo par de coordenadas do path (robusto a quantos pontos/curvas
+  // existirem no meio), nao uma leitura visual do screenshot.
   const areaPath = await page.locator('.recharts-area-curve').getAttribute('d')
-  const [, startY, endY] = areaPath.match(/M[\d.]+,([\d.]+)L[\d.]+,([\d.]+)/).map(Number)
+  const pairs = [...areaPath.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)]
+  const startY = Number(pairs[0][2])
+  const endY = Number(pairs[pairs.length - 1][2])
   assert.ok(endY < startY * 0.2, `esperava a curva subir perto do topo (start y=${startY}, end y=${endY})`)
 
   if (process.env.LEVEL_UI_SCREENSHOT_DIR) {
@@ -188,8 +195,57 @@ try {
     await page.screenshot({ path: `${process.env.LEVEL_UI_SCREENSHOT_DIR}/arena.png` })
   }
 
+  // --- Segundo cenario: usuario sem nenhum historico e sem nenhuma
+  // atividade -- o grafico tem que continuar aparecendo, zerado, em vez de
+  // sumir da tela (pedido explicito: "mesmo zerado, deixe o grafico la").
+  const zeroActor = 'ce220000-0000-4000-8000-000000000097'
+  const zeroContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+  const zeroErrors = []
+  await zeroContext.routeWebSocket(/supabase\.co/, (socket) => socket.close())
+  await zeroContext.route('https://**/*', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.origin === origin) return route.continue()
+    if (!url.hostname.endsWith('.supabase.co')) return route.abort()
+    const resource = url.pathname.split('/').at(-1)
+    let data = []
+    if (resource === 'get_my_registration_status') data = { status: 'approved' }
+    else if (resource === 'profiles') data = url.searchParams.has('user_id') ? { ...profile, id: zeroActor, user_id: zeroActor } : [{ ...profile, id: zeroActor, user_id: zeroActor }]
+    else if (resource === 'user_roles') data = [{ ...role, id: zeroActor, user_id: zeroActor }]
+    else if (resource === 'arena_goal_history') data = { summary: { total: 0, achieved: 0, failed: 0, unassigned: 0 }, items: [] }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(data) })
+  })
+  await zeroContext.addInitScript(({ actor, project }) => {
+    const encode = (value) => btoa(JSON.stringify(value)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    const session = {
+      access_token: `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: actor, role: 'authenticated', exp: 4102444800 })}.test`,
+      refresh_token: 'test', expires_at: 4102444800, expires_in: 3600, token_type: 'bearer',
+      user: { id: actor, email: 'zero-level@example.invalid', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: { display_name: 'Closer zerado' }, created_at: new Date().toISOString() },
+    }
+    sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
+  }, { actor: zeroActor, project })
+  const zeroPage = await zeroContext.newPage()
+  zeroPage.on('pageerror', (error) => zeroErrors.push(error.message))
+  zeroPage.on('console', (message) => { if (message.type() === 'error') zeroErrors.push(message.text()) })
+  try {
+    await zeroPage.goto(`${origin}/metas?tab=atribuicoes`)
+    await expect(zeroPage.getByLabel(/Nível 1, Closer\./)).toBeVisible()
+    await expect(zeroPage.getByRole('heading', { name: 'Sua Progressão' })).toBeVisible()
+    await expect(zeroPage.getByText('0 XP total')).toBeVisible()
+    await expect(zeroPage.getByText('Ainda não há atividade sua computada', { exact: false })).toBeVisible()
+    // O grafico continua la, so que achatado em zero -- nao pode sumir.
+    await expect(zeroPage.locator('.recharts-responsive-container')).toBeVisible()
+    const zeroXTicks = await zeroPage.locator('.recharts-xAxis .recharts-cartesian-axis-tick-value').allTextContents()
+    assert.equal(zeroXTicks.length, 2, `esperava 2 pontos (inicio sintetico + hoje) mesmo sem historico, veio ${JSON.stringify(zeroXTicks)}`)
+    if (process.env.LEVEL_UI_SCREENSHOT_DIR) {
+      await zeroPage.screenshot({ path: `${process.env.LEVEL_UI_SCREENSHOT_DIR}/metas-zerado.png`, fullPage: true })
+    }
+    assert.deepEqual(zeroErrors, [])
+  } finally {
+    await zeroContext.close()
+  }
+
   assert.deepEqual(errors, [])
-  console.log('PASS: level badge shows beside notifications (not on Arena) and Sua Progressão renders correct XP/level inside Metas.')
+  console.log('PASS: level badge shows beside notifications (not on Arena), Sua Progressão renders correct XP/level inside Metas, and the chart always renders (even zeroed with no history at all).')
 } finally {
   await context.close()
   await browser.close()

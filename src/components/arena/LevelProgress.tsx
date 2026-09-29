@@ -59,7 +59,20 @@ export function LevelProgress() {
     )
   }
 
+  // O grafico fica sempre visivel, mesmo sem nenhum historico ainda -- o
+  // ultimo ponto reflete o XP total agora mesmo (incluindo o ciclo em
+  // andamento, nao so o que ja fechou), entao ele sobe sozinho conforme
+  // novas atividades/metas contam pra XP, sem precisar editar esta tela.
   const chartData = series.map((point) => ({ label: shortDateFormatter.format(new Date(point.at)), xp: point.cumulativeXp }))
+  const todayLabel = shortDateFormatter.format(new Date())
+  if (chartData.length && chartData[chartData.length - 1].label === todayLabel) {
+    chartData[chartData.length - 1] = { label: todayLabel, xp }
+  } else {
+    chartData.push({ label: todayLabel, xp })
+  }
+  if (chartData.length < 2) {
+    chartData.unshift({ label: shortDateFormatter.format(new Date(Date.now() - 6 * 86_400_000)), xp: 0 })
+  }
 
   return (
     <Card className="surface-inset-glow overflow-hidden rounded-2xl border-0">
@@ -128,29 +141,27 @@ export function LevelProgress() {
           </p>
         )}
 
-        {chartData.length >= 2 && (
-          <div className="h-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="xpFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#34d399" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.055)" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#878091", fontSize: 11 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#878091", fontSize: 11 }} allowDecimals={false} />
-                <Tooltip
-                  cursor={{ stroke: "rgba(255,255,255,0.12)", strokeDasharray: "4 4" }}
-                  contentStyle={{ backgroundColor: "#171221", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "10px", boxShadow: "0 14px 36px rgba(0,0,0,0.28)", color: "#f7f5fb", fontSize: "12px" }}
-                  formatter={(value: number) => [`${value.toLocaleString("pt-BR")} XP`, "XP acumulado"]}
-                />
-                <Area type="monotone" dataKey="xp" name="XP acumulado" stroke="#34d399" strokeWidth={2.2} fill="url(#xpFill)" dot={false} activeDot={{ r: 4, fill: "#6ee7b7", stroke: "#171221", strokeWidth: 2 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        <div className="h-[200px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+              <defs>
+                <linearGradient id="xpFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#34d399" stopOpacity={0.28} />
+                  <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.055)" />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#878091", fontSize: 11 }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: "#878091", fontSize: 11 }} allowDecimals={false} domain={[0, "auto"]} />
+              <Tooltip
+                cursor={{ stroke: "rgba(255,255,255,0.12)", strokeDasharray: "4 4" }}
+                contentStyle={{ backgroundColor: "#171221", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "10px", boxShadow: "0 14px 36px rgba(0,0,0,0.28)", color: "#f7f5fb", fontSize: "12px" }}
+                formatter={(value: number) => [`${value.toLocaleString("pt-BR")} XP`, "XP acumulado"]}
+              />
+              <Area type="monotone" dataKey="xp" name="XP acumulado" stroke="#34d399" strokeWidth={2.2} fill="url(#xpFill)" dot={false} activeDot={{ r: 4, fill: "#6ee7b7", stroke: "#171221", strokeWidth: 2 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   )
