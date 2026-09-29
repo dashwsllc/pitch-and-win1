@@ -1,8 +1,8 @@
 import { normalizeHeader } from './meta-traffic.ts'
 
-export interface FieldAnswer { name: string; values: string[] }
+export type FieldAnswer = { name: string; values: string[] }
 
-export interface LeadImportRow {
+export type LeadImportRow = {
   meta_lead_id: string
   campaign_id: string
   campaign_name: string
