@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { arenaClient, arenaRpc } from '@/lib/arena-api'
 import { contactPayload, validateContact } from '@/lib/crm'
 import { metaAnswers, metaContactDefaults, type MetaFormLead } from '@/lib/meta-leads'
+import { lastRunFor, type MetaSyncRun } from '@/lib/meta-connection'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { errorMessage } from '@/lib/sales'
 
@@ -62,6 +63,18 @@ export default function Leads() {
     queryFn: () => fetchAllPages<MetaFormLead>((from, to) => arenaClient.from('meta_form_leads')
       .select('*').order('created_time', { ascending: false }).order('id').range(from, to)),
   })
+  const webhookQuery = useQuery({ queryKey: ['meta-webhook-events', user?.id], enabled: !!user, refetchInterval: 30_000,
+    queryFn: () => fetchAllPages<{ status: string }>((from, to) => arenaClient.from('meta_webhook_events')
+      .select('status').in('status', ['pending', 'error']).range(from, to)),
+  })
+  const reconciliationRunsQuery = useQuery({ queryKey: ['meta-reconciliation-runs', user?.id], enabled: !!user, refetchInterval: 30_000,
+    queryFn: () => fetchAllPages<MetaSyncRun>((from, to) => arenaClient.from('meta_sync_runs')
+      .select('*').eq('kind', 'leads_reconciliation').order('started_at', { ascending: false }).limit(20).range(from, to)),
+  })
+  const webhookEvents = webhookQuery.data || []
+  const webhookPending = webhookEvents.filter(item => item.status === 'pending').length
+  const webhookErrors = webhookEvents.filter(item => item.status === 'error').length
+  const lastReconciliation = lastRunFor(reconciliationRunsQuery.data || [], 'leads_reconciliation')
   const all = query.data || emptyLeads
   const campaigns = useMemo(() => [...new Map(all.filter(row => row.campaign_id).map(row => [row.campaign_id, row.campaign_name || row.campaign_id])).entries()], [all])
   const forms = useMemo(() => [...new Map(all.filter(row => row.form_id && (!campaign || row.campaign_id === campaign)).map(row => [row.form_id, row.form_name || row.form_id])).entries()], [all, campaign])
@@ -85,6 +98,7 @@ export default function Leads() {
   }
   return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6"><header className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="flex items-center gap-3 text-3xl font-light"><Users className="h-7 w-7 text-ember" />Leads</h1><p className="mt-2 text-sm text-muted-foreground">Fila de formulários da Meta para triagem individual pelo SDR. As respostas originais permanecem disponíveis aqui após a importação para o CRM.</p></div><Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={'mr-2 h-4 w-4 ' + (query.isFetching ? 'animate-spin' : '')} />Atualizar</Button></header>
     <div className="grid gap-3 sm:grid-cols-3">{[['Novos', all.filter(row => row.status === 'novo').length], ['No CRM', all.filter(row => row.status === 'importado').length], ['Ignorados', all.filter(row => row.status === 'ignorado').length]].map(([label, count]) => <div key={label} className="surface-panel rounded-xl p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-semibold">{count}</p></div>)}</div>
+    <section className="surface-panel rounded-2xl p-4"><p className="text-xs text-muted-foreground">Diagnóstico do webhook Meta: {webhookPending} evento(s) pendente(s), {webhookErrors} com erro. {lastReconciliation ? `Última reconciliação: ${new Date(lastReconciliation.started_at).toLocaleString('pt-BR')} (${lastReconciliation.status === 'success' ? lastReconciliation.rows_synced + ' leads conferidos' : lastReconciliation.error_message || lastReconciliation.status})` : 'Nenhuma reconciliação registrada ainda.'}</p></section>
     <section className="surface-panel grid gap-3 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="lead-status">Situação</Label><select id="lead-status" className={selectClass} value={status} onChange={event => setStatus(event.target.value)}><option value="novo">Novos</option><option value="importado">No CRM</option><option value="ignorado">Ignorados</option><option value="todos">Todos</option></select></div><div><Label htmlFor="lead-campaign">Campanha</Label><select id="lead-campaign" className={selectClass} value={campaign} onChange={event => { setCampaign(event.target.value); setForm('') }}><option value="">Todas</option>{campaigns.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></div><div><Label htmlFor="lead-form">Formulário</Label><select id="lead-form" className={selectClass} value={form} onChange={event => setForm(event.target.value)}><option value="">Todos</option>{forms.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></div><div><Label htmlFor="lead-search">Buscar</Label><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input id="lead-search" className="pl-9" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nome, telefone, e-mail ou ID" /></div></div></section>
     {query.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(query.error)}</p>}
     {query.isLoading ? <p className="py-10 text-center text-muted-foreground">Carregando leads…</p> : !visible.length ? <section className="surface-panel rounded-2xl p-10 text-center"><p className="font-medium">Nenhum lead neste filtro</p><p className="mt-2 text-sm text-muted-foreground">Os formulários enviados pela Meta aparecerão aqui quando a integração estiver conectada e autorizada.</p></section> : <div className="space-y-3">{visible.map(row => <article key={row.id} className="surface-panel rounded-2xl p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-medium">{row.full_name || 'Nome não informado'}</h2><p className="mt-1 text-xs text-muted-foreground">{dateTime(row.created_time)} · {row.campaign_name || row.campaign_id || 'Campanha não informada'} · {row.form_name || row.form_id}</p><p className="mt-2 text-sm">{row.phone || 'Sem telefone'} · {row.email || 'Sem e-mail'}</p></div><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => setExpanded(expanded === row.id ? null : row.id)}>{expanded === row.id ? 'Ocultar respostas' : 'Ver respostas'}</Button>{row.status === 'novo' && <Button size="sm" onClick={() => setSelected(row)}>Importar no CRM</Button>}{row.status === 'importado' && <Link className="rounded-md border px-3 py-2 text-xs" to="/crm?tab=leads">Ver CRM</Link>}{row.status === 'ignorado' && <span className="text-xs text-muted-foreground">Ignorado: {row.ignored_reason}</span>}</div></div>

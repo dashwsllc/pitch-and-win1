@@ -23,10 +23,11 @@ export interface MetaDailyRow {
   link_clicks: number
   messaging_conversations_started: number
   objective: string
+  source: 'csv' | 'api' | 'manual_legacy'
   updated_at: string
 }
 
-export type ImportRow = Omit<MetaDailyRow, 'id' | 'updated_at'> & { present_metrics?: string[] }
+export type ImportRow = Omit<MetaDailyRow, 'id' | 'updated_at' | 'source'> & { present_metrics?: string[] }
 export type CsvField = keyof Pick<ImportRow,
   'date' | 'account_id' | 'account_name' | 'campaign_id' | 'campaign_name' |
   'adset_id' | 'adset_name' | 'ad_id' | 'ad_name' | 'spend' | 'leads' |

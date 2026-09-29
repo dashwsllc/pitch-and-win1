@@ -4,6 +4,7 @@ import type { Database, Json } from "@/integrations/supabase/types";
 import type { ArenaNotification, ArenaEvent } from "./arena";
 import type { MetaDailyRow } from "./meta-traffic";
 import type { MetaFormLead } from "./meta-leads";
+import type { MetaAdAccount, MetaSyncRun } from "./meta-connection";
 
 // Additive contract until the generated project schema is refreshed after the
 // migration. This is the SAME authenticated Supabase client and auth session.
@@ -140,6 +141,8 @@ type ExtraFunctions = {
   meta_ignore_form_lead: FunctionDef<{ p_id: string; p_reason: string }>;
   meta_crm_attribution_daily: FunctionDef<{ p_start: string; p_end: string }>;
   meta_traffic_lead_reconciliation: FunctionDef<{ p_start: string; p_end: string }>;
+  meta_connect_ad_account: FunctionDef<{ p_account_id: string; p_account_name: string; p_currency?: string; p_timezone?: string }>;
+  meta_disconnect_ad_account: FunctionDef<{ p_account_id: string; p_reason: string }>;
 };
 type ReadTable<Row> = {
   Row: { [K in keyof Row]: Row[K] };
@@ -158,6 +161,9 @@ type ArenaDatabase = Omit<Database, "public"> & {
       traffic_suggestion_replies: ReadTable<{ id: string; suggestion_id: string; author_id: string; author_name: string; body: string; created_at: string }>;
       meta_import_batches: ReadTable<{ id: string; imported_by: string; filename: string; row_count: number; created_at: string }>;
       meta_form_leads: ReadTable<MetaFormLead>;
+      meta_ad_accounts: ReadTable<MetaAdAccount>;
+      meta_sync_runs: ReadTable<MetaSyncRun>;
+      meta_webhook_events: ReadTable<{ id: string; leadgen_id: string; page_id: string; form_id: string; status: 'pending' | 'processed' | 'error' | 'ignored'; attempts: number; last_error: string | null; meta_form_lead_id: string | null; received_at: string; processed_at: string | null; updated_at: string }>;
     };
   };
 };

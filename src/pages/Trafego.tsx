@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
+import { FileSpreadsheet, Upload } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,9 +11,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { arenaClient, arenaRpc } from '@/lib/arena-api'
 import { fetchAllPages } from '@/lib/supabase-pages'
+import { supabase } from '@/integrations/supabase/client'
 import { useBrasiliaToday } from '@/hooks/useGoals'
 import { useAuth } from '@/hooks/useAuth'
+import { useRoles } from '@/hooks/useRoles'
 import { aggregateMeta, buildImportRows, cost, csvFields, defaultCsvMapping, parseCsv, summarizeObjectives, type CsvMapping, type MetaDailyRow, type MetaLevel, type PromotableObjective } from '@/lib/meta-traffic'
+import { lastRunFor, type MetaAdAccount, type MetaSyncRun } from '@/lib/meta-connection'
 import { errorMessage, money } from '@/lib/sales'
 
 type Suggestion = { id: string; author_name: string; subject: string; body: string; campaign_id: string | null; status: string; created_at: string; updated_at: string }
@@ -64,6 +68,7 @@ function ImportPanel({ today, onImported }: { today: string; onImported: (select
   const [brlConfirmed, setBrlConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [fileError, setFileError] = useState('')
+  const [dragOver, setDragOver] = useState(false)
   const preview = useMemo(() => {
     if (!mapping || !values.length) return null
     try { return buildImportRows(values, headers, mapping, level, today, attribution) }
@@ -94,7 +99,21 @@ function ImportPanel({ today, onImported }: { today: string; onImported: (select
   return <section className="surface-panel space-y-5 rounded-2xl p-5 sm:p-6">
     <div><h2 className="text-lg font-medium">Importar</h2><p className="mt-1 text-sm text-muted-foreground">Exporte dados diários do Gerenciador de Anúncios da Meta em CSV, com moeda BRL. Inclua IDs, gasto e as colunas de resultados disponíveis: leads, compras, impressões, cliques no link, conversas por mensagem iniciadas e objetivo da campanha (opcional, usado para destacar as métricas mais relevantes no topo da tela).</p></div>
     <div className="grid gap-4 sm:grid-cols-2">
-      <div><Label htmlFor="meta-file">Arquivo CSV</Label><Input key={fileName || 'empty'} id="meta-file" type="file" accept=".csv,text/csv" onChange={event => void load(event.target.files?.[0])} /></div>
+      <div className="sm:col-span-2">
+        <Label htmlFor="meta-file">Arquivo CSV</Label>
+        <label
+          htmlFor="meta-file"
+          onDragOver={event => { event.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={event => { event.preventDefault(); setDragOver(false); void load(event.dataTransfer.files?.[0]) }}
+          className={`mt-1 flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${dragOver ? 'border-primary bg-primary/5' : 'border-input hover:border-primary/50 hover:bg-muted/30'}`}
+        >
+          {fileName ? <FileSpreadsheet className="h-8 w-8 text-primary" /> : <Upload className="h-8 w-8 text-muted-foreground" />}
+          <span className="text-sm font-medium">{fileName || 'Clique para selecionar ou arraste o CSV aqui'}</span>
+          <span className="text-xs text-muted-foreground">Exportação diária do Gerenciador de Anúncios da Meta · moeda BRL</span>
+          <Input key={fileName || 'empty'} id="meta-file" type="file" accept=".csv,text/csv" className="sr-only" onChange={event => void load(event.target.files?.[0])} />
+        </label>
+      </div>
       <div><Label htmlFor="meta-level">Nível da exportação</Label><select id="meta-level" className={selectClass} value={level} onChange={event => setLevel(event.target.value as MetaLevel)}><option value="campaign">Campanha</option><option value="adset">Conjunto de anúncios</option><option value="ad">Anúncio</option></select></div>
       <div className="sm:col-span-2"><Label htmlFor="meta-attribution">Janela de atribuição da exportação</Label><Input id="meta-attribution" maxLength={120} value={attribution} onChange={event => setAttribution(event.target.value)} /></div>
     </div>
@@ -106,6 +125,79 @@ function ImportPanel({ today, onImported }: { today: string; onImported: (select
       <Button disabled={busy || !brlConfirmed || !Array.isArray(preview) || !preview.length} onClick={() => void submit()}>{busy ? 'Importando…' : 'Confirmar importação'}</Button>
     </>}
   </section>
+}
+
+const runStatusLabel: Record<MetaSyncRun['status'], string> = { success: 'Sucesso', error: 'Erro', running: 'Em andamento' }
+function RunStatus({ run, emptyLabel }: { run: MetaSyncRun | null; emptyLabel: string }) {
+  if (!run) return <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+  return <p className="text-xs text-muted-foreground">{runStatusLabel[run.status]} · {new Date(run.started_at).toLocaleString('pt-BR')}
+    {run.status === 'success' && ` · ${run.rows_synced} linhas`}{run.status === 'error' && run.error_message && ` · ${run.error_message}`}</p>
+}
+
+function ConnectionPanel({ onProposeChange }: { onProposeChange: () => void }) {
+  const { isExecutive } = useRoles()
+  const [accountId, setAccountId] = useState('')
+  const [accountName, setAccountName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [disconnectId, setDisconnectId] = useState<string | null>(null)
+  const [reason, setReason] = useState('')
+  const accountsQuery = useQuery({ queryKey: ['meta-ad-accounts'], queryFn: () =>
+    fetchAllPages<MetaAdAccount>((from, to) => arenaClient.from('meta_ad_accounts').select('*').order('connected_at', { ascending: false }).range(from, to)) })
+  const runsQuery = useQuery({ queryKey: ['meta-sync-runs'], refetchInterval: 30_000, queryFn: () =>
+    fetchAllPages<MetaSyncRun>((from, to) => arenaClient.from('meta_sync_runs').select('*').order('started_at', { ascending: false }).limit(60).range(from, to)) })
+  const accounts = accountsQuery.data || []
+  const runs = runsQuery.data || []
+  const runningInsights = runs.some(run => run.kind === 'insights' && run.status === 'running')
+  const reconciliation = lastRunFor(runs, 'leads_reconciliation')
+  const connect = async (event: React.FormEvent) => {
+    event.preventDefault(); if (!accountId.trim() || !accountName.trim()) return
+    setBusy(true)
+    try {
+      await arenaRpc('meta_connect_ad_account', { p_account_id: accountId.trim(), p_account_name: accountName.trim() })
+      setAccountId(''); setAccountName(''); await accountsQuery.refetch()
+      toast.success('Conta Meta conectada')
+    } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(false) }
+  }
+  const disconnect = async () => {
+    if (!disconnectId || reason.trim().length < 3) return
+    setBusy(true)
+    try {
+      await arenaRpc('meta_disconnect_ad_account', { p_account_id: disconnectId, p_reason: reason.trim() })
+      setDisconnectId(null); setReason(''); await accountsQuery.refetch()
+      toast.success('Conta Meta desconectada')
+    } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(false) }
+  }
+  const syncNow = async () => {
+    setBusy(true)
+    try {
+      const { error } = await supabase.functions.invoke('meta-insights-sync', { body: {} })
+      if (error) throw error
+      await runsQuery.refetch()
+      toast.success('Sincronização solicitada')
+    } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(false) }
+  }
+  return <div className="space-y-5">
+    <section className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-medium">Contas conectadas</h2><p className="mt-1 text-sm text-muted-foreground">Sincronização automática de métricas via API oficial da Meta, a cada 30 minutos, mais uma varredura diária mais profunda.</p></div>
+        <Button size="sm" disabled={busy || runningInsights} onClick={() => void syncNow()}>{runningInsights ? 'Sincronizando…' : 'Sincronizar agora'}</Button></div>
+      {accountsQuery.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(accountsQuery.error)}</p>}
+      {!accountsQuery.isLoading && !accounts.length && <p className="text-sm text-muted-foreground">Nenhuma conta Meta conectada ainda.</p>}
+      {accounts.map(item => <div key={item.id} className="rounded-lg border border-border/60 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">{item.account_name || item.account_id} <span className="text-xs text-muted-foreground">({item.account_id})</span></p>
+          <p className="text-xs text-muted-foreground">{item.status === 'active' ? 'Ativa' : 'Pausada'} · conectada em {new Date(item.connected_at).toLocaleDateString('pt-BR')}</p></div>
+          {isExecutive && item.status === 'active' && <Button size="sm" variant="outline" onClick={() => { setDisconnectId(item.account_id); setReason('') }}>Desconectar</Button>}</div>
+        <RunStatus run={lastRunFor(runs, 'insights', item.account_id)} emptyLabel="Nenhuma sincronização de métricas registrada ainda." />
+        {disconnectId === item.account_id && <div className="mt-3 flex gap-2"><Input aria-label="Motivo da desconexão" maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo obrigatório" /><Button size="sm" variant="destructive" disabled={busy || reason.trim().length < 3} onClick={() => void disconnect()}>Confirmar</Button><Button size="sm" variant="ghost" onClick={() => setDisconnectId(null)}>Cancelar</Button></div>}
+      </div>)}
+      <div className="border-t border-border/60 pt-3"><RunStatus run={reconciliation} emptyLabel="Nenhuma reconciliação de leads registrada ainda." /><p className="text-xs text-muted-foreground">Reconciliação de leads de formulário roda a cada hora, recuperando entregas de webhook perdidas.</p></div>
+    </section>
+    {isExecutive ? <form onSubmit={connect} className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
+      <div><h2 className="text-lg font-medium">Conectar conta</h2><p className="text-sm text-muted-foreground">Requer o token de sistema já configurado no servidor (ver documentação de configuração). Aqui você só informa qual conta sincronizar.</p></div>
+      <div className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor="meta-account-id">ID da conta (act_...)</Label><Input id="meta-account-id" required value={accountId} onChange={event => setAccountId(event.target.value)} /></div>
+        <div><Label htmlFor="meta-account-name">Nome da conta</Label><Input id="meta-account-name" required value={accountName} onChange={event => setAccountName(event.target.value)} /></div></div>
+      <Button disabled={busy}>Conectar</Button>
+    </form> : <section className="surface-panel space-y-3 rounded-2xl p-5 sm:p-6"><h2 className="font-medium">Conectar/desconectar contas</h2><p className="text-sm text-muted-foreground">Somente Executive e Super Admin podem conectar ou desconectar contas Meta. Encontrou algo que precisa mudar?</p><Button size="sm" variant="outline" onClick={onProposeChange}>Propor alteração</Button></section>}
+  </div>
 }
 
 function Suggestions({ campaigns }: { campaigns: { id: string; name: string }[] }) {
@@ -153,8 +245,13 @@ export default function Trafego() {
   const [level, setLevel] = useState<MetaLevel>('campaign')
   const [account, setAccount] = useState('')
   const [campaign, setCampaign] = useState('')
-  const start = period === 'custom' ? customStart : period === 'month' ? today.slice(0, 7) + '-01' : shiftDate(today, 1 - Number(period))
-  const end = period === 'custom' ? customEnd : today
+  const [origin, setOrigin] = useState('')
+  const start = period === 'custom' ? customStart
+    : period === 'today' ? today
+    : period === 'yesterday' ? shiftDate(today, -1)
+    : period === 'month' ? today.slice(0, 7) + '-01'
+    : shiftDate(today, 1 - Number(period))
+  const end = period === 'custom' ? customEnd : period === 'yesterday' ? shiftDate(today, -1) : today
   const validRange = start <= end && end <= today && start.length === 10 && end.length === 10
   const query = useQuery({ queryKey: ['meta-traffic', user?.id, start, end, level], enabled: !!user && validRange, queryFn: () => fetchAllPages<MetaDailyRow>((from, to) => arenaClient.from('meta_traffic_daily').select('*').gte('date', start).lte('date', end).eq('level', level).order('date').order('id').range(from, to)) })
   const batchQuery = useQuery({ queryKey: ['meta-imports', user?.id], enabled: !!user, queryFn: () => fetchAllPages<Batch>((from, to) => arenaClient.from('meta_import_batches').select('*').order('created_at', { ascending: false }).range(from, to)) })
@@ -162,12 +259,13 @@ export default function Trafego() {
   const accounts = useMemo(() => [...new Map(allRows.map(row => [row.account_id, { id: row.account_id, name: row.account_name || row.account_id }])).values()], [allRows])
   const accountRows = account ? allRows.filter(row => row.account_id === account) : allRows
   const campaigns = useMemo(() => [...new Map(accountRows.map(row => [row.campaign_id, { id: row.campaign_id, name: row.campaign_name }])).values()], [accountRows])
-  const rows = campaign ? accountRows.filter(row => row.campaign_id === campaign) : accountRows
+  const originRows = origin ? accountRows.filter(row => row.source === origin) : accountRows
+  const rows = originRows.filter(row => !campaign || row.campaign_id === campaign)
   const total = aggregateMeta(rows)
   const objectiveSummary = useMemo(() => summarizeObjectives(rows), [rows])
   const [showAllMetrics, setShowAllMetrics] = useState(false)
   const daily = useMemo(() => [...new Set(rows.map(row => row.date))].sort().map(date => ({ date: formatDate(date), ...aggregateMeta(rows.filter(row => row.date === date)) })), [rows])
-  const byCampaign = useMemo(() => campaigns.map(item => ({ ...item, ...aggregateMeta(accountRows.filter(row => row.campaign_id === item.id)) })).sort((a, b) => b.spend - a.spend), [campaigns, accountRows])
+  const byCampaign = useMemo(() => campaigns.map(item => ({ ...item, ...aggregateMeta(originRows.filter(row => row.campaign_id === item.id)) })).sort((a, b) => b.spend - a.spend), [campaigns, originRows])
   const cplMedian = median(byCampaign.flatMap(item => item.cpl === null ? [] : [item.cpl]))
   const cpaMedian = median(byCampaign.flatMap(item => item.cpa === null ? [] : [item.cpa]))
   const attributionWindows = [...new Set(rows.map(row => row.attribution_window))]
@@ -187,8 +285,8 @@ export default function Trafego() {
     await Promise.all([queryClient.invalidateQueries({ queryKey: ['meta-traffic'] }), batchQuery.refetch()])
   }
   return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6"><header><h1 className="text-3xl font-light">Tráfego</h1><p className="mt-2 text-sm text-muted-foreground">Desempenho da Meta Ads para decisões de investimento, aquisição e otimização.</p></header>
-    <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import">Importar</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
-      <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
+    <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import" className="gap-1.5"><Upload className="h-3.5 w-3.5" /> Importar</TabsTrigger><TabsTrigger value="connection">Conexão</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
+      <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-origin">Origem</Label><select id="traffic-origin" className={selectClass} value={origin} onChange={event => setOrigin(event.target.value)}><option value="">Todas</option><option value="csv">CSV</option><option value="api">API</option></select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
         {!validRange && <p role="alert" className="text-sm text-destructive">Escolha um período válido até hoje.</p>}{query.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(query.error)}</p>}
         {(() => {
           const metricCards: [string, string, string][] = [
@@ -196,7 +294,7 @@ export default function Trafego() {
             ['cpa', 'CPA · custo por aquisição', format(total.cpa, 'money')],
             ['ctr', 'CTR · cliques no link', format(total.ctr, 'percent')],
             ['costPerMessage', 'Custo por mensagem iniciada', format(total.costPerMessage, 'money')],
-            ['spend', 'Investimento', format(total.spend, 'money')],
+            ['spend', 'Valor gasto', format(total.spend, 'money')],
             ['leads', 'Leads Meta', format(total.leads, 'count')],
             ['purchases', 'Aquisições Meta (compras)', format(total.purchases, 'count')],
             ['messagesStarted', 'Conversas iniciadas', format(total.messagesStarted, 'count')],
@@ -226,6 +324,7 @@ export default function Trafego() {
         {level === 'campaign' && !!byCampaign.length && <section className="surface-panel space-y-3 rounded-2xl p-5"><h2 className="font-medium">Leads: CSV agregado vs. fila de formulários</h2><p className="text-xs text-muted-foreground">Divergência é esperada: o CSV é o relatório agregado da Meta (pode incluir tipos de ação que contam como "lead" além do formulário); a fila individual só recebe formulários (Lead Ads) e pode ter atraso de sincronização.</p><table className="w-full text-left text-sm"><thead className="text-xs text-muted-foreground"><tr><th className="py-1">Campanha</th><th className="py-1">Leads (CSV)</th><th className="py-1">Leads (fila)</th></tr></thead><tbody>{byCampaign.map(item => <tr key={item.id} className="border-t border-border/40"><td className="py-1">{item.name}</td><td className="py-1">{item.leads}</td><td className="py-1">{reconciliationRows.find(row => row.campaign_id === item.id)?.form_leads_count ?? 0}</td></tr>)}</tbody></table></section>}
       </TabsContent>
       <TabsContent value="import" className="space-y-5"><ImportPanel today={today} onImported={imported} /><section className="surface-panel rounded-2xl p-5"><h2 className="font-medium">Importações recentes</h2>{batchQuery.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(batchQuery.error)}</p>}{batchQuery.data?.slice(0, 10).map(item => <p key={item.id} className="border-b border-border/40 py-3 text-sm">{item.filename} · {item.row_count} linhas · {new Date(item.created_at).toLocaleString('pt-BR')}</p>)}{!batchQuery.isLoading && !batchQuery.data?.length && <p className="mt-3 text-sm text-muted-foreground">Nenhuma importação registrada.</p>}</section></TabsContent>
+      <TabsContent value="connection"><ConnectionPanel onProposeChange={() => setTab('suggestions')} /></TabsContent>
       <TabsContent value="suggestions"><Suggestions campaigns={campaigns} /></TabsContent>
     </Tabs></div></DashboardLayout>
 }
