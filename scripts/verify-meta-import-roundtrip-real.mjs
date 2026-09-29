@@ -2,6 +2,10 @@
 // meta_traffic_daily/meta_import_batches rows, always removes all of them.
 // Proves meta_import_daily's present_metrics upsert on the real RPC (not just
 // the pure client-side row-building already covered by verify-meta-traffic.mjs).
+// Since the pending-approval workflow (meta_review_traffic_import), meta_import_daily
+// only stages a pending batch — this script approves each batch (as the same
+// traffic_manager+executive account) before asserting on meta_traffic_daily, so the
+// present_metrics assertions below still exercise the real end-to-end path.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
@@ -43,7 +47,7 @@ try {
   const created = must(await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { display_name: `QA Meta Roundtrip ${suffix}` } }))
   userId = created.user.id
   must(await admin.from('registration_requests').update({ status: 'approved' }).eq('user_id', userId))
-  must(await admin.from('user_roles').insert({ user_id: userId, role: 'traffic_manager' }).select('id').single())
+  must(await admin.from('user_roles').insert([{ user_id: userId, role: 'traffic_manager' }, { user_id: userId, role: 'executive' }]).select('id'))
   const session = must(await collaborator.auth.signInWithPassword({ email, password })).session
   assert(session, 'Disposable traffic_manager must be able to sign in')
 
@@ -53,6 +57,12 @@ try {
   })
   assert.ifError(firstImport.error)
   assert.equal(firstImport.data.rows, 1)
+  const firstBatch = must(await admin.from('meta_import_batches').select('*').eq('id', firstImport.data.batch_id).single())
+  assert.equal(firstBatch.status, 'pendente')
+  const firstApproval = must(await collaborator.rpc('meta_review_traffic_import', {
+    p_batch_id: firstImport.data.batch_id, p_action: 'aprovar', p_expected_updated_at: firstBatch.updated_at,
+  }))
+  assert.equal(firstApproval.status, 'aprovado')
 
   const afterFirst = must(await admin.from('meta_traffic_daily')
     .select('objective,leads,spend,purchases').eq('account_id', accountId).eq('campaign_id', campaignId).single())
@@ -73,6 +83,11 @@ try {
     }],
   })
   assert.ifError(secondImport.error)
+  const secondBatch = must(await admin.from('meta_import_batches').select('*').eq('id', secondImport.data.batch_id).single())
+  const secondApproval = must(await collaborator.rpc('meta_review_traffic_import', {
+    p_batch_id: secondImport.data.batch_id, p_action: 'aprovar', p_expected_updated_at: secondBatch.updated_at,
+  }))
+  assert.equal(secondApproval.status, 'aprovado')
 
   const afterSecond = must(await admin.from('meta_traffic_daily')
     .select('objective,leads,spend,purchases').eq('account_id', accountId).eq('campaign_id', campaignId).single())

@@ -84,7 +84,7 @@ const aliases: Record<CsvField, string[]> = {
   objective: ['objective', 'objetivo', 'campaign objective', 'objetivo da campanha'],
 }
 
-function normalizeHeader(value: string) {
+export function normalizeHeader(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/\([^)]*\)/g, match => match.toLowerCase().includes('brl') ? ' brl' : '')
     .replace(/[^a-z0-9]+/g, ' ').trim()

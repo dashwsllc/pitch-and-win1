@@ -15,13 +15,19 @@ import { supabase } from '@/integrations/supabase/client'
 import { useBrasiliaToday } from '@/hooks/useGoals'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
-import { aggregateMeta, buildImportRows, cost, csvFields, defaultCsvMapping, parseCsv, summarizeObjectives, type CsvMapping, type MetaDailyRow, type MetaLevel, type PromotableObjective } from '@/lib/meta-traffic'
+import { aggregateMeta, buildImportRows, cost, csvFields, defaultCsvMapping, summarizeObjectives, type CsvMapping, type ImportRow, type MetaDailyRow, type MetaLevel, type PromotableObjective } from '@/lib/meta-traffic'
+import { buildLeadImportRows, defaultLeadCsvMapping, leadCsvFields, summarizeLeadImport, type LeadCsvMapping, type LeadImportRow } from '@/lib/meta-lead-import'
+import { parseSpreadsheetFile } from '@/lib/spreadsheet'
 import { lastRunFor, type MetaAdAccount, type MetaSyncRun } from '@/lib/meta-connection'
 import { errorMessage, money } from '@/lib/sales'
 
 type Suggestion = { id: string; author_name: string; subject: string; body: string; campaign_id: string | null; status: string; created_at: string; updated_at: string }
 type Reply = { id: string; suggestion_id: string; author_name: string; body: string; created_at: string }
-type Batch = { id: string; filename: string; row_count: number; created_at: string }
+type ReviewStatus = 'pendente' | 'aprovado' | 'rejeitado'
+type Batch = { id: string; filename: string; row_count: number; created_at: string; status: ReviewStatus; updated_at: string; review_note: string | null }
+type MetricsBatch = Batch & { rows: ImportRow[] }
+type LeadBatch = Batch & { rows: LeadImportRow[] }
+const reviewStatusLabel: Record<ReviewStatus, string> = { pendente: 'Pendente', aprovado: 'Aprovado', rejeitado: 'Rejeitado' }
 const emptyRows: MetaDailyRow[] = []
 const statuses: Record<string, string> = { nova: 'Nova', em_analise: 'Em análise', planejada: 'Planejada', aplicada: 'Aplicada', descartada: 'Descartada' }
 const selectClass = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm'
@@ -58,7 +64,7 @@ function downloadCsv(filename: string, headers: string[], rows: (string | number
   URL.revokeObjectURL(url)
 }
 
-function ImportPanel({ today, onImported }: { today: string; onImported: (selection: { level: MetaLevel; start: string; end: string }) => Promise<unknown> }) {
+function ImportPanel({ today, onSubmitted }: { today: string; onSubmitted: () => Promise<unknown> }) {
   const [fileName, setFileName] = useState('')
   const [headers, setHeaders] = useState<string[]>([])
   const [values, setValues] = useState<string[][]>([])
@@ -79,7 +85,7 @@ function ImportPanel({ today, onImported }: { today: string; onImported: (select
     if (!file) return
     try {
       if (file.size > 2_000_000) throw new Error('Arquivo acima de 2 MB. Divida a exportação em partes menores.')
-      const parsed = parseCsv(await file.text())
+      const parsed = await parseSpreadsheetFile(file)
       setFileName(file.name); setHeaders(parsed.headers); setValues(parsed.values)
       setMapping(defaultCsvMapping(parsed.headers)); setFileError('')
     } catch (cause) { setFileError(errorMessage(cause)); setValues([]); setMapping(null) }
@@ -89,18 +95,17 @@ function ImportPanel({ today, onImported }: { today: string; onImported: (select
     setBusy(true)
     try {
       await arenaRpc('meta_import_daily', { p_filename: fileName, p_rows: preview })
-      const dates = preview.map(row => row.date).sort()
-      await onImported({ level, start: dates[0], end: dates[dates.length - 1] })
-      toast.success(preview.length + ' linhas da Meta importadas.')
+      await onSubmitted()
+      toast.success(preview.length + ' linhas enviadas para aprovação do gestor.')
       setValues([]); setMapping(null); setFileName(''); setBrlConfirmed(false)
     } catch (cause) { toast.error(errorMessage(cause)) }
     finally { setBusy(false) }
   }
   return <section className="surface-panel space-y-5 rounded-2xl p-5 sm:p-6">
-    <div><h2 className="text-lg font-medium">Importar</h2><p className="mt-1 text-sm text-muted-foreground">Exporte dados diários do Gerenciador de Anúncios da Meta em CSV, com moeda BRL. Inclua IDs, gasto e as colunas de resultados disponíveis: leads, compras, impressões, cliques no link, conversas por mensagem iniciadas e objetivo da campanha (opcional, usado para destacar as métricas mais relevantes no topo da tela).</p></div>
+    <div><h2 className="text-lg font-medium">Importar métricas (desempenho)</h2><p className="mt-1 text-sm text-muted-foreground">Exporte dados diários do Gerenciador de Anúncios da Meta em CSV, com moeda BRL. Inclua IDs, gasto e as colunas de resultados disponíveis: leads, compras, impressões, cliques no link, conversas por mensagem iniciadas e objetivo da campanha (opcional, usado para destacar as métricas mais relevantes no topo da tela). Fica pendente até o gestor aprovar.</p></div>
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
-        <Label htmlFor="meta-file">Arquivo CSV</Label>
+        <Label htmlFor="meta-file">Arquivo (CSV, XLS ou XLSX)</Label>
         <label
           htmlFor="meta-file"
           onDragOver={event => { event.preventDefault(); setDragOver(true) }}
@@ -109,9 +114,9 @@ function ImportPanel({ today, onImported }: { today: string; onImported: (select
           className={`mt-1 flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${dragOver ? 'border-primary bg-primary/5' : 'border-input hover:border-primary/50 hover:bg-muted/30'}`}
         >
           {fileName ? <FileSpreadsheet className="h-8 w-8 text-primary" /> : <Upload className="h-8 w-8 text-muted-foreground" />}
-          <span className="text-sm font-medium">{fileName || 'Clique para selecionar ou arraste o CSV aqui'}</span>
-          <span className="text-xs text-muted-foreground">Exportação diária do Gerenciador de Anúncios da Meta · moeda BRL</span>
-          <Input key={fileName || 'empty'} id="meta-file" type="file" accept=".csv,text/csv" className="sr-only" onChange={event => void load(event.target.files?.[0])} />
+          <span className="text-sm font-medium">{fileName || 'Clique para selecionar ou arraste o arquivo aqui'}</span>
+          <span className="text-xs text-muted-foreground">Exportação diária do Gerenciador de Anúncios da Meta · moeda BRL · CSV, XLS ou XLSX</span>
+          <Input key={fileName || 'empty'} id="meta-file" type="file" accept=".csv,text/csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={event => void load(event.target.files?.[0])} />
         </label>
       </div>
       <div><Label htmlFor="meta-level">Nível da exportação</Label><select id="meta-level" className={selectClass} value={level} onChange={event => setLevel(event.target.value as MetaLevel)}><option value="campaign">Campanha</option><option value="adset">Conjunto de anúncios</option><option value="ad">Anúncio</option></select></div>
@@ -122,8 +127,126 @@ function ImportPanel({ today, onImported }: { today: string; onImported: (select
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{csvFields.map(field => <div key={field.key}><Label htmlFor={'map-' + field.key}>{field.label}{field.required ? ' *' : ''}</Label><select id={'map-' + field.key} className={selectClass} value={mapping[field.key]} onChange={event => setMapping({ ...mapping, [field.key]: event.target.value })}><option value="">Sem coluna</option>{headers.map((header, index) => <option key={index} value={header}>{header}</option>)}</select></div>)}</div>
       {typeof preview === 'string' ? <p role="alert" className="text-sm text-destructive">{preview}</p> : preview && previewTotals && <div className="rounded-lg border border-border/60 p-4 text-sm"><strong>{preview.length} linhas prontas.</strong> A importação atualiza dados com os mesmos IDs e datas.<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground"><span>Gasto: {money(previewTotals.spend)}</span><span>Leads: {previewTotals.leads}</span><span>Compras: {previewTotals.purchases}</span><span>Cliques no link: {previewTotals.linkClicks}</span><span>Conversas iniciadas: {previewTotals.messagesStarted}</span></div><p className="mt-2 text-xs text-muted-foreground">Revise o mapeamento e a janela de atribuição antes de confirmar. Em registros novos, colunas não exportadas ficam em zero; na reimportação, métricas omitidas são preservadas.</p></div>}
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={brlConfirmed} onChange={event => setBrlConfirmed(event.target.checked)} /> Confirmo que o valor gasto e o valor de compras estão em BRL.</label>
-      <Button disabled={busy || !brlConfirmed || !Array.isArray(preview) || !preview.length} onClick={() => void submit()}>{busy ? 'Importando…' : 'Confirmar importação'}</Button>
+      <Button disabled={busy || !brlConfirmed || !Array.isArray(preview) || !preview.length} onClick={() => void submit()}>{busy ? 'Enviando…' : 'Enviar para aprovação'}</Button>
     </>}
+  </section>
+}
+
+function LeadImportPanel({ onSubmitted }: { onSubmitted: () => Promise<unknown> }) {
+  const [fileName, setFileName] = useState('')
+  const [headers, setHeaders] = useState<string[]>([])
+  const [values, setValues] = useState<string[][]>([])
+  const [mapping, setMapping] = useState<LeadCsvMapping | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [fileError, setFileError] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+  const preview = useMemo(() => {
+    if (!mapping || !values.length) return null
+    try { return buildLeadImportRows(values, headers, mapping, fileName) }
+    catch (cause) { return errorMessage(cause) }
+  }, [values, headers, mapping, fileName])
+  const summary = Array.isArray(preview) ? summarizeLeadImport(preview) : null
+  const load = async (file?: File) => {
+    if (!file) return
+    try {
+      if (file.size > 2_000_000) throw new Error('Arquivo acima de 2 MB. Divida a exportação em partes menores.')
+      const parsed = await parseSpreadsheetFile(file)
+      setFileName(file.name); setHeaders(parsed.headers); setValues(parsed.values)
+      setMapping(defaultLeadCsvMapping(parsed.headers)); setFileError('')
+    } catch (cause) { setFileError(errorMessage(cause)); setValues([]); setMapping(null) }
+  }
+  const submit = async () => {
+    if (!Array.isArray(preview) || !preview.length) return
+    setBusy(true)
+    try {
+      await arenaRpc('meta_import_leads', { p_filename: fileName, p_rows: preview })
+      await onSubmitted()
+      toast.success(preview.length + ' leads enviados para aprovação do gestor.')
+      setValues([]); setMapping(null); setFileName('')
+    } catch (cause) { toast.error(errorMessage(cause)) }
+    finally { setBusy(false) }
+  }
+  return <section className="surface-panel space-y-5 rounded-2xl p-5 sm:p-6">
+    <div><h2 className="text-lg font-medium">Importar leads (planilha)</h2><p className="mt-1 text-sm text-muted-foreground">Exporte os leads do formulário (Meta ou outra origem) em CSV, XLS ou XLSX: nome do responsável, WhatsApp, data e, quando o formulário perguntar, os dados do atleta. Qualquer outra coluna da planilha (motivação, dificuldade, características, histórico) é importada do jeito que está e guardada nas observações do lead, sem precisar de campo próprio. Complementa a fila de formulários que já chega sozinha pelo webhook em /leads. Também fica pendente até o gestor aprovar.</p></div>
+    <div>
+      <Label htmlFor="lead-file">Arquivo (CSV, XLS ou XLSX)</Label>
+      <label
+        htmlFor="lead-file"
+        onDragOver={event => { event.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={event => { event.preventDefault(); setDragOver(false); void load(event.dataTransfer.files?.[0]) }}
+        className={`mt-1 flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${dragOver ? 'border-primary bg-primary/5' : 'border-input hover:border-primary/50 hover:bg-muted/30'}`}
+      >
+        {fileName ? <FileSpreadsheet className="h-8 w-8 text-primary" /> : <Upload className="h-8 w-8 text-muted-foreground" />}
+        <span className="text-sm font-medium">{fileName || 'Clique para selecionar ou arraste o arquivo aqui'}</span>
+        <span className="text-xs text-muted-foreground">Planilha de leads/formulário · CSV, XLS ou XLSX</span>
+        <Input key={fileName || 'empty'} id="lead-file" type="file" accept=".csv,text/csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={event => void load(event.target.files?.[0])} />
+      </label>
+    </div>
+    {fileError && <p role="alert" className="text-sm text-destructive">{fileError}</p>}
+    {mapping && <><div><h3 className="font-medium">Conferir colunas · {fileName}</h3><p className="text-xs text-muted-foreground">Nada bloqueia o envio: campos sem coluna ficam vazios, texto que não bate exatamente com o esperado (ex.: posição do atleta) segue do jeito que está na planilha. O que não for completo cai na fila /leads pro SDR terminar.</p></div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{leadCsvFields.map(field => <div key={field.key}><Label htmlFor={'lead-map-' + field.key}>{field.label}{field.required ? ' *' : ''}</Label><select id={'lead-map-' + field.key} className={selectClass} value={mapping[field.key]} onChange={event => setMapping({ ...mapping, [field.key]: event.target.value })}><option value="">Sem coluna</option>{headers.map((header, index) => <option key={index} value={header}>{header}</option>)}</select></div>)}</div>
+      {typeof preview === 'string' ? <p role="alert" className="text-sm text-destructive">{preview}</p> : summary && <div className="rounded-lg border border-border/60 p-4 text-sm"><strong>{summary.total} leads prontos para envio.</strong><div className="mt-2 text-muted-foreground">{summary.complete} prontos para o CRM automaticamente na aprovação · {summary.manual} vão para a fila de complemento manual (SDR)</div></div>}
+      <Button disabled={busy || !Array.isArray(preview) || !preview.length} onClick={() => void submit()}>{busy ? 'Enviando…' : 'Enviar para aprovação'}</Button>
+    </>}
+  </section>
+}
+
+function PendingImports({ metricsBatches, leadBatches, isExecutive, onReviewed }: {
+  metricsBatches: MetricsBatch[]; leadBatches: LeadBatch[]; isExecutive: boolean; onReviewed: () => Promise<unknown>
+}) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [rejecting, setRejecting] = useState<string | null>(null)
+  const [reason, setReason] = useState('')
+  const pendingMetrics = metricsBatches.filter(batch => batch.status === 'pendente')
+  const pendingLeads = leadBatches.filter(batch => batch.status === 'pendente')
+  const review = async (kind: 'metrics' | 'leads', batch: Batch, action: 'aprovar' | 'rejeitar') => {
+    if (action === 'rejeitar' && reason.trim().length < 3) return
+    setBusy(batch.id)
+    try {
+      const args = { p_batch_id: batch.id, p_action: action, p_expected_updated_at: batch.updated_at, p_note: reason.trim() }
+      if (kind === 'metrics') await arenaRpc('meta_review_traffic_import', args)
+      else await arenaRpc('meta_review_lead_import', args)
+      setRejecting(null); setReason('')
+      await onReviewed()
+      toast.success(action === 'aprovar' ? 'Importação aprovada' : 'Importação rejeitada')
+    } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(null) }
+  }
+  const actions = (kind: 'metrics' | 'leads', batch: Batch) => isExecutive && <div className="flex flex-wrap gap-2">
+    <Button size="sm" disabled={busy === batch.id} onClick={() => void review(kind, batch, 'aprovar')}>Aprovar</Button>
+    <Button size="sm" variant="outline" disabled={busy === batch.id} onClick={() => { setRejecting(batch.id); setReason('') }}>Rejeitar</Button>
+  </div>
+  const rejectForm = (kind: 'metrics' | 'leads', batch: Batch) => rejecting === batch.id && <div className="mt-3 flex flex-wrap gap-2">
+    <Input aria-label="Motivo da rejeição" maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo obrigatório" />
+    <Button size="sm" variant="destructive" disabled={busy === batch.id || reason.trim().length < 3} onClick={() => void review(kind, batch, 'rejeitar')}>Confirmar rejeição</Button>
+    <Button size="sm" variant="ghost" onClick={() => setRejecting(null)}>Cancelar</Button>
+  </div>
+  return <section className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
+    <div><h2 className="text-lg font-medium">Pendentes de aprovação</h2><p className="mt-1 text-sm text-muted-foreground">{isExecutive ? 'Aprovar métricas publica os números em Desempenho; aprovar leads sincroniza com o CRM.' : 'Aguardando aprovação do Executive.'}</p></div>
+    {!pendingMetrics.length && !pendingLeads.length && <p className="text-sm text-muted-foreground">Nenhuma importação aguardando aprovação.</p>}
+    {pendingMetrics.map(batch => {
+      const preview = aggregateMeta(batch.rows)
+      const objective = summarizeObjectives(batch.rows)
+      return <article key={batch.id} className="rounded-lg border border-border/60 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="font-medium">Métricas · {batch.filename}</p><p className="text-xs text-muted-foreground">{batch.row_count} linhas · enviado em {new Date(batch.created_at).toLocaleString('pt-BR')}</p></div>
+          {actions('metrics', batch)}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"><span>Gasto: {money(preview.spend)}</span><span>Leads: {preview.leads}</span><span>Compras: {preview.purchases}</span>{objective.dominant && <span>Objetivo dominante: {objective.dominant}</span>}{objective.mixed && <span>Objetivos mistos</span>}</div>
+        {rejectForm('metrics', batch)}
+      </article>
+    })}
+    {pendingLeads.map(batch => {
+      const summary = summarizeLeadImport(batch.rows)
+      return <article key={batch.id} className="rounded-lg border border-border/60 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="font-medium">Leads · {batch.filename}</p><p className="text-xs text-muted-foreground">{batch.row_count} linhas · enviado em {new Date(batch.created_at).toLocaleString('pt-BR')}</p></div>
+          {actions('leads', batch)}
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">{summary.total} leads · {summary.complete} prontos para o CRM automaticamente · {summary.manual} vão para a fila de complemento manual (SDR)</p>
+        {rejectForm('leads', batch)}
+      </article>
+    })}
   </section>
 }
 
@@ -236,6 +359,7 @@ function Suggestions({ campaigns }: { campaigns: { id: string; name: string }[] 
 
 export default function Trafego() {
   const { user } = useAuth()
+  const { isExecutive } = useRoles()
   const queryClient = useQueryClient()
   const today = useBrasiliaToday()
   const [tab, setTab] = useState('performance')
@@ -254,7 +378,8 @@ export default function Trafego() {
   const end = period === 'custom' ? customEnd : period === 'yesterday' ? shiftDate(today, -1) : today
   const validRange = start <= end && end <= today && start.length === 10 && end.length === 10
   const query = useQuery({ queryKey: ['meta-traffic', user?.id, start, end, level], enabled: !!user && validRange, queryFn: () => fetchAllPages<MetaDailyRow>((from, to) => arenaClient.from('meta_traffic_daily').select('*').gte('date', start).lte('date', end).eq('level', level).order('date').order('id').range(from, to)) })
-  const batchQuery = useQuery({ queryKey: ['meta-imports', user?.id], enabled: !!user, queryFn: () => fetchAllPages<Batch>((from, to) => arenaClient.from('meta_import_batches').select('*').order('created_at', { ascending: false }).range(from, to)) })
+  const batchQuery = useQuery({ queryKey: ['meta-imports', user?.id], enabled: !!user, queryFn: () => fetchAllPages<MetricsBatch>((from, to) => arenaClient.from('meta_import_batches').select('*').order('created_at', { ascending: false }).range(from, to)) })
+  const leadBatchQuery = useQuery({ queryKey: ['meta-lead-imports', user?.id], enabled: !!user, queryFn: () => fetchAllPages<LeadBatch>((from, to) => arenaClient.from('meta_lead_import_batches').select('*').order('created_at', { ascending: false }).range(from, to)) })
   const allRows = query.data || emptyRows
   const accounts = useMemo(() => [...new Map(allRows.map(row => [row.account_id, { id: row.account_id, name: row.account_name || row.account_id }])).values()], [allRows])
   const accountRows = account ? allRows.filter(row => row.account_id === account) : allRows
@@ -279,10 +404,8 @@ export default function Trafego() {
   const cpaReal = cost(total.spend, confirmedSales)
   const roasReal = cost(confirmedRevenue, total.spend)
   const reconciliationRows = (reconciliationQuery.data || []).filter(row => campaigns.some(item => item.id === row.campaign_id))
-  const imported = async (selection: { level: MetaLevel; start: string; end: string }) => {
-    setLevel(selection.level); setPeriod('custom'); setCustomStart(selection.start); setCustomEnd(selection.end)
-    setAccount(''); setCampaign(''); setTab('performance')
-    await Promise.all([queryClient.invalidateQueries({ queryKey: ['meta-traffic'] }), batchQuery.refetch()])
+  const reviewed = async () => {
+    await Promise.all([queryClient.invalidateQueries({ queryKey: ['meta-traffic'] }), batchQuery.refetch(), leadBatchQuery.refetch()])
   }
   return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6"><header><h1 className="text-3xl font-light">Tráfego</h1><p className="mt-2 text-sm text-muted-foreground">Desempenho da Meta Ads para decisões de investimento, aquisição e otimização.</p></header>
     <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import" className="gap-1.5"><Upload className="h-3.5 w-3.5" /> Importar</TabsTrigger><TabsTrigger value="connection">Conexão</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
@@ -323,7 +446,18 @@ export default function Trafego() {
         <section className="surface-panel overflow-hidden rounded-2xl"><div className="flex flex-wrap items-center justify-between gap-2 p-5"><div><h2 className="font-medium">Campanhas</h2><p className="text-xs text-muted-foreground">Ordenadas por investimento no período.</p></div>{!!byCampaign.length && <Button variant="outline" size="sm" onClick={() => downloadCsv('campanhas_trafego_' + start + '_a_' + end + '.csv', ['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisicoes', 'CPA', 'CTR link (%)', 'CPC link', 'Conversas', 'Custo por mensagem'], byCampaign.map(item => [item.name, item.spend.toFixed(2), item.leads, item.cpl ?? '', item.purchases, item.cpa ?? '', item.ctr ?? '', item.cpc ?? '', item.messagesStarted, item.costPerMessage ?? '']))}>Exportar CSV</Button>}</div><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="border-y border-border/60 text-xs text-muted-foreground"><tr>{['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisições', 'CPA', 'CTR link', 'CPC link', 'Conversas', 'Custo por mensagem'].map(label => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{byCampaign.map(item => <tr className="border-b border-border/40" key={item.id}><td className="px-4 py-3">{item.name}</td><td className="px-4 py-3">{format(item.spend, 'money')}</td><td className="px-4 py-3">{item.leads}</td><td className="px-4 py-3">{format(item.cpl, 'money')}</td><td className="px-4 py-3">{item.purchases}</td><td className="px-4 py-3">{format(item.cpa, 'money')}</td><td className="px-4 py-3">{format(item.ctr, 'percent')}</td><td className="px-4 py-3">{format(item.cpc, 'money')}</td><td className="px-4 py-3">{item.messagesStarted}</td><td className="px-4 py-3">{format(item.costPerMessage, 'money')}</td></tr>)}</tbody></table></div>{!byCampaign.length && <p className="p-5 text-sm text-muted-foreground">Sem campanhas para exibir.</p>}</section>
         {level === 'campaign' && !!byCampaign.length && <section className="surface-panel space-y-3 rounded-2xl p-5"><h2 className="font-medium">Leads: CSV agregado vs. fila de formulários</h2><p className="text-xs text-muted-foreground">Divergência é esperada: o CSV é o relatório agregado da Meta (pode incluir tipos de ação que contam como "lead" além do formulário); a fila individual só recebe formulários (Lead Ads) e pode ter atraso de sincronização.</p><table className="w-full text-left text-sm"><thead className="text-xs text-muted-foreground"><tr><th className="py-1">Campanha</th><th className="py-1">Leads (CSV)</th><th className="py-1">Leads (fila)</th></tr></thead><tbody>{byCampaign.map(item => <tr key={item.id} className="border-t border-border/40"><td className="py-1">{item.name}</td><td className="py-1">{item.leads}</td><td className="py-1">{reconciliationRows.find(row => row.campaign_id === item.id)?.form_leads_count ?? 0}</td></tr>)}</tbody></table></section>}
       </TabsContent>
-      <TabsContent value="import" className="space-y-5"><ImportPanel today={today} onImported={imported} /><section className="surface-panel rounded-2xl p-5"><h2 className="font-medium">Importações recentes</h2>{batchQuery.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(batchQuery.error)}</p>}{batchQuery.data?.slice(0, 10).map(item => <p key={item.id} className="border-b border-border/40 py-3 text-sm">{item.filename} · {item.row_count} linhas · {new Date(item.created_at).toLocaleString('pt-BR')}</p>)}{!batchQuery.isLoading && !batchQuery.data?.length && <p className="mt-3 text-sm text-muted-foreground">Nenhuma importação registrada.</p>}</section></TabsContent>
+      <TabsContent value="import" className="space-y-5">
+        <ImportPanel today={today} onSubmitted={() => batchQuery.refetch()} />
+        <LeadImportPanel onSubmitted={() => leadBatchQuery.refetch()} />
+        <PendingImports metricsBatches={batchQuery.data || []} leadBatches={leadBatchQuery.data || []} isExecutive={isExecutive} onReviewed={reviewed} />
+        <section className="surface-panel rounded-2xl p-5"><h2 className="font-medium">Importações recentes</h2>
+          {(batchQuery.isError || leadBatchQuery.isError) && <p role="alert" className="text-sm text-destructive">{errorMessage(batchQuery.error || leadBatchQuery.error)}</p>}
+          {[...(batchQuery.data || []).map(item => ({ ...item, kind: 'Métricas' })), ...(leadBatchQuery.data || []).map(item => ({ ...item, kind: 'Leads' }))]
+            .sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 15)
+            .map(item => <p key={item.kind + item.id} className="border-b border-border/40 py-3 text-sm">{item.kind} · {item.filename} · {item.row_count} linhas · {new Date(item.created_at).toLocaleString('pt-BR')} · <span className={item.status === 'rejeitado' ? 'text-destructive' : item.status === 'aprovado' ? 'text-emerald-500' : 'text-amber-500'}>{reviewStatusLabel[item.status]}</span>{item.status === 'rejeitado' && item.review_note && <span className="text-muted-foreground"> · {item.review_note}</span>}</p>)}
+          {!batchQuery.isLoading && !leadBatchQuery.isLoading && !batchQuery.data?.length && !leadBatchQuery.data?.length && <p className="mt-3 text-sm text-muted-foreground">Nenhuma importação registrada.</p>}
+        </section>
+      </TabsContent>
       <TabsContent value="connection"><ConnectionPanel onProposeChange={() => setTab('suggestions')} /></TabsContent>
       <TabsContent value="suggestions"><Suggestions campaigns={campaigns} /></TabsContent>
     </Tabs></div></DashboardLayout>

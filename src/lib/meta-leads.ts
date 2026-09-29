@@ -20,6 +20,7 @@ export interface MetaFormLead {
   ignored_reason: string | null
   received_at: string
   updated_at: string
+  lead_import_batch_id: string | null
 }
 
 export function metaAnswers(fieldData: unknown) {
