@@ -31,7 +31,7 @@ type ArenaScoreWeight = { action_type: string; label: string; weight: number };
 // impressão de que o valor digitado mudou, sem alterar o número salvo.
 const displayWeight = (weight: number) =>
   Number.isInteger(weight) ? String(weight) : weight.toFixed(2);
-function ScoreWeights() {
+export function ScoreWeights() {
   const { user } = useAuth();
   const query = useQuery({
     queryKey: ["arena-score-weights", user?.id],
