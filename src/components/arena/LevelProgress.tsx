@@ -1,4 +1,4 @@
-import { Award, RefreshCw, Trophy } from "lucide-react"
+import { Award, Flame, Lock, RefreshCw, Trophy } from "lucide-react"
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,9 @@ export function LevelProgress() {
     percent,
     roleLabel,
     series,
-    achievedCount,
+    streakDays,
+    achievements,
+    achievementsUnlockedCount,
     hasData,
     loading,
     refreshing,
@@ -75,7 +77,7 @@ export function LevelProgress() {
           <LevelRing percent={percent} size={112} strokeWidth={9} className="mx-auto sm:mx-0">
             <div className="flex flex-col items-center">
               <span className="text-2xl font-semibold tabular-nums text-white">{level}</span>
-              <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Nível</span>
+              <span className="max-w-[76px] truncate text-[10px] uppercase tracking-[0.12em] text-emerald-400">{roleLabel}</span>
             </div>
           </LevelRing>
 
@@ -89,11 +91,35 @@ export function LevelProgress() {
                 {xp.toLocaleString("pt-BR")} XP total
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.035] px-3 py-1.5 text-xs tabular-nums text-muted-foreground">
+                <Flame className="h-3.5 w-3.5 text-ember" />
+                Sequência ativa · {streakDays} {streakDays === 1 ? "dia" : "dias"}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.035] px-3 py-1.5 text-xs tabular-nums text-muted-foreground">
                 <Trophy className="h-3.5 w-3.5 text-emerald-400" />
-                {achievedCount} {achievedCount === 1 ? "meta batida" : "metas batidas"}
+                Conquistas · {achievementsUnlockedCount} de {achievements.length}
               </span>
             </div>
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {achievements.map((achievement) => (
+            <div
+              key={achievement.id}
+              title={achievement.description}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-3 py-2.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)] transition-colors",
+                achievement.unlocked ? "bg-emerald-400/[0.08]" : "bg-white/[0.02]",
+              )}
+            >
+              {achievement.unlocked
+                ? <Trophy className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                : <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />}
+              <span className={cn("truncate text-xs", achievement.unlocked ? "text-ash" : "text-muted-foreground/70")}>
+                {achievement.name}
+              </span>
+            </div>
+          ))}
         </div>
 
         {!hasData && (

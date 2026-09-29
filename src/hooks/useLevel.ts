@@ -5,6 +5,12 @@ import { ROLE_LABELS, useRoles, type UserRole } from "@/hooks/useRoles";
 import { useBrasiliaToday } from "@/hooks/useGoals";
 import { arenaClient, arenaRpc } from "@/lib/arena-api";
 import type { ArenaCycle } from "@/lib/arena";
+import { addDaysToDateKey, brasiliaDateKey } from "@/lib/brasilia-time";
+import {
+  ACHIEVEMENT_CATALOG,
+  unlockedAchievementIds,
+  type AchievementDef,
+} from "@/lib/achievements";
 import {
   levelProgress,
   personalCycleSamples,
@@ -59,7 +65,7 @@ export function useLevelProgress() {
     queryFn: async () => {
       const { data, error } = await arenaClient
         .from("activity_feed")
-        .select("score_delta")
+        .select("score_delta, action_type, occurred_at")
         .eq("responsible_id", user!.id);
       if (error) throw error;
       return data ?? [];
@@ -102,16 +108,45 @@ export function useLevelProgress() {
     [activity.data],
   );
 
+  const saleCount = useMemo(
+    () => (activity.data ?? []).filter((row) => row.action_type === "sale.approved").length,
+    [activity.data],
+  );
+
+  // Sequência ativa: dias seguidos (fuso de Brasília) com pelo menos uma
+  // atividade registrada, contando pra trás a partir de hoje. Se ainda não
+  // houve atividade hoje, conta a partir de ontem -- assim a sequência não
+  // zera só porque o dia ainda não terminou.
+  const streakDays = useMemo(() => {
+    const days = new Set((activity.data ?? []).map((row) => brasiliaDateKey(row.occurred_at)));
+    if (days.size === 0) return 0;
+    let cursor = days.has(today) ? today : addDaysToDateKey(today, -1);
+    let count = 0;
+    while (days.has(cursor)) {
+      count++;
+      cursor = addDaysToDateKey(cursor, -1);
+    }
+    return count;
+  }, [activity.data, today]);
+
   const progress = useMemo(() => {
     const samples: PersonalGoalSample[] = [...closedSamples, ...liveSamples];
     return levelProgress(totalXp(samples) + activityXp);
   }, [closedSamples, liveSamples, activityXp]);
+
+  const achievements: (AchievementDef & { unlocked: boolean })[] = useMemo(() => {
+    const unlocked = unlockedAchievementIds({ level: progress.level, streakDays, achievedCount, saleCount });
+    return ACHIEVEMENT_CATALOG.map((achievement) => ({ ...achievement, unlocked: unlocked.has(achievement.id) }));
+  }, [progress.level, streakDays, achievedCount, saleCount]);
 
   return {
     ...progress,
     roleLabel: ROLE_LABELS[primaryRole],
     series,
     achievedCount,
+    streakDays,
+    achievements,
+    achievementsUnlockedCount: achievements.filter((achievement) => achievement.unlocked).length,
     hasData: closedSamples.length > 0 || liveSamples.length > 0 || activityXp > 0,
     loading: rolesLoading || visibleGoals.isLoading || history.isLoading || activity.isLoading,
     refreshing: visibleGoals.isFetching || history.isFetching || activity.isFetching,

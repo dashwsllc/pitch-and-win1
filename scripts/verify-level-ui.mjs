@@ -68,13 +68,15 @@ const historyItems = [
 ]
 const historyResponse = { summary: { total: 4, achieved: 3, failed: 1, unassigned: 0 }, items: historyItems }
 
-// Atividade real (activity_feed, lido direto por RLS): 2 acoes somando 2.0 de
-// score -> 50 XP. E essa fonte que garante o nivel evoluir mesmo quando a
-// meta do ciclo ativo esta parada em 0% (o bug relatado em producao: Closer
-// com meta configurada mas actual=0 no ciclo da semana).
+// Atividade real (activity_feed, lido direto por RLS): 3 acoes em 3 dias
+// seguidos (hoje, ontem, anteontem) somando 2.0 de score -> 50 XP, sequencia
+// de 3 dias, e 1 venda aprovada. E essa fonte que garante o nivel evoluir
+// mesmo quando a meta do ciclo ativo esta parada em 0% (o bug relatado em
+// producao: Closer com meta configurada mas actual=0 no ciclo da semana).
 const activityRows = [
-  { score_delta: 1.5 },
-  { score_delta: 0.5 },
+  { score_delta: 1.0, action_type: 'sale.approved', occurred_at: daysAgo(2) },
+  { score_delta: 0.5, action_type: 'q.scheduled', occurred_at: daysAgo(1) },
+  { score_delta: 0.5, action_type: 'q.scheduled', occurred_at: now.toISOString() },
 ]
 
 // XP esperado (mesma formula de src/lib/level.ts): 32 (h1) + 180 (h2) + 80 (live) + 50 (atividade) = 342
@@ -145,8 +147,23 @@ try {
   await expect(page.getByText(`${EXPECTED_XP_INTO_LEVEL} / ${EXPECTED_XP_FOR_NEXT} XP`)).toBeVisible()
   await expect(page.getByText(`Faltam ${EXPECTED_XP_TO_NEXT} XP para o nível ${EXPECTED_LEVEL + 1}`)).toBeVisible()
   await expect(page.getByText(`${EXPECTED_XP_TOTAL} XP total`)).toBeVisible()
-  await expect(page.getByText('1 meta batida')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Metas em andamento' })).toBeVisible()
+
+  // Sequencia (3 dias seguidos de atividade) e conquistas (3 das 8: primeira
+  // venda, meta batida, sequencia de 3 dias -- as outras 5 continuam
+  // bloqueadas com esses dados).
+  await expect(page.getByText('Sequência ativa · 3 dias')).toBeVisible()
+  await expect(page.getByText('Conquistas · 3 de 8')).toBeVisible()
+  const unlockedNames = ['Primeira venda', 'Meta batida', 'Em ritmo']
+  const lockedNames = ['Sequência forte', 'Veterano', 'Nível 5', 'Multimetas', '5 vendas']
+  for (const name of unlockedNames) {
+    const card = page.getByText(name, { exact: true }).locator('..')
+    await expect(card.locator('svg.lucide-trophy')).toHaveCount(1)
+  }
+  for (const name of lockedNames) {
+    const card = page.getByText(name, { exact: true }).locator('..')
+    await expect(card.locator('svg.lucide-lock')).toHaveCount(1)
+  }
 
   // Grafico de XP acumulado (2 pontos de historico validos -> chartData.length >= 2).
   await expect(page.locator('.recharts-responsive-container')).toBeVisible()
