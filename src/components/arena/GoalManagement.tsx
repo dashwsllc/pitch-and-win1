@@ -31,11 +31,17 @@ type ArenaScoreWeight = { action_type: string; label: string; weight: number };
 // impressão de que o valor digitado mudou, sem alterar o número salvo.
 const displayWeight = (weight: number) =>
   Number.isInteger(weight) ? String(weight) : weight.toFixed(2);
-export function ScoreWeights() {
+export function ScoreWeightsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { user } = useAuth();
   const query = useQuery({
     queryKey: ["arena-score-weights", user?.id],
-    enabled: !!user,
+    enabled: !!user && open,
     queryFn: () => arenaRpc<ArenaScoreWeight[]>("arena_score_weights", {}),
   });
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -61,6 +67,7 @@ export function ScoreWeights() {
       setReason("");
       await query.refetch();
       toast.success("Pontuação da Arena atualizada");
+      onOpenChange(false);
     } catch (cause) {
       toast.error(errorMessage(cause));
     } finally {
@@ -68,63 +75,66 @@ export function ScoreWeights() {
     }
   };
   return (
-    <section className="surface-panel space-y-3 rounded-xl p-5">
-      <div>
-        <h3 className="font-medium">Pontuação por evento</h3>
-        <p className="text-xs text-muted-foreground">
-          Quanto cada evento vale em pontos na Arena. Vale só para eventos novos a partir de
-          agora; o que já foi registrado no histórico não muda.
-        </p>
-      </div>
-      {query.isError && (
-        <p role="alert" className="text-sm text-destructive">
-          {errorMessage(query.error)}
-        </p>
-      )}
-      <form onSubmit={save} className="space-y-3">
-        {query.data?.map((w) => (
-          <div
-            key={w.action_type}
-            className="flex items-center justify-between gap-3 border-t border-white/5 py-2"
-          >
-            <div className="min-w-0">
-              <p className="text-sm">{w.label}</p>
-              <p className="text-xs text-muted-foreground">{w.action_type}</p>
-            </div>
-            <Input
-              type="number"
-              min="0"
-              max="100000"
-              step="0.1"
-              className="w-28 shrink-0"
-              aria-label={`Pontos para ${w.label}`}
-              value={overrides[w.action_type] ?? displayWeight(w.weight)}
-              onChange={(e) =>
-                setOverrides((o) => ({ ...o, [w.action_type]: e.target.value }))
-              }
-            />
-          </div>
-        ))}
-        {!query.isLoading && !query.data?.length && (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma métrica configurável encontrada.
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Valores individuais · Pontuação por evento</DialogTitle>
+          <DialogDescription>
+            Quanto cada evento vale em pontos na Arena (call de qualificação do SDR, repasse
+            ao Closer, handoff, venda aprovada). Vale só para eventos novos a partir de agora;
+            o que já foi registrado no histórico não muda.
+          </DialogDescription>
+        </DialogHeader>
+        {query.isError && (
+          <p role="alert" className="text-sm text-destructive">
+            {errorMessage(query.error)}
           </p>
         )}
-        <div>
-          <Label htmlFor="weights-reason">Motivo da alteração</Label>
-          <Input
-            id="weights-reason"
-            required
-            minLength={5}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </div>
-        <Button type="submit" disabled={busy || !query.data?.length}>
-          Salvar pontuação
-        </Button>
-      </form>
-    </section>
+        <form onSubmit={save} className="space-y-3">
+          {query.data?.map((w) => (
+            <div
+              key={w.action_type}
+              className="flex items-center justify-between gap-3 border-t border-white/5 py-2"
+            >
+              <div className="min-w-0">
+                <p className="text-sm">{w.label}</p>
+                <p className="text-xs text-muted-foreground">{w.action_type}</p>
+              </div>
+              <Input
+                type="number"
+                min="0"
+                max="100000"
+                step="0.1"
+                className="w-28 shrink-0"
+                aria-label={`Pontos para ${w.label}`}
+                value={overrides[w.action_type] ?? displayWeight(w.weight)}
+                onChange={(e) =>
+                  setOverrides((o) => ({ ...o, [w.action_type]: e.target.value }))
+                }
+              />
+            </div>
+          ))}
+          {!query.isLoading && !query.data?.length && (
+            <p className="text-sm text-muted-foreground">
+              Nenhuma métrica configurável encontrada.
+            </p>
+          )}
+          <div>
+            <Label htmlFor="weights-reason">Motivo da alteração</Label>
+            <Input
+              id="weights-reason"
+              required
+              minLength={5}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={busy || !query.data?.length}>
+            Salvar pontuação
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 const emptyGoal = {
@@ -154,6 +164,7 @@ export function GoalManagement({
   const people = useArenaAssignees();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [scoreWeightsOpen, setScoreWeightsOpen] = useState(false);
   const [previous, setPrevious] = useState<string>();
   const [form, setForm] = useState(emptyGoal);
   const [reason, setReason] = useState("");
@@ -352,9 +363,12 @@ export function GoalManagement({
               {goal.recurring ? "Recorrente" : "Ciclo único"} ·{" "}
               {goal.enabled ? "Ativa" : "Desativada"}
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => edit(goal)}>
                 Alterar com nova versão
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setScoreWeightsOpen(true)}>
+                Valores individuais
               </Button>
               <Button
                 size="sm"
@@ -372,7 +386,7 @@ export function GoalManagement({
           </article>
         ))}
       </div>
-      {configuration && <ScoreWeights />}
+      <ScoreWeightsDialog open={scoreWeightsOpen} onOpenChange={setScoreWeightsOpen} />
       {!configuration && (
         <section
           className="surface-panel space-y-3 rounded-xl p-5"

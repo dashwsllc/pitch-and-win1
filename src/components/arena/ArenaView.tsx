@@ -46,7 +46,7 @@ import {
 import { exactDate, money, errorMessage } from "@/lib/sales";
 import { PersonGoalProgress } from "@/components/arena/PersonGoalProgress";
 import { ArenaSoundToggle } from "@/components/arena/ArenaSoundToggle";
-import { ScoreWeights } from "@/components/arena/GoalManagement";
+import { ScoreWeightsDialog } from "@/components/arena/GoalManagement";
 import { useRoles } from "@/hooks/useRoles";
 import "@/components/arena/arena.css";
 
@@ -324,6 +324,7 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
   toolbar?: React.ReactNode;
 }) {
   const { isExecutive } = useRoles();
+  const [scoreWeightsOpen, setScoreWeightsOpen] = useState(false);
   const [chart, setChart] = useState<"revenue" | "sales" | "appointments">(
     "revenue",
   );
@@ -408,6 +409,11 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             {query.connected && data ? "LIVE" : "RECONECTANDO"}
           </span>
           <ArenaSoundToggle />
+          {isExecutive && (
+            <Button variant="outline" size="sm" onClick={() => setScoreWeightsOpen(true)}>
+              Valores individuais
+            </Button>
+          )}
           {toolbar}
           <Button
             variant="ghost"
@@ -667,8 +673,10 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             <Feed role="sdr" events={data.feed} cycle={sdr} />
             <Feed role="closer" events={data.feed} cycle={closer} />
           </footer>
-          {isExecutive && <ScoreWeights />}
         </>
+      )}
+      {isExecutive && (
+        <ScoreWeightsDialog open={scoreWeightsOpen} onOpenChange={setScoreWeightsOpen} />
       )}
     </main>
   );
