@@ -45,19 +45,19 @@ export function LevelProgress() {
     )
   }
 
-  if (error) {
-    return (
-      <Card className="surface-inset-glow rounded-2xl border-0">
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-6">
-          <p role="alert" className="text-sm text-destructive">Não foi possível carregar sua progressão: {errorMessage(error)}</p>
-          <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={refreshing}>
-            <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
-            Tentar novamente
-          </Button>
-        </CardContent>
-      </Card>
-    )
-  }
+  // Um erro numa das tres fontes (metas ativas, historico, atividade) nao
+  // pode apagar o card inteiro -- as outras duas ja renderizam normalmente
+  // com dado real (cada uma degrada pra vazio sozinha). Em vez de bloquear
+  // tudo, mostra um aviso discreto e mantem anel/XP/grafico com o que der.
+  const errorBanner = error && (
+    <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-destructive/10 px-4 py-3 text-xs text-destructive">
+      <span>Parte da sua progressão pode estar desatualizada: {errorMessage(error)}</span>
+      <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={refreshing}>
+        <RefreshCw className={cn("mr-2 h-3.5 w-3.5", refreshing && "animate-spin")} />
+        Tentar novamente
+      </Button>
+    </div>
+  )
 
   // O grafico fica sempre visivel, mesmo sem nenhum historico ainda -- o
   // ultimo ponto reflete o XP total agora mesmo (incluindo o ciclo em
@@ -86,6 +86,7 @@ export function LevelProgress() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6 p-5 sm:p-6">
+        {errorBanner}
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           <LevelRing percent={percent} size={112} strokeWidth={9} className="mx-auto sm:mx-0">
             <div className="flex flex-col items-center">

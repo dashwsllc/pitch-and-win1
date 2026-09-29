@@ -21,7 +21,10 @@ import {
   type PersonalHistoryRow,
 } from "@/lib/level";
 
-const HISTORY_LIMIT = 60;
+// A RPC arena_goal_history rejeita p_limit > 50 (ver migration) -- usar 60
+// aqui fazia TODA chamada falhar com "Filtro de histórico inválido" e
+// derrubar o card inteiro. 50 é o teto real permitido pelo banco.
+const HISTORY_LIMIT = 50;
 
 export interface LevelHistoryPoint {
   at: string;

@@ -244,8 +244,60 @@ try {
     await zeroContext.close()
   }
 
+  // --- Terceiro cenario: arena_goal_history falha (reproduz o bug real de
+  // producao -- "Filtro de histórico inválido" quando p_limit>50). O card
+  // nao pode sumir inteiro so porque UMA das tres fontes deu erro; anel, XP
+  // ao vivo e grafico continuam usando o que as outras duas ja tem.
+  const brokenActor = 'ce220000-0000-4000-8000-000000000096'
+  const brokenContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+  const brokenErrors = []
+  await brokenContext.routeWebSocket(/supabase\.co/, (socket) => socket.close())
+  await brokenContext.route('https://**/*', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.origin === origin) return route.continue()
+    if (!url.hostname.endsWith('.supabase.co')) return route.abort()
+    const resource = url.pathname.split('/').at(-1)
+    if (resource === 'arena_goal_history') {
+      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ message: 'Filtro de histórico inválido', code: '22023' }) })
+      return
+    }
+    let data = []
+    if (resource === 'get_my_registration_status') data = { status: 'approved' }
+    else if (resource === 'profiles') data = url.searchParams.has('user_id') ? { ...profile, id: brokenActor, user_id: brokenActor } : [{ ...profile, id: brokenActor, user_id: brokenActor }]
+    else if (resource === 'user_roles') data = [{ ...role, id: brokenActor, user_id: brokenActor }]
+    else if (resource === 'arena_visible_goals') data = visibleGoals.map((cycle) => ({ ...cycle, result: { ...cycle.result, members: cycle.result.members.map((member) => ({ ...member, user_id: brokenActor })) } }))
+    else if (resource === 'activity_feed') data = activityRows
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(data) })
+  })
+  await brokenContext.addInitScript(({ actor, project }) => {
+    const encode = (value) => btoa(JSON.stringify(value)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    const session = {
+      access_token: `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: actor, role: 'authenticated', exp: 4102444800 })}.test`,
+      refresh_token: 'test', expires_at: 4102444800, expires_in: 3600, token_type: 'bearer',
+      user: { id: actor, email: 'broken-level@example.invalid', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: { display_name: 'Closer quebrado' }, created_at: new Date().toISOString() },
+    }
+    sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
+  }, { actor: brokenActor, project })
+  const brokenPage = await brokenContext.newPage()
+  brokenPage.on('pageerror', (error) => brokenErrors.push(error.message))
+  try {
+    await brokenPage.goto(`${origin}/metas?tab=atribuicoes`)
+    // O aviso de erro aparece, mas o card continua util: anel, XP ao vivo (80
+    // do ciclo ativo) + XP de atividade (50) ainda contam, ja que so o
+    // historico falhou -- 130 XP total, nao zero.
+    await expect(brokenPage.getByRole('alert').filter({ hasText: 'Filtro de histórico inválido' })).toBeVisible()
+    await expect(brokenPage.getByRole('heading', { name: 'Sua Progressão' })).toBeVisible()
+    await expect(brokenPage.getByText('130 XP total')).toBeVisible()
+    await expect(brokenPage.locator('.recharts-responsive-container')).toBeVisible()
+    if (process.env.LEVEL_UI_SCREENSHOT_DIR) {
+      await brokenPage.screenshot({ path: `${process.env.LEVEL_UI_SCREENSHOT_DIR}/metas-erro-parcial.png`, fullPage: true })
+    }
+  } finally {
+    await brokenContext.close()
+  }
+
   assert.deepEqual(errors, [])
-  console.log('PASS: level badge shows beside notifications (not on Arena), Sua Progressão renders correct XP/level inside Metas, and the chart always renders (even zeroed with no history at all).')
+  console.log('PASS: level badge shows beside notifications (not on Arena), Sua Progressão renders correct XP/level inside Metas, the chart always renders (even zeroed with no history), and a single failing source (e.g. history) shows a banner without blanking the whole card.')
 } finally {
   await context.close()
   await browser.close()
