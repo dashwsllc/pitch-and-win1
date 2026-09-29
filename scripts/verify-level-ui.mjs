@@ -68,13 +68,22 @@ const historyItems = [
 ]
 const historyResponse = { summary: { total: 4, achieved: 3, failed: 1, unassigned: 0 }, items: historyItems }
 
-// XP esperado (mesma formula de src/lib/level.ts): 32 (h1) + 180 (h2) + 80 (live) = 292
-// Curva: xpForLevel(2)=260, xpForLevel(3)=559 -> nivel 2, faltam 267 XP pro nivel 3.
+// Atividade real (activity_feed, lido direto por RLS): 2 acoes somando 2.0 de
+// score -> 50 XP. E essa fonte que garante o nivel evoluir mesmo quando a
+// meta do ciclo ativo esta parada em 0% (o bug relatado em producao: Closer
+// com meta configurada mas actual=0 no ciclo da semana).
+const activityRows = [
+  { score_delta: 1.5 },
+  { score_delta: 0.5 },
+]
+
+// XP esperado (mesma formula de src/lib/level.ts): 32 (h1) + 180 (h2) + 80 (live) + 50 (atividade) = 342
+// Curva: xpForLevel(2)=260, xpForLevel(3)=559 -> nivel 2, faltam 217 XP pro nivel 3.
 const EXPECTED_LEVEL = 2
-const EXPECTED_XP_INTO_LEVEL = '32'
+const EXPECTED_XP_INTO_LEVEL = '82'
 const EXPECTED_XP_FOR_NEXT = '299'
-const EXPECTED_XP_TO_NEXT = '267'
-const EXPECTED_XP_TOTAL = '292'
+const EXPECTED_XP_TO_NEXT = '217'
+const EXPECTED_XP_TOTAL = '342'
 
 const metrics = { revenue: 0, sales: 0, ticket: null, conversion: null, cpl: null, appointments: 0, approaches: 0, spend: null, leads: null }
 const dashboard = { server_time: now.toISOString(), revision: 1, metrics, previous: metrics, series: [], cycles: visibleGoals, feed: [], sdrs: [], closers: [], ticket_reference: 2997 }
@@ -94,6 +103,7 @@ await context.route('https://**/*', async (route) => {
   else if (resource === 'user_roles') data = [role]
   else if (resource === 'arena_visible_goals') data = visibleGoals
   else if (resource === 'arena_goal_history') data = historyResponse
+  else if (resource === 'activity_feed') data = activityRows
   else if (resource === 'arena_dashboard') data = dashboard
   else if (resource === 'arena_revision') data = 1
   else if (resource === 'arena_live_cursor') data = now.toISOString()
@@ -118,10 +128,17 @@ page.on('console', (message) => {
 try {
   await page.goto(`${origin}/metas?tab=atribuicoes`)
 
-  // Badge no header, ao lado do sino de notificacao.
+  // Badge no header, ao lado do sino de notificacao. O texto "Nível N" tem
+  // que estar visivel de verdade (nao só no aria-label) -- era o bug relatado.
   const badge = page.getByLabel(new RegExp(`Nível ${EXPECTED_LEVEL}, Closer\\.`))
   await expect(badge).toBeVisible()
   await expect(badge).toHaveAttribute('href', '/metas?tab=atribuicoes')
+  await expect(badge.getByText(`Nível ${EXPECTED_LEVEL}`)).toBeVisible()
+
+  // O trilho do anel tem que estar sempre visivel (verde), nao quase
+  // transparente -- antes ficava invisivel quando o progresso era 0%.
+  const trackStroke = await badge.locator('svg circle').first().getAttribute('stroke')
+  assert.equal(trackStroke, 'rgba(52,211,153,0.22)', `trilho do anel deveria ser verde visivel, veio "${trackStroke}"`)
 
   // Card "Sua Progressao" dentro da aba Minhas tarefas, antes de "Metas em andamento".
   await expect(page.getByRole('heading', { name: 'Sua Progressão' })).toBeVisible()

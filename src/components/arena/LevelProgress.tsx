@@ -64,9 +64,9 @@ export function LevelProgress() {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b border-white/[0.05] px-5 py-4 sm:px-6">
         <div>
           <CardTitle className="text-base font-medium tracking-[-0.015em] text-white">Sua Progressão</CardTitle>
-          <p className="mt-1 text-xs text-muted-foreground">Nível evolui com o cumprimento das suas metas de {roleLabel}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Nível evolui com suas atividades e metas de {roleLabel}</p>
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-ember/10 text-ember shadow-[rgba(255,255,255,0.06)_0_0_0_1px_inset]">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-400/10 text-emerald-400 shadow-[rgba(255,255,255,0.06)_0_0_0_1px_inset]">
           <Award className="h-4 w-4" strokeWidth={1.8} />
         </div>
       </CardHeader>
@@ -89,7 +89,7 @@ export function LevelProgress() {
                 {xp.toLocaleString("pt-BR")} XP total
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.035] px-3 py-1.5 text-xs tabular-nums text-muted-foreground">
-                <Trophy className="h-3.5 w-3.5 text-ember" />
+                <Trophy className="h-3.5 w-3.5 text-emerald-400" />
                 {achievedCount} {achievedCount === 1 ? "meta batida" : "metas batidas"}
               </span>
             </div>
@@ -98,7 +98,7 @@ export function LevelProgress() {
 
         {!hasData && (
           <p className="rounded-xl bg-white/[0.025] px-4 py-3 text-xs text-muted-foreground">
-            Seu nível evolui conforme suas metas pessoais forem apuradas. Ainda não há metas suas concluídas ou em andamento.
+            Seu nível evolui a partir de vendas, calls e abordagens registradas, e das metas do seu cargo. Ainda não há atividade sua computada nesse critério.
           </p>
         )}
 
@@ -108,8 +108,8 @@ export function LevelProgress() {
               <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                 <defs>
                   <linearGradient id="xpFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ff5f1f" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#ff5f1f" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#34d399" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.055)" />
@@ -120,7 +120,7 @@ export function LevelProgress() {
                   contentStyle={{ backgroundColor: "#171221", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "10px", boxShadow: "0 14px 36px rgba(0,0,0,0.28)", color: "#f7f5fb", fontSize: "12px" }}
                   formatter={(value: number) => [`${value.toLocaleString("pt-BR")} XP`, "XP acumulado"]}
                 />
-                <Area type="monotone" dataKey="xp" name="XP acumulado" stroke="#ff5f1f" strokeWidth={2.2} fill="url(#xpFill)" dot={false} activeDot={{ r: 4, fill: "#ff7b32", stroke: "#171221", strokeWidth: 2 }} />
+                <Area type="monotone" dataKey="xp" name="XP acumulado" stroke="#34d399" strokeWidth={2.2} fill="url(#xpFill)" dot={false} activeDot={{ r: 4, fill: "#6ee7b7", stroke: "#171221", strokeWidth: 2 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

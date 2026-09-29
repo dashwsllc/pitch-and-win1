@@ -119,3 +119,14 @@ export function personalHistorySamples(
 export function totalXp(samples: PersonalGoalSample[]): number {
   return samples.reduce((sum, sample) => sum + xpFromPercent(sample.period, sample.percent), 0);
 }
+
+// XP por atividade exercida: cada ação registrada na Arena (venda aprovada,
+// call feita, lead abordado etc.) já tem um "score" calibrado em
+// arena_score_weights (ex.: venda aprovada = 10 pontos). Essa é a fonte que
+// faz o nível evoluir a cada ação real, independente de existir meta
+// configurada para o cargo -- diferente das metas, nunca fica vazia à toa.
+const ACTIVITY_XP_PER_SCORE_POINT = 25;
+
+export function xpFromActivityScore(totalScore: number): number {
+  return Math.max(0, Math.round(totalScore * ACTIVITY_XP_PER_SCORE_POINT));
+}

@@ -3,13 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { ROLE_LABELS, useRoles, type UserRole } from "@/hooks/useRoles";
 import { useBrasiliaToday } from "@/hooks/useGoals";
-import { arenaRpc } from "@/lib/arena-api";
+import { arenaClient, arenaRpc } from "@/lib/arena-api";
 import type { ArenaCycle } from "@/lib/arena";
 import {
   levelProgress,
   personalCycleSamples,
   personalHistorySamples,
   totalXp,
+  xpFromActivityScore,
   type PersonalGoalSample,
   type PersonalHistoryRow,
 } from "@/lib/level";
@@ -49,6 +50,23 @@ export function useLevelProgress() {
     staleTime: 5 * 60_000,
   });
 
+  // Score real de cada ação (venda aprovada, call feita, lead abordado...),
+  // liberado por RLS pra quem tem acesso à Arena. É a fonte que garante o
+  // nível evoluir mesmo sem meta configurada pro cargo.
+  const activity = useQuery({
+    queryKey: ["activity-feed", "my-score", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await arenaClient
+        .from("activity_feed")
+        .select("score_delta")
+        .eq("responsible_id", user!.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 30_000,
+  });
+
   const closedSamples = useMemo(
     () => (user ? personalHistorySamples(history.data?.items ?? [], user.id, roles) : []),
     [history.data, user, roles],
@@ -79,20 +97,25 @@ export function useLevelProgress() {
     [history.data, user, roles],
   );
 
+  const activityXp = useMemo(
+    () => xpFromActivityScore((activity.data ?? []).reduce((sum, row) => sum + (row.score_delta ?? 0), 0)),
+    [activity.data],
+  );
+
   const progress = useMemo(() => {
     const samples: PersonalGoalSample[] = [...closedSamples, ...liveSamples];
-    return levelProgress(totalXp(samples));
-  }, [closedSamples, liveSamples]);
+    return levelProgress(totalXp(samples) + activityXp);
+  }, [closedSamples, liveSamples, activityXp]);
 
   return {
     ...progress,
     roleLabel: ROLE_LABELS[primaryRole],
     series,
     achievedCount,
-    hasData: closedSamples.length > 0 || liveSamples.length > 0,
-    loading: rolesLoading || visibleGoals.isLoading || history.isLoading,
-    refreshing: visibleGoals.isFetching || history.isFetching,
-    error: visibleGoals.error ?? history.error ?? null,
-    refetch: () => Promise.all([visibleGoals.refetch(), history.refetch()]),
+    hasData: closedSamples.length > 0 || liveSamples.length > 0 || activityXp > 0,
+    loading: rolesLoading || visibleGoals.isLoading || history.isLoading || activity.isLoading,
+    refreshing: visibleGoals.isFetching || history.isFetching || activity.isFetching,
+    error: visibleGoals.error ?? history.error ?? activity.error ?? null,
+    refetch: () => Promise.all([visibleGoals.refetch(), history.refetch(), activity.refetch()]),
   };
 }

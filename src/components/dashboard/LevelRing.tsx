@@ -19,13 +19,13 @@ export function LevelRing({ percent, size = 40, strokeWidth = 4, className, chil
   return (
     <div className={cn("relative inline-flex shrink-0 items-center justify-center", className)} style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-        <circle cx={center} cy={center} r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth} />
+        <circle cx={center} cy={center} r={radius} fill="none" stroke="rgba(52,211,153,0.22)" strokeWidth={strokeWidth} />
         <circle
           cx={center}
           cy={center}
           r={radius}
           fill="none"
-          stroke="#ff5f1f"
+          stroke="#34d399"
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={circumference}
