@@ -196,25 +196,47 @@ function PendingImports({ metricsBatches, leadBatches, isExecutive, onReviewed }
   metricsBatches: MetricsBatch[]; leadBatches: LeadBatch[]; isExecutive: boolean; onReviewed: () => Promise<unknown>
 }) {
   const [busy, setBusy] = useState<string | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [rejecting, setRejecting] = useState<string | null>(null)
   const [reason, setReason] = useState('')
   const pendingMetrics = metricsBatches.filter(batch => batch.status === 'pendente')
   const pendingLeads = leadBatches.filter(batch => batch.status === 'pendente')
+  const pendingTotal = pendingMetrics.length + pendingLeads.length
+  const reviewOne = (kind: 'metrics' | 'leads', batch: Batch, action: 'aprovar' | 'rejeitar', note: string) => {
+    const args = { p_batch_id: batch.id, p_action: action, p_expected_updated_at: batch.updated_at, p_note: note }
+    return kind === 'metrics' ? arenaRpc('meta_review_traffic_import', args) : arenaRpc('meta_review_lead_import', args)
+  }
   const review = async (kind: 'metrics' | 'leads', batch: Batch, action: 'aprovar' | 'rejeitar') => {
     if (action === 'rejeitar' && reason.trim().length < 3) return
     setBusy(batch.id)
     try {
-      const args = { p_batch_id: batch.id, p_action: action, p_expected_updated_at: batch.updated_at, p_note: reason.trim() }
-      if (kind === 'metrics') await arenaRpc('meta_review_traffic_import', args)
-      else await arenaRpc('meta_review_lead_import', args)
+      await reviewOne(kind, batch, action, reason.trim())
       setRejecting(null); setReason('')
       await onReviewed()
       toast.success(action === 'aprovar' ? 'Importação aprovada' : 'Importação rejeitada')
     } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(null) }
   }
+  const approveAll = async () => {
+    const targets = [
+      ...pendingMetrics.map(batch => ({ kind: 'metrics' as const, batch })),
+      ...pendingLeads.map(batch => ({ kind: 'leads' as const, batch })),
+    ]
+    if (!targets.length) return
+    setBulkBusy(true)
+    let approved = 0
+    const failures: string[] = []
+    for (const { kind, batch } of targets) {
+      try { await reviewOne(kind, batch, 'aprovar', ''); approved++ }
+      catch (cause) { failures.push(`${batch.filename}: ${errorMessage(cause)}`) }
+    }
+    await onReviewed()
+    setBulkBusy(false)
+    if (failures.length) toast.error(`${approved} aprovada(s), ${failures.length} falhou/falharam: ${failures.join(' · ')}`)
+    else toast.success(`${approved} ${approved === 1 ? 'importação aprovada' : 'importações aprovadas'}`)
+  }
   const actions = (kind: 'metrics' | 'leads', batch: Batch) => isExecutive && <div className="flex flex-wrap gap-2">
-    <Button size="sm" disabled={busy === batch.id} onClick={() => void review(kind, batch, 'aprovar')}>Aprovar</Button>
-    <Button size="sm" variant="outline" disabled={busy === batch.id} onClick={() => { setRejecting(batch.id); setReason('') }}>Rejeitar</Button>
+    <Button size="sm" disabled={busy === batch.id || bulkBusy} onClick={() => void review(kind, batch, 'aprovar')}>Aprovar</Button>
+    <Button size="sm" variant="outline" disabled={busy === batch.id || bulkBusy} onClick={() => { setRejecting(batch.id); setReason('') }}>Rejeitar</Button>
   </div>
   const rejectForm = (kind: 'metrics' | 'leads', batch: Batch) => rejecting === batch.id && <div className="mt-3 flex flex-wrap gap-2">
     <Input aria-label="Motivo da rejeição" maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo obrigatório" />
@@ -222,7 +244,10 @@ function PendingImports({ metricsBatches, leadBatches, isExecutive, onReviewed }
     <Button size="sm" variant="ghost" onClick={() => setRejecting(null)}>Cancelar</Button>
   </div>
   return <section className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
-    <div><h2 className="text-lg font-medium">Pendentes de aprovação</h2><p className="mt-1 text-sm text-muted-foreground">{isExecutive ? 'Aprovar métricas publica os números em Desempenho; aprovar leads sincroniza com o CRM.' : 'Aguardando aprovação do Executive.'}</p></div>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><h2 className="text-lg font-medium">Pendentes de aprovação</h2><p className="mt-1 text-sm text-muted-foreground">{isExecutive ? 'Aprovar métricas publica os números em Desempenho; aprovar leads sincroniza com o CRM.' : 'Aguardando aprovação do Executive.'}</p></div>
+      {isExecutive && pendingTotal > 0 && <Button size="sm" variant="outline" disabled={busy !== null || bulkBusy} onClick={() => void approveAll()}>{bulkBusy ? 'Aprovando…' : `Aprovar todas (${pendingTotal})`}</Button>}
+    </div>
     {!pendingMetrics.length && !pendingLeads.length && <p className="text-sm text-muted-foreground">Nenhuma importação aguardando aprovação.</p>}
     {pendingMetrics.map(batch => {
       const preview = aggregateMeta(batch.rows)

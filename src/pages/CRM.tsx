@@ -293,11 +293,12 @@ export default function CRM() {
     if (tab === "leads") return !closedStages.includes(lead.pipeline_stage);
     if (tab === "closer") return inQueue(lead, queue);
     if (tab === "sdr") return inSdrQueue(lead, sdrQueue);
+    if (tab === "importados") return lead.lead_source === "meta_ads_form";
     return true;
   };
   const showResults = tab === "results" || (tab === "closer" && queue === "closed") || (tab === "sdr" && sdrQueue === "closed");
   const showRemarketing = tab === "remarketing" || (tab === "sdr" && sdrQueue === "negative");
-  const dailyPipeline = view === "pipeline" && ["leads", "sdr"].includes(tab) && !showResults && !showRemarketing;
+  const dailyPipeline = view === "pipeline" && ["leads", "sdr", "importados"].includes(tab) && !showResults && !showRemarketing;
   const todayKey = brasiliaDateKey(now);
   const tomorrowKey = addDaysToDateKey(todayKey, 1);
   const pipelineRange = resolveCRMPipelinePeriod(pipelinePeriod, pipelineCustomRange, todayKey);
@@ -532,7 +533,7 @@ export default function CRM() {
     sales.isLoading ||
     contextSummary.loading;
   const permittedTab =
-    ["leads", "results", "remarketing"].includes(tab) ||
+    ["leads", "results", "remarketing", "importados"].includes(tab) ||
     (tab === "sdr" && capabilities.sdr) ||
     (tab === "closer" && capabilities.closer) ||
     (["users", "permissions"].includes(tab) && capabilities.admin);
@@ -611,6 +612,7 @@ export default function CRM() {
         >
           <TabsList className="h-auto flex flex-wrap justify-start gap-1 w-fit max-w-full">
             <TabsTrigger className="h-8 px-3 text-xs" value="leads">Leads</TabsTrigger>
+            <TabsTrigger className="h-8 px-3 text-xs" value="importados">Importados</TabsTrigger>
             {capabilities.sdr && <TabsTrigger className="h-8 px-3 text-xs" value="sdr">SDR</TabsTrigger>}
             {capabilities.closer && (
               <TabsTrigger className="h-8 px-3 text-xs" value="closer">Closer</TabsTrigger>
@@ -699,7 +701,7 @@ export default function CRM() {
                       ))}
                     </TabsList>
                   </Tabs>
-                ) : ["leads", "sdr"].includes(tab) ? (
+                ) : ["leads", "sdr", "importados"].includes(tab) ? (
                   <div className="space-y-2">
                     {tab === "sdr" && (
                       <div className="space-y-2">
