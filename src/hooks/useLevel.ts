@@ -15,7 +15,7 @@ import {
   type PersonalHistoryRow,
 } from "@/lib/level";
 
-const HISTORY_LIMIT = 300;
+const HISTORY_LIMIT = 60;
 
 export interface LevelHistoryPoint {
   at: string;

@@ -4,11 +4,11 @@ import { LevelRing } from "@/components/dashboard/LevelRing"
 import { useLevelProgress } from "@/hooks/useLevel"
 
 export function LevelBadge() {
-  const { level, percent, xpToNext, roleLabel, loading } = useLevelProgress()
-
-  if (loading) {
-    return <div className="h-10 w-10 animate-pulse rounded-lg bg-white/[0.04] sm:w-32" aria-hidden="true" />
-  }
+  // Renderiza direto com o que já tiver (nível 1/0% por padrão) em vez de
+  // esperar as 3 buscas terminarem: eram ~6s de espaço vazio no header antes
+  // de aparecer qualquer coisa. Cada fonte atualiza o número sozinha assim
+  // que chega, sem bloquear a primeira pintura.
+  const { level, percent, xpToNext, roleLabel } = useLevelProgress()
 
   return (
     <Tooltip>
