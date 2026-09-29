@@ -5,6 +5,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SalesBoard } from "@/components/sales/SalesBoard";
 import { GoalTasks } from "@/components/arena/GoalTasks";
 import { GoalOverview } from "@/components/arena/GoalOverview";
+import { LevelProgress } from "@/components/arena/LevelProgress";
 import { GoalHistory } from "@/components/arena/GoalHistory";
 import { ShiftApproachGoals } from "@/components/arena/ShiftApproachGoals";
 import { GoalManagement } from "@/components/arena/GoalManagement";
@@ -143,7 +144,7 @@ export default function Metas() {
           ))}
         </nav>
         {tab === "vendas" && <SalesBoard management={isExecutive} />}
-        {tab === "atribuicoes" && <><GoalOverview /><ShiftGoalsSection isExecutive={isExecutive} /><GoalTasks /></>}
+        {tab === "atribuicoes" && <><LevelProgress /><GoalOverview /><ShiftGoalsSection isExecutive={isExecutive} /><GoalTasks /></>}
         {tab === "gestao" && <GoalManagement />}
         {tab === "configuracoes" && <GoalManagement configuration />}
         {tab === "historico" && <GoalHistory management={isExecutive} />}

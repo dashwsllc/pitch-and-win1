@@ -1,6 +1,7 @@
 import { ReactNode } from "react"
 import { ExecutiveAppSidebar } from "./ExecutiveAppSidebar"
 import { UserProfile } from "@/components/dashboard/UserProfile"
+import { LevelBadge } from "@/components/dashboard/LevelBadge"
 import { useRoles } from "@/hooks/useRoles"
 import { NotificationInbox } from '@/components/arena/ArenaNotifications'
 
@@ -28,7 +29,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </h1>
             </div>
             
-            <div className="flex items-center gap-2"><NotificationInbox /><UserProfile /></div>
+            <div className="flex items-center gap-2"><LevelBadge /><NotificationInbox /><UserProfile /></div>
           </div>
         </header>
         
