@@ -67,7 +67,19 @@ function PersonAvatar({ name, url }: { name: string; url?: string | null }) {
     </Avatar>
   );
 }
-function GoalBar({ cycle, now }: { cycle: ArenaCycle; now: number }) {
+// Server-aligned clock owned by the goal card itself: the once-per-second tick
+// re-renders these few cards instead of the entire Arena screen (charts,
+// rankings, feeds). `offset` is a ref, so it never causes a render on its own.
+function useServerNow(offset: { current: number }) {
+  const [now, setNow] = useState(() => Date.now() + offset.current);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now() + offset.current), 1000);
+    return () => clearInterval(timer);
+  }, [offset]);
+  return now;
+}
+function GoalBar({ cycle, offset }: { cycle: ArenaCycle; offset: { current: number } }) {
+  const now = useServerNow(offset);
   const { actual, target } = cycle.result;
   const isRevenue = cycle.metric === "revenue";
   const state = cycleState(actual, target, cycle.starts_at, cycle.ends_at, now);
@@ -329,23 +341,15 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
     "revenue",
   );
   const [full, setFull] = useState(false);
-  const [now, setNow] = useState(Date.now());
   const serverOffset = useRef(0);
   const data = query.data;
   useEffect(() => {
     if (data) serverOffset.current = Date.parse(data.server_time) - Date.now();
   }, [data]);
   useEffect(() => {
-    const timer = setInterval(
-      () => setNow(Date.now() + serverOffset.current),
-      1000,
-    );
     const changed = () => setFull(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", changed);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("fullscreenchange", changed);
-    };
+    return () => document.removeEventListener("fullscreenchange", changed);
   }, []);
   const fullscreen = async () => {
     try {
@@ -655,12 +659,12 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
             <div className="grid gap-3 sm:grid-cols-2">
               {collectiveGoals.map((cycle) => (
                 <div key={cycle.id} className={cycle.scope === "global" ? "sm:col-span-2" : undefined}>
-                  <GoalBar cycle={cycle} now={now} />
+                  <GoalBar cycle={cycle} offset={serverOffset} />
                 </div>
               ))}
               {personalGoals.map((cycle) => (
                 <div className="sm:col-span-2" key={cycle.id}>
-                  <GoalBar cycle={cycle} now={now} />
+                  <GoalBar cycle={cycle} offset={serverOffset} />
                 </div>
               ))}
             </div>

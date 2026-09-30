@@ -59,6 +59,7 @@ export function useExecutiveDashboard(
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const latestFetch = useRef(0)
+  const lastSignature = useRef('')
   const customStart = customRange.start
   const customEnd = customRange.end
 
@@ -72,12 +73,59 @@ export function useExecutiveDashboard(
     try {
       const period = resolveDashboardPeriod(dateFilter, { start: customStart, end: customEnd })
 
-      // Fetch profiles for name resolution
-      const profilesData = await fetchAllPages((from, to) => supabase
-        .from('profiles')
-        .select('user_id, display_name, suspended')
-        .order('user_id')
-        .range(from, to))
+      // The five reads are independent of each other. They used to run one after the
+      // other, paying a full network round trip (~150 ms to the database region)
+      // for each; running them together costs a single one.
+      const [profilesData, sellerRoles, salesData, approachesData, subscriptionsData] = await Promise.all([
+        // Profiles for name resolution
+        fetchAllPages((from, to) => supabase
+          .from('profiles')
+          .select('user_id, display_name, suspended')
+          .order('user_id')
+          .range(from, to)),
+        // Collaborators, for the total sellers count
+        fetchAllPages((from, to) => supabase.from('user_roles')
+          .select('id, user_id').in('role', ['seller','closer','sdr','bdr'])
+          .order('id')
+          .range(from, to)),
+        // Sales in period (apenas aprovadas)
+        fetchAllPages((from, to) => {
+          let request = supabase
+            .from('vendas')
+            .select('id, user_id, nome_produto, valor_venda, created_at')
+            .eq('approval_status', 'aprovada')
+          if (period.start && period.end) {
+            request = request
+              .gte('created_at', period.start.toISOString())
+              .lt('created_at', period.end.toISOString())
+          }
+          return request
+            .order('created_at', { ascending: false })
+            .order('id')
+            .range(from, to)
+        }),
+        // Approaches in period
+        fetchAllPages((from, to) => {
+          let request = supabase
+            .from('abordagens')
+            .select('id, user_id, nomes_abordados, created_at')
+          if (period.start && period.end) {
+            request = request
+              .gte('created_at', period.start.toISOString())
+              .lt('created_at', period.end.toISOString())
+          }
+          return request
+            .order('created_at', { ascending: false })
+            .order('id')
+            .range(from, to)
+        }),
+        // Subscriptions
+        fetchAllPages((from, to) => supabase
+          .from('assinaturas')
+          .select('id, status')
+          .order('id')
+          .range(from, to)),
+      ])
 
       const profileMap = new Map<string, string>()
       const activeProfiles = new Set<string>()
@@ -86,55 +134,10 @@ export function useExecutiveDashboard(
         if (!p.suspended) activeProfiles.add(p.user_id)
       })
 
-      // Fetch total sellers count
-      const sellerRoles = await fetchAllPages((from, to) => supabase.from('user_roles')
-        .select('id, user_id').in('role', ['seller','closer','sdr','bdr'])
-        .order('id')
-        .range(from, to))
       // Count each active collaborator once, including accumulated roles.
       const totalSellers = new Set(
         (sellerRoles ?? []).map(role => role.user_id).filter(id => activeProfiles.has(id))
       ).size
-
-      // Fetch sales in period (apenas aprovadas)
-      const salesData = await fetchAllPages((from, to) => {
-        let request = supabase
-          .from('vendas')
-          .select('id, user_id, nome_produto, valor_venda, created_at')
-          .eq('approval_status', 'aprovada')
-        if (period.start && period.end) {
-          request = request
-            .gte('created_at', period.start.toISOString())
-            .lt('created_at', period.end.toISOString())
-        }
-        return request
-          .order('created_at', { ascending: false })
-          .order('id')
-          .range(from, to)
-      })
-
-      // Fetch approaches in period
-      const approachesData = await fetchAllPages((from, to) => {
-        let request = supabase
-          .from('abordagens')
-          .select('id, user_id, nomes_abordados, created_at')
-        if (period.start && period.end) {
-          request = request
-            .gte('created_at', period.start.toISOString())
-            .lt('created_at', period.end.toISOString())
-        }
-        return request
-          .order('created_at', { ascending: false })
-          .order('id')
-          .range(from, to)
-      })
-
-      // Fetch subscriptions
-      const subscriptionsData = await fetchAllPages((from, to) => supabase
-        .from('assinaturas')
-        .select('id, status')
-        .order('id')
-        .range(from, to))
 
       const totalSales = salesData?.length || 0
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.valor_venda), 0) || 0
@@ -209,7 +212,7 @@ export function useExecutiveDashboard(
         .slice(0, 10)
 
       if (requestId !== latestFetch.current) return
-      setData({
+      const next: ExecutiveDashboardData = {
         totalSellers,
         totalSales,
         totalRevenue,
@@ -220,7 +223,14 @@ export function useExecutiveDashboard(
         salesByPeriod,
         topSellers,
         recentActivity
-      })
+      }
+      // A background refresh that returns the same numbers must not re-render the
+      // page or restart the chart animation.
+      const signature = JSON.stringify(next)
+      if (signature !== lastSignature.current) {
+        lastSignature.current = signature
+        setData(next)
+      }
 
     } catch (err) {
       if (requestId !== latestFetch.current) return

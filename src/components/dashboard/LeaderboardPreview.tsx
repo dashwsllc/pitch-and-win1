@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { memo, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,9 @@ import { cn } from '@/lib/utils'
 import { Trophy, Crown, Medal, Award, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
+// Building an Intl.NumberFormat per seller on every render is far costlier than formatting.
+const wholeReais = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+
 const avatarColors = [
   'bg-amber-500/70',
   'bg-blue-500/65',
@@ -16,7 +19,7 @@ const avatarColors = [
   'bg-rose-500/65',
 ]
 
-export function LeaderboardPreview() {
+function LeaderboardPreviewBase() {
   const { ranking, loading, error } = useRankingDataWithMock()
   const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -142,7 +145,7 @@ export function LeaderboardPreview() {
               {/* Value */}
               <div className="text-right">
                 <span className="text-sm font-medium text-white tabular-nums">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(seller.totalVendas)}
+                  {wholeReais.format(seller.totalVendas)}
                 </span>
                 <p className="text-[10px] text-muted-foreground">
                   {seller.quantidadeVendas} vendas
@@ -155,3 +158,5 @@ export function LeaderboardPreview() {
     </Card>
   )
 }
+
+export const LeaderboardPreview = memo(LeaderboardPreviewBase)

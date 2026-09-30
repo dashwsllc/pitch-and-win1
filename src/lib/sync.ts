@@ -25,6 +25,24 @@ export function shouldRefreshDashboardRevision(
     now - lastRefreshStartedAt >= DASHBOARD_RECONCILE_INTERVAL_MS
 }
 
+// Realtime and the revision poll describe the same database counters. Tracking
+// the highest revision per topic that a refresh already covers lets the poll skip
+// a second, identical round of requests when Realtime delivered the change first.
+// Revisions are bigint columns, so they are compared as integers; anything that
+// does not parse falls back to plain inequality (refresh when in doubt).
+export function isRevisionNewer(seen: string | undefined, revision: number | string) {
+  if (seen === undefined) return true
+  try {
+    return BigInt(revision) > BigInt(seen)
+  } catch {
+    return String(revision) !== seen
+  }
+}
+
+export function maxRevision(seen: string | undefined, revision: number | string) {
+  return seen === undefined || isRevisionNewer(seen, revision) ? String(revision) : seen
+}
+
 function notifyLocalDataChanged() {
   window.dispatchEvent(new Event('dashboard-data-changed'))
 }

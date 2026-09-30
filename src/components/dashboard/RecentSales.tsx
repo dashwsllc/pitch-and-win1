@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { ArrowRight, ChevronLeft, ChevronRight, Pause, Play, Trophy } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { exactDate, money } from '@/lib/sales'
 import { RECENT_SALES_AUTOPLAY_INTERVAL_MS } from '@/lib/sync'
 
-export function RecentSales() {
+function RecentSalesBase() {
   const { data, isLoading, isError } = useSalesBoard('aprovada', '', 0, 10)
   const { user } = useAuth()
   const rail = useRef<HTMLDivElement>(null)
@@ -54,10 +54,12 @@ export function RecentSales() {
         {isLoading ? [1,2,3].map(i => <div key={i} className="h-40 w-72 shrink-0 animate-pulse rounded-xl bg-white/[0.03]" />)
           : sales.length===0 && !isError ? <div className="w-full rounded-xl border border-dashed border-white/[0.08] py-8 text-center text-sm text-muted-foreground">A primeira venda aprovada abre a competição.</div>
           : sales.map((sale,index) => <article key={sale.id} aria-label={`${index+1} de ${sales.length}: ${sale.seller_name}`} className="relative w-[280px] shrink-0 snap-start overflow-hidden rounded-xl bg-white/[0.025] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ember/50 to-transparent" /><div className="mb-3 flex items-center gap-2.5">{sale.seller_avatar ? <img src={sale.seller_avatar} alt={sale.seller_name} className="h-8 w-8 rounded-lg object-cover" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ember/10 text-xs font-medium text-ember">{sale.seller_name.split(' ').map(n => n[0]).join('').slice(0,2)}</div>}<div className="min-w-0"><p className="truncate text-sm font-medium text-ash">{sale.seller_name}</p><p className="text-[9px] uppercase tracking-wider text-muted-foreground">{sale.user_id===user?.id ? 'Sua conquista' : 'Venda confirmada'}</p></div><Trophy className="ml-auto h-3.5 w-3.5 text-amber-300/60" /></div>
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ember/50 to-transparent" /><div className="mb-3 flex items-center gap-2.5">{sale.seller_avatar ? <img src={sale.seller_avatar} alt={sale.seller_name} width={32} height={32} loading="lazy" decoding="async" className="h-8 w-8 rounded-lg object-cover" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ember/10 text-xs font-medium text-ember">{sale.seller_name.split(' ').map(n => n[0]).join('').slice(0,2)}</div>}<div className="min-w-0"><p className="truncate text-sm font-medium text-ash">{sale.seller_name}</p><p className="text-[9px] uppercase tracking-wider text-muted-foreground">{sale.user_id===user?.id ? 'Sua conquista' : 'Venda confirmada'}</p></div><Trophy className="ml-auto h-3.5 w-3.5 text-amber-300/60" /></div>
             <p className="text-2xl font-light tracking-tight text-white">{money(sale.valor_venda)}</p><p className="mt-1 truncate text-xs text-muted-foreground" title={sale.nome_produto}>{sale.nome_produto}</p><p className="mt-4 border-t border-white/[0.05] pt-3 text-[10px] text-muted-foreground">{sale.reviewed_at ? 'Aprovada' : 'Registrada'} em <time dateTime={sale.reviewed_at || sale.created_at} title={sale.reviewed_at || sale.created_at}>{exactDate(sale.reviewed_at || sale.created_at)}</time> · BRT</p>
           </article>)}
       </div>
     </section>
   )
 }
+
+export const RecentSales = memo(RecentSalesBase)

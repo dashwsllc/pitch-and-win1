@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowUpRight, BadgeDollarSign, MessageSquareText, Trophy } from "lucide-react"
@@ -5,7 +6,7 @@ import { useNavigate } from "react-router-dom"
 
 const secondaryButton = "group h-11 w-full justify-between rounded-lg border-0 bg-white/[0.035] px-3.5 text-ash shadow-[rgba(255,255,255,0.065)_0_0_0_1px_inset] transition-colors hover:bg-white/[0.065] hover:text-white"
 
-export function QuickActions() {
+function QuickActionsBase() {
   const navigate = useNavigate()
 
   return (
@@ -31,3 +32,5 @@ export function QuickActions() {
     </Card>
   )
 }
+
+export const QuickActions = memo(QuickActionsBase)

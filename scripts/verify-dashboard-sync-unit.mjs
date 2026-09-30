@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import {
+  isRevisionNewer,
+  maxRevision,
   notifyDashboardDataChanged,
   refreshApproachData,
   refreshDashboardData,
@@ -41,4 +43,14 @@ assert.equal(shouldRefreshDashboardRevision('sales:1', 'sales:2', 1_000, 2_000),
 assert.equal(shouldRefreshDashboardRevision('sales:1', 'sales:1', 1_000, 2_000), false)
 assert.equal(shouldRefreshDashboardRevision('sales:1', 'sales:1', 1_000, 121_000), true,
   'A failed fetch must be retried even without another data change')
+// Realtime already delivered these counters: the revision poll must not repeat the refresh.
+assert.equal(isRevisionNewer(undefined, 5), true, 'An unseen topic is always news')
+assert.equal(isRevisionNewer('5', 5), false, 'Same revision as Realtime delivered is not news')
+assert.equal(isRevisionNewer('5', '4'), false, 'A stale poll read never moves the cursor backwards')
+assert.equal(isRevisionNewer('5', 6), true, 'A newer revision is a missed change and must refresh')
+assert.equal(isRevisionNewer('9007199254740993', '9007199254740994'), true, 'bigint counters compare exactly')
+assert.equal(isRevisionNewer('abc', 7), true, 'Unparseable values refresh when in doubt')
+assert.equal(maxRevision(undefined, 3), '3')
+assert.equal(maxRevision('5', 3), '5')
+assert.equal(maxRevision('5', 8), '8')
 console.log('Dashboard sync: local refresh, complete invalidation and loop-free cross-tab broadcast passed.')

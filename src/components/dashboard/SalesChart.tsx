@@ -1,6 +1,7 @@
+import { lazy, memo, Suspense, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { ChartNoAxesCombined } from "lucide-react"
+import type { SalesChartPoint } from "./SalesChartPlot"
 
 interface ChartDataItem {
   month?: string
@@ -15,17 +16,31 @@ interface SalesChartProps {
   loading?: boolean
 }
 
-export function SalesChart({ data = [], loading = false }: SalesChartProps) {
-  const chartData = data.length > 0
-    ? data.map((item) => ({ ...item, label: item.month || item.period || "" }))
-    : [
-        { label: "Jan", vendas: 0, abordagens: 0 },
-        { label: "Fev", vendas: 0, abordagens: 0 },
-        { label: "Mar", vendas: 0, abordagens: 0 },
-        { label: "Abr", vendas: 0, abordagens: 0 },
-        { label: "Mai", vendas: 0, abordagens: 0 },
-        { label: "Jun", vendas: 0, abordagens: 0 },
-      ]
+// Recharts is ~100 KB gzip. The card renders immediately and the plot is fetched
+// in parallel with the first data request instead of sitting on the critical
+// path of the dashboard's initial JavaScript.
+const loadPlot = () => import("./SalesChartPlot")
+const SalesChartPlot = lazy(loadPlot)
+void loadPlot().catch(() => undefined)
+
+const placeholder: SalesChartPoint[] = [
+  { label: "Jan", vendas: 0, abordagens: 0 },
+  { label: "Fev", vendas: 0, abordagens: 0 },
+  { label: "Mar", vendas: 0, abordagens: 0 },
+  { label: "Abr", vendas: 0, abordagens: 0 },
+  { label: "Mai", vendas: 0, abordagens: 0 },
+  { label: "Jun", vendas: 0, abordagens: 0 },
+]
+
+const plotSkeleton = <div className="h-[320px] animate-pulse rounded-xl bg-white/[0.025]" />
+
+function SalesChartCard({ data, loading = false }: SalesChartProps) {
+  const chartData = useMemo(
+    () => (data && data.length > 0
+      ? data.map((item) => ({ ...item, label: item.month || item.period || "" }))
+      : placeholder),
+    [data],
+  )
 
   return (
     <Card className="surface-panel overflow-hidden rounded-2xl border-0">
@@ -40,33 +55,11 @@ export function SalesChart({ data = [], loading = false }: SalesChartProps) {
       </CardHeader>
       <CardContent className="px-2 pb-4 pt-5 sm:px-5">
         {loading ? (
-          <div className="h-[320px] animate-pulse rounded-xl bg-white/[0.025]" />
+          plotSkeleton
         ) : (
-          <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ff5f1f" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#ff5f1f" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="approachFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6b21ef" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="#6b21ef" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.055)" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#878091", fontSize: 11 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#878091", fontSize: 11 }} />
-                <Tooltip
-                  cursor={{ stroke: "rgba(255,255,255,0.12)", strokeDasharray: "4 4" }}
-                  contentStyle={{ backgroundColor: "#171221", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "10px", boxShadow: "0 14px 36px rgba(0,0,0,0.28)", color: "#f7f5fb", fontSize: "12px" }}
-                />
-                <Area type="monotone" dataKey="abordagens" name="Abordagens" stroke="#6b21ef" strokeWidth={1.7} fill="url(#approachFill)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
-                <Area type="monotone" dataKey="vendas" name="Vendas" stroke="#ff5f1f" strokeWidth={2.2} fill="url(#salesFill)" dot={false} activeDot={{ r: 4, fill: "#ff7b32", stroke: "#171221", strokeWidth: 2 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <Suspense fallback={plotSkeleton}>
+            <SalesChartPlot data={chartData} />
+          </Suspense>
         )}
         <div className="mt-1 flex items-center justify-end gap-4 px-3 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-ember" /> Vendas</span>
@@ -76,3 +69,5 @@ export function SalesChart({ data = [], loading = false }: SalesChartProps) {
     </Card>
   )
 }
+
+export const SalesChart = memo(SalesChartCard)

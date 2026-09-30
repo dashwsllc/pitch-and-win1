@@ -33,12 +33,13 @@ const statuses: Record<string, string> = { nova: 'Nova', em_analise: 'Em anális
 const selectClass = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm'
 function shiftDate(date: string, days: number) { const value = new Date(date + 'T12:00:00Z'); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10) }
 function formatDate(value: string) { return value.slice(0, 10).split('-').reverse().join('/') }
+const countFormatter = new Intl.NumberFormat('pt-BR')
 function format(value: number | null, kind: 'money' | 'count' | 'percent' | 'ratio') {
   if (value === null) return '—'
   if (kind === 'money') return money(value)
   if (kind === 'percent') return value.toFixed(2) + '%'
   if (kind === 'ratio') return value.toFixed(2) + 'x'
-  return new Intl.NumberFormat('pt-BR').format(value)
+  return countFormatter.format(value)
 }
 function median(values: number[]) {
   if (!values.length) return null

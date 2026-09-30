@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
@@ -39,7 +39,7 @@ const formatShiftTime = (value: Date | string | number) => formatBrasiliaDate(va
   hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 })
 
-export function ShiftApproachGoals({ date, person = '', management = false }: {
+function ShiftApproachGoalsBase({ date, person = '', management = false }: {
   date: string
   person?: string
   management?: boolean
@@ -163,3 +163,5 @@ export function ShiftApproachGoals({ date, person = '', management = false }: {
     </section>
   )
 }
+
+export const ShiftApproachGoals = memo(ShiftApproachGoalsBase)

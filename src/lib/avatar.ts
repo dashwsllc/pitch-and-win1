@@ -41,6 +41,44 @@ export async function validateAvatarFile(file: File) {
   return extension
 }
 
+// Avatars are drawn at 32-96 px, yet uploads may be up to 2 MB and every ranking,
+// sales card and header downloads them. Re-encoding on the client keeps each
+// picture to a few KB. Any decoder/encoder limitation returns the original file,
+// so a picture can never fail to upload because of this step.
+const AVATAR_MIN_SIDE_PX = 256
+const AVATAR_MAX_SIDE_PX = 1024
+const AVATAR_SKIP_BELOW_BYTES = 60 * 1024
+const AVATAR_WEBP_QUALITY = 0.86
+
+export async function optimizeAvatar(file: File, extension: string): Promise<{ file: File; extension: string }> {
+  const original = { file, extension }
+  if (file.size <= AVATAR_SKIP_BELOW_BYTES) return original
+  try {
+    const bitmap = await createImageBitmap(file)
+    try {
+      const shortSide = Math.min(bitmap.width, bitmap.height)
+      const longSide = Math.max(bitmap.width, bitmap.height)
+      if (!shortSide) return original
+      const scale = Math.min(1, AVATAR_MIN_SIDE_PX / shortSide, AVATAR_MAX_SIDE_PX / longSide)
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+      const context = canvas.getContext('2d')
+      if (!context) return original
+      context.imageSmoothingQuality = 'high'
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', AVATAR_WEBP_QUALITY))
+      // Browsers without WebP encoding silently return PNG; never make the file larger.
+      if (!blob || blob.type !== 'image/webp' || blob.size >= file.size) return original
+      return { file: new File([blob], 'avatar.webp', { type: 'image/webp' }), extension: 'webp' }
+    } finally {
+      bitmap.close()
+    }
+  } catch {
+    return original
+  }
+}
+
 export function avatarObjectPath(
   publicUrl: string | null | undefined,
   userId: string,

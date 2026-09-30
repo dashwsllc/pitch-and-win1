@@ -12,6 +12,7 @@ import { SDRRewards } from "@/components/ranking/SDRRewards"
 import { DailyCallsRanking } from "@/components/ranking/DailyCallsRanking"
 import { Trophy, Medal, Award, Target, Crown, ChevronDown, ChevronUp, Gift, Percent, Star, Zap } from "lucide-react"
 import gsap from 'gsap'
+import { money } from "@/lib/sales"
 
 const avatarColors = [
   'bg-gradient-to-br from-amber-500 to-orange-600',
@@ -36,10 +37,7 @@ export default function Ranking() {
     name: user.name,
     avatarUrl: user.avatarUrl,
     salesValue: user.totalVendas,
-    sales: new Intl.NumberFormat('pt-BR', { 
-      style: 'currency', 
-      currency: 'BRL' 
-    }).format(user.totalVendas),
+    sales: money(user.totalVendas),
     deals: user.quantidadeVendas,
     approaches: user.abordagens,
     conversion: `${user.conversao.toFixed(1)}%`,

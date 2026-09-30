@@ -23,7 +23,7 @@ import { useAllUsers } from '@/hooks/useRoles'
 import { useBrasiliaToday } from '@/hooks/useGoals'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { SalesChart } from '@/components/dashboard/SalesChart'
-import { errorMessage } from '@/lib/sales'
+import { errorMessage, money } from '@/lib/sales'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { addDaysToDateKey, brasiliaDateKey, formatBrasiliaDate, formatDateKey } from '@/lib/brasilia-time'
 
@@ -171,12 +171,7 @@ export function ExecutiveSellerDetails() {
     return () => window.removeEventListener('dashboard-data-changed', refresh)
   }, [selectedSeller, fetchSellerStats])
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value)
-  }
+  const formatCurrency = (value: number) => money(value)
 
   const formatPercent = (value: number) => {
     return `${value.toFixed(1)}%`

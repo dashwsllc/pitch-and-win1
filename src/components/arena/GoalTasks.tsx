@@ -5,11 +5,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
 import { useBrasiliaToday, type DailyGoalTask } from "@/hooks/useGoals";
 import { useArenaAssignees } from "@/hooks/useArena";
+import { useLiveClock } from "@/hooks/useLiveClock";
 import { supabase } from "@/integrations/supabase/client";
 import { arenaRpc } from "@/lib/arena-api";
 import { errorMessage, exactDate } from "@/lib/sales";
 import { addDaysToDateKey, addMonthsToMonthKey, brasiliaLocalInputToIso, formatDateKey, isValidDateKey, isoToBrasiliaLocalInput } from "@/lib/brasilia-time";
-import { refreshDashboardMutation } from "@/lib/sync";
+import { LIVE_CLOCK_INTERVAL_MS, refreshDashboardMutation } from "@/lib/sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,24 @@ type Task = DailyGoalTask & {
 };
 type TaskPeriod = "hoje" | "ontem" | "7dias" | "mes" | "custom";
 
+// The per-second countdown lives in these two leaves so the whole task manager
+// (forms, dialogs, every task card) no longer re-renders once a second.
+function DeadlineStatus({ deadlineAt }: { deadlineAt: string }) {
+  const now = useLiveClock();
+  return <>{Date.parse(deadlineAt) < now.getTime() ? "Atrasada" : "Em andamento"}</>;
+}
+
+function DeadlineLine({ task }: { task: Task }) {
+  const live = !!task.deadline_at && !task.is_completed;
+  const now = useLiveClock(live ? LIVE_CLOCK_INTERVAL_MS : 0).getTime();
+  return (
+    <p className={`mt-2 text-xs tabular-nums ${live && Date.parse(task.deadline_at!) < now ? "text-rose-300" : "text-muted-foreground"}`}>
+      Prazo: {task.deadline_at ? exactDate(task.deadline_at) : `${formatDateKey(task.task_date)} · dia inteiro`}
+      {live ? ` · ${taskTimeRemaining(task.deadline_at!, now)}` : ""}
+    </p>
+  );
+}
+
 export function GoalTasks() {
   const { user } = useAuth();
   const { isExecutive } = useRoles();
@@ -41,7 +60,6 @@ export function GoalTasks() {
   const [assignee, setAssignee] = useState("");
   const [deadlineTime, setDeadlineTime] = useState("18:00");
   const [draftItems, setDraftItems] = useState([""]);
-  const [clock, setClock] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Task | null>(null);
   const [comment, setComment] = useState("");
@@ -65,10 +83,6 @@ export function GoalTasks() {
   const rangeStart = period === "7dias" ? addDaysToDateKey(today, -6)
     : period === "mes" ? `${today.slice(0, 7)}-01`
     : period === "custom" ? customStart : rangeEnd;
-  useEffect(() => {
-    const timer = window.setInterval(() => setClock(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
   useEffect(() => {
     if (assignmentDate < today) setAssignmentDate(today);
   }, [assignmentDate, today]);
@@ -363,7 +377,7 @@ export function GoalTasks() {
                 {task.is_completed
                   ? `Concluída em ${exactDate(task.completed_at)}`
                   : task.deadline_at
-                    ? Date.parse(task.deadline_at) < clock ? "Atrasada" : "Em andamento"
+                    ? <DeadlineStatus deadlineAt={task.deadline_at} />
                   : task.task_date < today
                     ? "Expirada"
                     : "Pendente"}
@@ -373,10 +387,7 @@ export function GoalTasks() {
                 {task.completion_comment}
                 </p>
               )}
-              <p className={`mt-2 text-xs tabular-nums ${task.deadline_at && !task.is_completed && Date.parse(task.deadline_at) < clock ? "text-rose-300" : "text-muted-foreground"}`}>
-                Prazo: {task.deadline_at ? exactDate(task.deadline_at) : `${formatDateKey(task.task_date)} · dia inteiro`}
-                {task.deadline_at && !task.is_completed ? ` · ${taskTimeRemaining(task.deadline_at, clock)}` : ""}
-              </p>
+              <DeadlineLine task={task} />
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <Progress value={progress} className="h-2 min-w-28 flex-1" aria-label={`${progress}% da tarefa concluída`} />
                 <span className="text-xs tabular-nums text-muted-foreground">

@@ -460,10 +460,7 @@ export default function RegistrarVenda() {
                       &mdash; Comissão desta venda:{" "}
                     </span>
                     <span className="font-bold text-green-400">
-                      {new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      }).format(comissaoEstimada)}
+                      {money(comissaoEstimada)}
                     </span>
                   </div>
                 </div>

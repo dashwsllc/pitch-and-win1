@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { clearStoredSupabaseSession, supabase } from '@/integrations/supabase/client'
 import { AUTO_REFRESH_INTERVAL_MS } from '@/lib/sync'
@@ -16,6 +16,16 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+// Supabase re-emits SIGNED_IN with an equivalent session whenever the tab regains
+// focus. Replacing state with an identical session would re-render every screen
+// that reads useAuth(); an actual change (token, expiry, user data) still applies.
+function sameSession(a: Session | null, b: Session | null) {
+  if (a === b) return true
+  if (!a || !b) return false
+  return a.access_token === b.access_token && a.refresh_token === b.refresh_token &&
+    a.expires_at === b.expires_at && a.user.id === b.user.id && a.user.updated_at === b.user.updated_at
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -39,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const applySession = (nextSession: Session | null) => {
       if (disposed || (signingOut.current && nextSession)) return
       authRevision += 1
-      setSession(nextSession)
+      setSession(current => sameSession(current, nextSession) ? current : nextSession)
       setAuthLoading(false)
     }
 
@@ -81,7 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const status = (data as { status?: string } | null)?.status
           if (error || !status || !['pending', 'approved', 'rejected'].includes(status)) throw error ?? new Error('Invalid registration status')
           if (!disposed) {
-            setRegistration({ userId: sessionUserId, status: status as 'pending' | 'approved' | 'rejected' })
+            // The 50-second poll usually returns the same answer; keep the current
+            // object so it does not re-render everything that reads useAuth().
+            setRegistration(current => current?.userId === sessionUserId && current.status === status
+              ? current
+              : { userId: sessionUserId, status: status as 'pending' | 'approved' | 'rejected' })
             setRegistrationError(false)
           }
         } catch {
@@ -117,9 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [sessionUserId, accessToken, refreshKey])
 
-  const signUp = async (email: string, password: string, displayName: string, captchaToken?: string) => {
+  const signUp = useCallback(async (email: string, password: string, displayName: string, captchaToken?: string) => {
     const redirectUrl = `${window.location.origin}/`
-    
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -140,16 +154,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const duplicate = !error && data.user?.identities?.length === 0
     return { error: duplicate ? new Error('Registration not created') : error, session: data.session }
-  }
+  }, [])
 
-  const signIn = async (email: string, password: string, captchaToken?: string) => {
+  const signIn = useCallback(async (email: string, password: string, captchaToken?: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
       options: { captchaToken },
     })
     return { error }
-  }
+  }, [])
 
   const signOut = useCallback(async () => {
     signingOut.current = true
@@ -171,16 +185,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // A new object on every render would re-render every useAuth() consumer even when
+  // nothing about the session changed.
+  const value = useMemo(() => ({
+    user,
+    session,
+    signUp,
+    signIn,
+    signOut,
+    loading,
+    registrationStatus, registrationError, refreshRegistration
+  }), [user, session, signUp, signIn, signOut, loading, registrationStatus, registrationError, refreshRegistration])
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      session,
-      signUp,
-      signIn,
-      signOut,
-      loading,
-      registrationStatus, registrationError, refreshRegistration
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

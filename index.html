@@ -6,7 +6,11 @@
     <title>WS LTDA - Dashboard</title>
     <meta name="description" content="Dashboard comercial e gerencial" />
     <meta name="author" content="WS LTDA" />
-    
+
+    <!-- Open the TLS connection to the API while the JavaScript downloads, so the
+         first request (session/registration) does not pay for the handshake. -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" href="/favicon.svg" />
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Clock3, Flame, RefreshCw, Sparkles, Target } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { useDailyGoals, type DailyGoalTask } from '@/hooks/useGoals'
-import { useLiveClock } from '@/hooks/useLiveClock'
+import { useLiveClock, useLiveClockSelector } from '@/hooks/useLiveClock'
 import { brasiliaDayBounds, brasiliaLocalToDate, brasiliaParts, formatDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
 import { safePlainText } from '@/lib/plain-text'
 import { errorMessage } from '@/lib/sales'
@@ -21,10 +21,28 @@ function countdownLabel(milliseconds: number) {
   return `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
 }
 
-export function GoalsProgress() {
+type Urgency = 'critical' | 'attention' | 'normal'
+
+const urgencyAt = (now: Date): Urgency => {
+  const remainingMs = millisecondsUntilBrasiliaMidnight(now)
+  return remainingMs <= 2 * 60 * 60 * 1000
+    ? 'critical'
+    : remainingMs <= 6 * 60 * 60 * 1000
+      ? 'attention'
+      : 'normal'
+}
+
+// Only this label changes every second. The card around it re-renders when the
+// urgency bucket actually flips (6h / 2h before midnight), not on every tick.
+function Countdown() {
+  const remainingMs = useLiveClockSelector((now) => millisecondsUntilBrasiliaMidnight(now))
+  return <>{countdownLabel(remainingMs)} restantes</>
+}
+
+function GoalsProgressBase() {
   const { tasks, today, yesterday, previousTasks, previousError, loading, error, refreshing, refetch, setCompleted } = useDailyGoals()
   const { toast } = useToast()
-  const now = useLiveClock()
+  const urgency = useLiveClockSelector(urgencyAt)
   const paceNow = useLiveClock(5 * 60 * 1000)
   const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set())
 
@@ -41,13 +59,6 @@ export function GoalsProgress() {
     : null
   const behindYesterday = previousProgress !== null && progress < previousProgress
   const belowPace = !allCompleted && (progress < elapsedDayPercent || behindYesterday)
-  const remainingMs = millisecondsUntilBrasiliaMidnight(now)
-  const urgency = remainingMs <= 2 * 60 * 60 * 1000
-    ? 'critical'
-    : remainingMs <= 6 * 60 * 60 * 1000
-      ? 'attention'
-      : 'normal'
-  const countdown = useMemo(() => countdownLabel(remainingMs), [remainingMs])
 
   const toggle = async (task: DailyGoalTask, checked: boolean) => {
     if (busyIds.has(task.id)) return
@@ -146,7 +157,7 @@ export function GoalsProgress() {
                 urgency === 'attention' ? 'bg-amber-400/10 text-amber-300' : 'bg-white/[0.035] text-muted-foreground',
           )}>
             {allCompleted ? <CheckCircle2 className="h-4 w-4" /> : urgency === 'normal' ? <Clock3 className="h-4 w-4" /> : <Flame className="h-4 w-4" />}
-            <span>{allCompleted ? 'Dia concluído' : `${countdown} restantes`}</span>
+            <span>{allCompleted ? 'Dia concluído' : <Countdown />}</span>
           </div>
         </div>
 
@@ -189,3 +200,5 @@ export function GoalsProgress() {
     </Card>
   )
 }
+
+export const GoalsProgress = memo(GoalsProgressBase)

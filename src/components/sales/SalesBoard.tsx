@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { ArrowUpRight, CalendarClock, Check, ChevronLeft, ChevronRight, Clock3, Eye, Loader2, RefreshCw, Search, ShieldCheck, Trash2, UserRoundPen, X } from 'lucide-react'
@@ -19,7 +19,7 @@ import { refreshSalesData } from '@/lib/sync'
 import { brasiliaLocalInputToIso, isoToBrasiliaLocalInput } from '@/lib/brasilia-time'
 import { arenaClient } from '@/lib/arena-api'
 
-export function SalesBoard({ compact = false, management = false }: { compact?: boolean; management?: boolean }) {
+function SalesBoardBase({ compact = false, management = false }: { compact?: boolean; management?: boolean }) {
   const [status, setStatus] = useState(management ? 'pendente' : 'aprovada')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -131,7 +131,7 @@ export function SalesBoard({ compact = false, management = false }: { compact?: 
           : <div className="space-y-2">{query.data?.items.map(sale => <article key={sale.id} className="group rounded-xl bg-white/[0.025] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)] transition-colors hover:bg-white/[0.04]">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
-                {sale.seller_avatar ? <img src={sale.seller_avatar} alt={sale.seller_name} className="h-9 w-9 shrink-0 rounded-lg object-cover" /> : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-electric-violet/15 text-xs font-medium text-violet-200">{sale.seller_name.split(' ').map(n => n[0]).join('').slice(0,2)}</div>}
+                {sale.seller_avatar ? <img src={sale.seller_avatar} alt={sale.seller_name} width={36} height={36} loading="lazy" decoding="async" className="h-9 w-9 shrink-0 rounded-lg object-cover" /> : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-electric-violet/15 text-xs font-medium text-violet-200">{sale.seller_name.split(' ').map(n => n[0]).join('').slice(0,2)}</div>}
                 <div className="min-w-0"><p className="text-sm font-medium text-ash">{sale.seller_name}{sale.user_id===user?.id && <span className="ml-2 text-[10px] text-ember">VOCÊ</span>}</p><p className="mt-1 break-words text-xs text-muted-foreground">{sale.nome_produto}{sale.ticket_name && <span className="mt-1 block">{sale.ticket_name}</span>}</p></div>
               </div>
               <div className="ml-auto text-right"><p className="text-lg font-medium tabular-nums text-white">{money(sale.valor_venda)}</p><Badge className={`mt-1 border text-[10px] ${saleStatus[sale.approval_status].color}`}>{sale.approval_status==='pendente' ? <Clock3 className="mr-1 h-3 w-3" /> : sale.approval_status==='aprovada' ? <Check className="mr-1 h-3 w-3" /> : <X className="mr-1 h-3 w-3" />}{saleStatus[sale.approval_status].label}</Badge></div>
@@ -171,3 +171,5 @@ export function SalesBoard({ compact = false, management = false }: { compact?: 
     </section>
   )
 }
+
+export const SalesBoard = memo(SalesBoardBase)

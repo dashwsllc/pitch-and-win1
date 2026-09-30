@@ -1,9 +1,10 @@
+import { memo } from "react"
 import { Link } from "react-router-dom"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { LevelRing } from "@/components/dashboard/LevelRing"
 import { useLevelProgress } from "@/hooks/useLevel"
 
-export function LevelBadge() {
+function LevelBadgeBase() {
   // Renderiza direto com o que já tiver (nível 1/0% por padrão) em vez de
   // esperar as 3 buscas terminarem: eram ~6s de espaço vazio no header antes
   // de aparecer qualquer coisa. Cada fonte atualiza o número sozinha assim
@@ -32,3 +33,5 @@ export function LevelBadge() {
     </Tooltip>
   )
 }
+
+export const LevelBadge = memo(LevelBadgeBase)

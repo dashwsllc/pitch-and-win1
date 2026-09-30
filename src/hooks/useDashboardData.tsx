@@ -49,6 +49,7 @@ export function useDashboardData(
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const latestFetch = useRef(0)
+  const lastSignature = useRef('')
   const customStart = customRange.start
   const customEnd = customRange.end
 
@@ -128,7 +129,7 @@ export function useDashboardData(
         .slice(0, 5)
 
       if (requestId !== latestFetch.current) return
-      setMetrics({
+      const next: DashboardMetrics = {
         totalVendas,
         quantidadeVendas,
         ticketMedio,
@@ -136,7 +137,14 @@ export function useDashboardData(
         conversao,
         vendasMes,
         produtosMaisVendidos
-      })
+      }
+      // Background refreshes usually return the same numbers. Keeping the current
+      // state then avoids re-rendering the page and restarting the chart animation.
+      const signature = JSON.stringify(next)
+      if (signature !== lastSignature.current) {
+        lastSignature.current = signature
+        setMetrics(next)
+      }
     } catch (err) {
       if (requestId !== latestFetch.current) return
       console.error('Erro ao buscar dados do dashboard:', err)

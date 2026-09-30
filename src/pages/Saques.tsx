@@ -14,7 +14,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { useToast } from '@/hooks/use-toast'
-import { errorMessage } from '@/lib/sales'
+import { errorMessage, money } from '@/lib/sales'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import type { Tables } from '@/integrations/supabase/types'
 import { formatBrasiliaDate } from '@/lib/brasilia-time'
@@ -189,8 +189,7 @@ export default function Saques() {
     }
   }
 
-  const formatCurrency = (v: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+  const formatCurrency = (v: number) => money(v)
 
   const getStatusBadge = (status: string) => {
     switch (status) {

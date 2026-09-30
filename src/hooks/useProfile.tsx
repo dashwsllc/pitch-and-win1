@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
 import { refreshIdentityData } from '@/lib/sync'
-import { avatarObjectPath, validateAvatarFile } from '@/lib/avatar'
+import { avatarObjectPath, optimizeAvatar, validateAvatarFile } from '@/lib/avatar'
 
 export function useProfile() {
   const { user } = useAuth()
@@ -35,12 +35,13 @@ export function useProfile() {
   const uploadAvatar = async (file: File) => {
     if (!user) return
     const ext = await validateAvatarFile(file)
-    const filePath = `${user.id}/${crypto.randomUUID()}.${ext}`
+    const optimized = await optimizeAvatar(file, ext)
+    const filePath = `${user.id}/${crypto.randomUUID()}.${optimized.extension}`
     let profileUpdated = false
     try {
-      const { error } = await supabase.storage.from('avatars').upload(filePath, file, {
+      const { error } = await supabase.storage.from('avatars').upload(filePath, optimized.file, {
         upsert: false,
-        contentType: file.type,
+        contentType: optimized.file.type,
         cacheControl: '3600',
       })
       if (error) { toast.error('Erro ao enviar imagem'); throw error }

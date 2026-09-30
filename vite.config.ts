@@ -25,5 +25,25 @@ export default defineConfig(({ mode, command }) => {
       "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Library code changes far less often than the app, but by default it is
+        // bundled together with app modules (the Supabase client shared a chunk with
+        // the auth hook), so every deploy changed the chunk hash and made returning
+        // users re-download ~200 KB of unchanged libraries. These libraries are
+        // already needed by every route, so giving them their own long-lived
+        // chunks changes nothing about what loads first, only what stays cached.
+        codeSplitting: {
+          groups: [
+            { name: "vendor-react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 40 },
+            { name: "vendor-router", test: /node_modules[\\/]react-router(-dom)?[\\/]/, priority: 30 },
+            { name: "vendor-supabase", test: /node_modules[\\/]@supabase[\\/]/, priority: 30 },
+            { name: "vendor-query", test: /node_modules[\\/]@tanstack[\\/]/, priority: 30 },
+          ],
+        },
+      },
+    },
+  },
   };
 });

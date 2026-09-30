@@ -9,25 +9,31 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DataSync } from "@/components/DataSync";
 import { SaleAlerts } from "@/components/arena/ArenaNotifications";
-const Index = lazy(() => import("./pages/Index"));
-const Auth = lazy(() => import("./pages/Auth"));
-const EmailConfirmation = lazy(() => import("./pages/EmailConfirmation"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const ExecutiveDashboard = lazy(() => import("./pages/ExecutiveDashboard"));
-const Ranking = lazy(() => import("./pages/Ranking"));
-const NovaAbordagem = lazy(() => import("./pages/NovaAbordagem"));
-const RegistrarVenda = lazy(() => import("./pages/RegistrarVenda"));
-const Clientes = lazy(() => import("./pages/Clientes"));
-const Leads = lazy(() => import("./pages/Leads"));
-const Perfil = lazy(() => import("./pages/Perfil"));
-const Configuracoes = lazy(() => import("./pages/Configuracoes"));
-const Saques = lazy(() => import("./pages/Saques"));
-const CRM = lazy(() => import("./pages/CRM"));
-const MinhasVendas = lazy(() => import("./pages/MinhasVendas"));
-const Arena = lazy(() => import("./pages/Arena"));
-const Metas = lazy(() => import("./pages/Metas"));
-const Trafego = lazy(() => import("./pages/Trafego"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+import { pageLoaders, preloadRoute } from "@/lib/route-preload";
+const Index = lazy(pageLoaders.index);
+const Auth = lazy(pageLoaders.auth);
+const EmailConfirmation = lazy(pageLoaders.emailConfirmation);
+const ResetPassword = lazy(pageLoaders.resetPassword);
+const ExecutiveDashboard = lazy(pageLoaders.executive);
+const Ranking = lazy(pageLoaders.ranking);
+const NovaAbordagem = lazy(pageLoaders.approaches);
+const RegistrarVenda = lazy(pageLoaders.registerSale);
+const Clientes = lazy(pageLoaders.subscriptions);
+const Leads = lazy(pageLoaders.leads);
+const Perfil = lazy(pageLoaders.profile);
+const Configuracoes = lazy(pageLoaders.settings);
+const Saques = lazy(pageLoaders.withdrawals);
+const CRM = lazy(pageLoaders.crm);
+const MinhasVendas = lazy(pageLoaders.mySales);
+const Arena = lazy(pageLoaders.arena);
+const Metas = lazy(pageLoaders.goals);
+const Trafego = lazy(pageLoaders.traffic);
+const NotFound = lazy(pageLoaders.notFound);
+
+// ProtectedRoute only renders (and so only requests) a page after the session,
+// registration, profile and role requests finish. Start the chunk of the page in
+// the address bar now so its download overlaps with those requests.
+preloadRoute(window.location.pathname);
 
 const queryClient = new QueryClient({
   defaultOptions: {

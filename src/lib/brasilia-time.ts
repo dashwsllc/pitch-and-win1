@@ -120,16 +120,29 @@ export function isoToBrasiliaLocalInput(value: string | null | undefined, includ
   return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}${includeSeconds ? `:${pad(second)}` : ''}`
 }
 
+// Building an Intl.DateTimeFormat is far costlier than formatting with one, and
+// callers reuse a handful of option sets, so formatters are cached by options.
+// `year: undefined` overrides the default year and must stay part of the key.
+const brasiliaFormatters = new Map<string, Intl.DateTimeFormat>()
+const optionsKey = (options?: Intl.DateTimeFormatOptions) =>
+  JSON.stringify(options ?? {}, (_name, item) => (item === undefined ? '\u0000undefined' : item))
+
 export function formatBrasiliaDate(value: Date | string | number, options?: Intl.DateTimeFormatOptions) {
   const date = value instanceof Date ? value : new Date(value)
   if (!Number.isFinite(date.getTime())) return 'Sem registro'
-  return new Intl.DateTimeFormat('pt-BR', {
-    timeZone: BRASILIA_TIME_ZONE,
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    ...options,
-  }).format(date)
+  const key = optionsKey(options)
+  let formatter = brasiliaFormatters.get(key)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: BRASILIA_TIME_ZONE,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      ...options,
+    })
+    brasiliaFormatters.set(key, formatter)
+  }
+  return formatter.format(date)
 }
 
 export function formatDateKey(dateKey: string, options?: Intl.DateTimeFormatOptions) {

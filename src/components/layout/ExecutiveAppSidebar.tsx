@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { 
   BarChart3, 
   Home,
@@ -17,6 +18,7 @@ import {
 import { NavLink } from "react-router-dom"
 import { useRoles } from '@/hooks/useRoles'
 import { canAccessArena, canAccessTraffic } from '@/lib/arena'
+import { preloadRoute } from '@/lib/route-preload'
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
@@ -55,7 +57,7 @@ interface AppSidebarProps {
   isExecutive?: boolean
 }
 
-export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
+function ExecutiveAppSidebarBase({ isExecutive = false }: AppSidebarProps) {
   const { capabilities, roles, isSuperAdmin } = useRoles()
   const items = (isExecutive ? menuItems : sellerMenuItems).filter(item =>
     (item.url !== '/crm' || capabilities.leads) && (item.url !== '/vendas' || capabilities.sales) &&
@@ -64,7 +66,7 @@ export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
     (item.url !== '/trafego' || canAccessTraffic(roles)))
   
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-dvh w-16 flex-col overflow-y-auto border-r border-white/[0.055] bg-[#0c0715]/92 backdrop-blur-xl sm:w-[72px]" data-lenis-prevent>
+    <aside className="fixed left-0 top-0 z-40 flex h-dvh w-16 flex-col overflow-y-auto border-r border-white/[0.055] bg-[#0c0715]/92 sm:w-[72px]" data-lenis-prevent>
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ember/70 to-transparent" />
       
       <div className="p-4 sm:p-5">
@@ -88,6 +90,9 @@ export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
               }`
             }
             title={item.title}
+            onMouseEnter={() => preloadRoute(item.url)}
+            onFocus={() => preloadRoute(item.url)}
+            onTouchStart={() => preloadRoute(item.url)}
           >
             <item.icon className="h-[19px] w-[19px] transition-transform duration-200 group-hover:scale-105" strokeWidth={1.8} />
           </NavLink>
@@ -96,3 +101,5 @@ export function ExecutiveAppSidebar({ isExecutive = false }: AppSidebarProps) {
     </aside>
   )
 }
+
+export const ExecutiveAppSidebar = memo(ExecutiveAppSidebarBase)

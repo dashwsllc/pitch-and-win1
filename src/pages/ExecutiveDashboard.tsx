@@ -31,7 +31,7 @@ import { GoalTasks } from '@/components/arena/GoalTasks'
 import { ExecutiveAudit } from '@/components/executive/ExecutiveAudit'
 import { ExecutiveWithdrawals } from '@/components/executive/ExecutiveWithdrawals'
 import { ExecutiveProducts } from '@/components/executive/ExecutiveProducts'
-import { exactDate } from '@/lib/sales'
+import { exactDate, money } from '@/lib/sales'
 import {
   createDefaultDashboardCustomRange,
   DashboardDateFilter,
@@ -44,12 +44,7 @@ export default function ExecutiveDashboard() {
   const [customRange, setCustomRange] = useState(createDefaultDashboardCustomRange)
   const { data, loading, refetch, error } = useExecutiveDashboard(selectedFilter, customRange)
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value)
-  }
+  const formatCurrency = (value: number) => money(value)
 
   const formatPercent = (value: number) => {
     return `${value.toFixed(1)}%`

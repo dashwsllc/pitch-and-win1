@@ -15,7 +15,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
 import { errorMessage, exactDate } from '@/lib/sales'
-import { avatarObjectPath, validateAvatarFile } from '@/lib/avatar'
+import { avatarObjectPath, optimizeAvatar, validateAvatarFile } from '@/lib/avatar'
 import { firstIssue, strongPasswordSchema } from '@/lib/auth-security'
 import { refreshDashboardMutation } from '@/lib/sync'
 
@@ -110,12 +110,13 @@ export function ExecutiveUserManagement({ compact = false }: { compact?: boolean
       let nextAvatarUrl = avatarRemoved ? '' : form.avatar_url
       if (avatarFile) {
         const extension = await validateAvatarFile(avatarFile)
-        uploadedAvatarPath = `${editing.user_id}/${crypto.randomUUID()}.${extension}`
+        const optimized = await optimizeAvatar(avatarFile, extension)
+        uploadedAvatarPath = `${editing.user_id}/${crypto.randomUUID()}.${optimized.extension}`
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(uploadedAvatarPath, avatarFile, {
+          .upload(uploadedAvatarPath, optimized.file, {
             upsert: false,
-            contentType: avatarFile.type,
+            contentType: optimized.file.type,
             cacheControl: '3600',
           })
         if (uploadError) throw new Error('Não foi possível enviar a imagem. Tente novamente.')

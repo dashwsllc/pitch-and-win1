@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
@@ -115,7 +115,7 @@ export function SaleAlerts() {
   }, [userId]);
   return null;
 }
-export function NotificationInbox() {
+function NotificationInboxBase() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const query = useQuery({
@@ -193,3 +193,5 @@ export function NotificationInbox() {
     </Popover>
   );
 }
+
+export const NotificationInbox = memo(NotificationInboxBase)

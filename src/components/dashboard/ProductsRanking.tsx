@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Boxes, Medal } from "lucide-react"
 
@@ -7,8 +8,10 @@ interface ProductsRankingProps {
 }
 
 const medals = ["text-amber-400", "text-slate-300", "text-amber-700"]
+// Building an Intl.NumberFormat per product on every render is far costlier than formatting.
+const wholeReais = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
 
-export function ProductsRanking({ data = [], loading = false }: ProductsRankingProps) {
+function ProductsRankingBase({ data = [], loading = false }: ProductsRankingProps) {
   const topProducts = data.slice(0, 3)
   const maxValue = Math.max(...topProducts.map((product) => product.valor), 1)
 
@@ -47,7 +50,7 @@ export function ProductsRanking({ data = [], loading = false }: ProductsRankingP
                     <p className="mt-1 text-xs text-muted-foreground">{product.quantidade} {product.quantidade === 1 ? "venda" : "vendas"}</p>
                   </div>
                   <p className="text-sm font-medium tabular-nums text-white">
-                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(product.valor)}
+                    {wholeReais.format(product.valor)}
                   </p>
                 </div>
               </div>
@@ -58,3 +61,5 @@ export function ProductsRanking({ data = [], loading = false }: ProductsRankingP
     </Card>
   )
 }
+
+export const ProductsRanking = memo(ProductsRankingBase)

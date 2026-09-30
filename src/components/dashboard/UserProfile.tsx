@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth"
 import { useNavigate } from "react-router-dom"
 import { useProfile } from "@/hooks/useProfile"
 
-export function UserProfile() {
+function UserProfileBase() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const { profile } = useProfile()
@@ -80,3 +81,5 @@ export function UserProfile() {
     </DropdownMenu>
   )
 }
+
+export const UserProfile = memo(UserProfileBase)

@@ -57,13 +57,15 @@ function inclusiveMonthCount(startMonth: string, endMonth: string) {
   return (endYear - startYear) * 12 + endValue - startValue + 1
 }
 
+const monthFormatter = new Intl.DateTimeFormat('pt-BR', {
+  month: 'short',
+  year: '2-digit',
+  timeZone: 'UTC',
+})
+
 function formatMonthKey(monthKey: string) {
   const [year, month] = monthKey.split('-').map(Number)
-  return new Intl.DateTimeFormat('pt-BR', {
-    month: 'short',
-    year: '2-digit',
-    timeZone: 'UTC',
-  })
+  return monthFormatter
     .format(new Date(Date.UTC(year, month - 1, 1, 12)))
     .replace('.', '')
 }

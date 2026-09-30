@@ -1,11 +1,16 @@
-export const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+// Intl formatters are expensive to construct and these run once per row on every
+// render of the sales lists, so they are built a single time.
+const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+export const money = (value: number) => moneyFormatter.format(value)
+
+const exactDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+})
 
 export function exactDate(value: string | null | undefined) {
   if (!value || !Number.isFinite(Date.parse(value))) return 'Sem registro'
-  return new Intl.DateTimeFormat('pt-BR', {
-    timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-  }).format(new Date(value))
+  return exactDateFormatter.format(new Date(value))
 }
 
 export const errorMessage = (error: unknown) =>

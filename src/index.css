@@ -112,10 +112,22 @@ All colors MUST be HSL.
     font-feature-settings: "cv11", "ss01";
     font-variation-settings: "opsz" 32;
     background-color: var(--surface-void);
+  }
+
+  /* Ambient glow behind the app. It used to be `background-attachment: fixed` on the
+     body, which makes the browser repaint the whole viewport on every scroll frame.
+     A fixed pseudo-element on its own compositor layer looks identical and is
+     painted once. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
     background-image:
       radial-gradient(900px 520px at 88% -12%, rgba(107, 33, 239, 0.10), transparent 62%),
       radial-gradient(720px 420px at 8% 24%, rgba(253, 137, 37, 0.055), transparent 68%);
-    background-attachment: fixed;
+    will-change: transform;
   }
 
   ::selection {
@@ -170,6 +182,14 @@ All colors MUST be HSL.
   
   .animate-float {
     animation: float 3s ease-in-out infinite;
+  }
+
+  /* Header "live" dot. Tailwind's animate-ping redraws it 60 times a second and,
+     because the header has a backdrop-filter, every frame also re-composites the
+     blurred bar: about half of everything the page did while sitting idle. Ten
+     steps a second read the same on an 8px dot for a fraction of the work. */
+  .animate-ping-soft {
+    animation: ping-soft 1s steps(10, end) infinite;
   }
 
   .surface-panel {
@@ -274,6 +294,10 @@ All colors MUST be HSL.
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
+}
+
+@keyframes ping-soft {
+  75%, 100% { transform: scale(2); opacity: 0; }
 }
 
 @keyframes confetti {

@@ -18,9 +18,10 @@ import { useAuth } from "@/hooks/useAuth"
 import { useProfile } from "@/hooks/useProfile"
 import { useRoles } from "@/hooks/useRoles"
 import { useGSAP } from "@/hooks/useGSAP"
-import { useLiveClock } from "@/hooks/useLiveClock"
 import { useBrasiliaToday } from "@/hooks/useGoals"
-import { 
+import { HeroClock, HeroDateText, HeroGreetingText } from "@/components/dashboard/HeroClock"
+import { money } from "@/lib/sales"
+import {
   CircleDollarSign,
   ShoppingBag,
   ChartSpline,
@@ -30,12 +31,10 @@ import {
   Flame,
   RefreshCw,
   Crown,
-  Activity,
   Radio,
 } from "lucide-react"
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { BRASILIA_TIME_ZONE, brasiliaParts, formatBrasiliaDate } from '@/lib/brasilia-time'
 import {
   createDefaultDashboardCustomRange,
   DashboardDateFilter,
@@ -63,8 +62,6 @@ export default function Dashboard() {
   const userPosition = closerPosition || sdrPosition
   const rankingLabel = closerPosition ? 'Closers' : sdrPosition ? 'SDRs' : ''
   const rankingSize = closerPosition ? ranking.length : sdrRanking.length
-  
-  const currentTime = useLiveClock()
 
   useEffect(() => {
     if (!dashboardRef.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
@@ -123,13 +120,6 @@ export default function Dashboard() {
     return () => context.revert()
   }, [loading, selectedFilter])
 
-  const getGreeting = () => {
-    const hour = brasiliaParts(currentTime).hour
-    if (hour < 12) return 'Bom dia'
-    if (hour < 18) return 'Boa tarde'
-    return 'Boa noite'
-  }
-
   return (
     <DashboardLayout>
       <div ref={dashboardRef} className="relative mx-auto max-w-[1520px] space-y-7 pb-8">
@@ -145,11 +135,11 @@ export default function Dashboard() {
                   <Radio className="h-3.5 w-3.5 text-success" />
                   Dados ao vivo
                 </span>
-                <span className="capitalize">{formatBrasiliaDate(currentTime, { weekday: 'long', day: 'numeric', month: 'long', year: undefined })}</span>
+                <span className="capitalize"><HeroDateText /></span>
               </div>
 
               <h1 data-hero-item className="mt-5 text-balance text-[clamp(2rem,5vw,3.35rem)] font-light leading-[0.98] tracking-[-0.045em] text-white">
-                {getGreeting()}, <span className="text-ash">{userName}</span>
+                <HeroGreetingText />, <span className="text-ash">{userName}</span>
               </h1>
 
               <p data-hero-item className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
@@ -167,15 +157,7 @@ export default function Dashboard() {
                 </Badge>
               )}
 
-              <time
-                data-live-clock
-                dateTime={currentTime.toISOString()}
-                aria-label="Horário de Brasília"
-                className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/[0.035] px-3 text-xs tabular-nums text-muted-foreground shadow-[rgba(255,255,255,0.07)_0_0_0_1px_inset]"
-              >
-                <Activity className="h-3.5 w-3.5 text-electric" />
-                {currentTime.toLocaleTimeString('pt-BR', { timeZone: BRASILIA_TIME_ZONE, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </time>
+              <HeroClock />
 
               <Button
                 onClick={() => refetch()}
@@ -190,7 +172,7 @@ export default function Dashboard() {
         </section>
 
         <section data-dashboard-section="commercial-indicators" data-scroll-reveal className="space-y-3">
-          <div className="sticky top-20 z-20 rounded-2xl border border-white/[0.05] bg-[#0e0918]/78 p-1.5 backdrop-blur-xl">
+          <div className="sticky top-20 z-20 rounded-2xl border border-white/[0.05] bg-[#0e0918]/78 p-1.5 backdrop-blur-[10px]">
             <FilterTabs
               value={selectedFilter}
               onValueChange={setSelectedFilter}
@@ -220,10 +202,7 @@ export default function Dashboard() {
         <div ref={metricsRef} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <MetricCard
             title="Total de Vendas"
-            value={new Intl.NumberFormat('pt-BR', { 
-              style: 'currency', 
-              currency: 'BRL' 
-            }).format(metrics.totalVendas)}
+            value={money(metrics.totalVendas)}
             subtitle="Receita aprovada no período"
             icon={<CircleDollarSign className="h-5 w-5" strokeWidth={1.8} />}
             gradient
@@ -242,10 +221,7 @@ export default function Dashboard() {
           
           <MetricCard
             title="Ticket Médio"
-            value={new Intl.NumberFormat('pt-BR', { 
-              style: 'currency', 
-              currency: 'BRL' 
-            }).format(metrics.ticketMedio)}
+            value={money(metrics.ticketMedio)}
             subtitle="Receita média por venda"
             icon={<ChartSpline className="h-5 w-5" strokeWidth={1.8} />}
             accent="electric"
