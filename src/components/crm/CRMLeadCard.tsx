@@ -167,6 +167,7 @@ export function CRMLeadCard({
     quente: "bg-orange-600/15 text-orange-400",
   }[lead.temperature];
   const qualificationCall = call?.call_type === "qualificacao";
+  const closerCall = call?.call_type === "fechamento_closer";
   const readyForCloser = lead.pipeline_stage === "pronto_closer";
   const qualificationDue =
     qualificationCall && (callState === "now" || callState === "overdue");
@@ -442,6 +443,11 @@ export function CRMLeadCard({
         {handed && capabilities.closer && !lead.closer_id && (
           <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onTransition("claim")}>
             Assumir lead
+          </Button>
+        )}
+        {handed && capabilities.closer && !!lead.closer_id && canManage && closerCall && (
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onSchedule("closer")}>
+            Reagendar call Closer
           </Button>
         )}
         {handed && capabilities.closer && !!lead.closer_id && canManage && (
