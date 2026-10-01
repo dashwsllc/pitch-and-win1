@@ -445,12 +445,12 @@ export function CRMLeadCard({
             Assumir lead
           </Button>
         )}
-        {handed && capabilities.closer && !!lead.closer_id && canManage && closerCall && (
+        {handed && capabilities.closer && !!lead.closer_id && closerCall && (
           <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onSchedule("closer")}>
             Reagendar call Closer
           </Button>
         )}
-        {handed && capabilities.closer && !!lead.closer_id && canManage && (
+        {handed && capabilities.closer && !!lead.closer_id && (
           <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onAction("close")}>
             Registrar fechamento
           </Button>
