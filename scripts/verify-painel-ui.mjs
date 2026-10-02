@@ -743,12 +743,16 @@ await teste('atalhos do painel antigo no canto dos blocos e a conta no rodapé d
     await expect(pagina).toHaveURL(/\/abordagens\?new=true$/)
     await pagina.goBack()
     await expect(pagina.getByRole('heading', { level: 1, name: 'Visão geral' })).toBeVisible()
-    // A tela de vendas não sobe com este backend falso (já era assim antes desta mudança: as fixtures não cobrem tudo
-    // o que ela lê), então os erros dela não contam; aqui só importa que o atalho leva para ela.
+    // A tela de vendas não sobe com este backend falso (já era assim antes desta mudança: as fixtures não trazem
+    // products.product_tickets, que RegistrarVenda lê), então os erros dela não contam; aqui só importa que o atalho
+    // leva para ela. O erro chega assíncrono e abre o AppErrorBoundary global (a mesma janela da Home): espera por
+    // ele (ou 5 s, se um dia o mock cobrir a tela) e recarrega a Home, como a pessoa faria, em vez de voltar no histórico.
     const errosAntesDeSair = erros.length
+    const erroDaTelaDeVendas = pagina.waitForEvent('pageerror', { timeout: 5000 }).catch(() => null)
     await regiao(pagina, 'Últimas vendas').getByRole('button', { name: 'Registrar venda' }).click()
     await expect(pagina).toHaveURL(/\/vendas\?new=true$/)
-    await pagina.goBack()
+    await erroDaTelaDeVendas
+    await pagina.goto(new URL(pagina.url()).origin + '/')
     await expect(pagina.getByRole('heading', { level: 1, name: 'Visão geral' })).toBeVisible()
     erros.splice(errosAntesDeSair)
     for (const bloco of ['Pódio dos Closers', 'Últimas vendas']) await expect(regiao(pagina, bloco).getByRole('link', { name: 'Ranking' })).toHaveAttribute('href', '/ranking')
