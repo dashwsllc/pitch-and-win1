@@ -1,5 +1,7 @@
 // Derivações puras da Home: cada bloco recebe dados prontos e nunca consulta nada. Todas recebem as linhas que a
 // hook de dados (useDashboardData) já buscou para o período escolhido; nenhuma lê relógio nem faz requisição.
+import { brasiliaDateKey, isValidDateKey } from '@/lib/brasilia-time'
+import { buildDashboardSeries, type ResolvedDashboardPeriod } from '@/lib/dashboard-period'
 import type { PontoDaSerie } from '../charts/SeriesChart'
 import { chaveDaHora } from './tempo'
 
@@ -91,11 +93,6 @@ export function serieDaHook(vendasMes: Array<{ month: string; vendas: number; ab
 /** Sem nenhuma venda e nenhuma abordagem não há o que desenhar: vale o estado vazio, não uma linha de zeros. */
 export const serieSemMovimento = (pontos: PontoDaSerie[]) => pontos.every((p) => p.principal === 0 && p.secundaria === 0)
 
-/** Soma acumulada da série principal (o minigráfico do indicador em destaque). */
-export function acumulado(pontos: PontoDaSerie[]): number[] {
-  let soma = 0
-  return pontos.map((p) => (soma += p.principal))
-}
 
 /** Registros com horário a partir de `agora − 1 h`. */
 export function contarNaUltimaHora(linhas: AbordagemLinha[], agoraIso: string): number {
@@ -135,6 +132,65 @@ export function dividirAbordagens(abordagens: AbordagemLinha[]): { mostrou: numb
   let mostrou = 0
   for (const a of abordagens) if (a.mostrou_ia === true) mostrou++
   return { mostrou, naoMostrou: abordagens.length - mostrou }
+}
+
+/** Um intervalo da série com as abordagens repartidas pela demonstração da IA. */
+export interface PontoDividido {
+  chave: string
+  rotulo: string
+  vendas: number
+  abordagens: number
+  /** Abordagens do intervalo em que a IA foi mostrada (as demais não mostraram). */
+  mostrou: number
+}
+
+export type Passo = 'hora' | 'dia' | 'mês' | 'ano'
+
+/**
+ * A série do gráfico grande (os mesmos intervalos, os mesmos totais) com as abordagens de cada intervalo repartidas
+ * pela demonstração da IA, para os gráficos dos indicadores. Num dia só os intervalos são as horas da série; nos
+ * períodos longos eles saem de buildDashboardSeries, a mesma função que fez a série da hook. Devolve [] se os
+ * intervalos não baterem (nunca um número que não veio dos dados).
+ */
+export function dividirSerie(
+  serie: PontoDaSerie[],
+  porHora: boolean,
+  vendas: AbordagemLinha[],
+  abordagens: AbordagemLinha[],
+  periodo: ResolvedDashboardPeriod,
+): PontoDividido[] {
+  if (serie.length === 0) return []
+  const comIa = abordagens.filter((a) => a.mostrou_ia === true && instanteValido(a.created_at))
+  let mostrou: number[]
+  if (porHora) {
+    const porChave = new Map<string, number>()
+    for (const a of comIa) {
+      const h = chaveDaHora(a.created_at)
+      porChave.set(h, (porChave.get(h) ?? 0) + 1)
+    }
+    mostrou = serie.map((p) => porChave.get(p.chave) ?? 0)
+  } else {
+    // Em "todo o período" o primeiro e o último dia vêm dos eventos: fixa os dois a partir de TODOS os eventos, senão
+    // contar só as abordagens com a IA mudaria os intervalos.
+    let fixo = periodo
+    if (periodo.allTime) {
+      const dias = [...vendas, ...abordagens].map((l) => brasiliaDateKey(l.created_at)).filter(isValidDateKey).sort()
+      fixo = { ...periodo, startKey: dias[0], endKey: dias[dias.length - 1] }
+    }
+    const porIntervalo = buildDashboardSeries([], comIa, fixo)
+    if (porIntervalo.length !== serie.length || porIntervalo.some((p, i) => p.month !== serie[i].rotulo)) return []
+    mostrou = porIntervalo.map((p) => p.abordagens)
+  }
+  return serie.map((p, i) => ({ chave: p.chave, rotulo: p.rotulo, vendas: p.principal, abordagens: p.secundaria, mostrou: mostrou[i] }))
+}
+
+/** O passo dos intervalos, para as legendas: hora num dia só; nos longos, pelo rótulo que a hook escreveu. */
+export function passoDaSerie(serie: Array<{ rotulo: string }>, porHora: boolean): Passo {
+  if (porHora) return 'hora'
+  const rotulo = serie[0]?.rotulo ?? ''
+  if (/^\d{2}\/\d{2}$/.test(rotulo)) return 'dia'
+  if (/^\d{4}$/.test(rotulo)) return 'ano'
+  return 'mês'
 }
 
 /** União de vendas e abordagens, do mais novo para o mais antigo, cortada em `limite`. */

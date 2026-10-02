@@ -113,7 +113,7 @@ const KPIS = ['Quantidade de Vendas', 'Abordagens', 'Conversão', 'Meta do dia',
 /** Legenda da barra dividida das abordagens: os dois totais escritos ao lado dos pontos coloridos. */
 async function divisaoNaTela(pagina) {
   const texto = await textoDe(pagina, 'Abordagens')
-  const m = texto.match(/Mostrou a IA ([\d.]+) Não mostrou ([\d.]+)/)
+  const m = texto.match(/Mostrou a IA ([\d.]+)(?: \([\d,]+%\))? Não mostrou ([\d.]+)/)
   assert.ok(m, `legenda da barra dividida (veio "${texto}")`)
   return { mostrou: Number(m[1].replaceAll('.', '')), naoMostrou: Number(m[2].replaceAll('.', '')) }
 }
@@ -325,6 +325,57 @@ await teste('gráfico: teclado, mira, tabela alternativa e série por hora fecha
   }
 })
 
+await teste('gráficos dos indicadores: as colunas são as horas do gráfico grande, somam os totais e têm dica e teclado', async () => {
+  const { pagina, f, erros, fechar } = await abrir()
+  try {
+    const e = esperado(f, 'hoje')
+    const colunas = (nome) => regiao(pagina, nome).locator('g[data-coluna]').evaluateAll((gs) => gs.map((g) => Number(g.getAttribute('data-total'))))
+    const soma = (lista) => lista.reduce((t, v) => t + v, 0)
+    // Só compara depois da primeira carga (antes dela não há tabela nem colunas: as duas listas viriam vazias).
+    await expect(regiao(pagina, 'Total de Vendas')).toContainText(normalizar(money(e.total)))
+    await expect(pagina.getByRole('img', { name: /Vendas e abordagens por hora/ })).toBeVisible()
+    const linhas = await linhasDaTabela(pagina)
+    await expect.poll(async () => (await colunas('Quantidade de Vendas')).length).toBe(linhas.length)
+    assert.deepEqual(await colunas('Quantidade de Vendas'), linhas.map((l) => Number(l[1])), 'cada coluna de vendas é a mesma hora do gráfico grande')
+    assert.deepEqual(await colunas('Abordagens'), linhas.map((l) => Number(l[2])), 'cada coluna de abordagens é a mesma hora do gráfico grande')
+    assert.equal(soma(await colunas('Quantidade de Vendas')), e.quantidade, 'as colunas somam o indicador de vendas')
+    assert.equal(soma(await colunas('Abordagens')), e.abordagens.length, 'e as de abordagens, o indicador de abordagens')
+    await expect(regiao(pagina, 'Quantidade de Vendas').getByText('Vendas por hora', { exact: true })).toBeVisible()
+    await expect(regiao(pagina, 'Quantidade de Vendas').getByText(/^média [\d,]+ por hora$/)).toBeVisible()
+    await expect(regiao(pagina, 'Abordagens').getByText('Abordagens por hora', { exact: true })).toBeVisible()
+
+    // Teclado e dica: o foco mostra o último intervalo; Home vai ao primeiro. A dica de vendas traz o acumulado.
+    const grafVendas = regiao(pagina, 'Quantidade de Vendas').getByRole('img', { name: /^Vendas por hora: / })
+    await grafVendas.focus()
+    const dicaVendas = regiao(pagina, 'Quantidade de Vendas').locator('[role="tooltip"]')
+    await expect(dicaVendas).toContainText(linhas.at(-1)[0])
+    await expect(dicaVendas).toContainText(`${inteiro(e.quantidade)} ${e.quantidade === 1 ? 'venda' : 'vendas'} no acumulado`)
+    await pagina.keyboard.press('Home')
+    await expect(dicaVendas).toContainText(linhas[0][0])
+    const grafAbordagens = regiao(pagina, 'Abordagens').getByRole('img', { name: /^Abordagens por hora: / })
+    await grafAbordagens.focus()
+    const dicaAbordagens = regiao(pagina, 'Abordagens').locator('[role="tooltip"]')
+    await expect(dicaAbordagens).toContainText(linhas.at(-1)[0])
+    const textoDaDica = normalizar(await dicaAbordagens.innerText())
+    const partes = textoDaDica.match(/(\d+) mostraram a IA (\d+) não mostraram/)
+    assert.ok(partes, `a dica reparte as abordagens (veio "${textoDaDica}")`)
+    assert.equal(Number(partes[1]) + Number(partes[2]), Number(linhas.at(-1)[2]), 'as duas partes somam a hora')
+    await pagina.locator('body').click({ position: { x: 5, y: 5 } })
+    await expect(dicaAbordagens).toHaveCount(0)
+
+    // Vários dias: um intervalo por dia, ainda somando os indicadores.
+    await pagina.getByRole('radio', { name: '7 dias', exact: true }).click()
+    await expect(regiao(pagina, 'Quantidade de Vendas').getByText('Vendas por dia', { exact: true })).toBeVisible()
+    await expect.poll(async () => (await colunas('Quantidade de Vendas')).length).toBe(7)
+    const e7 = esperado(f, '7dias')
+    assert.equal(soma(await colunas('Quantidade de Vendas')), e7.quantidade)
+    assert.equal(soma(await colunas('Abordagens')), e7.abordagens.length)
+    assert.deepEqual(erros, [])
+  } finally {
+    await fechar()
+  }
+})
+
 await teste('estado vazio: moldura sem valor inventado, em todos os blocos', async () => {
   const vazio = buildFixtures({ role: 'super_admin', now: FIXED })
   vazio.tables.vendas = []
@@ -341,15 +392,16 @@ await teste('estado vazio: moldura sem valor inventado, em todos os blocos', asy
     await expect(pagina.getByRole('list', { name: 'Legenda' })).toBeVisible()
     assert.ok((await textoDe(pagina, 'Quantidade de Vendas')).includes('+0 na última hora'))
     assert.ok(!(await textoDe(pagina, 'Quantidade de Vendas')).includes('última às'), 'sem venda não há "última às"')
-    assert.equal(await regiao(pagina, 'Quantidade de Vendas').locator('svg').count(), 1, 'só o ícone: sem minigráfico com menos de 2 pontos')
+    assert.equal(await regiao(pagina, 'Quantidade de Vendas').locator('svg').count(), 1, 'só o ícone: sem venda não há colunas, só a moldura')
     assert.ok((await textoDe(pagina, 'Conversão')).includes('—'))
     assert.ok((await textoDe(pagina, 'Conversão')).includes('0 vendas para 0 abordagens'))
     assert.equal(await pagina.getByRole('meter', { name: 'Vendas por abordagem' }).count(), 0, 'sem taxa não há anel')
     assert.ok((await textoDe(pagina, 'Total de Vendas')).includes('R$ 0,00'))
     assert.ok(!(await textoDe(pagina, 'Total de Vendas')).includes('na última hora'), 'sem venda não há receita da última hora')
-    // Barra dividida vazia: trilho sem segmentos e a legenda com 0 e 0.
+    // Gráficos dos indicadores vazios: moldura sem nenhuma coluna e a legenda com 0 e 0.
     assert.deepEqual(await divisaoNaTela(pagina), { mostrou: 0, naoMostrou: 0 })
-    assert.equal(await regiao(pagina, 'Abordagens').locator('.bg-viz-1.h-full, .bg-viz-2.h-full').count(), 0, 'nenhum segmento inventado')
+    assert.equal(await pagina.locator('rect.painel-coluna').count(), 0, 'nenhuma coluna inventada')
+    for (const texto of ['Sem vendas no período.', 'Sem abordagens no período.']) await expect(pagina.getByText(texto, { exact: true })).toBeVisible()
     for (const texto of [
       'Nenhum produto vendido no período',
       'As vendas aprovadas e as abordagens aparecem aqui assim que acontecem.',
@@ -436,6 +488,10 @@ await teste('ao vivo: um evento novo muda KPI, gráfico, feed e tabela juntos, s
     const linhas = await linhasDaTabela(pagina)
     assert.equal(linhas.reduce((t, l) => t + Number(l[1]), 0), depois.quantidade)
     assert.equal(linhas.reduce((t, l) => t + Number(l[2]), 0), depois.abordagens.length)
+    // Os gráficos dos indicadores mudam junto.
+    const somaDasColunas = (nome) => regiao(pagina, nome).locator('g[data-coluna]').evaluateAll((gs) => gs.reduce((t, g) => t + Number(g.getAttribute('data-total')), 0))
+    assert.equal(await somaDasColunas('Quantidade de Vendas'), depois.quantidade)
+    assert.equal(await somaDasColunas('Abordagens'), depois.abordagens.length)
     assert.equal(await pagina.evaluate(() => window.__marcador), 'mesma-pagina', 'sem recarregar a página')
     await expect(pagina.getByText(/^atualizado (agora|há)/)).toBeVisible()
     assert.deepEqual(erros, [])

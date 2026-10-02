@@ -152,7 +152,11 @@ const EXTRAI_DEPOIS = () => {
   const checklist = limpo(regiao('Checklist de hoje')?.querySelector('h2 + p')?.textContent) || null
   const turno = [...(regiao('Metas de abordagens por turno')?.querySelectorAll('li') ?? [])].map((li) => limpo(li.querySelector('.tabular-nums')?.textContent))
   const serie = [...document.querySelectorAll('[data-dashboard-section="commercial-evolution"] details tbody tr')].map((tr) => [...tr.cells].map((c) => limpo(c.textContent)))
-  const divisao = limpo(regiao('Abordagens')?.querySelector('.mt-4 .mt-2')?.textContent)
+  const divisao = limpo(document.querySelector('ul[aria-label="Abordagens por demonstração da IA"]')?.textContent)
+  // Gráficos dos indicadores: o total de cada coluna fica em data-total (a soma tem de fechar com o indicador).
+  const somaDasColunas = (nome) => [...(regiao(nome)?.querySelectorAll('g[data-coluna]') ?? [])].reduce((s, g) => s + Number(g.getAttribute('data-total')), 0)
+  const colunasVendas = somaDasColunas('Quantidade de Vendas')
+  const colunasAbordagens = somaDasColunas('Abordagens')
   return {
     kpis: Object.fromEntries(
       [['Total de Vendas', 'Total de Vendas'], ['Quantidade de Vendas', 'Quantidade de Vendas'], ['Ticket Médio', 'Ticket Médio'], ['Abordagens', 'Abordagens'], ['Taxa Conversão', 'Conversão'], ['Posição Ranking', 'Posição no ranking']].map(([antigo, novo]) => [antigo, kpi(novo)]),
@@ -166,6 +170,8 @@ const EXTRAI_DEPOIS = () => {
     turno,
     serie,
     divisao,
+    colunasVendas,
+    colunasAbordagens,
   }
 }
 
@@ -308,7 +314,10 @@ try {
       const pd = (d.produtos ?? []).slice(0, pa.length).map(([n, q, v]) => [n, q, normalizar(v)])
       comparar(nome, filtro, 'Produtos (top 3)', pa, pd, { nota: d.produtos?.length > pa.length ? `o novo mostra também o 4º e o 5º da mesma lista (${d.produtos.length} itens)` : '' })
       // Divisão das abordagens (nova): soma = o total do indicador antigo.
-      const m = normalizar(d.divisao).match(/Mostrou a IA\s*([\d.]+)\s*Não mostrou\s*([\d.]+)/)
+      // Gráficos dos indicadores (novos): a soma das colunas fecha com os totais do painel antigo.
+      comparar(nome, filtro, 'Gráfico de vendas: soma das colunas', numero(a.kpis['Quantidade de Vendas']?.valor), d.colunasVendas, { nota: 'bloco novo: soma das colunas = total antigo' })
+      comparar(nome, filtro, 'Gráfico de abordagens: soma das colunas', numero(a.kpis.Abordagens?.valor), d.colunasAbordagens, { nota: 'bloco novo: soma das colunas = total antigo' })
+      const m = normalizar(d.divisao).match(/Mostrou a IA\s*([\d.]+)\s*(?:\([\d,]+%\))?\s*Não mostrou\s*([\d.]+)/)
       comparar(nome, filtro, 'Abordagens: Mostrou a IA + Não mostrou', numero(a.kpis.Abordagens?.valor), m ? numero(m[1]) + numero(m[2]) : null, { nota: 'bloco novo: as duas partes somam o total antigo' })
       if (filtro === 'hoje') {
         // Blocos com janela própria (não dependem do filtro): uma comparação basta.

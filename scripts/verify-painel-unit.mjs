@@ -157,7 +157,52 @@ const UTC = (s) => new Date(s).toISOString()
     }
   }
 }
-assert.deepEqual(visao.acumulado([{ principal: 1 }, { principal: 0 }, { principal: 3 }]), [1, 1, 4])
+{
+  // Gráficos dos indicadores: os mesmos intervalos e totais do gráfico grande, com as abordagens repartidas pela IA.
+  const sorteio = rng(41)
+  const agoraMs = Date.now()
+  const linha = (i, dias, comIa) => ({
+    id: String(i),
+    created_at: new Date(agoraMs - Math.floor(sorteio() * dias * 86_400_000)).toISOString(),
+    mostrou_ia: comIa ? sorteio() < 0.6 : undefined,
+    nome_produto: 'P',
+    valor_venda: 10,
+  })
+  const conferir = (serie, dividida, vendas, abordagens, rotulo) => {
+    assert.equal(dividida.length, serie.length, `${rotulo}: um ponto dividido por intervalo`)
+    dividida.forEach((p, i) => {
+      assert.equal(p.chave, serie[i].chave)
+      assert.equal(p.vendas, serie[i].principal, `${rotulo}: vendas do intervalo ${p.rotulo}`)
+      assert.equal(p.abordagens, serie[i].secundaria, `${rotulo}: abordagens do intervalo ${p.rotulo}`)
+      assert.ok(p.mostrou >= 0 && p.mostrou <= p.abordagens, `${rotulo}: mostrou cabe no intervalo`)
+    })
+    assert.equal(dividida.reduce((t, p) => t + p.mostrou, 0), visao.dividirAbordagens(abordagens).mostrou, `${rotulo}: a soma das colunas fecha com a legenda`)
+  }
+  for (let rodada = 0; rodada < 60; rodada++) {
+    // Um dia só: série por hora.
+    const vendas = Array.from({ length: Math.floor(sorteio() * 20) }, (_, i) => linha(i, 1, false))
+    const abordagens = Array.from({ length: 1 + Math.floor(sorteio() * 60) }, (_, i) => linha(1000 + i, 1, true))
+    const serie = visao.serieHoraria(vendas, abordagens)
+    const hoje = periodos.resolveDashboardPeriod('hoje', periodos.createDefaultDashboardCustomRange())
+    conferir(serie, visao.dividirSerie(serie, true, vendas, abordagens, hoje), vendas, abordagens, 'por hora')
+    // Períodos longos: a série da hook (dia, mês, ano), recortada como a hook recorta.
+    for (const filtro of ['7dias', '30dias', 'all', 'custom']) {
+      const periodo = periodos.resolveDashboardPeriod(filtro, { start: '2025-01-01', end: periodos.createDefaultDashboardCustomRange().end })
+      const dentro = (l) => periodo.allTime || (Date.parse(l.created_at) >= periodo.start.getTime() && Date.parse(l.created_at) < periodo.end.getTime())
+      const dias = filtro === 'custom' ? 600 : 90
+      const v = Array.from({ length: Math.floor(sorteio() * 40) }, (_, i) => linha(i, dias, false)).filter(dentro)
+      const a = Array.from({ length: 1 + Math.floor(sorteio() * 120) }, (_, i) => linha(1000 + i, dias, true)).filter(dentro)
+      const longa = visao.serieDaHook(periodos.buildDashboardSeries(v, a, periodo))
+      if (longa.length === 0) continue
+      conferir(longa, visao.dividirSerie(longa, false, v, a, periodo), v, a, filtro)
+    }
+  }
+  assert.deepEqual(visao.dividirSerie([], true, [], [], periodos.resolveDashboardPeriod('hoje', periodos.createDefaultDashboardCustomRange())), [])
+  assert.equal(visao.passoDaSerie([{ rotulo: '14h' }], true), 'hora')
+  assert.equal(visao.passoDaSerie([{ rotulo: '29/09' }], false), 'dia')
+  assert.equal(visao.passoDaSerie([{ rotulo: 'set 26' }], false), 'mês')
+  assert.equal(visao.passoDaSerie([{ rotulo: '2026' }], false), 'ano')
+}
 assert.equal(visao.serieSemMovimento([{ principal: 0, secundaria: 0 }]), true)
 assert.equal(visao.serieSemMovimento([{ principal: 0, secundaria: 1 }]), false)
 {

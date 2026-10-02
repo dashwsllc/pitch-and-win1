@@ -20,12 +20,12 @@ import { useRankingDataWithMock } from '@/hooks/useRankingDataWithMock'
 import { useRoles } from '@/hooks/useRoles'
 import { resolveDashboardPeriod } from '@/lib/dashboard-period'
 import { refreshDashboardData } from '@/lib/sync'
-import { BarraDividida } from '@/painel/components/BarraDividida'
 import { Cabecalho } from '@/painel/components/Cabecalho'
 import { ChecklistDoDia } from '@/painel/components/ChecklistDoDia'
 import { FeedAoVivo } from '@/painel/components/FeedAoVivo'
 import { FiltroPainel } from '@/painel/components/FiltroPainel'
 import { Iniciais } from '@/painel/components/Iniciais'
+import { LegendaDaDivisao } from '@/painel/components/LegendaDaDivisao'
 import { Bloco, KpiCard } from '@/painel/components/KpiCard'
 import { LinkSecao } from '@/painel/components/LinkSecao'
 import { MetasDeTurno } from '@/painel/components/MetasDeTurno'
@@ -34,10 +34,10 @@ import { Podio } from '@/painel/components/Podio'
 import { UltimasVendas } from '@/painel/components/UltimasVendas'
 import { VendasDoTime } from '@/painel/components/VendasDoTime'
 import { Barras } from '@/painel/charts/Barras'
+import { ColunasKpi } from '@/painel/charts/ColunasKpi'
 import { RingGauge } from '@/painel/charts/RingGauge'
 import { formatarNumero } from '@/painel/charts/scale'
 import { SeriesChart } from '@/painel/charts/SeriesChart'
-import { Sparkline } from '@/painel/charts/Sparkline'
 import { useAgora } from '@/painel/hooks/relogio'
 import { useStatusAoVivo } from '@/painel/hooks/statusAoVivo'
 import { PainelLayout } from '@/painel/layout/PainelLayout'
@@ -46,11 +46,12 @@ import { useFiltroPainel } from '@/painel/lib/filtro'
 import { emCentavos, formatarCentavos, formatarPercentual, formatarReais, formatarReaisInteiros, pluralizar } from '@/painel/lib/formatar'
 import { formatarHoraMinuto } from '@/painel/lib/tempo'
 import {
-  acumulado,
   barrasDeProdutos,
   contarNaUltimaHora,
   dividirAbordagens,
+  dividirSerie,
   montarAtividade,
+  passoDaSerie,
   serieDaHook,
   serieHoraria,
   serieSemMovimento,
@@ -92,10 +93,11 @@ export default function Dashboard() {
 
   // O recorte dos números que estão na tela (enquanto o filtro novo carrega, ainda o anterior): um dia só vira série
   // por hora; o que não inclui o momento atual não tem "última hora".
-  const { umDiaSo, incluiAgora } = useMemo(() => {
+  const { periodo, umDiaSo, incluiAgora } = useMemo(() => {
     const periodo = loadedPeriod ?? resolveDashboardPeriod(filtro.valor.periodo, filtro.intervalo)
     const agoraMs = Date.parse(agora)
     return {
+      periodo,
       umDiaSo: !periodo.allTime && periodo.startKey === periodo.endKey,
       incluiAgora: periodo.allTime || (periodo.start!.getTime() <= agoraMs && periodo.end!.getTime() > agoraMs),
     }
@@ -106,7 +108,9 @@ export default function Dashboard() {
     const pontos = umDiaSo ? serieHoraria(rows.vendas, rows.abordagens) : serieDaHook(metrics.vendasMes)
     return serieSemMovimento(pontos) ? [] : pontos
   }, [umDiaSo, rows, metrics.vendasMes])
-  const acumuladoDeVendas = useMemo(() => acumulado(serie), [serie])
+  // Os gráficos dos indicadores usam os mesmos intervalos do gráfico grande; o das abordagens, com a divisão pela IA.
+  const serieDividida = useMemo(() => dividirSerie(serie, umDiaSo, rows.vendas, rows.abordagens, periodo), [serie, umDiaSo, rows, periodo])
+  const passo = passoDaSerie(serie, umDiaSo)
   const naUltimaHora = useMemo(() => contarNaUltimaHora(rows.vendas, agora), [rows.vendas, agora])
   const receitaNaUltimaHora = useMemo(() => somarNaUltimaHora(rows.vendas, agora), [rows.vendas, agora])
   const ultimaVenda = useMemo(() => ultimoInstante(rows.vendas), [rows.vendas])
@@ -179,20 +183,43 @@ export default function Dashboard() {
                 <>Negócios confirmados</>
               )
             }
-            lateral={
-              <div className="hidden w-40 sm:block" aria-hidden="true">
-                <Sparkline valores={acumuladoDeVendas} />
-              </div>
-            }
             className={`md:col-span-2 xl:col-span-5 ${esmaecer}`}
-          />
+          >
+            <div className="mt-4">
+              <ColunasKpi
+                colunas={serie.map((p) => ({ chave: p.chave, rotulo: p.rotulo, partes: [p.principal] }))}
+                series={[{ nome: 'vendas', cor: 'viz-1', ponto: 'bg-viz-1' }]}
+                unidade={['venda', 'vendas']}
+                passo={passo}
+                resumo={`Vendas por ${passo}`}
+                vazio="Sem vendas no período."
+                media
+                acumulado
+              />
+            </div>
+          </KpiCard>
           <KpiCard rotulo="Abordagens" icone={UsersRoundIcon} valor={<NumeroAnimado valor={metrics.abordagens} />} className={`xl:col-span-3 ${esmaecer}`}>
-            <BarraDividida
-              partes={[
-                { rotulo: 'Mostrou a IA', valor: divisao.mostrou },
-                { rotulo: 'Não mostrou', valor: divisao.naoMostrou },
-              ]}
-            />
+            {/* Altura maior que a das vendas: o número é menor, e assim as duas molduras terminam alinhadas no xl. */}
+            <div className="mt-4">
+              <ColunasKpi
+                colunas={serieDividida.map((p) => ({ chave: p.chave, rotulo: p.rotulo, partes: [p.mostrou, p.abordagens - p.mostrou] }))}
+                series={[
+                  { nome: 'mostraram a IA', cor: 'viz-1', ponto: 'bg-viz-1' },
+                  { nome: 'não mostraram', cor: 'viz-2', ponto: 'bg-viz-2' },
+                ]}
+                unidade={['abordagem', 'abordagens']}
+                passo={passo}
+                resumo={`Abordagens por ${passo}`}
+                vazio="Sem abordagens no período."
+                altura={152}
+              />
+              <LegendaDaDivisao
+                partes={[
+                  { rotulo: 'Mostrou a IA', valor: divisao.mostrou },
+                  { rotulo: 'Não mostrou', valor: divisao.naoMostrou },
+                ]}
+              />
+            </div>
           </KpiCard>
           <KpiCard
             rotulo="Conversão"

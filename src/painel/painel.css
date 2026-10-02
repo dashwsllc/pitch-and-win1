@@ -268,6 +268,23 @@ html.painel [data-sidebar='menu-button'][data-active='true']::before {
   animation: painel-numero-subiu 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Colunas dos gráficos dos indicadores: sobem da base ao aparecer (só para quem aceita movimento). */
+@keyframes painel-coluna-subir {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .painel-coluna {
+    transform-box: fill-box;
+    transform-origin: bottom;
+    animation: painel-coluna-subir 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
 /* Dados em recarga por troca de filtro: os números anteriores ficam na tela, só mais discretos. */
 .painel-recarregando {
   opacity: 0.6;
