@@ -52,6 +52,7 @@ for (const c of CENARIOS) {
   if (c.vazio) {
     fixtures.tables.vendas = []
     fixtures.tables.abordagens = []
+    fixtures.tables.crm_activities = []
     fixtures.tables.daily_goal_tasks = []
     fixtures.rpc.get_team_ranking = () => []
     fixtures.rpc.get_sdr_ranking = () => []
@@ -85,7 +86,7 @@ for (const c of CENARIOS) {
     const estouro = await pagina.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     const arquivo = path.join(OUT, `${c.id}-${c.nome}.png`)
     if (c.dica) {
-      const grafico = pagina.getByRole('img', { name: /Vendas e abordagens/ })
+      const grafico = pagina.getByRole('img', { name: /Calls feitas e abordagens/ })
       await grafico.scrollIntoViewIfNeeded()
       const caixa = await grafico.boundingBox()
       if (caixa) await pagina.mouse.move(caixa.x + caixa.width * 0.62, caixa.y + caixa.height * 0.45)

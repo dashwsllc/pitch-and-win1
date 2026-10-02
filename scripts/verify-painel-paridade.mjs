@@ -27,6 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 instalarResolvedor(raiz)
 const periodos = await import('../src/lib/dashboard-period.ts')
+const { brasiliaDateKey } = await import('../src/lib/brasilia-time.ts')
 
 function comRelogioFixo(fn) {
   const Original = Date
@@ -69,6 +70,31 @@ function serieAntiga(f, filtro, soDoUsuario) {
     const vendas = f.tables.vendas.filter((v) => v.approval_status === 'aprovada' && dentro(v.created_at) && meu(v))
     const abordagens = f.tables.abordagens.filter((a) => dentro(a.created_at) && meu(a))
     return periodos.buildDashboardSeries(vendas, abordagens, periodo).map((p) => [p.month, p.vendas, p.abordagens])
+  })
+}
+
+/**
+ * Calls feitas que o gráfico novo tem de mostrar, refeitas sobre o mock: qualificação ou fechamento com presença
+ * registrada (performed_at) e sem cancelamento, no período, e só as da própria pessoa para quem não é Executive
+ * (assigned_to). Por dia, mês ou ano, nos mesmos intervalos; em "todo o período", do primeiro ao último registro de tudo.
+ */
+function callsEsperadas(f, filtro, soDoUsuario) {
+  return comRelogioFixo(() => {
+    const periodo = periodos.resolveDashboardPeriod(filtro, INTERVALO)
+    const dentro = (iso) => periodo.allTime || (Date.parse(iso) >= periodo.start.getTime() && Date.parse(iso) < periodo.end.getTime())
+    const meu = (r) => !soDoUsuario || r.user_id === USER_ID
+    const feita = (c) => ['qualificacao', 'fechamento_closer'].includes(c.call_type) && c.performed_at && !c.cancelled_at
+    const calls = f.tables.crm_activities
+      .filter((c) => feita(c) && dentro(c.performed_at) && (!soDoUsuario || c.assigned_to === USER_ID))
+      .map((c) => ({ created_at: c.performed_at }))
+    let fixo = periodo
+    if (periodo.allTime) {
+      const vendas = f.tables.vendas.filter((v) => v.approval_status === 'aprovada' && meu(v))
+      const abordagens = f.tables.abordagens.filter(meu)
+      const dias = [...vendas, ...abordagens, ...calls].map((l) => brasiliaDateKey(l.created_at)).sort()
+      fixo = { ...periodo, startKey: dias[0], endKey: dias[dias.length - 1] }
+    }
+    return { total: calls.length, serie: calls.length ? periodos.buildDashboardSeries([], calls, fixo).map((p) => [p.month, p.abordagens]) : [] }
   })
 }
 
@@ -133,12 +159,12 @@ const EXTRAI_DEPOIS = () => {
     limpo(li.querySelector('p')?.textContent),
     limpo(li.querySelector('strong')?.textContent),
   ])
-  const podio = [...document.querySelectorAll('ol[aria-label="Pódio"] > li:not(.opacity-50)')].map((li) => [
-    limpo(li.querySelector('.truncate')?.textContent),
-    limpo(li.querySelector('.painel-numero-subiu')?.textContent),
-    limpo(li.querySelector('.text-\\[11px\\]')?.textContent),
-  ])
-  const resto = [...document.querySelectorAll('ol[start="4"] > li')].map((li) => [limpo(li.querySelector('.truncate')?.textContent), limpo(li.querySelector('.tabular-nums.text-muted-foreground:last-child')?.textContent), null])
+  const podio = (nome) =>
+    [...document.querySelectorAll(`ol[aria-label="${nome}"] > li:not(.opacity-50)`)].map((li) => [
+      limpo(li.querySelector('.truncate')?.textContent),
+      limpo(li.querySelector('.painel-numero-subiu')?.textContent),
+      limpo(li.querySelector('.text-\\[11px\\]')?.textContent),
+    ])
   const linha = (li) => [
     limpo(li.querySelector('p.font-medium .truncate')?.textContent),
     limpo(li.querySelector('.font-semibold.tabular-nums')?.textContent),
@@ -151,18 +177,24 @@ const EXTRAI_DEPOIS = () => {
   const totalDoTime = time ? limpo([...time.querySelectorAll('p')].find((p) => /resultados/.test(p.textContent))?.textContent).replace(/ · consulta.*/, '') : null
   const checklist = limpo(regiao('Checklist de hoje')?.querySelector('h2 + p')?.textContent) || null
   const turno = [...(regiao('Metas de abordagens por turno')?.querySelectorAll('li') ?? [])].map((li) => limpo(li.querySelector('.tabular-nums')?.textContent))
+  // Gráfico de abordagens e calls: a tabela alternativa traz [intervalo, calls feitas, abordagens]; a legenda, os totais.
   const serie = [...document.querySelectorAll('[data-dashboard-section="commercial-evolution"] details tbody tr')].map((tr) => [...tr.cells].map((c) => limpo(c.textContent)))
+  const legenda = limpo(regiao('Abordagens e calls')?.querySelector('ul[aria-label="Legenda"]')?.textContent)
   const divisao = limpo(document.querySelector('ul[aria-label="Abordagens por demonstração da IA"]')?.textContent)
-  // Gráficos dos indicadores: o total de cada coluna fica em data-total (a soma tem de fechar com o indicador).
-  const somaDasColunas = (nome) => [...(regiao(nome)?.querySelectorAll('g[data-coluna]') ?? [])].reduce((s, g) => s + Number(g.getAttribute('data-total')), 0)
-  const colunasVendas = somaDasColunas('Quantidade de Vendas')
-  const colunasAbordagens = somaDasColunas('Abordagens')
+  // Gráficos dos indicadores: cada coluna traz o intervalo (data-rotulo) e o total (data-total).
+  const colunas = (nome) => [...(regiao(nome)?.querySelectorAll('g[data-coluna]') ?? [])].map((g) => [g.getAttribute('data-rotulo'), Number(g.getAttribute('data-total'))])
+  const colunasDeVendas = colunas('Quantidade de Vendas')
+  const colunasDeAbordagens = colunas('Abordagens')
+  const somar = (lista) => lista.reduce((s, [, v]) => s + v, 0)
   return {
     kpis: Object.fromEntries(
       [['Total de Vendas', 'Total de Vendas'], ['Quantidade de Vendas', 'Quantidade de Vendas'], ['Ticket Médio', 'Ticket Médio'], ['Abordagens', 'Abordagens'], ['Taxa Conversão', 'Conversão'], ['Posição Ranking', 'Posição no ranking']].map(([antigo, novo]) => [antigo, kpi(novo)]),
     ),
     produtos,
-    ranking: [...podio, ...resto],
+    ranking: podio('Pódio dos Closers'),
+    rankingSdr: podio('Pódio dos SDRs'),
+    legenda,
+    colunasDeVendas,
     ultimas,
     vendasDoTime,
     totalDoTime,
@@ -170,8 +202,8 @@ const EXTRAI_DEPOIS = () => {
     turno,
     serie,
     divisao,
-    colunasVendas,
-    colunasAbordagens,
+    colunasVendas: somar(colunasDeVendas),
+    colunasAbordagens: somar(colunasDeAbordagens),
   }
 }
 
@@ -301,14 +333,33 @@ try {
       for (const k of ['Total de Vendas', 'Quantidade de Vendas', 'Ticket Médio', 'Abordagens']) comparar(nome, filtro, k, normalizar(a.kpis[k]?.valor), normalizar(d.kpis[k]?.valor), { modo: 'numero' })
       comparar(nome, filtro, 'Conversão', normalizar(a.kpis['Taxa Conversão']?.valor), normalizar(d.kpis['Taxa Conversão']?.valor), { modo: 'conversao' })
       comparar(nome, filtro, 'Posição no ranking', [normalizar(a.kpis['Posição Ranking']?.valor), normalizar(a.kpis['Posição Ranking']?.detalhe)], [normalizar(d.kpis['Posição Ranking']?.valor), normalizar(d.kpis['Posição Ranking']?.detalhe)])
-      // Série: a antiga é a de buildDashboardSeries; a nova é a mesma nos períodos longos e, num dia só, a mesma soma por hora.
-      const antiga = serieAntiga(f, filtro, nome.startsWith('vendedor'))
-      const nova = d.serie.map(([rotulo, v, ab]) => [rotulo, Number(v), Number(ab)])
+      // Série: a antiga é a de buildDashboardSeries (vendas e abordagens por intervalo). Na nova, as vendas de cada
+      // intervalo estão nas colunas do indicador e as abordagens na tabela do gráfico de abordagens e calls; num dia só
+      // as duas abrem por hora e a soma das horas é o ponto do dia. Um intervalo que só a linha nova tem (uma call fora do
+      // alcance das vendas e abordagens, em "todo o período") só pode vir zerado de vendas e abordagens.
+      const soDoUsuario = nome.startsWith('vendedor')
+      const antiga = serieAntiga(f, filtro, soDoUsuario)
+      const tabela = d.serie.map(([rotulo, calls, ab]) => [rotulo, Number(calls), Number(ab)])
+      const vendasPorRotulo = new Map(d.colunasDeVendas)
+      const abordagensPorRotulo = new Map(tabela.map(([r, , ab]) => [r, ab]))
       const umDia = antiga.length === 1
       if (umDia) {
-        const soma = (i) => nova.reduce((t, p) => t + p[i], 0)
-        comparar(nome, filtro, 'Evolução (vendas, abordagens)', [antiga[0][1], antiga[0][2]], [soma(1), soma(2)], { nota: antiga[0][1] + antiga[0][2] ? 'um dia: a nova abre por hora; a soma das horas = o ponto do dia' : 'sem movimento: moldura vazia nas duas' })
-      } else comparar(nome, filtro, `Evolução (${antiga.length} pontos)`, antiga.filter(() => true), nova.length ? nova : antiga.map(([r]) => [r, 0, 0]), { nota: nova.length ? '' : 'sem movimento' })
+        const soma = (mapa) => [...mapa.values()].reduce((t, v) => t + v, 0)
+        comparar(nome, filtro, 'Evolução (vendas, abordagens)', [antiga[0][1], antiga[0][2]], [soma(vendasPorRotulo), soma(abordagensPorRotulo)], { nota: antiga[0][1] + antiga[0][2] ? 'um dia: a nova abre por hora; a soma das horas = o ponto do dia' : 'sem movimento: moldura vazia' })
+      } else {
+        const nova = antiga.map(([r]) => [r, vendasPorRotulo.get(r) ?? 0, abordagensPorRotulo.get(r) ?? 0])
+        const sobra = [...vendasPorRotulo, ...abordagensPorRotulo].filter(([r, v]) => v !== 0 && !antiga.some(([ra]) => ra === r))
+        comparar(nome, filtro, `Evolução (${antiga.length} pontos)`, antiga, sobra.length ? [...nova, ...sobra] : nova, { nota: 'vendas nas colunas do indicador; abordagens na tabela do gráfico de abordagens e calls' })
+      }
+      // Calls feitas (bloco novo): a tabela fecha com o mock intervalo a intervalo, e a legenda traz o mesmo total.
+      const ce = callsEsperadas(f, filtro, soDoUsuario)
+      const callsNaTela = tabela.map(([r, c]) => [r, c])
+      const notaCalls = 'bloco novo: calls com presença registrada, sem as só marcadas e as canceladas'
+      if (umDia || ce.total === 0) comparar(nome, filtro, 'Calls feitas (soma do gráfico)', ce.total, callsNaTela.reduce((t, [, c]) => t + c, 0), { nota: notaCalls })
+      else comparar(nome, filtro, `Calls feitas (${ce.serie.length} pontos)`, ce.serie, callsNaTela, { nota: notaCalls })
+      const totalNaLegenda = (rotulo) => numero(normalizar(d.legenda).match(new RegExp(`${rotulo}\\s*([\\d.]+)`))?.[1])
+      comparar(nome, filtro, 'Legenda: calls feitas', ce.total, totalNaLegenda('Calls feitas'), { nota: notaCalls })
+      comparar(nome, filtro, 'Legenda: abordagens', numero(a.kpis.Abordagens?.valor), totalNaLegenda('Abordagens'), { nota: 'bloco novo: o total da legenda = o indicador antigo' })
       // Produtos: o antigo mostrava os 3 primeiros da mesma lista (top 5); o novo mostra os 5.
       const pa = (a.produtos ?? []).map(([n, q, v]) => [n, q, normalizar(v)])
       const pd = (d.produtos ?? []).slice(0, pa.length).map(([n, q, v]) => [n, q, normalizar(v)])
@@ -321,9 +372,12 @@ try {
       comparar(nome, filtro, 'Abordagens: Mostrou a IA + Não mostrou', numero(a.kpis.Abordagens?.valor), m ? numero(m[1]) + numero(m[2]) : null, { nota: 'bloco novo: as duas partes somam o total antigo' })
       if (filtro === 'hoje') {
         // Blocos com janela própria (não dependem do filtro): uma comparação basta.
-        const ra = (a.ranking ?? []).map(([n, v]) => [n, normalizar(v)])
-        const rd = d.ranking.slice(0, ra.length).map(([n, v]) => [n, normalizar(v)])
-        comparar(nome, '—', 'Ranking de Closers (top 5)', ra, rd)
+        const ra = (a.ranking ?? []).slice(0, 3).map(([n, v]) => [n, normalizar(v)])
+        const rd = d.ranking.map(([n, v]) => [n, normalizar(v)])
+        comparar(nome, '—', 'Pódio dos Closers (top 3)', ra, rd, { nota: 'o pódio compacto mostra os 3 primeiros da mesma lista; a lista toda fica em Ranking' })
+        const plural = (n, um, varios) => `${n.toLocaleString('pt-BR')} ${n === 1 ? um : varios}`
+        const sdrs = f.rpc.get_sdr_ranking().slice(0, 3).map((s) => [s.name, plural(s.repasses, 'repasse', 'repasses'), plural(s.abordagens, 'abordagem', 'abordagens')])
+        comparar(nome, '—', 'Pódio dos SDRs (top 3)', sdrs, d.rankingSdr.map(([n, v, ap]) => [n, normalizar(v), normalizar(ap)]), { nota: 'bloco novo: a ordem e os números de get_sdr_ranking (o mesmo ranking da tela Ranking)' })
         comparar(nome, '—', 'Últimas vendas (10)', a.ultimas.map(([s, v, p, t]) => [s, normalizar(v), p, t]), d.ultimas.map(([s, v, p, t]) => [s, normalizar(v), p, t]))
         comparar(nome, '—', 'Vendas do time (pág. 1)', a.vendasDoTime?.map(([s, v, p, t]) => [s, normalizar(v), p, t]), d.vendasDoTime?.map(([s, v, p, t]) => [s, normalizar(v), p, t]))
         comparar(nome, '—', 'Vendas do time (total)', a.totalDoTime, d.totalDoTime)

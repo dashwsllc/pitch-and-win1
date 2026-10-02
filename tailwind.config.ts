@@ -109,6 +109,7 @@ export default {
           1: "hsl(var(--viz-1) / <alpha-value>)",
           2: "hsl(var(--viz-2) / <alpha-value>)",
           3: "hsl(var(--viz-3) / <alpha-value>)",
+          4: "hsl(var(--viz-4) / <alpha-value>)",
           track: "hsl(var(--viz-track) / <alpha-value>)",
           grid: "hsl(var(--viz-grid) / <alpha-value>)",
           alerta: "hsl(var(--viz-alerta) / <alpha-value>)",

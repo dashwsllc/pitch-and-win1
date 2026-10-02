@@ -20,6 +20,12 @@ export interface AbordagemLinha {
   mostrou_ia?: boolean
 }
 
+/** Call feita no período: a hora em que ela aconteceu (crm_activities.performed_at). */
+export interface CallLinha {
+  id: string
+  performed_at: string
+}
+
 /** Item do feed ao vivo: o mais novo primeiro. */
 export type AtividadeItem =
   | { tipo: 'venda'; chave: string; em: string; produto: string; valor: number }
@@ -52,46 +58,91 @@ export function horasContinuas(instantes: number[]): string[] {
   return horas
 }
 
+/** Um intervalo dos gráficos da Home, com tudo o que eles mostram contado sobre as mesmas linhas dos totais. */
+export interface IntervaloDoPainel {
+  /** 'yyyy-MM-dd HH' (por hora) ou o rótulo do dia, mês ou ano. */
+  chave: string
+  /** '14h', '30/09 14h', '30/09', 'set 26', '2026'. */
+  rotulo: string
+  vendas: number
+  abordagens: number
+  /** Abordagens do intervalo em que a IA foi mostrada (as demais não mostraram). */
+  mostrou: number
+  calls: number
+}
+
 /**
- * Vendas (área) e abordagens (linha) por hora de Brasília, série contínua. Rótulo "14h" ou "30/09 14h" quando a série
- * cruza dias. Usada quando o período é um dia só; nos períodos longos vale a série diária, mensal ou anual da hook.
+ * A linha do tempo de todos os gráficos da Home, a mesma para todos. Num dia só, as horas de Brasília entre o primeiro e
+ * o último registro (vendas, abordagens ou calls), sem pular as vazias; nos períodos longos, os dias, meses ou anos de
+ * buildDashboardSeries, a mesma função da série que o painel antigo desenhava. Em "todo o período" o primeiro e o último
+ * dia saem de TODOS os registros, para nenhuma call ficar fora. Sem registro nenhum, [] (os gráficos mostram a moldura).
  */
-export function serieHoraria(vendas: AbordagemLinha[], abordagens: AbordagemLinha[]): PontoDaSerie[] {
-  const validas = (linhas: AbordagemLinha[]) => linhas.filter((l) => instanteValido(l.created_at))
-  const v = validas(vendas)
-  const a = validas(abordagens)
-  const contar = (linhas: AbordagemLinha[]) => {
-    const mapa = new Map<string, number>()
-    for (const l of linhas) {
-      const h = chaveDaHora(l.created_at)
-      mapa.set(h, (mapa.get(h) ?? 0) + 1)
+export function montarIntervalos(
+  periodo: ResolvedDashboardPeriod,
+  porHora: boolean,
+  vendas: AbordagemLinha[],
+  abordagens: AbordagemLinha[],
+  calls: CallLinha[],
+): IntervaloDoPainel[] {
+  const v = vendas.filter((l) => instanteValido(l.created_at))
+  const a = abordagens.filter((l) => instanteValido(l.created_at))
+  const comIa = a.filter((l) => l.mostrou_ia === true)
+  // As calls na forma de registro datado (created_at = quando aconteceram), para as mesmas contas das outras linhas.
+  const c = calls.filter((l) => instanteValido(l.performed_at)).map((l) => ({ id: l.id, created_at: l.performed_at }))
+  if (v.length + a.length + c.length === 0) return []
+
+  if (porHora) {
+    const contar = (linhas: Array<{ created_at: string }>) => {
+      const mapa = new Map<string, number>()
+      for (const l of linhas) {
+        const h = chaveDaHora(l.created_at)
+        mapa.set(h, (mapa.get(h) ?? 0) + 1)
+      }
+      return mapa
     }
-    return mapa
+    const [porVendas, porAbordagens, porIa, porCalls] = [v, a, comIa, c].map(contar)
+    const horas = horasContinuas([...v, ...a, ...c].map((l) => Date.parse(l.created_at)))
+    const variosDias = horas[0].slice(0, 10) !== horas[horas.length - 1].slice(0, 10)
+    return horas.map((hora) => {
+      const [data, hh] = hora.split(' ')
+      const [, mes, dia] = data.split('-')
+      return {
+        chave: hora,
+        rotulo: variosDias ? `${dia}/${mes} ${hh}h` : `${hh}h`,
+        vendas: porVendas.get(hora) ?? 0,
+        abordagens: porAbordagens.get(hora) ?? 0,
+        mostrou: porIa.get(hora) ?? 0,
+        calls: porCalls.get(hora) ?? 0,
+      }
+    })
   }
-  const porHoraVendas = contar(v)
-  const porHoraAbordagens = contar(a)
 
-  const horas = horasContinuas([...v, ...a].map((l) => Date.parse(l.created_at)))
-  const variosDias = horas.length > 0 && horas[0].slice(0, 10) !== horas[horas.length - 1].slice(0, 10)
-  return horas.map((hora) => {
-    const [data, hh] = hora.split(' ')
-    const [, mes, dia] = data.split('-')
-    return {
-      chave: hora,
-      rotulo: variosDias ? `${dia}/${mes} ${hh}h` : `${hh}h`,
-      principal: porHoraVendas.get(hora) ?? 0,
-      secundaria: porHoraAbordagens.get(hora) ?? 0,
-    }
-  })
+  let fixo = periodo
+  if (periodo.allTime) {
+    const dias = [...v, ...a, ...c].map((l) => brasiliaDateKey(l.created_at)).filter(isValidDateKey).sort()
+    fixo = { ...periodo, startKey: dias[0], endKey: dias[dias.length - 1] }
+  }
+  const base = buildDashboardSeries(v, a, fixo)
+  const ia = buildDashboardSeries([], comIa, fixo)
+  const feitas = buildDashboardSeries([], c, fixo)
+  return base.map((p, i) => ({
+    chave: p.month,
+    rotulo: p.month,
+    vendas: p.vendas,
+    abordagens: p.abordagens,
+    mostrou: ia[i]?.abordagens ?? 0,
+    calls: feitas[i]?.abordagens ?? 0,
+  }))
 }
 
-/** Série diária, mensal ou anual que a hook já calculou (buildDashboardSeries), no formato do gráfico. */
-export function serieDaHook(vendasMes: Array<{ month: string; vendas: number; abordagens: number }>): PontoDaSerie[] {
-  return vendasMes.map((p) => ({ chave: p.month, rotulo: p.month, principal: p.vendas, secundaria: p.abordagens }))
+/**
+ * Pontos do gráfico de abordagens e calls: as calls feitas na área (a medida mais funda do funil) e as abordagens na
+ * linha. Sem calls nem abordagens (só vendas), [] e o gráfico fica na moldura vazia, nunca numa linha de zeros.
+ */
+export function serieDeCalls(intervalos: IntervaloDoPainel[]): PontoDaSerie[] {
+  if (intervalos.every((p) => p.calls === 0 && p.abordagens === 0)) return []
+  return intervalos.map((p) => ({ chave: p.chave, rotulo: p.rotulo, principal: p.calls, secundaria: p.abordagens }))
 }
-
-/** Sem nenhuma venda e nenhuma abordagem não há o que desenhar: vale o estado vazio, não uma linha de zeros. */
-export const serieSemMovimento = (pontos: PontoDaSerie[]) => pontos.every((p) => p.principal === 0 && p.secundaria === 0)
 
 
 /** Registros com horário a partir de `agora − 1 h`. */
@@ -134,55 +185,7 @@ export function dividirAbordagens(abordagens: AbordagemLinha[]): { mostrou: numb
   return { mostrou, naoMostrou: abordagens.length - mostrou }
 }
 
-/** Um intervalo da série com as abordagens repartidas pela demonstração da IA. */
-export interface PontoDividido {
-  chave: string
-  rotulo: string
-  vendas: number
-  abordagens: number
-  /** Abordagens do intervalo em que a IA foi mostrada (as demais não mostraram). */
-  mostrou: number
-}
-
 export type Passo = 'hora' | 'dia' | 'mês' | 'ano'
-
-/**
- * A série do gráfico grande (os mesmos intervalos, os mesmos totais) com as abordagens de cada intervalo repartidas
- * pela demonstração da IA, para os gráficos dos indicadores. Num dia só os intervalos são as horas da série; nos
- * períodos longos eles saem de buildDashboardSeries, a mesma função que fez a série da hook. Devolve [] se os
- * intervalos não baterem (nunca um número que não veio dos dados).
- */
-export function dividirSerie(
-  serie: PontoDaSerie[],
-  porHora: boolean,
-  vendas: AbordagemLinha[],
-  abordagens: AbordagemLinha[],
-  periodo: ResolvedDashboardPeriod,
-): PontoDividido[] {
-  if (serie.length === 0) return []
-  const comIa = abordagens.filter((a) => a.mostrou_ia === true && instanteValido(a.created_at))
-  let mostrou: number[]
-  if (porHora) {
-    const porChave = new Map<string, number>()
-    for (const a of comIa) {
-      const h = chaveDaHora(a.created_at)
-      porChave.set(h, (porChave.get(h) ?? 0) + 1)
-    }
-    mostrou = serie.map((p) => porChave.get(p.chave) ?? 0)
-  } else {
-    // Em "todo o período" o primeiro e o último dia vêm dos eventos: fixa os dois a partir de TODOS os eventos, senão
-    // contar só as abordagens com a IA mudaria os intervalos.
-    let fixo = periodo
-    if (periodo.allTime) {
-      const dias = [...vendas, ...abordagens].map((l) => brasiliaDateKey(l.created_at)).filter(isValidDateKey).sort()
-      fixo = { ...periodo, startKey: dias[0], endKey: dias[dias.length - 1] }
-    }
-    const porIntervalo = buildDashboardSeries([], comIa, fixo)
-    if (porIntervalo.length !== serie.length || porIntervalo.some((p, i) => p.month !== serie[i].rotulo)) return []
-    mostrou = porIntervalo.map((p) => p.abordagens)
-  }
-  return serie.map((p, i) => ({ chave: p.chave, rotulo: p.rotulo, vendas: p.principal, abordagens: p.secundaria, mostrou: mostrou[i] }))
-}
 
 /** O passo dos intervalos, para as legendas: hora num dia só; nos longos, pelo rótulo que a hook escreveu. */
 export function passoDaSerie(serie: Array<{ rotulo: string }>, porHora: boolean): Passo {

@@ -168,11 +168,47 @@ export function buildFixtures({ sales = 900, approaches = 3000, days = 60, role 
     updated_at: iso(nowMs - Math.floor(r() * 5 * 86400_000)), status: 'open', product_interest: pick(products).nome, value: pick(products).valor,
   }))
 
+  // Calls do CRM (crm_activities): qualificação, do SDR, e fechamento, do Closer. "Feita" é a que tem presença registrada
+  // (performed_at) e não foi cancelada, a mesma regra da Arena; aqui também há calls só marcadas e canceladas, que o
+  // painel não pode contar. Gerador próprio, depois de tudo: as outras fixtures continuam idênticas.
+  const rc = rng(seed + 1000)
+  const escolher = (arr) => arr[Math.floor(rc() * arr.length)]
+  const call = (n, { pessoa, qualificacao, marcadaMs, estado }) => {
+    const feita = estado === 'feita'
+    const cancelada = estado === 'cancelada'
+    const feitaMs = Math.min(nowMs - 60_000, marcadaMs + Math.floor(rc() * 3 * 3600_000))
+    const fimMs = feita ? feitaMs : marcadaMs + 1800_000
+    return {
+      id: uuid(95_000 + n), lead_id: escolher(crmLeads).id, user_id: qualificacao ? pessoa.id : escolher(sdrs).id, assigned_to: pessoa.id,
+      activity_type: 'call', call_type: qualificacao ? 'qualificacao' : 'fechamento_closer', title: qualificacao ? 'Call de qualificação' : 'Call de fechamento',
+      description: null, author_name: null, scheduled_at: iso(marcadaMs + 3600_000), created_at: iso(marcadaMs), updated_at: iso(feita || cancelada ? fimMs : marcadaMs),
+      is_completed: feita || cancelada, completed_at: feita || cancelada ? iso(fimMs) : null,
+      outcome: feita ? (qualificacao ? 'avancou' : 'venda_perdida') : cancelada ? 'followup' : null,
+      performed_at: feita ? iso(feitaMs) : null, performed_by: feita ? pessoa.id : null,
+      cancelled_at: cancelada ? iso(fimMs) : null, cancelled_by: cancelada ? pessoa.id : null, cancellation_reason: cancelada ? 'Cliente pediu para remarcar' : null,
+      is_pinned: false, previous_state: null, new_state: null,
+    }
+  }
+  const estadoDaCall = () => (rc() < 0.72 ? 'feita' : rc() < 0.5 ? 'cancelada' : 'marcada')
+  const crmActivities = []
+  for (let i = 0; i < Math.round(approaches / 5); i++) {
+    const qualificacao = rc() < 0.55
+    const pessoa = rc() < 0.05 ? me : escolher(qualificacao ? sdrs : closers)
+    crmActivities.push(call(i, { pessoa, qualificacao, marcadaMs: nowMs - Math.floor(rc() * days * 86400_000), estado: estadoDaCall() }))
+  }
+  // Algumas hoje (o filtro padrão é "Hoje"), seis delas da própria pessoa logada (o vendedor só vê as suas).
+  for (let i = 0; i < 24; i++) {
+    const qualificacao = rc() < 0.5
+    const pessoa = i < 6 ? me : escolher(qualificacao ? sdrs : closers)
+    crmActivities.push(call(10_000 + i, { pessoa, qualificacao, marcadaMs: nowMs - Math.floor(rc() * 9 * 3600_000), estado: i % 4 === 3 ? 'marcada' : 'feita' }))
+  }
+  crmActivities.sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
+
   return {
     today, users: allUsers, closers, sdrs,
     tables: {
       profiles, user_roles: roleRows, vendas, abordagens, products: products.map((p) => ({ id: p.id, nome: p.nome, valor: p.valor, ativo: true, active: true, name: p.nome, price: p.valor })),
-      daily_goal_tasks: dailyTasks, activity_feed: activity, arena_notifications: [], crm_leads: crmLeads, crm_activities: [], crm_lead_contexts: [],
+      daily_goal_tasks: dailyTasks, activity_feed: activity, arena_notifications: [], crm_leads: crmLeads, crm_activities: crmActivities, crm_lead_contexts: [],
       saques: [], assinaturas: [], meta_ad_accounts: [], meta_sync_runs: [], meta_traffic_daily: [], meta_import_batches: [], meta_lead_import_batches: [],
       meta_form_leads: [], meta_webhook_events: [], traffic_suggestions: [], traffic_suggestion_replies: [], executive_audit_events: [], password_reset_requests: [],
     },
@@ -227,6 +263,7 @@ function matchFilter(row, col, spec) {
     case 'is': return val === 'null' ? v == null : String(v) === val
     case 'in': return val.replace(/^\(|\)$/g, '').split(',').map((s) => s.replace(/^"|"$/g, '')).includes(String(v))
     case 'like': case 'ilike': return new RegExp('^' + val.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', op === 'ilike' ? 'i' : '').test(String(v ?? ''))
+    case 'not': return !matchFilter(row, col, val)
     default: return true
   }
 }

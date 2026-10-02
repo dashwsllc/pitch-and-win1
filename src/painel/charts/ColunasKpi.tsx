@@ -1,5 +1,6 @@
 import { useId, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import type { Passo } from '../lib/visao'
+import { indicesDosRotulos } from './eixo'
 import { formatarNumero, niceTicks } from './scale'
 import { useLargura } from './useLargura'
 
@@ -23,19 +24,6 @@ const CORES = { 'viz-1': 'hsl(var(--viz-1))', 'viz-2': 'hsl(var(--viz-2))' } as 
 const MARGEM = { topo: 18, direita: 2, base: 18, esquerda: 24 }
 const NOME_DO_PASSO: Record<Passo, [string, string]> = { hora: ['hora', 'horas'], dia: ['dia', 'dias'], mês: ['mês', 'meses'], ano: ['ano', 'anos'] }
 const decimal = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 })
-
-/** Rótulos do eixo X sem colisão: espaçados pela largura útil, sempre com o último. */
-function indicesDosRotulos(n: number, larguraUtil: number): number[] {
-  const cada = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(larguraUtil / 44))))
-  const indices: number[] = []
-  for (let i = 0; i < n; i += cada) indices.push(i)
-  const ultimo = indices[indices.length - 1]
-  if (ultimo !== n - 1) {
-    if (n - 1 - ultimo < cada * 0.6) indices[indices.length - 1] = n - 1
-    else indices.push(n - 1)
-  }
-  return indices
-}
 
 /**
  * Colunas dos indicadores: uma série (vendas) ou duas empilhadas (abordagens com e sem a IA), nos mesmos intervalos
@@ -182,7 +170,14 @@ export function ColunasKpi({
           {colunas.map((c, i) => {
             let topoDaPilha = base
             return (
-              <g key={c.chave} data-coluna={c.chave} data-total={totais[i]} className="transition-opacity duration-150" opacity={ativo === null || ativo === i ? 1 : 0.5}>
+              <g
+                key={c.chave}
+                data-coluna={c.chave}
+                data-rotulo={c.rotulo}
+                data-total={totais[i]}
+                className="transition-opacity duration-150"
+                opacity={ativo === null || ativo === i ? 1 : 0.5}
+              >
                 {c.partes.map((v, k) => {
                   if (v <= 0) return null
                   // O respiro entre as partes sai da parte de cima: o topo da pilha continua no total certo.

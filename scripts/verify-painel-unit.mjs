@@ -14,6 +14,7 @@ instalarResolvedor(raiz)
 
 const { niceTicks, formatarNumero, formatarPct } = await import('../src/painel/charts/scale.ts')
 const { caminhoSuave, indiceMaisProximo } = await import('../src/painel/charts/geometria.ts')
+const { indicesDosRotulos } = await import('../src/painel/charts/eixo.ts')
 const tempo = await import('../src/painel/lib/tempo.ts')
 const visao = await import('../src/painel/lib/visao.ts')
 const metas = await import('../src/painel/lib/metas.ts')
@@ -90,6 +91,27 @@ assert.equal(caminhoSuave([[10, 20]]), 'M10,20')
     }
   }
 }
+{
+  // Rótulos do eixo X: o primeiro e o último sempre aparecem, e dois vizinhos nunca ficam mais perto do que o espaço
+  // pedido (a não ser o par final, que pode chegar a 60% dele para o último rótulo não sumir).
+  assert.deepEqual(indicesDosRotulos(1, 300), [0])
+  assert.deepEqual(indicesDosRotulos(2, 300), [0, 1])
+  assert.deepEqual(indicesDosRotulos(0, 300), [])
+  const sorteio = rng(17)
+  for (let rodada = 0; rodada < 400; rodada++) {
+    const n = 1 + Math.floor(sorteio() * 120)
+    const largura = 80 + Math.floor(sorteio() * 1200)
+    const espaco = [44, 64][rodada % 2]
+    const ind = indicesDosRotulos(n, largura, espaco)
+    assert.equal(ind[0], 0, 'começa no primeiro intervalo')
+    assert.equal(ind.at(-1), n - 1, 'termina no último intervalo')
+    assert.ok(ind.every((v, k) => k === 0 || v > ind[k - 1]), 'índices crescentes, sem repetir')
+    const faixa = largura / n
+    const cabem = Math.max(2, Math.floor(largura / espaco))
+    assert.ok(ind.length <= cabem + 1, `n=${n} largura=${largura}: ${ind.length} rótulos para ${cabem} lugares`)
+    for (let k = 1; k < ind.length - 1; k++) assert.ok((ind[k] - ind[k - 1]) * faixa >= Math.min(espaco, largura / 2) - 0.001 || n <= cabem, 'vizinhos afastados')
+  }
+}
 
 // ---------------------------------------------------------------------------------------------- tempo
 assert.equal(tempo.chaveDaHora('2026-09-30T02:30:00Z'), '2026-09-29 23', 'Brasília é UTC-3')
@@ -115,38 +137,45 @@ assert.equal(iniciais(null), '?')
 
 // ----------------------------------------------------------------------------------------- visão (puras)
 const UTC = (s) => new Date(s).toISOString()
+const HOJE = periodos.resolveDashboardPeriod('hoje', periodos.createDefaultDashboardCustomRange())
+const somaDe = (pontos, campo) => pontos.reduce((t, p) => t + p[campo], 0)
 {
-  // Série contínua: nenhuma hora some, nem as sem evento.
+  // Uma linha do tempo só, para todos os gráficos: as horas de Brasília entre o primeiro e o último registro de
+  // vendas, abordagens OU calls (nenhuma hora some, nem as sem evento), com as quatro contagens de cada hora.
   const v = [{ id: 'a', created_at: UTC('2026-10-01T17:50:00Z'), nome_produto: 'P', valor_venda: 10 }, { id: 'b', created_at: UTC('2026-10-01T20:05:00Z'), nome_produto: 'P', valor_venda: 20 }]
-  const a = [{ id: 'x', created_at: UTC('2026-10-01T18:10:00Z') }, { id: 'y', created_at: UTC('2026-10-01T18:40:00Z') }]
-  const s = visao.serieHoraria(v, a)
-  assert.deepEqual(s.map((p) => p.rotulo), ['14h', '15h', '16h', '17h'])
-  assert.deepEqual(s.map((p) => p.principal), [1, 0, 0, 1])
-  assert.deepEqual(s.map((p) => p.secundaria), [0, 2, 0, 0])
-  assert.equal(s.reduce((t, p) => t + p.principal, 0), v.length, 'a soma por hora fecha com o total de vendas')
-  assert.equal(s.reduce((t, p) => t + p.secundaria, 0), a.length, 'e com o total de abordagens')
+  const a = [{ id: 'x', created_at: UTC('2026-10-01T18:10:00Z'), mostrou_ia: true }, { id: 'y', created_at: UTC('2026-10-01T18:40:00Z'), mostrou_ia: false }]
+  const c = [{ id: 'k', performed_at: UTC('2026-10-01T21:15:00Z') }]
+  const s = visao.montarIntervalos(HOJE, true, v, a, c)
+  assert.deepEqual(s.map((p) => p.rotulo), ['14h', '15h', '16h', '17h', '18h'], 'a call das 18h estende a linha do tempo')
+  assert.deepEqual(s.map((p) => p.vendas), [1, 0, 0, 1, 0])
+  assert.deepEqual(s.map((p) => p.abordagens), [0, 2, 0, 0, 0])
+  assert.deepEqual(s.map((p) => p.mostrou), [0, 1, 0, 0, 0])
+  assert.deepEqual(s.map((p) => p.calls), [0, 0, 0, 0, 1])
 }
 {
-  const cruzando = visao.serieHoraria([{ id: '1', created_at: UTC('2026-10-01T01:30:00Z') }, { id: '2', created_at: UTC('2026-10-01T03:30:00Z') }], [])
+  const cruzando = visao.montarIntervalos(HOJE, true, [{ id: '1', created_at: UTC('2026-10-01T01:30:00Z') }, { id: '2', created_at: UTC('2026-10-01T03:30:00Z') }], [], [])
   assert.deepEqual(cruzando.map((p) => p.rotulo), ['30/09 22h', '30/09 23h', '01/10 00h'], 'cruzou o dia: rótulo com data')
   assert.deepEqual(cruzando.map((p) => p.chave), ['2026-09-30 22', '2026-09-30 23', '2026-10-01 00'])
-  assert.deepEqual(visao.serieHoraria([], []), [])
-  assert.deepEqual(visao.serieHoraria([{ id: 'z', created_at: 'lixo' }], []), [], 'horário inválido é ignorado')
-  const um = visao.serieHoraria([{ id: '1', created_at: UTC('2026-10-01T15:00:00Z') }], [])
-  assert.equal(um.length, 1)
-  assert.equal(um[0].rotulo, '12h')
+  assert.deepEqual(visao.montarIntervalos(HOJE, true, [], [], []), [])
+  assert.deepEqual(visao.montarIntervalos(HOJE, true, [{ id: 'z', created_at: 'lixo' }], [], [{ id: 'w', performed_at: 'lixo' }]), [], 'horário inválido é ignorado')
+  const so = visao.montarIntervalos(HOJE, true, [], [], [{ id: '1', performed_at: UTC('2026-10-01T15:00:00Z') }])
+  assert.deepEqual(so.map((p) => [p.rotulo, p.vendas, p.abordagens, p.calls]), [['12h', 0, 0, 1]], 'só calls (o dia de um Closer) também vira série')
 }
 {
-  // Propriedade: para qualquer conjunto de eventos, as horas são contínuas, e as somas fecham com os totais.
+  // Propriedade: horas contínuas, sem repetição, e cada contagem fecha com o seu total.
   const sorteio = rng(21)
   for (let rodada = 0; rodada < 150; rodada++) {
     const base = Date.parse('2026-09-28T00:00:00Z')
-    const evento = (i) => ({ id: String(i), created_at: new Date(base + Math.floor(sorteio() * 4 * 86_400_000)).toISOString() })
-    const vendas = Array.from({ length: Math.floor(sorteio() * 30) }, (_, i) => evento(i))
-    const abord = Array.from({ length: Math.floor(sorteio() * 60) }, (_, i) => evento(1000 + i))
-    const serie = visao.serieHoraria(vendas, abord)
-    assert.equal(serie.reduce((t, p) => t + p.principal, 0), vendas.length)
-    assert.equal(serie.reduce((t, p) => t + p.secundaria, 0), abord.length)
+    const instante = () => new Date(base + Math.floor(sorteio() * 4 * 86_400_000)).toISOString()
+    const vendas = Array.from({ length: Math.floor(sorteio() * 30) }, (_, i) => ({ id: String(i), created_at: instante() }))
+    const abord = Array.from({ length: Math.floor(sorteio() * 60) }, (_, i) => ({ id: String(1000 + i), created_at: instante(), mostrou_ia: sorteio() < 0.6 }))
+    const calls = Array.from({ length: Math.floor(sorteio() * 25) }, (_, i) => ({ id: String(5000 + i), performed_at: instante() }))
+    const serie = visao.montarIntervalos(HOJE, true, vendas, abord, calls)
+    assert.equal(somaDe(serie, 'vendas'), vendas.length)
+    assert.equal(somaDe(serie, 'abordagens'), abord.length)
+    assert.equal(somaDe(serie, 'mostrou'), visao.dividirAbordagens(abord).mostrou)
+    assert.equal(somaDe(serie, 'calls'), calls.length)
+    assert.ok(serie.every((p) => p.mostrou <= p.abordagens), 'mostrou cabe nas abordagens da hora')
     assert.equal(new Set(serie.map((p) => p.chave)).size, serie.length, 'sem hora repetida')
     for (let i = 1; i < serie.length; i++) {
       const [d0, h0] = serie[i - 1].chave.split(' ')
@@ -158,53 +187,63 @@ const UTC = (s) => new Date(s).toISOString()
   }
 }
 {
-  // Gráficos dos indicadores: os mesmos intervalos e totais do gráfico grande, com as abordagens repartidas pela IA.
+  // Períodos longos: os mesmos intervalos e os mesmos números de vendas e abordagens da série que a hook calculava
+  // (buildDashboardSeries); as calls e a divisão pela IA caem nesses mesmos intervalos.
   const sorteio = rng(41)
   const agoraMs = Date.now()
-  const linha = (i, dias, comIa) => ({
-    id: String(i),
-    created_at: new Date(agoraMs - Math.floor(sorteio() * dias * 86_400_000)).toISOString(),
-    mostrou_ia: comIa ? sorteio() < 0.6 : undefined,
-    nome_produto: 'P',
-    valor_venda: 10,
-  })
-  const conferir = (serie, dividida, vendas, abordagens, rotulo) => {
-    assert.equal(dividida.length, serie.length, `${rotulo}: um ponto dividido por intervalo`)
-    dividida.forEach((p, i) => {
-      assert.equal(p.chave, serie[i].chave)
-      assert.equal(p.vendas, serie[i].principal, `${rotulo}: vendas do intervalo ${p.rotulo}`)
-      assert.equal(p.abordagens, serie[i].secundaria, `${rotulo}: abordagens do intervalo ${p.rotulo}`)
-      assert.ok(p.mostrou >= 0 && p.mostrou <= p.abordagens, `${rotulo}: mostrou cabe no intervalo`)
-    })
-    assert.equal(dividida.reduce((t, p) => t + p.mostrou, 0), visao.dividirAbordagens(abordagens).mostrou, `${rotulo}: a soma das colunas fecha com a legenda`)
-  }
+  const instante = (dias) => new Date(agoraMs - Math.floor(sorteio() * dias * 86_400_000)).toISOString()
   for (let rodada = 0; rodada < 60; rodada++) {
-    // Um dia só: série por hora.
-    const vendas = Array.from({ length: Math.floor(sorteio() * 20) }, (_, i) => linha(i, 1, false))
-    const abordagens = Array.from({ length: 1 + Math.floor(sorteio() * 60) }, (_, i) => linha(1000 + i, 1, true))
-    const serie = visao.serieHoraria(vendas, abordagens)
-    const hoje = periodos.resolveDashboardPeriod('hoje', periodos.createDefaultDashboardCustomRange())
-    conferir(serie, visao.dividirSerie(serie, true, vendas, abordagens, hoje), vendas, abordagens, 'por hora')
-    // Períodos longos: a série da hook (dia, mês, ano), recortada como a hook recorta.
     for (const filtro of ['7dias', '30dias', 'all', 'custom']) {
       const periodo = periodos.resolveDashboardPeriod(filtro, { start: '2025-01-01', end: periodos.createDefaultDashboardCustomRange().end })
-      const dentro = (l) => periodo.allTime || (Date.parse(l.created_at) >= periodo.start.getTime() && Date.parse(l.created_at) < periodo.end.getTime())
+      const dentro = (iso) => periodo.allTime || (Date.parse(iso) >= periodo.start.getTime() && Date.parse(iso) < periodo.end.getTime())
       const dias = filtro === 'custom' ? 600 : 90
-      const v = Array.from({ length: Math.floor(sorteio() * 40) }, (_, i) => linha(i, dias, false)).filter(dentro)
-      const a = Array.from({ length: 1 + Math.floor(sorteio() * 120) }, (_, i) => linha(1000 + i, dias, true)).filter(dentro)
-      const longa = visao.serieDaHook(periodos.buildDashboardSeries(v, a, periodo))
-      if (longa.length === 0) continue
-      conferir(longa, visao.dividirSerie(longa, false, v, a, periodo), v, a, filtro)
+      const v = Array.from({ length: Math.floor(sorteio() * 40) }, (_, i) => ({ id: String(i), created_at: instante(dias) })).filter((l) => dentro(l.created_at))
+      const a = Array.from({ length: Math.floor(sorteio() * 120) }, (_, i) => ({ id: String(1000 + i), created_at: instante(dias), mostrou_ia: sorteio() < 0.6 })).filter((l) => dentro(l.created_at))
+      // Calls nos mesmos instantes de registros que já existem: os intervalos têm de ser exatamente os da hook.
+      const c = [...v, ...a].filter(() => sorteio() < 0.3).map((l, i) => ({ id: String(9000 + i), performed_at: l.created_at }))
+      const s = visao.montarIntervalos(periodo, false, v, a, c)
+      if (v.length + a.length === 0) {
+        assert.deepEqual(s, [], `${filtro}: sem registro, sem série`)
+        continue
+      }
+      const hook = periodos.buildDashboardSeries(v, a, periodo)
+      assert.deepEqual(s.map((p) => [p.rotulo, p.vendas, p.abordagens]), hook.map((p) => [p.month, p.vendas, p.abordagens]), `${filtro}: os intervalos e números da hook`)
+      assert.equal(somaDe(s, 'calls'), c.length, `${filtro}: as calls fecham com o total`)
+      assert.equal(somaDe(s, 'mostrou'), visao.dividirAbordagens(a).mostrou, `${filtro}: a divisão pela IA fecha com a legenda`)
+      assert.ok(s.every((p) => p.mostrou <= p.abordagens))
     }
   }
-  assert.deepEqual(visao.dividirSerie([], true, [], [], periodos.resolveDashboardPeriod('hoje', periodos.createDefaultDashboardCustomRange())), [])
-  assert.equal(visao.passoDaSerie([{ rotulo: '14h' }], true), 'hora')
-  assert.equal(visao.passoDaSerie([{ rotulo: '29/09' }], false), 'dia')
-  assert.equal(visao.passoDaSerie([{ rotulo: 'set 26' }], false), 'mês')
-  assert.equal(visao.passoDaSerie([{ rotulo: '2026' }], false), 'ano')
 }
-assert.equal(visao.serieSemMovimento([{ principal: 0, secundaria: 0 }]), true)
-assert.equal(visao.serieSemMovimento([{ principal: 0, secundaria: 1 }]), false)
+{
+  // Todo o período: o primeiro e o último dia saem de TODOS os registros; uma call antes da primeira venda não some.
+  const tudo = periodos.resolveDashboardPeriod('all', periodos.createDefaultDashboardCustomRange())
+  const v = [{ id: '1', created_at: UTC('2026-09-10T15:00:00Z') }]
+  const a = [{ id: '2', created_at: UTC('2026-09-12T15:00:00Z'), mostrou_ia: true }]
+  const c = [{ id: '3', performed_at: UTC('2026-09-08T15:00:00Z') }]
+  const s = visao.montarIntervalos(tudo, false, v, a, c)
+  assert.deepEqual(s.map((p) => p.rotulo), ['08/09', '09/09', '10/09', '11/09', '12/09'])
+  assert.deepEqual(s.map((p) => [p.vendas, p.abordagens, p.mostrou, p.calls]), [[0, 0, 0, 1], [0, 0, 0, 0], [1, 0, 0, 0], [0, 0, 0, 0], [0, 1, 1, 0]])
+  assert.deepEqual(visao.montarIntervalos(tudo, false, [], [], c).map((p) => [p.rotulo, p.calls]), [['08/09', 1]], 'só calls também vira série')
+  assert.deepEqual(visao.montarIntervalos(tudo, false, [], [], []), [])
+}
+{
+  // Pontos do gráfico de abordagens e calls: calls na área, abordagens na linha. Sem calls nem abordagens (só vendas),
+  // a moldura vazia, nunca uma linha de zeros.
+  const pontos = [
+    { chave: 'a', rotulo: '14h', vendas: 3, abordagens: 5, mostrou: 2, calls: 1 },
+    { chave: 'b', rotulo: '15h', vendas: 0, abordagens: 0, mostrou: 0, calls: 2 },
+  ]
+  assert.deepEqual(visao.serieDeCalls(pontos), [
+    { chave: 'a', rotulo: '14h', principal: 1, secundaria: 5 },
+    { chave: 'b', rotulo: '15h', principal: 2, secundaria: 0 },
+  ])
+  assert.deepEqual(visao.serieDeCalls([{ chave: 'a', rotulo: '14h', vendas: 4, abordagens: 0, mostrou: 0, calls: 0 }]), [])
+  assert.deepEqual(visao.serieDeCalls([]), [])
+}
+assert.equal(visao.passoDaSerie([{ rotulo: '14h' }], true), 'hora')
+assert.equal(visao.passoDaSerie([{ rotulo: '29/09' }], false), 'dia')
+assert.equal(visao.passoDaSerie([{ rotulo: 'set 26' }], false), 'mês')
+assert.equal(visao.passoDaSerie([{ rotulo: '2026' }], false), 'ano')
 {
   const agora = '2026-10-01T15:00:00.000Z'
   const l = [{ id: '1', created_at: '2026-10-01T14:00:00.000Z' }, { id: '2', created_at: '2026-10-01T14:00:00.001Z' }, { id: '3', created_at: '2026-10-01T13:59:59.999Z' }, { id: '4', created_at: '2026-10-01T15:00:00.000Z' }]
@@ -230,7 +269,6 @@ assert.equal(visao.serieSemMovimento([{ principal: 0, secundaria: 1 }]), false)
   assert.deepEqual(b.map((x) => x.fracao), [0.75, 0.25])
   assert.equal(visao.barrasDeProdutos([{ nome: 'A', quantidade: 0, valor: 0 }], 0)[0].fracao, null, 'sem receita não há fração')
 }
-assert.deepEqual(visao.serieDaHook([{ month: '01/10', vendas: 2, abordagens: 5 }]), [{ chave: '01/10', rotulo: '01/10', principal: 2, secundaria: 5 }])
 {
   // Barra dividida: as duas partes somam sempre o total de abordagens (o número que o painel antigo já mostrava).
   assert.deepEqual(visao.dividirAbordagens([]), { mostrou: 0, naoMostrou: 0 })
@@ -383,6 +421,11 @@ for (const [tema, t] of [['claro', claro], ['escuro', escuro]]) {
   const r = spawnSync(process.execPath, [path.join(raiz, 'validar-paleta.mjs'), series, tema, card], { encoding: 'utf8' })
   assert.equal(r.status, 0, `validar-paleta (${tema}) reprovou:\n${r.stdout}${r.stderr}`)
   assert.ok(!/\[FAIL\]/.test(r.stdout), `validar-paleta (${tema}) tem FAIL`)
+  // Gráfico de abordagens e calls: as calls (azul, na área) ao lado das abordagens (laranja, na linha).
+  const calls = ['viz-4', 'viz-1'].map((n) => hex(t, n)).join(',')
+  const rc = spawnSync(process.execPath, [path.join(raiz, 'validar-paleta.mjs'), calls, tema, card], { encoding: 'utf8' })
+  assert.equal(rc.status, 0, `validar-paleta calls × abordagens (${tema}) reprovou:\n${rc.stdout}${rc.stderr}`)
+  assert.ok(!/\[FAIL\]/.test(rc.stdout), `calls × abordagens (${tema}) tem FAIL`)
   // Rampa ordinal (um matiz, do claro ao escuro), validada como rampa e não como séries.
   const rampa = ['viz-ord-1', 'viz-ord-2', 'viz-ord-3'].map((n) => hex(t, n)).join(',')
   const o = spawnSync(process.execPath, [path.join(raiz, 'validar-paleta.mjs'), rampa, tema, card, '--ordinal'], { encoding: 'utf8' })

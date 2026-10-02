@@ -57,6 +57,8 @@ html.painel {
   --viz-1: 21 90.16% 47.84%;
   --viz-2: 258.18 72.69% 55.49%;
   --viz-3: 162.08 82.76% 34.12%;
+  /* série 4 (azul): as calls, na área do gráfico de abordagens e calls (validada ao lado do laranja) */
+  --viz-4: 221.21 83.19% 53.33%;
   --viz-track: 20.4 100% 90.2%;
   --viz-grid: 261.82 31.43% 93.14%;
   /* reservados (estados; a Home não os usa como série) */
@@ -126,6 +128,7 @@ html.painel.dark {
   --viz-1: 23.25 87.45% 46.86%;
   --viz-2: 256 83.85% 68.43%;
   --viz-3: 159.57 69% 39.22%;
+  --viz-4: 217.22 91.22% 59.8%;
   --viz-track: 19.15 52.81% 17.45%;
   --viz-grid: 257.14 16.28% 16.86%;
   --viz-critico: 0 84.24% 60.2%;
@@ -292,13 +295,14 @@ html.painel [data-sidebar='menu-button'][data-active='true']::before {
 }
 
 /* ---------------------------------------------------------------------------
-   Pódio: 2º, 1º e 3º lado a lado; os degraus sobem ao abrir. Ouro, prata e bronze só aqui.
+   Pódio (compacto: dois dividem a coluna ao lado do gráfico): 2º, 1º e 3º lado a lado; os degraus sobem ao abrir.
+   Ouro, prata e bronze só aqui.
    --------------------------------------------------------------------------- */
 .podio {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 .podio-lugar {
   --medalha: hsl(var(--prata));
@@ -330,7 +334,7 @@ html.painel [data-sidebar='menu-button'][data-active='true']::before {
 .podio-degrau {
   position: relative;
   width: 100%;
-  border-radius: 14px 14px 6px 6px;
+  border-radius: 10px 10px 4px 4px;
   border: 1px solid color-mix(in oklab, var(--medalha) 38%, hsl(var(--border)));
   background: linear-gradient(180deg, color-mix(in oklab, var(--medalha) 26%, hsl(var(--card))) 0%, hsl(var(--card)) 88%);
   transform-origin: bottom;

@@ -21,16 +21,15 @@ import { useRoles } from '@/hooks/useRoles'
 import { resolveDashboardPeriod } from '@/lib/dashboard-period'
 import { refreshDashboardData } from '@/lib/sync'
 import { Cabecalho } from '@/painel/components/Cabecalho'
+import { CartaoDoPodio } from '@/painel/components/CartaoDoPodio'
 import { ChecklistDoDia } from '@/painel/components/ChecklistDoDia'
 import { FeedAoVivo } from '@/painel/components/FeedAoVivo'
 import { FiltroPainel } from '@/painel/components/FiltroPainel'
 import { Iniciais } from '@/painel/components/Iniciais'
 import { LegendaDaDivisao } from '@/painel/components/LegendaDaDivisao'
 import { Bloco, KpiCard } from '@/painel/components/KpiCard'
-import { LinkSecao } from '@/painel/components/LinkSecao'
 import { MetasDeTurno } from '@/painel/components/MetasDeTurno'
 import { NumeroAnimado } from '@/painel/components/NumeroAnimado'
-import { Podio } from '@/painel/components/Podio'
 import { UltimasVendas } from '@/painel/components/UltimasVendas'
 import { VendasDoTime } from '@/painel/components/VendasDoTime'
 import { Barras } from '@/painel/charts/Barras'
@@ -49,12 +48,10 @@ import {
   barrasDeProdutos,
   contarNaUltimaHora,
   dividirAbordagens,
-  dividirSerie,
   montarAtividade,
+  montarIntervalos,
   passoDaSerie,
-  serieDaHook,
-  serieHoraria,
-  serieSemMovimento,
+  serieDeCalls,
   somarNaUltimaHora,
   ultimoInstante,
 } from '@/painel/lib/visao'
@@ -65,7 +62,7 @@ const VALOR_EM_REAIS = 'text-[clamp(1.5rem,2.1vw,2.25rem)]'
 /**
  * Home: "Visão geral", na grade da referência; os indicadores formam a seção "Indicadores comerciais". Lê a mesma camada de dados do painel antigo
  * (useDashboardData, ranking, metas e vendas do time, todos atualizados pelo DataSync) e só compõe: cada bloco recebe
- * dados prontos. O período vale para os blocos de vendas e abordagens; ranking, metas e vendas do time têm janela
+ * dados prontos. O período vale para os blocos de vendas, abordagens e calls; ranking, metas e vendas do time têm janela
  * própria, dita na barra de filtros e na descrição de cada bloco.
  */
 export default function Dashboard() {
@@ -79,7 +76,7 @@ export default function Dashboard() {
   const agora = useAgora()
   const status = useStatusAoVivo()
   const { metrics, rows, loading, fetching, error, updatedAt, generation, loadedPeriod, refetch } = useDashboardData(filtro.valor.periodo, filtro.intervalo)
-  const { ranking, sdrRanking, loading: carregandoRanking, error: erroRanking } = useRankingDataWithMock()
+  const { ranking, sdrRanking, loading: carregandoRanking, error: erroRanking, sdrError: erroSdr } = useRankingDataWithMock()
   const metas = useDailyGoals()
 
   const nomeCompleto = profile?.display_name || user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Usuário'
@@ -103,23 +100,26 @@ export default function Dashboard() {
     }
   }, [loadedPeriod, filtro.valor.periodo, filtro.intervalo, agora])
 
-  // Tudo abaixo sai das mesmas linhas que deram os totais (rows e metrics chegam juntos, na mesma carga).
-  const serie = useMemo(() => {
-    const pontos = umDiaSo ? serieHoraria(rows.vendas, rows.abordagens) : serieDaHook(metrics.vendasMes)
-    return serieSemMovimento(pontos) ? [] : pontos
-  }, [umDiaSo, rows, metrics.vendasMes])
-  // Os gráficos dos indicadores usam os mesmos intervalos do gráfico grande; o das abordagens, com a divisão pela IA.
-  const serieDividida = useMemo(() => dividirSerie(serie, umDiaSo, rows.vendas, rows.abordagens, periodo), [serie, umDiaSo, rows, periodo])
-  const passo = passoDaSerie(serie, umDiaSo)
+  // Tudo abaixo sai das mesmas linhas que deram os totais (rows e metrics chegam juntos, na mesma carga). Uma linha do
+  // tempo só para os três gráficos: as colunas de vendas, as de abordagens (com a divisão pela IA) e o de abordagens e calls.
+  const intervalos = useMemo(() => montarIntervalos(periodo, umDiaSo, rows.vendas, rows.abordagens, rows.calls), [periodo, umDiaSo, rows])
+  const pontosDeCalls = useMemo(() => serieDeCalls(intervalos), [intervalos])
+  const passo = passoDaSerie(intervalos, umDiaSo)
   const naUltimaHora = useMemo(() => contarNaUltimaHora(rows.vendas, agora), [rows.vendas, agora])
   const receitaNaUltimaHora = useMemo(() => somarNaUltimaHora(rows.vendas, agora), [rows.vendas, agora])
   const ultimaVenda = useMemo(() => ultimoInstante(rows.vendas), [rows.vendas])
   const divisao = useMemo(() => dividirAbordagens(rows.abordagens), [rows.abordagens])
   const atividade = useMemo(() => montarAtividade(rows.vendas, rows.abordagens), [rows])
   const produtos = useMemo(() => barrasDeProdutos(metrics.produtosMaisVendidos, metrics.totalVendas), [metrics.produtosMaisVendidos, metrics.totalVendas])
-  const linhasDoPodio = useMemo(
-    () => ranking.slice(0, 6).map((r, i) => ({ posicao: i + 1, chave: r.user_id, nome: r.name, total: r.totalVendas, vendas: r.quantidadeVendas })),
+  // Os pódios do mês, na ordem que o servidor devolve (a mesma da tela Ranking): Closers pela receita aprovada, SDRs pelos
+  // repasses para Closers.
+  const podioDosClosers = useMemo(
+    () => ranking.slice(0, 3).map((r, i) => ({ posicao: i + 1, chave: r.user_id, nome: r.name, valor: r.totalVendas, apoio: pluralizar(r.quantidadeVendas, 'venda', 'vendas') })),
     [ranking],
+  )
+  const podioDosSdrs = useMemo(
+    () => sdrRanking.slice(0, 3).map((r, i) => ({ posicao: i + 1, chave: r.user_id, nome: r.name, valor: r.repasses, apoio: pluralizar(r.abordagens, 'abordagem', 'abordagens') })),
+    [sdrRanking],
   )
 
   const primeiraCarga = loading && updatedAt === null && !error
@@ -165,7 +165,7 @@ export default function Dashboard() {
       {/* Montada desde o começo: as consultas dos blocos independentes saem em paralelo com a das métricas. */}
       <div aria-busy={recarregando} className={`${primeiraCarga || falhouAntesDeCarregar ? 'hidden' : 'grid'} gap-4 md:grid-cols-2 xl:grid-cols-12`}>
         <section data-dashboard-section="commercial-indicators" aria-label="Indicadores comerciais" className="contents">
-          {/* Linha 1 da referência: destaque · barra dividida · taxa · meta (5 · 3 · 2 · 2). */}
+          {/* Linha 1: destaque · abordagens · taxa sobre meta (5 · 4 · 3). */}
           <KpiCard
             destaque
             rotulo="Quantidade de Vendas"
@@ -187,7 +187,7 @@ export default function Dashboard() {
           >
             <div className="mt-4">
               <ColunasKpi
-                colunas={serie.map((p) => ({ chave: p.chave, rotulo: p.rotulo, partes: [p.principal] }))}
+                colunas={intervalos.map((p) => ({ chave: p.chave, rotulo: p.rotulo, partes: [p.vendas] }))}
                 series={[{ nome: 'vendas', cor: 'viz-1', ponto: 'bg-viz-1' }]}
                 unidade={['venda', 'vendas']}
                 passo={passo}
@@ -198,11 +198,11 @@ export default function Dashboard() {
               />
             </div>
           </KpiCard>
-          <KpiCard rotulo="Abordagens" icone={UsersRoundIcon} valor={<NumeroAnimado valor={metrics.abordagens} />} className={`xl:col-span-3 ${esmaecer}`}>
+          <KpiCard rotulo="Abordagens" icone={UsersRoundIcon} valor={<NumeroAnimado valor={metrics.abordagens} />} className={`xl:col-span-4 ${esmaecer}`}>
             {/* Altura maior que a das vendas: o número é menor, e assim as duas molduras terminam alinhadas no xl. */}
             <div className="mt-4">
               <ColunasKpi
-                colunas={serieDividida.map((p) => ({ chave: p.chave, rotulo: p.rotulo, partes: [p.mostrou, p.abordagens - p.mostrou] }))}
+                colunas={intervalos.map((p) => ({ chave: p.chave, rotulo: p.rotulo, partes: [p.mostrou, p.abordagens - p.mostrou] }))}
                 series={[
                   { nome: 'mostraram a IA', cor: 'viz-1', ponto: 'bg-viz-1' },
                   { nome: 'não mostraram', cor: 'viz-2', ponto: 'bg-viz-2' },
@@ -221,43 +221,39 @@ export default function Dashboard() {
               />
             </div>
           </KpiCard>
-          <KpiCard
-            rotulo="Conversão"
-            icone={PercentIcon}
-            valor={conversao === null ? '—' : formatarPercentual(conversao)}
-            detalhe={`${pluralizar(metrics.quantidadeVendas, 'venda', 'vendas')} para ${pluralizar(metrics.abordagens, 'abordagem', 'abordagens')}`}
-            lateral={
-              conversao !== null && (
-                <RingGauge fracao={Math.min(1, conversao / 100)} rotulo="Vendas por abordagem">
-                  <UsersRoundIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-                </RingGauge>
-              )
-            }
-            className={`xl:col-span-2 ${esmaecer}`}
-          />
-          <KpiCard
-            rotulo="Meta do dia"
-            icone={TargetIcon}
-            valor={metas.error ? '—' : <NumeroAnimado valor={tarefasConcluidas} />}
-            detalhe={
-              metas.loading ? 'Carregando…' : metas.error ? 'Metas indisponíveis agora' : tarefas.length ? `${progressoDasTarefas}% das tarefas de hoje` : 'Sem tarefas hoje'
-            }
-            lateral={
-              !metas.error && (
-                <RingGauge fracao={tarefas.length ? tarefasConcluidas / tarefas.length : 0} rotulo={`${tarefasConcluidas} de ${tarefas.length} tarefas do dia concluídas`}>
-                  <span className="text-base font-semibold tabular-nums text-heading">{tarefasConcluidas}</span>
-                  <span className="text-[10px] text-muted-foreground">de {tarefas.length}</span>
-                </RingGauge>
-              )
-            }
-            className="md:col-span-2 xl:col-span-2"
-          >
-            <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
-              {tarefas.length
-                ? 'Cada tarefa concluída avança a meta do dia. O checklist completo está logo abaixo.'
-                : 'O Executive pode cadastrar o checklist do dia em Metas.'}
-            </p>
-          </KpiCard>
+          {/* Os dois indicadores de anel dividem uma coluna: cada um ganha largura para o número e a frase. */}
+          <div className="grid grid-rows-2 gap-4 xl:col-span-3">
+            <KpiCard
+              rotulo="Conversão"
+              icone={PercentIcon}
+              valor={conversao === null ? '—' : formatarPercentual(conversao)}
+              detalhe={`${pluralizar(metrics.quantidadeVendas, 'venda', 'vendas')} para ${pluralizar(metrics.abordagens, 'abordagem', 'abordagens')}`}
+              lateral={
+                conversao !== null && (
+                  <RingGauge fracao={Math.min(1, conversao / 100)} rotulo="Vendas por abordagem">
+                    <UsersRoundIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                  </RingGauge>
+                )
+              }
+              className={esmaecer}
+            />
+            <KpiCard
+              rotulo="Meta do dia"
+              icone={TargetIcon}
+              valor={metas.error ? '—' : <NumeroAnimado valor={tarefasConcluidas} />}
+              detalhe={
+                metas.loading ? 'Carregando…' : metas.error ? 'Metas indisponíveis agora' : tarefas.length ? `${progressoDasTarefas}% das tarefas de hoje` : 'Sem tarefas hoje'
+              }
+              lateral={
+                !metas.error && (
+                  <RingGauge fracao={tarefas.length ? tarefasConcluidas / tarefas.length : 0} rotulo={`${tarefasConcluidas} de ${tarefas.length} tarefas do dia concluídas`}>
+                    <span className="text-base font-semibold tabular-nums text-heading">{tarefasConcluidas}</span>
+                    <span className="text-[10px] text-muted-foreground">de {tarefas.length}</span>
+                  </RingGauge>
+                )
+              }
+            />
+          </div>
 
           {/* Os outros indicadores do painel antigo, numa segunda linha (6 · 3 · 3). */}
           <KpiCard
@@ -299,65 +295,52 @@ export default function Dashboard() {
           <MetasDeTurno data={today} className="md:col-span-2 xl:col-span-6" />
         </section>
 
+        {/* O funil logo depois da abordagem: as calls feitas (área) contra as abordagens (linha), na mesma linha do tempo
+            dos indicadores. Ao lado, os dois pódios do mês, compactos e empilhados. */}
         <Bloco
-          titulo="Evolução comercial"
-          descricao={umDiaSo ? 'Vendas e abordagens em cada hora do período.' : 'Volume de vendas e abordagens no período.'}
+          titulo="Abordagens e calls"
+          descricao={umDiaSo ? 'Abordagens registradas e calls feitas em cada hora do período.' : 'Abordagens registradas e calls feitas ao longo do período.'}
           dataSecao="commercial-evolution"
           className={`md:col-span-2 xl:col-span-8 ${esmaecer}`}
         >
+          {/* Mais alto que o padrão: ocupa a altura dos dois pódios ao lado, sem vão embaixo. */}
           <SeriesChart
-            pontos={serie}
+            pontos={pontosDeCalls}
+            altura={344}
             textos={{
-              principal: 'Vendas',
+              principal: 'Calls feitas',
               secundaria: 'Abordagens',
+              unidades: { principal: ['call feita', 'calls feitas'], secundaria: ['abordagem', 'abordagens'] },
               coluna: umDiaSo ? 'Hora' : 'Período',
-              resumo: `Vendas e abordagens ${umDiaSo ? 'por hora' : 'ao longo do período'}, no horário de Brasília`,
-              vazio: 'Aguardando as primeiras vendas.',
+              resumo: `Calls feitas e abordagens ${umDiaSo ? 'por hora' : 'ao longo do período'}, no horário de Brasília`,
+              vazio: 'Sem abordagens nem calls no período.',
             }}
           />
         </Bloco>
 
-        <Bloco
-          titulo="Pódio dos Closers"
-          descricao={
-            linhasDoPodio[0]
-              ? `${linhasDoPodio[0].nome} lidera o mês com ${formatarReaisInteiros(linhasDoPodio[0].total)}`
-              : 'Quem mais vendeu neste mês (receita aprovada)'
-          }
-          acao={<LinkSecao para="/ranking">Ranking</LinkSecao>}
-          className="md:col-span-2 xl:col-span-4"
-        >
-          {erroRanking && (
-            <p role="alert" className="mb-3 text-xs text-destructive">
-              Não foi possível atualizar o ranking.
-            </p>
-          )}
-          {carregandoRanking ? (
-            <p role="status" className="py-8 text-center text-sm text-muted-foreground">
-              Carregando…
-            </p>
-          ) : (
-            <>
-              <div className="pt-6">
-                <Podio linhas={linhasDoPodio.slice(0, 3)} destaque={user?.id} />
-              </div>
-              {ranking.length === 0 && !erroRanking && <p className="mt-4 text-center text-xs text-muted-foreground">Nenhum Closer elegível no ranking.</p>}
-              {ranking.length > 3 && (
-                <ol className="mt-4 space-y-1.5 border-t pt-3 text-sm" start={4}>
-                  {linhasDoPodio.slice(3, 6).map((l) => (
-                    <li key={l.chave} className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="w-6 text-xs tabular-nums text-muted-foreground">{l.posicao}º</span>
-                        <span className="truncate text-heading">{l.nome}</span>
-                      </span>
-                      <span className="tabular-nums text-muted-foreground">{formatarReaisInteiros(l.total)}</span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </>
-          )}
-        </Bloco>
+        {/* Empilhados ao lado do gráfico (xl); abaixo dele, lado a lado só quando cada um ainda tem largura (lg). */}
+        <div className="grid gap-4 md:col-span-2 lg:grid-cols-2 xl:col-span-4 xl:grid-cols-1 xl:grid-rows-2">
+          <CartaoDoPodio
+            titulo="Pódio dos Closers"
+            descricao="Receita aprovada no mês"
+            linhas={podioDosClosers}
+            formatar={formatarReaisInteiros}
+            carregando={carregandoRanking}
+            erro={erroRanking !== null}
+            vazio="Nenhum Closer elegível no ranking."
+            destaque={user?.id}
+          />
+          <CartaoDoPodio
+            titulo="Pódio dos SDRs"
+            descricao="Repasses para Closers no mês"
+            linhas={podioDosSdrs}
+            formatar={(n) => pluralizar(n, 'repasse', 'repasses')}
+            carregando={carregandoRanking}
+            erro={erroSdr !== null}
+            vazio="Nenhum SDR elegível no ranking."
+            destaque={user?.id}
+          />
+        </div>
 
         {/* Trio da referência (4 · 4 · 4): sem funil real no negócio, o 2º lugar fica com as vendas do time. */}
         <Bloco titulo="Produtos em destaque" descricao="Ranking por receita aprovada" dataSecao="featured-products" className={`md:col-span-2 xl:col-span-4 ${esmaecer}`}>

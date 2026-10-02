@@ -67,6 +67,7 @@ export function Bloco({
   className = '',
   id,
   dataSecao,
+  compacto = false,
 }: {
   titulo: string
   descricao?: ReactNode
@@ -76,15 +77,17 @@ export function Bloco({
   id?: string
   /** Âncora estável para os testes de interface (data-dashboard-section). */
   dataSecao?: string
+  /** Respiro menor, para os cartões que dividem uma coluna (os pódios). */
+  compacto?: boolean
 }) {
   return (
     <section
       aria-labelledby={id}
       aria-label={id ? undefined : titulo}
       data-dashboard-section={dataSecao}
-      className={`min-w-0 rounded-2xl border bg-card p-4 text-card-foreground md:p-5 ${className}`}
+      className={`min-w-0 rounded-2xl border bg-card text-card-foreground ${compacto ? 'p-4' : 'p-4 md:p-5'} ${className}`}
     >
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className={`${compacto ? 'mb-1' : 'mb-4'} flex items-start justify-between gap-3`}>
         <div className="min-w-0">
           <h2 id={id} className="text-[0.95rem] font-semibold text-heading">
             {titulo}

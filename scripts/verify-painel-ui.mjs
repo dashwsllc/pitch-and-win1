@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { chromium, expect as baseExpect } from '../.verification.local/node_modules/@playwright/test/index.mjs'
-import { buildFixtures, fakeSession, installMock, STORAGE_KEY } from './perf/mock.mjs'
+import { buildFixtures, fakeSession, installMock, STORAGE_KEY, USER_ID } from './perf/mock.mjs'
 import { startServer } from './perf/server.mjs'
 import { instalarResolvedor } from './perf/ts-alias.mjs'
 
@@ -27,6 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 instalarResolvedor(raiz)
 const periodos = await import('../src/lib/dashboard-period.ts')
+const tempo = await import('../src/painel/lib/tempo.ts')
 const { money } = await import('../src/lib/sales.ts')
 
 /** Roda `fn` com o relógio do Node congelado em FIXED (as funções de período leem "agora" sozinhas). */
@@ -59,8 +60,15 @@ function esperado(fixtures, filtro, intervalo = { start: '2026-09-01', end: '202
   const conversao = abordagens.length > 0 ? (quantidade / abordagens.length) * 100 : 0
   // A barra dividida: as abordagens do mesmo recorte, pela resposta "Mostrou a IA funcionando?".
   const mostrou = abordagens.filter((a) => a.mostrou_ia === true).length
-  return { periodo, vendas, abordagens, total, quantidade, ticket: quantidade > 0 ? total / quantidade : 0, conversao, mostrou, naoMostrou: abordagens.length - mostrou }
+  // Calls feitas: qualificação ou fechamento com presença registrada (performed_at), sem cancelamento, pela hora em que
+  // aconteceram (a regra da Arena para "call realizada"); só marcadas e canceladas ficam de fora.
+  const calls = fixtures.tables.crm_activities.filter(
+    (c) => ['qualificacao', 'fechamento_closer'].includes(c.call_type) && c.performed_at && !c.cancelled_at && dentro(c.performed_at),
+  )
+  return { periodo, vendas, abordagens, calls, total, quantidade, ticket: quantidade > 0 ? total / quantidade : 0, conversao, mostrou, naoMostrou: abordagens.length - mostrou }
 }
+/** "1 call feita", "3 calls feitas": como o gráfico escreve na dica e no rótulo de acessibilidade. */
+const callsFeitas = (n) => `${inteiro(n)} ${n === 1 ? 'call feita' : 'calls feitas'}`
 const normalizar = (s) => s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim()
 const inteiro = (n) => n.toLocaleString('pt-BR')
 const percentual = (c) => `${Number(c.toFixed(1)).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
@@ -80,9 +88,11 @@ async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 
   const f = fixtures ?? buildFixtures({ role: 'super_admin', now: FIXED })
   const mock = installMock(contexto, f, { latencyMs: latencia, ws })
   const pedidosDeVendas = []
+  const pedidosDeCalls = []
   contexto.on('request', (r) => {
     const u = new URL(r.url())
     if (u.pathname.endsWith('/rest/v1/vendas') && (u.searchParams.get('select') ?? '').includes('valor_venda')) pedidosDeVendas.push(u)
+    if (u.pathname.endsWith('/rest/v1/crm_activities') && (u.searchParams.get('select') ?? '').includes('performed_at')) pedidosDeCalls.push(u)
   })
   await contexto.addInitScript(
     ({ chave, sessao, tema, comSessao }) => {
@@ -104,7 +114,7 @@ async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 
   })
   await pagina.goto(url + caminho, { waitUntil: 'load' })
   if (esperarTitulo) await expect(pagina.getByRole('heading', { level: 1, name: 'Visão geral' })).toBeVisible()
-  return { contexto, pagina, mock, f, erros, pedidosDeVendas, fechar: () => contexto.close() }
+  return { contexto, pagina, mock, f, erros, pedidosDeVendas, pedidosDeCalls, fechar: () => contexto.close() }
 }
 
 const regiao = (pagina, nome) => pagina.getByRole('region', { name: nome, exact: true })
@@ -117,8 +127,11 @@ async function divisaoNaTela(pagina) {
   assert.ok(m, `legenda da barra dividida (veio "${texto}")`)
   return { mostrou: Number(m[1].replaceAll('.', '')), naoMostrou: Number(m[2].replaceAll('.', '')) }
 }
+/** Tabela alternativa do gráfico de abordagens e calls: [intervalo, calls feitas, abordagens]. */
 const linhasDaTabela = (pagina) =>
   pagina.locator('[data-dashboard-section="commercial-evolution"] details tbody tr').evaluateAll((trs) => trs.map((tr) => [...tr.cells].map((c) => c.textContent.trim())))
+const GRAFICO = 'Abordagens e calls'
+const PODIOS = ['Pódio dos Closers', 'Pódio dos SDRs']
 
 const resultados = []
 async function teste(nome, fn) {
@@ -142,13 +155,26 @@ await teste('estrutura, ordem das seções, tokens escopados e navegação intac
     const secoes = await pagina.locator('[data-dashboard-section]').evaluateAll((ns) => ns.map((n) => n.getAttribute('data-dashboard-section')))
     // As 5 primeiras na ordem que os testes antigos do repositório conferem (verify-sales-management-ui).
     assert.deepEqual(secoes, ['greeting', 'commercial-indicators', 'goals-in-progress', 'commercial-evolution', 'featured-products', 'transparent-operation', 'recent-sales'])
-    for (const nome of KPIS) await expect(regiao(pagina, nome)).toBeVisible()
-    // A grade da referência a 1440 px: KPIs 5 · 3 · 2 · 2, a linha extra 6 · 3 · 3, metas 6 · 6, série 8 + pódio 4,
-    // trio 4 · 4 · 4 e a lista larga 12.
+    for (const nome of [...KPIS, GRAFICO, ...PODIOS]) await expect(regiao(pagina, nome)).toBeVisible()
+    // A grade a 1440 px: indicadores 5 · 4 · 3 (Conversão sobre Meta do dia na coluna de 3), a linha extra 6 · 3 · 3,
+    // metas 6 · 6, o gráfico de abordagens e calls 8 com os dois pódios empilhados no 4, trio 4 · 4 · 4 e a lista 12.
     const span = (loc) => loc.evaluate((el) => getComputedStyle(el).gridColumnStart)
-    assert.deepEqual(await Promise.all(KPIS.map((n) => span(regiao(pagina, n)))), ['span 5', 'span 3', 'span 2', 'span 2', 'span 6', 'span 3', 'span 3'])
-    const blocos = ['Checklist de hoje', 'Metas de abordagens por turno', 'Evolução comercial', 'Pódio dos Closers', 'Produtos em destaque', 'Vendas do time', 'Ao vivo', 'Últimas vendas']
-    assert.deepEqual(await Promise.all(blocos.map((n) => span(regiao(pagina, n)))), ['span 6', 'span 6', 'span 8', 'span 4', 'span 4', 'span 4', 'span 4', 'span 12'])
+    const pai = (nome) => regiao(pagina, nome).locator('xpath=..')
+    const diretos = ['Quantidade de Vendas', 'Abordagens', 'Total de Vendas', 'Ticket Médio', 'Posição no ranking']
+    assert.deepEqual(await Promise.all(diretos.map((n) => span(regiao(pagina, n)))), ['span 5', 'span 4', 'span 6', 'span 3', 'span 3'])
+    assert.equal(await span(pai('Conversão')), 'span 3')
+    const blocos = ['Checklist de hoje', 'Metas de abordagens por turno', GRAFICO, 'Produtos em destaque', 'Vendas do time', 'Ao vivo', 'Últimas vendas']
+    assert.deepEqual(await Promise.all(blocos.map((n) => span(regiao(pagina, n)))), ['span 6', 'span 6', 'span 8', 'span 4', 'span 4', 'span 4', 'span 12'])
+    assert.equal(await span(pai(PODIOS[0])), 'span 4')
+    // Empilhados e sem buraco: cada coluna termina na mesma linha do cartão ao lado.
+    const caixa = (nome) => regiao(pagina, nome).boundingBox()
+    const [conv, meta, qv] = await Promise.all(['Conversão', 'Meta do dia', 'Quantidade de Vendas'].map(caixa))
+    assert.ok(Math.abs(conv.x - meta.x) < 1 && meta.y > conv.y + conv.height, 'Meta do dia logo abaixo da Conversão')
+    assert.ok(Math.abs(meta.y + meta.height - (qv.y + qv.height)) <= 1, 'a coluna dos dois termina com o cartão de vendas')
+    const [grafico, closers, sdrs] = await Promise.all([GRAFICO, ...PODIOS].map(caixa))
+    assert.ok(Math.abs(closers.x - sdrs.x) < 1 && sdrs.y > closers.y + closers.height, 'pódio dos SDRs logo abaixo do dos Closers')
+    assert.ok(closers.x > grafico.x + grafico.width, 'os pódios ficam ao lado do gráfico')
+    assert.ok(Math.abs(closers.y - grafico.y) <= 1 && Math.abs(sdrs.y + sdrs.height - (grafico.y + grafico.height)) <= 1, 'os pódios ocupam a altura do gráfico')
     // Medidas da referência: cartão de 18 px, chip de 14 px, controle segmentado de 14 px e botão interno de 9,6 px.
     const raio = (loc) => loc.evaluate((el) => getComputedStyle(el).borderTopLeftRadius)
     assert.equal(await raio(regiao(pagina, 'Total de Vendas')), '18px')
@@ -196,13 +222,14 @@ await teste('login (/auth) e demais telas não ganham o escopo do painel', async
 })
 
 await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e o filtro vive na URL', async () => {
-  const { pagina, f, erros, pedidosDeVendas, fechar } = await abrir()
+  const { pagina, f, erros, pedidosDeVendas, pedidosDeCalls, fechar } = await abrir()
   try {
     const nomes = { hoje: 'Hoje', ontem: 'Ontem', '7dias': '7 dias', '14dias': '14 dias', '30dias': '30 dias', all: 'Todo o período' }
     const enderecos = { hoje: null, ontem: 'ontem', '7dias': '7dias', '14dias': '14dias', '30dias': '30dias', all: 'tudo' }
     for (const [filtro, rotulo] of Object.entries(nomes)) {
       const e = esperado(f, filtro)
       pedidosDeVendas.length = 0
+      pedidosDeCalls.length = 0
       if (filtro !== 'hoje') await pagina.getByRole('radio', { name: rotulo, exact: true }).click()
       await expect(pagina.getByRole('radio', { name: rotulo, exact: true })).toHaveAttribute('aria-checked', 'true')
       const url = new URL(pagina.url())
@@ -224,6 +251,16 @@ await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e
         assert.ok(janela, `pedido de vendas para ${filtro}`)
         assert.deepEqual(janela.searchParams.getAll('created_at'), [`gte.${e.periodo.start.toISOString()}`, `lt.${e.periodo.end.toISOString()}`], `janela do filtro ${filtro}`)
       }
+      // As calls saem na mesma carga, com a mesma janela (pela hora da call), só as feitas e não canceladas, do time todo.
+      const calls = pedidosDeCalls.at(-1)
+      assert.ok(calls, `pedido de calls para ${filtro}`)
+      const feitas = ['call_type', 'cancelled_at'].map((c) => calls.searchParams.get(c))
+      assert.deepEqual(feitas, ['in.(qualificacao,fechamento_closer)', 'is.null'], `calls de qualificação e fechamento, sem as canceladas (${filtro})`)
+      const janelaDasCalls = calls.searchParams.getAll('performed_at')
+      assert.ok(janelaDasCalls.includes('not.is.null'), `só as calls com presença registrada (${filtro})`)
+      if (e.periodo.allTime) assert.deepEqual(janelaDasCalls, ['not.is.null'], 'todo o período não recorta as calls por data')
+      else assert.deepEqual(janelaDasCalls.filter((p) => p !== 'not.is.null'), [`gte.${e.periodo.start.toISOString()}`, `lt.${e.periodo.end.toISOString()}`], `janela das calls ${filtro}`)
+      assert.equal(calls.searchParams.has('assigned_to'), false, 'o Executive vê as calls do time todo')
     }
 
     // Tempo personalizado: valida, aplica e vai para o endereço. Invertido no formulário, o próprio navegador barra o
@@ -267,17 +304,24 @@ await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e
   }
 })
 
-await teste('gráfico: teclado, mira, tabela alternativa e série por hora fechando com os totais', async () => {
+await teste('gráfico de abordagens e calls: teclado, mira, legenda com os totais, tabela e horas fechando com os totais', async () => {
   const { pagina, f, erros, fechar } = await abrir()
   try {
     const e = esperado(f, 'hoje')
-    const grafico = pagina.getByRole('img', { name: /Vendas e abordagens por hora, no horário de Brasília/ })
+    assert.ok(e.calls.length > 0 && e.abordagens.length > 0, 'o mock tem calls feitas e abordagens hoje')
+    const soMarcadasHoje = f.tables.crm_activities.filter((c) => !c.performed_at && Date.parse(c.created_at) >= e.periodo.start.getTime())
+    assert.ok(soMarcadasHoje.length > 0, 'o mock também tem calls só marcadas hoje, que não podem entrar na conta')
+    const grafico = pagina.getByRole('img', { name: /Calls feitas e abordagens por hora, no horário de Brasília/ })
     await expect(grafico).toBeVisible()
-    assert.match((await grafico.getAttribute('aria-label')) ?? '', /Use as setas para percorrer os pontos\. Último ponto \(\d{2}h\): \d+ vendas e \d+ abordagens\./)
+    assert.match((await grafico.getAttribute('aria-label')) ?? '', /Use as setas para percorrer os pontos\. Último ponto \(\d{2}h\): \d+ calls? feitas? e \d+ abordage(m|ns)\./)
     const linhas = await linhasDaTabela(pagina)
     assert.ok(linhas.length >= 2)
-    assert.equal(linhas.reduce((t, l) => t + Number(l[1]), 0), e.quantidade, 'a soma das vendas por hora fecha com o indicador')
-    assert.equal(linhas.reduce((t, l) => t + Number(l[2]), 0), e.abordagens.length, 'e a das abordagens com o total')
+    assert.equal(linhas.reduce((t, l) => t + Number(l[1]), 0), e.calls.length, 'a soma das calls por hora fecha com as calls feitas do dia (sem as só marcadas e as canceladas)')
+    assert.equal(linhas.reduce((t, l) => t + Number(l[2]), 0), e.abordagens.length, 'e a das abordagens com o indicador')
+    // A legenda traz os dois totais do período: os mesmos números da tabela e do indicador de abordagens.
+    const legenda = normalizar(await regiao(pagina, GRAFICO).getByRole('list', { name: 'Legenda' }).innerText())
+    assert.ok(legenda.includes(`Calls feitas ${inteiro(e.calls.length)}`), `legenda com o total de calls (veio "${legenda}")`)
+    assert.ok(legenda.includes(`Abordagens ${inteiro(e.abordagens.length)}`), `legenda com o total de abordagens (veio "${legenda}")`)
 
     await grafico.focus()
     // A dica fica dentro do contêiner role="img", como na referência: para o ARIA os filhos de uma imagem são
@@ -286,8 +330,8 @@ await teste('gráfico: teclado, mira, tabela alternativa e série por hora fecha
     await expect(dica).toBeVisible()
     const ultima = linhas.at(-1)
     await expect(dica).toContainText(ultima[0])
-    await expect(dica).toContainText(new RegExp(`${ultima[1]}\\s*vendas`))
-    await expect(dica).toContainText(new RegExp(`${ultima[2]}\\s*abordagens`))
+    await expect(dica).toContainText(new RegExp(`${ultima[1]}\\s*calls? feitas?`))
+    await expect(dica).toContainText(new RegExp(`${ultima[2]}\\s*abordage(m|ns)`))
     await pagina.keyboard.press('ArrowLeft')
     await expect(dica).toContainText(linhas.at(-2)[0])
     await pagina.keyboard.press('Home')
@@ -311,13 +355,13 @@ await teste('gráfico: teclado, mira, tabela alternativa e série por hora fecha
     await pagina.mouse.move(5, 5)
     await expect(dica).toHaveCount(0)
 
-    // Um dia só = série por hora; vários dias = a série diária da hook, também com tabela.
+    // Um dia só = série por hora; vários dias = um ponto por dia, também com tabela.
     await pagina.getByRole('radio', { name: '7 dias', exact: true }).click()
-    await expect(pagina.getByRole('img', { name: /Vendas e abordagens ao longo do período/ })).toBeVisible()
+    await expect(pagina.getByRole('img', { name: /Calls feitas e abordagens ao longo do período/ })).toBeVisible()
     const e7 = esperado(f, '7dias')
     const linhas7 = await linhasDaTabela(pagina)
     assert.equal(linhas7.length, 7, 'um ponto por dia')
-    assert.equal(linhas7.reduce((t, l) => t + Number(l[1]), 0), e7.quantidade)
+    assert.equal(linhas7.reduce((t, l) => t + Number(l[1]), 0), e7.calls.length)
     assert.equal(linhas7.reduce((t, l) => t + Number(l[2]), 0), e7.abordagens.length)
     assert.deepEqual(erros, [])
   } finally {
@@ -329,15 +373,21 @@ await teste('gráficos dos indicadores: as colunas são as horas do gráfico gra
   const { pagina, f, erros, fechar } = await abrir()
   try {
     const e = esperado(f, 'hoje')
-    const colunas = (nome) => regiao(pagina, nome).locator('g[data-coluna]').evaluateAll((gs) => gs.map((g) => Number(g.getAttribute('data-total'))))
-    const soma = (lista) => lista.reduce((t, v) => t + v, 0)
+    const colunas = (nome) => regiao(pagina, nome).locator('g[data-coluna]').evaluateAll((gs) => gs.map((g) => [g.getAttribute('data-rotulo'), Number(g.getAttribute('data-total'))]))
+    const soma = (lista) => lista.reduce((t, [, v]) => t + v, 0)
     // Só compara depois da primeira carga (antes dela não há tabela nem colunas: as duas listas viriam vazias).
     await expect(regiao(pagina, 'Total de Vendas')).toContainText(normalizar(money(e.total)))
-    await expect(pagina.getByRole('img', { name: /Vendas e abordagens por hora/ })).toBeVisible()
+    await expect(pagina.getByRole('img', { name: /Calls feitas e abordagens por hora/ })).toBeVisible()
     const linhas = await linhasDaTabela(pagina)
     await expect.poll(async () => (await colunas('Quantidade de Vendas')).length).toBe(linhas.length)
-    assert.deepEqual(await colunas('Quantidade de Vendas'), linhas.map((l) => Number(l[1])), 'cada coluna de vendas é a mesma hora do gráfico grande')
-    assert.deepEqual(await colunas('Abordagens'), linhas.map((l) => Number(l[2])), 'cada coluna de abordagens é a mesma hora do gráfico grande')
+    // Uma linha do tempo só: as colunas dos dois indicadores são as horas do gráfico grande.
+    const vendasPorHora = new Map()
+    for (const v of e.vendas) {
+      const rotulo = `${tempo.chaveDaHora(v.created_at).slice(11)}h`
+      vendasPorHora.set(rotulo, (vendasPorHora.get(rotulo) ?? 0) + 1)
+    }
+    assert.deepEqual(await colunas('Quantidade de Vendas'), linhas.map((l) => [l[0], vendasPorHora.get(l[0]) ?? 0]), 'cada coluna de vendas é a mesma hora do gráfico grande, com as vendas dela')
+    assert.deepEqual(await colunas('Abordagens'), linhas.map((l) => [l[0], Number(l[2])]), 'cada coluna de abordagens é a mesma hora (e o mesmo número) do gráfico grande')
     assert.equal(soma(await colunas('Quantidade de Vendas')), e.quantidade, 'as colunas somam o indicador de vendas')
     assert.equal(soma(await colunas('Abordagens')), e.abordagens.length, 'e as de abordagens, o indicador de abordagens')
     await expect(regiao(pagina, 'Quantidade de Vendas').getByText('Vendas por hora', { exact: true })).toBeVisible()
@@ -359,7 +409,7 @@ await teste('gráficos dos indicadores: as colunas são as horas do gráfico gra
     const textoDaDica = normalizar(await dicaAbordagens.innerText())
     const partes = textoDaDica.match(/(\d+) mostraram a IA (\d+) não mostraram/)
     assert.ok(partes, `a dica reparte as abordagens (veio "${textoDaDica}")`)
-    assert.equal(Number(partes[1]) + Number(partes[2]), Number(linhas.at(-1)[2]), 'as duas partes somam a hora')
+    assert.equal(Number(partes[1]) + Number(partes[2]), (await colunas('Abordagens')).at(-1)[1], 'as duas partes somam a hora')
     await pagina.locator('body').click({ position: { x: 5, y: 5 } })
     await expect(dicaAbordagens).toHaveCount(0)
 
@@ -380,6 +430,7 @@ await teste('estado vazio: moldura sem valor inventado, em todos os blocos', asy
   const vazio = buildFixtures({ role: 'super_admin', now: FIXED })
   vazio.tables.vendas = []
   vazio.tables.abordagens = []
+  vazio.tables.crm_activities = []
   vazio.tables.daily_goal_tasks = []
   vazio.rpc.get_team_ranking = () => []
   vazio.rpc.get_sdr_ranking = () => []
@@ -387,9 +438,9 @@ await teste('estado vazio: moldura sem valor inventado, em todos os blocos', asy
   vazio.rpc.get_sales_board = () => ({ items: [], total: 0, summary: { pending: 0, approved: 0, rejected: 0, pending_value: 0, approved_value: 0, overdue: 0 }, fetched_at: FIXED.toISOString() })
   const { pagina, erros, fechar } = await abrir({ fixtures: vazio })
   try {
-    await expect(pagina.getByText('Aguardando as primeiras vendas.')).toBeVisible()
-    assert.equal(await pagina.getByRole('img', { name: /Vendas e abordagens/ }).count(), 0, 'sem pontos não há gráfico')
-    await expect(pagina.getByRole('list', { name: 'Legenda' })).toBeVisible()
+    await expect(pagina.getByText('Sem abordagens nem calls no período.')).toBeVisible()
+    assert.equal(await pagina.getByRole('img', { name: /Calls feitas e abordagens/ }).count(), 0, 'sem pontos não há gráfico')
+    await expect(regiao(pagina, GRAFICO).getByRole('list', { name: 'Legenda' })).toBeVisible()
     assert.ok((await textoDe(pagina, 'Quantidade de Vendas')).includes('+0 na última hora'))
     assert.ok(!(await textoDe(pagina, 'Quantidade de Vendas')).includes('última às'), 'sem venda não há "última às"')
     assert.equal(await regiao(pagina, 'Quantidade de Vendas').locator('svg').count(), 1, 'só o ícone: sem venda não há colunas, só a moldura')
@@ -409,35 +460,53 @@ await teste('estado vazio: moldura sem valor inventado, em todos os blocos', asy
       'Nenhuma tarefa definida para hoje',
       'Nenhuma meta de turno para esta seleção.',
       'Nenhum Closer elegível no ranking.',
+      'Nenhum SDR elegível no ranking.',
       'Nenhuma venda neste filtro',
     ]) await expect(pagina.getByText(texto, { exact: true }).first()).toBeVisible()
-    for (const lugar of ['1º', '2º', '3º']) await expect(pagina.getByText(`${lugar} lugar em aberto`)).toBeVisible()
+    // Os dois pódios vazios: os três degraus "em aberto" em cada um.
+    for (const lugar of ['1º', '2º', '3º']) await expect(pagina.getByText(`${lugar} lugar em aberto`)).toHaveCount(2)
     assert.deepEqual(erros, [])
   } finally {
     await fechar()
   }
 })
 
-await teste('pódio: 0, 1, 2, 3 e 6 posições, na ordem de leitura 1º, 2º, 3º', async () => {
-  const pessoas = (n) =>
-    Array.from({ length: n }, (_, i) => ({ user_id: `00000000-0000-4000-8000-0000000000${20 + i}`, name: `Pessoa ${i + 1}`, avatarUrl: null, totalVendas: 1000 - i * 100, quantidadeVendas: 10 - i, abordagens: 50, conversao: 10 }))
+await teste('pódios dos Closers e dos SDRs: 0, 1, 2, 3 e 6 posições, só o top 3, na ordem de leitura 1º, 2º, 3º', async () => {
+  const closers = (n) =>
+    Array.from({ length: n }, (_, i) => ({ user_id: `00000000-0000-4000-8000-0000000000${20 + i}`, name: `Closer ${i + 1}`, avatarUrl: null, totalVendas: 1000 - i * 100, quantidadeVendas: 10 - i, abordagens: 50, conversao: 10 }))
+  // A ordem é a do servidor (repasses, depois conversão e abordagens): o pódio não reordena.
+  const sdrs = (n) =>
+    Array.from({ length: n }, (_, i) => ({ user_id: `00000000-0000-4000-8000-0000000000${40 + i}`, name: `SDR ${i + 1}`, avatarUrl: null, totalLeads: 90, leadsAbordados: 80, abordagens: 70 - i, repasses: 12 - i, vendasOriginadas: 3, receitaOriginada: 9000, conversao: 15 }))
   for (const n of [0, 1, 2, 3, 6]) {
     const f = buildFixtures({ role: 'super_admin', now: FIXED })
-    f.rpc.get_team_ranking = () => pessoas(n)
+    f.rpc.get_team_ranking = () => closers(n)
+    f.rpc.get_sdr_ranking = () => sdrs(n)
     const { pagina, erros, fechar } = await abrir({ fixtures: f })
     try {
-      const podio = pagina.getByRole('list', { name: 'Pódio' })
-      await expect(podio).toBeVisible()
-      const lugares = await podio.locator('li').evaluateAll((lis) => lis.map((li) => ({ lugar: li.dataset.lugar, ordemVisual: li.style.order })))
-      assert.deepEqual(lugares.map((l) => l.lugar), ['1', '2', '3'], 'a ordem do DOM é 1º, 2º, 3º')
-      assert.deepEqual(lugares.map((l) => l.ordemVisual), ['2', '1', '3'], 'a ordem visual é 2º, 1º, 3º')
-      for (let lugar = 1; lugar <= 3; lugar++) {
-        const aberto = await pagina.getByText(`${lugar}º lugar em aberto`).count()
-        assert.equal(aberto, lugar > n ? 1 : 0, `n=${n}: ${lugar}º ${lugar > n ? 'em aberto' : 'preenchido'}`)
+      for (const nome of PODIOS) {
+        const podio = regiao(pagina, nome).getByRole('list', { name: nome })
+        await expect(podio).toBeVisible()
+        const lugares = await podio.locator('li').evaluateAll((lis) => lis.map((li) => ({ lugar: li.dataset.lugar, ordemVisual: li.style.order })))
+        assert.deepEqual(lugares.map((l) => l.lugar), ['1', '2', '3'], `${nome}: a ordem do DOM é 1º, 2º, 3º`)
+        assert.deepEqual(lugares.map((l) => l.ordemVisual), ['2', '1', '3'], `${nome}: a ordem visual é 2º, 1º, 3º`)
+        for (let lugar = 1; lugar <= 3; lugar++) {
+          const aberto = await regiao(pagina, nome).getByText(`${lugar}º lugar em aberto`).count()
+          assert.equal(aberto, lugar > n ? 1 : 0, `${nome}, n=${n}: ${lugar}º ${lugar > n ? 'em aberto' : 'preenchido'}`)
+        }
+        assert.equal(await regiao(pagina, nome).locator('ol[start="4"] li').count(), 0, `${nome}: compacto, só o top 3 (a lista completa fica em Ranking)`)
       }
-      const lista = pagina.locator('ol[start="4"] li')
-      assert.equal(await lista.count(), n > 3 ? Math.min(3, n - 3) : 0, `n=${n}: lista do 4º ao 6º`)
-      if (n > 0) await expect(pagina.getByText('Pessoa 1').first()).toBeVisible()
+      if (n > 0) {
+        const closer = regiao(pagina, 'Pódio dos Closers').locator('li[data-lugar="1"]')
+        await expect(closer).toContainText('Closer 1')
+        await expect(closer).toContainText('R$ 1.000')
+        await expect(closer).toContainText('10 vendas')
+        // SDRs: o número grande é o critério do ranking (repasses), com as abordagens embaixo.
+        const sdr = regiao(pagina, 'Pódio dos SDRs').locator('li[data-lugar="1"]')
+        await expect(sdr).toContainText('SDR 1')
+        await expect(sdr).toContainText('12 repasses')
+        await expect(sdr).toContainText('70 abordagens')
+      }
+      if (n >= 3) await expect(regiao(pagina, 'Pódio dos SDRs').locator('li[data-lugar="3"]')).toContainText('SDR 3')
       assert.deepEqual(erros, [])
     } finally {
       await fechar()
@@ -470,9 +539,17 @@ await teste('ao vivo: um evento novo muda KPI, gráfico, feed e tabela juntos, s
       commission_amount: 123.45, withdrawn: false, withdrawal_id: null, consideracoes_gerais: null,
     })
     f.tables.abordagens.push({ id: '00000000-0000-4000-8000-0000000eeeee', user_id: usuario, created_at: iso })
+    // E uma call feita agora (o CRM registra a presença): entra no gráfico de abordagens e calls na mesma atualização.
+    f.tables.crm_activities.push({
+      id: '00000000-0000-4000-8000-0000000ddddd', lead_id: f.tables.crm_leads[0].id, user_id: f.sdrs[0].id, assigned_to: usuario, activity_type: 'call',
+      call_type: 'fechamento_closer', title: 'Call ao vivo QA', description: null, author_name: null, scheduled_at: iso, created_at: iso, updated_at: iso,
+      is_completed: true, completed_at: iso, outcome: 'venda_perdida', performed_at: iso, performed_by: usuario, cancelled_at: null, cancelled_by: null,
+      cancellation_reason: null, is_pinned: false, previous_state: null, new_state: null,
+    })
     assert.ok(mock.bumpRevision('sales') > 0, 'o canal Realtime estava inscrito')
     const depois = esperado(f, 'hoje')
     assert.equal(depois.quantidade, antes.quantidade + 1)
+    assert.equal(depois.calls.length, antes.calls.length + 1)
     await expect(regiao(pagina, 'Total de Vendas')).toContainText(normalizar(money(depois.total)), { timeout: 12_000 })
     // Tudo no mesmo instante: indicador, abordagens (e a barra dividida), feed, gráfico e tabela.
     assert.ok((await textoDe(pagina, 'Quantidade de Vendas')).includes(inteiro(depois.quantidade)))
@@ -486,7 +563,7 @@ await teste('ao vivo: um evento novo muda KPI, gráfico, feed e tabela juntos, s
     assert.ok(realcados.every((t) => t.includes('Venda ao vivo QA') || t.includes('Abordagem registrada')), 'só os itens novos ganham o realce')
     await expect(feed.locator('li.painel-linha-nova')).toHaveCount(0, { timeout: 6000 })
     const linhas = await linhasDaTabela(pagina)
-    assert.equal(linhas.reduce((t, l) => t + Number(l[1]), 0), depois.quantidade)
+    assert.equal(linhas.reduce((t, l) => t + Number(l[1]), 0), depois.calls.length, 'a call nova já está no gráfico')
     assert.equal(linhas.reduce((t, l) => t + Number(l[2]), 0), depois.abordagens.length)
     // Os gráficos dos indicadores mudam junto.
     const somaDasColunas = (nome) => regiao(pagina, nome).locator('g[data-coluna]').evaluateAll((gs) => gs.reduce((t, g) => t + Number(g.getAttribute('data-total')), 0))
@@ -751,10 +828,19 @@ await teste('checklist: marcar uma tarefa chama a mesma RPC e as metas avançam 
 
 await teste('papel de vendedor: números só dele e menu sem itens de administração', async () => {
   const f = buildFixtures({ role: 'seller', now: FIXED })
-  const { pagina, pedidosDeVendas, erros, fechar } = await abrir({ fixtures: f })
+  const { pagina, pedidosDeVendas, pedidosDeCalls, erros, fechar } = await abrir({ fixtures: f })
   try {
     await expect.poll(() => pedidosDeVendas.length).toBeGreaterThan(0)
     assert.ok(pedidosDeVendas.every((u) => u.searchParams.get('user_id')?.startsWith('eq.')), 'a consulta do vendedor filtra pelo próprio usuário (a regra do painel antigo)')
+    // As calls seguem a mesma regra: só as que a própria pessoa fez (assigned_to, quem a Arena credita).
+    await expect.poll(() => pedidosDeCalls.length).toBeGreaterThan(0)
+    assert.ok(pedidosDeCalls.every((u) => u.searchParams.get('assigned_to') === `eq.${USER_ID}`), 'o vendedor só conta as próprias calls')
+    const proprias = f.tables.crm_activities.filter(
+      (c) => c.assigned_to === USER_ID && c.performed_at && !c.cancelled_at && Date.parse(c.performed_at) >= esperado(f, 'hoje').periodo.start.getTime(),
+    )
+    assert.ok(proprias.length > 0, 'o mock tem calls feitas hoje pela própria pessoa')
+    const legenda = normalizar(await regiao(pagina, GRAFICO).getByRole('list', { name: 'Legenda' }).innerText())
+    assert.ok(legenda.includes(`Calls feitas ${inteiro(proprias.length)}`), `o gráfico conta só as calls dela (veio "${legenda}")`)
     const itens = (await pagina.locator('[data-sidebar="content"] [data-sidebar="menu-button"]').allInnerTexts()).map((t) => t.trim())
     assert.ok(!itens.includes('Executive') && !itens.includes('Assinaturas'), `vendedor não vê Executive nem Assinaturas (veio ${itens.join(', ')})`)
     await expect(pagina.getByText('somente os seus números')).toBeVisible()
@@ -811,7 +897,7 @@ await teste('atalhos do painel antigo no canto dos blocos e a conta no rodapé d
     await pagina.goto(new URL(pagina.url()).origin + '/')
     await expect(pagina.getByRole('heading', { level: 1, name: 'Visão geral' })).toBeVisible()
     erros.splice(errosAntesDeSair)
-    for (const bloco of ['Pódio dos Closers', 'Últimas vendas']) await expect(regiao(pagina, bloco).getByRole('link', { name: 'Ranking' })).toHaveAttribute('href', '/ranking')
+    for (const bloco of [...PODIOS, 'Últimas vendas']) await expect(regiao(pagina, bloco).getByRole('link', { name: 'Ranking' })).toHaveAttribute('href', '/ranking')
     // A conta saiu da barra superior (ficava duplicada) e mora no rodapé do menu: Perfil, Configurações e Sair.
     assert.equal(await pagina.locator('header').getByText('BE', { exact: true }).count(), 0, 'sem o avatar da conta repetido na barra')
     await pagina.locator('[data-sidebar="footer"] [data-sidebar="menu-button"]').click()

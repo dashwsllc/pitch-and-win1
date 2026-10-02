@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
@@ -33,11 +34,18 @@ interface DashboardMetrics {
 
 // As mesmas linhas que as métricas acima resumem (vendas aprovadas e abordagens do período). A Home nova as usa para
 // o que não cabe num total: série por hora, feed ao vivo, "na última hora" e a divisão das abordagens pela
-// demonstração da IA (campo obrigatório do formulário). Nenhuma consulta a mais.
+// demonstração da IA (campo obrigatório do formulário).
 export interface DashboardRows {
   vendas: Array<{ id: string; nome_produto: string; valor_venda: number; created_at: string }>
   abordagens: Array<{ id: string; created_at: string; mostrou_ia: boolean }>
+  // Calls feitas no período: qualificação ou fechamento com presença registrada (crm_activities.performed_at, o mesmo
+  // fato que a Arena conta como "call realizada"), sem cancelamento, pela hora em que aconteceram.
+  calls: Array<{ id: string; performed_at: string }>
 }
+
+// Os tipos gerados ainda não têm as colunas que a Arena acrescentou às calls (performed_at, cancelled_at): a consulta das
+// calls sai pelo mesmo cliente, só sem a checagem de tipos dessas colunas.
+const clienteSemTipos = supabase as unknown as SupabaseClient
 
 export function useDashboardData(
   dateFilter: DashboardDateFilter = '30dias',
@@ -55,7 +63,7 @@ export function useDashboardData(
     vendasMes: [],
     produtosMaisVendidos: []
   })
-  const [rows, setRows] = useState<DashboardRows>({ vendas: [], abordagens: [] })
+  const [rows, setRows] = useState<DashboardRows>({ vendas: [], abordagens: [], calls: [] })
   const [loading, setLoading] = useState(true)
   // Algum pedido em andamento (inclusive os de fundo, que não mostram "carregando").
   const [fetching, setFetching] = useState(false)
@@ -86,7 +94,7 @@ export function useDashboardData(
 
       // Executives see the consolidated commercial operation. Sellers see only
       // their own data. RLS remains the final source of authorization.
-      const [vendas, abordagens] = await Promise.all([
+      const [vendas, abordagens, calls] = await Promise.all([
         fetchAllPages((from, to) => {
           let request = supabase
             .from('vendas')
@@ -112,6 +120,24 @@ export function useDashboardData(
           }
           request = request.order('created_at').order('id')
           if (!isExecutive) request = request.eq('user_id', userId)
+          return request.range(from, to)
+        }),
+        // Calls feitas: o mesmo período, pela hora da call. Quem não é Executive vê as que fez (assigned_to, a pessoa
+        // que a Arena credita pela call).
+        fetchAllPages<{ id: string; performed_at: string }>((from, to) => {
+          let request = clienteSemTipos
+            .from('crm_activities')
+            .select('id, performed_at')
+            .in('call_type', ['qualificacao', 'fechamento_closer'])
+            .not('performed_at', 'is', null)
+            .is('cancelled_at', null)
+          if (period.start && period.end) {
+            request = request
+              .gte('performed_at', period.start.toISOString())
+              .lt('performed_at', period.end.toISOString())
+          }
+          request = request.order('performed_at').order('id')
+          if (!isExecutive) request = request.eq('assigned_to', userId)
           return request.range(from, to)
         }),
       ])
@@ -171,6 +197,7 @@ export function useDashboardData(
           created_at: abordagem.created_at,
           mostrou_ia: abordagem.mostrou_ia === true,
         })),
+        calls: (calls ?? []).map(call => ({ id: call.id, performed_at: call.performed_at })),
       }
       // Background refreshes usually return the same numbers. Keeping the current
       // state then avoids re-rendering the page and restarting the chart animation.

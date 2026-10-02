@@ -1,9 +1,9 @@
 import { useId, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { indicesDosRotulos } from './eixo'
 import { caminhoSuave, indiceMaisProximo } from './geometria'
 import { formatarNumero, niceTicks } from './scale'
 import { useLargura } from './useLargura'
 
-const ALTURA = 280
 const MARGEM = { topo: 16, direita: 16, base: 30, esquerda: 40 }
 
 export interface PontoDaSerie {
@@ -11,19 +11,21 @@ export interface PontoDaSerie {
   chave: string
   /** '14h', '30/09 14h', '30/09', 'set 26'... */
   rotulo: string
-  /** Série da ÁREA: a medida mais importante. */
+  /** Série da ÁREA (azul): a medida mais funda do funil. */
   principal: number
-  /** Série da LINHA: a medida de topo de funil. */
+  /** Série da LINHA (laranja): a medida de topo de funil. */
   secundaria: number
 }
 
 export interface TextosDaSerie {
-  /** Legenda e tabela, no plural e com inicial maiúscula: "Vendas". */
+  /** Legenda e cabeçalho da tabela, no plural e com inicial maiúscula: "Calls feitas". */
   principal: string
   secundaria: string
+  /** As mesmas medidas na dica e no rótulo de acessibilidade, no singular e no plural: ['call feita', 'calls feitas']. */
+  unidades: { principal: [string, string]; secundaria: [string, string] }
   /** Primeira coluna da tabela alternativa: "Hora" ou "Período". */
   coluna: string
-  /** Frase que abre o rótulo de acessibilidade: "Vendas e abordagens por hora, no horário de Brasília". */
+  /** Frase que abre o rótulo de acessibilidade: "Calls feitas e abordagens por hora, no horário de Brasília". */
   resumo: string
   /** Estado vazio. */
   vazio: string
@@ -31,36 +33,53 @@ export interface TextosDaSerie {
   clique?: string
 }
 
-function Legenda({ textos }: { textos: TextosDaSerie }) {
+const contar = (n: number, [um, varios]: [string, string]) => `${formatarNumero(n)} ${n === 1 ? um : varios}`
+
+/** Legenda com o total de cada medida no período (os mesmos números da tabela). */
+function Legenda({ textos, totais }: { textos: TextosDaSerie; totais: [number, number] }) {
   return (
     <ul className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground" aria-label="Legenda">
       <li className="flex items-center gap-2">
-        <span className="h-2.5 w-4 rounded-[3px] bg-gradient-to-b from-viz-1/70 to-viz-1/10 ring-1 ring-viz-1" aria-hidden="true" />
-        {textos.principal}
+        <span className="h-2.5 w-4 rounded-[3px] bg-gradient-to-b from-viz-4/70 to-viz-4/10 ring-1 ring-viz-4" aria-hidden="true" />
+        <span>{textos.principal}</span>
+        <strong className="font-semibold tabular-nums text-heading">{formatarNumero(totais[0])}</strong>
       </li>
       <li className="flex items-center gap-2">
-        <span className="w-4 border-t-2 border-viz-2" aria-hidden="true" />
-        {textos.secundaria}
+        <span className="w-4 border-t-2 border-viz-1" aria-hidden="true" />
+        <span>{textos.secundaria}</span>
+        <strong className="font-semibold tabular-nums text-heading">{formatarNumero(totais[1])}</strong>
       </li>
     </ul>
   )
 }
 
 /**
- * Duas medidas no tempo (área com degradê e linha), num só eixo, com mira e dica.
- * Com `onSelecionar`, clicar num ponto (ou Enter no teclado) abre o que aconteceu naquele intervalo.
+ * Duas medidas no tempo, num só eixo: a principal em área azul com degradê (e o valor do último ponto escrito), a
+ * secundária em linha laranja, com mira e dica. Com `onSelecionar`, clicar num ponto (ou Enter) abre aquele intervalo.
  */
-export function SeriesChart({ pontos, textos, onSelecionar }: { pontos: PontoDaSerie[]; textos: TextosDaSerie; onSelecionar?(chave: string): void }) {
+export function SeriesChart({
+  pontos,
+  textos,
+  altura = 280,
+  onSelecionar,
+}: {
+  pontos: PontoDaSerie[]
+  textos: TextosDaSerie
+  /** Altura do desenho em px (a largura acompanha o cartão). */
+  altura?: number
+  onSelecionar?(chave: string): void
+}) {
   const { ref, largura } = useLargura()
   const [ativo, setAtivo] = useState<number | null>(null)
   const idGradiente = useId().replace(/:/g, '')
+  const totais: [number, number] = [pontos.reduce((t, p) => t + p.principal, 0), pontos.reduce((t, p) => t + p.secundaria, 0)]
 
   if (pontos.length === 0) {
-    // Antes da primeira venda: a moldura do gráfico aparece vazia (nenhum valor inventado).
+    // Sem nenhum registro: a moldura do gráfico aparece vazia (nenhum valor inventado).
     return (
       <figure>
-        <Legenda textos={textos} />
-        <div className="relative mt-4 rounded-lg border border-dashed" style={{ height: ALTURA }}>
+        <Legenda textos={textos} totais={totais} />
+        <div className="relative mt-4 rounded-lg border border-dashed" style={{ height: altura }}>
           <div aria-hidden="true" className="absolute inset-x-0 bottom-8 border-t border-border" />
           <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-muted-foreground">{textos.vazio}</p>
         </div>
@@ -70,7 +89,7 @@ export function SeriesChart({ pontos, textos, onSelecionar }: { pontos: PontoDaS
 
   const W = Math.max(280, largura)
   const plotW = W - MARGEM.esquerda - MARGEM.direita
-  const plotH = ALTURA - MARGEM.topo - MARGEM.base
+  const plotH = altura - MARGEM.topo - MARGEM.base
   const ticks = niceTicks(Math.max(...pontos.flatMap((p) => [p.principal, p.secundaria])))
   const topo = ticks[ticks.length - 1]
   const n = pontos.length
@@ -81,7 +100,8 @@ export function SeriesChart({ pontos, textos, onSelecionar }: { pontos: PontoDaS
   const linhaPrincipal = caminhoSuave(pontos.map((p, i) => [x(i), y(p.principal)]))
   const linhaSecundaria = caminhoSuave(pontos.map((p, i) => [x(i), y(p.secundaria)]))
   const areaPrincipal = n > 1 ? `${linhaPrincipal} L${x(n - 1)},${base} L${x(0)},${base} Z` : ''
-  const cadaRotulo = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(plotW / 64))))
+  // Rótulos sem colisão; o primeiro encosta à esquerda e o último à direita, para nenhum sair do cartão.
+  const rotulosX = indicesDosRotulos(n, plotW, 64)
   const ultimo = pontos[n - 1]
 
   function mover(e: PointerEvent<SVGSVGElement>) {
@@ -102,16 +122,14 @@ export function SeriesChart({ pontos, textos, onSelecionar }: { pontos: PontoDaS
 
   const p = ativo === null ? null : pontos[ativo]
   const xAtivo = ativo === null ? 0 : x(ativo)
-  const nomePrincipal = textos.principal.toLowerCase()
-  const nomeSecundaria = textos.secundaria.toLowerCase()
 
   return (
     <figure>
-      <Legenda textos={textos} />
+      <Legenda textos={textos} totais={totais} />
       <div
         ref={ref}
         role="img"
-        aria-label={`${textos.resumo}. Use as setas para percorrer os pontos${onSelecionar ? ' e Enter para abrir o ponto escolhido' : ''}. Último ponto (${ultimo.rotulo}): ${ultimo.principal} ${nomePrincipal} e ${ultimo.secundaria} ${nomeSecundaria}.`}
+        aria-label={`${textos.resumo}. Use as setas para percorrer os pontos${onSelecionar ? ' e Enter para abrir o ponto escolhido' : ''}. Último ponto (${ultimo.rotulo}): ${contar(ultimo.principal, textos.unidades.principal)} e ${contar(ultimo.secundaria, textos.unidades.secundaria)}.`}
         tabIndex={0}
         onFocus={() => setAtivo((a) => a ?? n - 1)}
         onBlur={() => setAtivo(null)}
@@ -120,8 +138,8 @@ export function SeriesChart({ pontos, textos, onSelecionar }: { pontos: PontoDaS
       >
         <svg
           width={W}
-          height={ALTURA}
-          viewBox={`0 0 ${W} ${ALTURA}`}
+          height={altura}
+          viewBox={`0 0 ${W} ${altura}`}
           className={`block h-auto max-w-full touch-pan-y select-none ${onSelecionar ? 'cursor-pointer' : ''}`}
           onPointerMove={mover}
           onClick={() => {
@@ -132,8 +150,8 @@ export function SeriesChart({ pontos, textos, onSelecionar }: { pontos: PontoDaS
         >
           <defs>
             <linearGradient id={idGradiente} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" style={{ stopColor: 'hsl(var(--viz-1))', stopOpacity: 0.26 }} />
-              <stop offset="100%" style={{ stopColor: 'hsl(var(--viz-1))', stopOpacity: 0 }} />
+              <stop offset="0%" style={{ stopColor: 'hsl(var(--viz-4))', stopOpacity: 0.3 }} />
+              <stop offset="100%" style={{ stopColor: 'hsl(var(--viz-4))', stopOpacity: 0 }} />
             </linearGradient>
           </defs>
 
@@ -153,20 +171,24 @@ export function SeriesChart({ pontos, textos, onSelecionar }: { pontos: PontoDaS
             </g>
           ))}
 
-          {pontos.map((pt, i) =>
-            i % cadaRotulo === 0 || i === n - 1 ? (
-              <text key={pt.chave} x={x(i)} y={ALTURA - 8} textAnchor="middle" className="fill-muted-foreground text-[11px]">
-                {pt.rotulo}
-              </text>
-            ) : null,
-          )}
+          {rotulosX.map((i) => (
+            <text
+              key={pontos[i].chave}
+              x={x(i)}
+              y={altura - 8}
+              textAnchor={n > 1 && i === 0 ? 'start' : n > 1 && i === n - 1 ? 'end' : 'middle'}
+              className="fill-muted-foreground text-[11px]"
+            >
+              {pontos[i].rotulo}
+            </text>
+          ))}
 
           {areaPrincipal && <path d={areaPrincipal} fill={`url(#${idGradiente})`} />}
-          <path d={linhaSecundaria} fill="none" className="stroke-viz-2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-          <path d={linhaPrincipal} fill="none" className="stroke-viz-1" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={linhaSecundaria} fill="none" className="stroke-viz-1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={linhaPrincipal} fill="none" className="stroke-viz-4" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
 
           {/* Ponto e rótulo só no fim da série principal (rotulagem seletiva). */}
-          <circle cx={x(n - 1)} cy={y(ultimo.principal)} r={4.5} className="fill-viz-1 stroke-card" strokeWidth={2} />
+          <circle cx={x(n - 1)} cy={y(ultimo.principal)} r={4.5} className="fill-viz-4 stroke-card" strokeWidth={2} />
           {ativo === null && (
             <text x={x(n - 1)} y={y(ultimo.principal) - 12} textAnchor={n === 1 ? 'middle' : 'end'} className="fill-foreground text-xs font-semibold tabular-nums">
               {formatarNumero(ultimo.principal)}
@@ -176,8 +198,8 @@ export function SeriesChart({ pontos, textos, onSelecionar }: { pontos: PontoDaS
           {p && (
             <g>
               <line x1={xAtivo} x2={xAtivo} y1={MARGEM.topo} y2={base} className="stroke-muted-foreground/50" strokeWidth={1} />
-              <circle cx={xAtivo} cy={y(p.secundaria)} r={5} className="fill-viz-2 stroke-card" strokeWidth={2} />
-              <circle cx={xAtivo} cy={y(p.principal)} r={5.5} className="fill-viz-1 stroke-card" strokeWidth={2} />
+              <circle cx={xAtivo} cy={y(p.secundaria)} r={5} className="fill-viz-1 stroke-card" strokeWidth={2} />
+              <circle cx={xAtivo} cy={y(p.principal)} r={5.5} className="fill-viz-4 stroke-card" strokeWidth={2} />
             </g>
           )}
         </svg>
@@ -193,14 +215,14 @@ export function SeriesChart({ pontos, textos, onSelecionar }: { pontos: PontoDaS
           >
             <p className="mb-1.5 font-medium text-muted-foreground">{p.rotulo}</p>
             <p className="flex items-center gap-2">
-              <span className="w-3 border-t-2 border-viz-1" aria-hidden="true" />
+              <span className="w-3 border-t-2 border-viz-4" aria-hidden="true" />
               <strong className="tabular-nums text-foreground">{formatarNumero(p.principal)}</strong>
-              <span className="text-muted-foreground">{nomePrincipal}</span>
+              <span className="text-muted-foreground">{p.principal === 1 ? textos.unidades.principal[0] : textos.unidades.principal[1]}</span>
             </p>
             <p className="flex items-center gap-2">
-              <span className="w-3 border-t-2 border-viz-2" aria-hidden="true" />
+              <span className="w-3 border-t-2 border-viz-1" aria-hidden="true" />
               <strong className="tabular-nums text-foreground">{formatarNumero(p.secundaria)}</strong>
-              <span className="text-muted-foreground">{nomeSecundaria}</span>
+              <span className="text-muted-foreground">{p.secundaria === 1 ? textos.unidades.secundaria[0] : textos.unidades.secundaria[1]}</span>
             </p>
             {onSelecionar && textos.clique && <p className="mt-1.5 border-t pt-1.5 text-[11px] text-muted-foreground">{textos.clique}</p>}
           </div>
