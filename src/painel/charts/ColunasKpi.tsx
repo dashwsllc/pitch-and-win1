@@ -1,7 +1,8 @@
-import { useId, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useId, type KeyboardEvent, type PointerEvent } from 'react'
 import type { Passo } from '../lib/visao'
 import { indicesDosRotulos } from './eixo'
 import { formatarNumero, niceTicks } from './scale'
+import { useFocoNoTempo } from './useFocoNoTempo'
 import { useLargura } from './useLargura'
 
 export interface ColunaKpi {
@@ -28,9 +29,11 @@ const decimal = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 })
 /**
  * Colunas dos indicadores: uma série (vendas) ou duas empilhadas (abordagens com e sem a IA), nos mesmos intervalos
  * do gráfico grande. Um eixo só, valores do pico e do último intervalo escritos, média tracejada opcional e, ao
- * passar o mouse ou percorrer com as setas, a dica do intervalo. Sem dados, a moldura vazia (nada inventado).
+ * passar o mouse ou percorrer com as setas, a dica do intervalo. A mira é a mesma dos outros gráficos da linha do tempo
+ * (FocoNoTempo): apontar uma hora em outro gráfico acende a mesma coluna aqui, sem a dica. Sem dados, a moldura vazia.
  */
 export function ColunasKpi({
+  id,
   colunas,
   series,
   unidade: [singular, plural],
@@ -41,6 +44,8 @@ export function ColunasKpi({
   media = false,
   acumulado = false,
 }: {
+  /** Quem aponta na mira sincronizada ("abordagens"); sem ele, um id próprio. */
+  id?: string
   colunas: ColunaKpi[]
   series: SerieKpi[]
   /** "venda"/"vendas": o total do intervalo na dica e no rótulo de acessibilidade. */
@@ -56,8 +61,8 @@ export function ColunasKpi({
   acumulado?: boolean
 }) {
   const { ref, largura } = useLargura(320)
-  const [ativo, setAtivo] = useState<number | null>(null)
   const idDoDegrade = useId().replace(/:/g, '')
+  const { ativo, origem, focar, entrar } = useFocoNoTempo(id ?? idDoDegrade, colunas.map((c) => c.chave))
   const totais = colunas.map((c) => c.partes.reduce((s, v) => s + v, 0))
   const soma = totais.reduce((s, v) => s + v, 0)
 
@@ -99,14 +104,14 @@ export function ColunasKpi({
     const caixa = e.currentTarget.getBoundingClientRect()
     const escala = caixa.width > 0 ? W / caixa.width : 1
     const x = (e.clientX - caixa.left) * escala - MARGEM.esquerda
-    setAtivo(Math.min(n - 1, Math.max(0, Math.floor(x / faixa))))
+    focar(Math.min(n - 1, Math.max(0, Math.floor(x / faixa))))
   }
 
   function teclar(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'ArrowLeft') setAtivo((a) => Math.max(0, (a ?? n - 1) - 1))
-    else if (e.key === 'ArrowRight') setAtivo((a) => Math.min(n - 1, (a ?? n - 1) + 1))
-    else if (e.key === 'Home') setAtivo(0)
-    else if (e.key === 'End') setAtivo(n - 1)
+    if (e.key === 'ArrowLeft') focar(Math.max(0, (ativo ?? n - 1) - 1))
+    else if (e.key === 'ArrowRight') focar(Math.min(n - 1, (ativo ?? n - 1) + 1))
+    else if (e.key === 'Home') focar(0)
+    else if (e.key === 'End') focar(n - 1)
     else return
     e.preventDefault()
   }
@@ -135,8 +140,8 @@ export function ColunasKpi({
         role="img"
         aria-label={rotuloAcessivel}
         tabIndex={0}
-        onFocus={() => setAtivo((a) => a ?? n - 1)}
-        onBlur={() => setAtivo(null)}
+        onFocus={entrar}
+        onBlur={() => focar(null)}
         onKeyDown={teclar}
         className="relative rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
       >
@@ -146,7 +151,7 @@ export function ColunasKpi({
           viewBox={`0 0 ${W} ${altura}`}
           className="block h-auto max-w-full touch-pan-y select-none"
           onPointerMove={mover}
-          onPointerLeave={() => setAtivo(null)}
+          onPointerLeave={() => focar(null)}
           aria-hidden="true"
         >
           <defs>
@@ -235,7 +240,7 @@ export function ColunasKpi({
           ))}
         </svg>
 
-        {ativo !== null && (
+        {ativo !== null && origem && (
           <div
             role="tooltip"
             className="pointer-events-none absolute bottom-full z-10 mb-1 min-w-32 whitespace-nowrap rounded-lg border bg-popover/95 px-2.5 py-1.5 text-xs leading-4 text-popover-foreground shadow-lg backdrop-blur"

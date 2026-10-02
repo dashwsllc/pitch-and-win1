@@ -135,6 +135,11 @@ const linhasDaTabela = (pagina) =>
   pagina.locator('[data-dashboard-section="commercial-evolution"] details tbody tr').evaluateAll((trs) => trs.map((tr) => [...tr.cells].map((c) => c.textContent.trim())))
 const GRAFICO = 'Abordagens e calls'
 const PODIOS = ['Pódio dos Closers', 'Pódio dos SDRs']
+/** Tabela gêmea do gráfico de vendas (área): [intervalo, vendas, acumulado]. */
+const pontosDeVendas = (pagina) =>
+  regiao(pagina, 'Quantidade de Vendas')
+    .locator('details tbody tr')
+    .evaluateAll((trs) => trs.map((tr) => [tr.cells[0].textContent.trim(), Number(tr.cells[1].textContent), Number(tr.cells[2].textContent)]))
 
 const resultados = []
 async function teste(nome, fn) {
@@ -384,17 +389,27 @@ await teste('gráficos dos indicadores: as colunas são as horas do gráfico gra
     await expect(regiao(pagina, 'Total de Vendas')).toContainText(normalizar(money(e.total)))
     await expect(pagina.getByRole('img', { name: /Calls feitas e abordagens por hora/ })).toBeVisible()
     const linhas = await linhasDaTabela(pagina)
-    await expect.poll(async () => (await colunas('Quantidade de Vendas')).length).toBe(linhas.length)
-    // Uma linha do tempo só: as colunas dos dois indicadores são as horas do gráfico grande.
+    await expect.poll(async () => (await pontosDeVendas(pagina)).length).toBe(linhas.length)
+    // Uma linha do tempo só: os pontos de vendas e as colunas de abordagens são as horas do gráfico grande.
     const vendasPorHora = new Map()
     for (const v of e.vendas) {
       const rotulo = `${tempo.chaveDaHora(v.created_at).slice(11)}h`
       vendasPorHora.set(rotulo, (vendasPorHora.get(rotulo) ?? 0) + 1)
     }
-    assert.deepEqual(await colunas('Quantidade de Vendas'), linhas.map((l) => [l[0], vendasPorHora.get(l[0]) ?? 0]), 'cada coluna de vendas é a mesma hora do gráfico grande, com as vendas dela')
+    const vendas = await pontosDeVendas(pagina)
+    assert.deepEqual(vendas.map(([r, v]) => [r, v]), linhas.map((l) => [l[0], vendasPorHora.get(l[0]) ?? 0]), 'cada ponto de vendas é a mesma hora do gráfico grande, com as vendas dela')
+    let corrida = 0
+    assert.deepEqual(vendas.map(([, , ac]) => ac), vendas.map(([, v]) => (corrida += v)), 'o acumulado de cada hora é a soma até ela')
+    assert.equal(vendas.at(-1)[2], e.quantidade, 'o acumulado termina no indicador de vendas')
     assert.deepEqual(await colunas('Abordagens'), linhas.map((l) => [l[0], Number(l[2])]), 'cada coluna de abordagens é a mesma hora (e o mesmo número) do gráfico grande')
-    assert.equal(soma(await colunas('Quantidade de Vendas')), e.quantidade, 'as colunas somam o indicador de vendas')
     assert.equal(soma(await colunas('Abordagens')), e.abordagens.length, 'e as de abordagens, o indicador de abordagens')
+    // O gráfico de vendas é de área (o modelo do gráfico de abordagens e calls), com o pico e o último ponto escritos.
+    const qv = regiao(pagina, 'Quantidade de Vendas')
+    await expect(qv.locator('svg path[data-area]')).toHaveCount(1)
+    assert.equal(await qv.locator('rect.painel-coluna').count(), 0, 'sem colunas no gráfico de vendas')
+    assert.equal(await qv.locator('svg text[data-rotulo-ponto="ultimo"]').textContent(), String(vendas.at(-1)[1]), 'o último ponto escrito')
+    const pico = Math.max(...vendas.map(([, v]) => v))
+    if (vendas.at(-1)[1] !== pico) assert.equal(await qv.locator('svg text[data-rotulo-ponto="pico"]').textContent(), String(pico), 'e o pico')
     await expect(regiao(pagina, 'Quantidade de Vendas').getByText('Vendas por hora', { exact: true })).toBeVisible()
     await expect(regiao(pagina, 'Quantidade de Vendas').getByText(/^média [\d,]+ por hora$/)).toBeVisible()
     await expect(regiao(pagina, 'Abordagens').getByText('Abordagens por hora', { exact: true })).toBeVisible()
@@ -421,10 +436,61 @@ await teste('gráficos dos indicadores: as colunas são as horas do gráfico gra
     // Vários dias: um intervalo por dia, ainda somando os indicadores.
     await pagina.getByRole('radio', { name: '7 dias', exact: true }).click()
     await expect(regiao(pagina, 'Quantidade de Vendas').getByText('Vendas por dia', { exact: true })).toBeVisible()
-    await expect.poll(async () => (await colunas('Quantidade de Vendas')).length).toBe(7)
+    await expect.poll(async () => (await pontosDeVendas(pagina)).length).toBe(7)
     const e7 = esperado(f, '7dias')
-    assert.equal(soma(await colunas('Quantidade de Vendas')), e7.quantidade)
+    assert.equal((await pontosDeVendas(pagina)).at(-1)[2], e7.quantidade)
     assert.equal(soma(await colunas('Abordagens')), e7.abordagens.length)
+    assert.deepEqual(erros, [])
+  } finally {
+    await fechar()
+  }
+})
+
+await teste('mira sincronizada: apontar uma hora num gráfico acende a mesma hora nos outros dois, com uma dica só', async () => {
+  const { pagina, erros, fechar } = await abrir()
+  try {
+    const qv = regiao(pagina, 'Quantidade de Vendas')
+    const grafVendas = qv.getByRole('img', { name: /^Vendas por hora: / })
+    await expect(grafVendas).toBeVisible()
+    await expect(pagina.getByRole('img', { name: /Calls feitas e abordagens por hora/ })).toBeVisible()
+    const linhas = await linhasDaTabela(pagina)
+    const dicas = pagina.locator('[role="tooltip"]')
+    const miraGrande = pagina.locator('[data-dashboard-section="commercial-evolution"] [data-mira]')
+    const miraVendas = qv.locator('[data-mira]')
+    const colunasAcesas = () =>
+      regiao(pagina, 'Abordagens').locator('g[data-coluna]').evaluateAll((gs) => gs.filter((g) => g.getAttribute('opacity') === '1').map((g) => g.getAttribute('data-coluna')))
+
+    // Mouse no gráfico de vendas: a dica é dele; o gráfico grande ganha a mira na mesma hora, e a coluna da mesma hora
+    // fica acesa no de abordagens (as outras apagam).
+    await grafVendas.scrollIntoViewIfNeeded()
+    const caixa = await grafVendas.boundingBox()
+    await pagina.mouse.move(caixa.x + caixa.width * 0.6, caixa.y + caixa.height * 0.5)
+    await expect(qv.locator('[role="tooltip"]')).toBeVisible()
+    await expect(dicas).toHaveCount(1)
+    await expect(miraGrande).toHaveCount(1)
+    const chave = await miraGrande.getAttribute('data-chave')
+    await expect(miraVendas).toHaveAttribute('data-chave', chave)
+    assert.deepEqual(await colunasAcesas(), [chave], 'só a coluna da mesma hora fica acesa')
+    const rotulo = normalizar(await qv.locator('[role="tooltip"] p').first().innerText())
+    assert.ok(linhas.some((l) => l[0] === rotulo), `a hora da dica (${rotulo}) é uma hora do gráfico grande`)
+
+    // Sair apaga a mira de todos.
+    await pagina.mouse.move(5, 5)
+    await expect(dicas).toHaveCount(0)
+    await expect(miraGrande).toHaveCount(0)
+    await expect(miraVendas).toHaveCount(0)
+    assert.equal((await colunasAcesas()).length, linhas.length, 'todas as colunas voltam ao normal')
+
+    // Teclado no gráfico grande: Home vai à primeira hora em todos; a dica continua só no gráfico com o foco.
+    await pagina.getByRole('img', { name: /Calls feitas e abordagens por hora/ }).focus()
+    await pagina.keyboard.press('Home')
+    await expect(miraGrande).toHaveCount(1)
+    const primeira = await miraGrande.getAttribute('data-chave')
+    await expect(miraVendas).toHaveAttribute('data-chave', primeira)
+    await expect(dicas).toHaveCount(1)
+    await expect(pagina.locator('[data-dashboard-section="commercial-evolution"] [role="tooltip"]')).toContainText(linhas[0][0])
+    await pagina.keyboard.press('ArrowRight')
+    await expect(miraVendas).not.toHaveAttribute('data-chave', primeira)
     assert.deepEqual(erros, [])
   } finally {
     await fechar()
@@ -572,7 +638,7 @@ await teste('ao vivo: um evento novo muda KPI, gráfico, feed e tabela juntos, s
     assert.equal(linhas.reduce((t, l) => t + Number(l[2]), 0), depois.abordagens.length)
     // Os gráficos dos indicadores mudam junto.
     const somaDasColunas = (nome) => regiao(pagina, nome).locator('g[data-coluna]').evaluateAll((gs) => gs.reduce((t, g) => t + Number(g.getAttribute('data-total')), 0))
-    assert.equal(await somaDasColunas('Quantidade de Vendas'), depois.quantidade)
+    assert.equal((await pontosDeVendas(pagina)).reduce((t, [, v]) => t + v, 0), depois.quantidade)
     assert.equal(await somaDasColunas('Abordagens'), depois.abordagens.length)
     assert.equal(await pagina.evaluate(() => window.__marcador), 'mesma-pagina', 'sem recarregar a página')
     await expect(pagina.getByText(/^atualizado (agora|há)/)).toBeVisible()

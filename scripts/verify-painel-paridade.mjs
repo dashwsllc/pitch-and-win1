@@ -185,7 +185,8 @@ const EXTRAI_DEPOIS = () => {
   const divisao = limpo(document.querySelector('ul[aria-label="Abordagens por demonstração da IA"]')?.textContent)
   // Gráficos dos indicadores: cada coluna traz o intervalo (data-rotulo) e o total (data-total).
   const colunas = (nome) => [...(regiao(nome)?.querySelectorAll('g[data-coluna]') ?? [])].map((g) => [g.getAttribute('data-rotulo'), Number(g.getAttribute('data-total'))])
-  const colunasDeVendas = colunas('Quantidade de Vendas')
+  // O gráfico de vendas (área) traz cada intervalo na tabela gêmea: [intervalo, vendas, acumulado].
+  const colunasDeVendas = [...(regiao('Quantidade de Vendas')?.querySelectorAll('details tbody tr') ?? [])].map((tr) => [limpo(tr.cells[0].textContent), Number(limpo(tr.cells[1].textContent))])
   const colunasDeAbordagens = colunas('Abordagens')
   const somar = (lista) => lista.reduce((s, [, v]) => s + v, 0)
   return {
@@ -351,7 +352,7 @@ try {
       } else {
         const nova = antiga.map(([r]) => [r, vendasPorRotulo.get(r) ?? 0, abordagensPorRotulo.get(r) ?? 0])
         const sobra = [...vendasPorRotulo, ...abordagensPorRotulo].filter(([r, v]) => v !== 0 && !antiga.some(([ra]) => ra === r))
-        comparar(nome, filtro, `Evolução (${antiga.length} pontos)`, antiga, sobra.length ? [...nova, ...sobra] : nova, { nota: 'vendas nas colunas do indicador; abordagens na tabela do gráfico de abordagens e calls' })
+        comparar(nome, filtro, `Evolução (${antiga.length} pontos)`, antiga, sobra.length ? [...nova, ...sobra] : nova, { nota: 'vendas na tabela do gráfico do indicador; abordagens na do gráfico de abordagens e calls' })
       }
       // Calls feitas (bloco novo): a tabela fecha com o mock intervalo a intervalo, e a legenda traz o mesmo total.
       const ce = callsEsperadas(f, filtro, soDoUsuario)

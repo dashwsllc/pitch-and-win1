@@ -15,6 +15,7 @@ instalarResolvedor(raiz)
 const { niceTicks, formatarNumero, formatarPct } = await import('../src/painel/charts/scale.ts')
 const { caminhoSuave, indiceMaisProximo } = await import('../src/painel/charts/geometria.ts')
 const { indicesDosRotulos } = await import('../src/painel/charts/eixo.ts')
+const foco = await import('../src/painel/charts/foco.ts')
 const tempo = await import('../src/painel/lib/tempo.ts')
 const visao = await import('../src/painel/lib/visao.ts')
 const metas = await import('../src/painel/lib/metas.ts')
@@ -111,6 +112,23 @@ assert.equal(caminhoSuave([[10, 20]]), 'M10,20')
     assert.ok(ind.length <= cabem + 1, `n=${n} largura=${largura}: ${ind.length} rótulos para ${cabem} lugares`)
     for (let k = 1; k < ind.length - 1; k++) assert.ok((ind[k] - ind[k - 1]) * faixa >= Math.min(espaco, largura / 2) - 0.001 || n <= cabem, 'vizinhos afastados')
   }
+}
+
+{
+  // Mira sincronizada entre os gráficos da mesma linha do tempo: quem aponta vira a dona do foco; quem sai só apaga o
+  // foco se ainda for a dona (o ponteiro pode já ter passado para outro gráfico).
+  const vendas = { chave: '2026-10-01 14', origem: 'vendas' }
+  assert.deepEqual(foco.apontar(null, '2026-10-01 14', 'vendas'), vendas)
+  assert.equal(foco.apontar(vendas, '2026-10-01 14', 'vendas'), vendas, 'mesmo ponto, mesmo objeto (nada para redesenhar)')
+  assert.deepEqual(foco.apontar(vendas, '2026-10-01 15', 'calls'), { chave: '2026-10-01 15', origem: 'calls' })
+  assert.equal(foco.soltar(vendas, 'vendas'), null)
+  assert.equal(foco.soltar(vendas, 'calls'), vendas, 'outro gráfico não apaga o foco que não é dele')
+  assert.equal(foco.soltar(null, 'vendas'), null)
+  // Cada gráfico acha o próprio índice pela chave; fora da linha do tempo dele, nenhum.
+  const chaves = ['2026-10-01 13', '2026-10-01 14', '2026-10-01 15']
+  assert.equal(foco.indiceNoGrafico(vendas, chaves), 1)
+  assert.equal(foco.indiceNoGrafico({ chave: '2026-10-01 20', origem: 'calls' }, chaves), null)
+  assert.equal(foco.indiceNoGrafico(null, chaves), null)
 }
 
 // ---------------------------------------------------------------------------------------------- tempo

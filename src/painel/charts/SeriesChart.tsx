@@ -1,7 +1,8 @@
-import { useId, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useId, type KeyboardEvent, type PointerEvent } from 'react'
 import { indicesDosRotulos } from './eixo'
 import { caminhoSuave, indiceMaisProximo } from './geometria'
 import { formatarNumero, niceTicks } from './scale'
+import { useFocoNoTempo } from './useFocoNoTempo'
 import { useLargura } from './useLargura'
 
 const MARGEM = { topo: 16, direita: 16, base: 30, esquerda: 40 }
@@ -55,23 +56,27 @@ function Legenda({ textos, totais }: { textos: TextosDaSerie; totais: [number, n
 
 /**
  * Duas medidas no tempo, num só eixo: a principal em área azul com degradê (e o valor do último ponto escrito), a
- * secundária em linha laranja, com mira e dica. Com `onSelecionar`, clicar num ponto (ou Enter) abre aquele intervalo.
+ * secundária em linha laranja, com mira e dica. A mira é a mesma dos outros gráficos da linha do tempo (FocoNoTempo): a
+ * dica só aparece no gráfico apontado. Com `onSelecionar`, clicar num ponto (ou Enter) abre aquele intervalo.
  */
 export function SeriesChart({
   pontos,
   textos,
   altura = 280,
+  foco,
   onSelecionar,
 }: {
   pontos: PontoDaSerie[]
   textos: TextosDaSerie
   /** Altura do desenho em px (a largura acompanha o cartão). */
   altura?: number
+  /** Quem aponta na mira sincronizada ("calls"); sem ele, um id próprio. */
+  foco?: string
   onSelecionar?(chave: string): void
 }) {
   const { ref, largura } = useLargura()
-  const [ativo, setAtivo] = useState<number | null>(null)
   const idGradiente = useId().replace(/:/g, '')
+  const { ativo, origem, focar, entrar } = useFocoNoTempo(foco ?? idGradiente, pontos.map((p) => p.chave))
   const totais: [number, number] = [pontos.reduce((t, p) => t + p.principal, 0), pontos.reduce((t, p) => t + p.secundaria, 0)]
 
   if (pontos.length === 0) {
@@ -107,14 +112,14 @@ export function SeriesChart({
   function mover(e: PointerEvent<SVGSVGElement>) {
     const caixa = e.currentTarget.getBoundingClientRect()
     const escala = caixa.width > 0 ? W / caixa.width : 1
-    setAtivo(indiceMaisProximo((e.clientX - caixa.left) * escala - MARGEM.esquerda, n, plotW))
+    focar(indiceMaisProximo((e.clientX - caixa.left) * escala - MARGEM.esquerda, n, plotW))
   }
 
   function teclar(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'ArrowLeft') setAtivo((a) => Math.max(0, (a ?? n - 1) - 1))
-    else if (e.key === 'ArrowRight') setAtivo((a) => Math.min(n - 1, (a ?? n - 1) + 1))
-    else if (e.key === 'Home') setAtivo(0)
-    else if (e.key === 'End') setAtivo(n - 1)
+    if (e.key === 'ArrowLeft') focar(Math.max(0, (ativo ?? n - 1) - 1))
+    else if (e.key === 'ArrowRight') focar(Math.min(n - 1, (ativo ?? n - 1) + 1))
+    else if (e.key === 'Home') focar(0)
+    else if (e.key === 'End') focar(n - 1)
     else if (e.key === 'Enter' && onSelecionar) onSelecionar(pontos[ativo ?? n - 1].chave)
     else return
     e.preventDefault()
@@ -131,8 +136,8 @@ export function SeriesChart({
         role="img"
         aria-label={`${textos.resumo}. Use as setas para percorrer os pontos${onSelecionar ? ' e Enter para abrir o ponto escolhido' : ''}. Último ponto (${ultimo.rotulo}): ${contar(ultimo.principal, textos.unidades.principal)} e ${contar(ultimo.secundaria, textos.unidades.secundaria)}.`}
         tabIndex={0}
-        onFocus={() => setAtivo((a) => a ?? n - 1)}
-        onBlur={() => setAtivo(null)}
+        onFocus={entrar}
+        onBlur={() => focar(null)}
         onKeyDown={teclar}
         className="relative mt-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
       >
@@ -145,7 +150,7 @@ export function SeriesChart({
           onClick={() => {
             if (onSelecionar && ativo !== null) onSelecionar(pontos[ativo].chave)
           }}
-          onPointerLeave={() => setAtivo(null)}
+          onPointerLeave={() => focar(null)}
           aria-hidden="true"
         >
           <defs>
@@ -196,7 +201,7 @@ export function SeriesChart({
           )}
 
           {p && (
-            <g>
+            <g data-mira data-chave={p.chave}>
               <line x1={xAtivo} x2={xAtivo} y1={MARGEM.topo} y2={base} className="stroke-muted-foreground/50" strokeWidth={1} />
               <circle cx={xAtivo} cy={y(p.secundaria)} r={5} className="fill-viz-1 stroke-card" strokeWidth={2} />
               <circle cx={xAtivo} cy={y(p.principal)} r={5.5} className="fill-viz-4 stroke-card" strokeWidth={2} />
@@ -204,7 +209,7 @@ export function SeriesChart({
           )}
         </svg>
 
-        {p && (
+        {p && origem && (
           <div
             role="tooltip"
             className="pointer-events-none absolute top-2 z-10 min-w-36 rounded-lg border bg-popover/95 px-3 py-2 text-xs text-popover-foreground shadow-lg backdrop-blur"

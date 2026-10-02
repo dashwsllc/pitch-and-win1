@@ -32,6 +32,7 @@ import { MetasDeTurno } from '@/painel/components/MetasDeTurno'
 import { NumeroAnimado } from '@/painel/components/NumeroAnimado'
 import { UltimasVendas } from '@/painel/components/UltimasVendas'
 import { VendasDoTime } from '@/painel/components/VendasDoTime'
+import { AreaKpi } from '@/painel/charts/AreaKpi'
 import { Barras } from '@/painel/charts/Barras'
 import { ColunasKpi } from '@/painel/charts/ColunasKpi'
 import { RingGauge } from '@/painel/charts/RingGauge'
@@ -185,10 +186,12 @@ export default function Dashboard() {
             }
             className={`md:col-span-2 xl:col-span-5 ${esmaecer}`}
           >
+            {/* O modelo do gráfico de abordagens e calls, em verde (a cor das vendas no feed): área, pico e último ponto
+                escritos, média e a mira que acompanha os outros gráficos da mesma linha do tempo. */}
             <div className="mt-4">
-              <ColunasKpi
-                colunas={intervalos.map((p) => ({ chave: p.chave, rotulo: p.rotulo, partes: [p.vendas] }))}
-                series={[{ nome: 'vendas', cor: 'viz-1', ponto: 'bg-viz-1' }]}
+              <AreaKpi
+                id="vendas"
+                pontos={intervalos.map((p) => ({ chave: p.chave, rotulo: p.rotulo, valor: p.vendas }))}
                 unidade={['venda', 'vendas']}
                 passo={passo}
                 resumo={`Vendas por ${passo}`}
@@ -202,6 +205,7 @@ export default function Dashboard() {
             {/* Altura maior que a das vendas: o número é menor, e assim as duas molduras terminam alinhadas no xl. */}
             <div className="mt-4">
               <ColunasKpi
+                id="abordagens"
                 colunas={intervalos.map((p) => ({ chave: p.chave, rotulo: p.rotulo, partes: [p.mostrou, p.abordagens - p.mostrou] }))}
                 series={[
                   { nome: 'mostraram a IA', cor: 'viz-1', ponto: 'bg-viz-1' },
@@ -309,6 +313,7 @@ export default function Dashboard() {
         >
           {/* Mais alto que o padrão: ocupa a altura dos dois pódios ao lado, sem vão embaixo. */}
           <SeriesChart
+            foco="calls"
             pontos={pontosDeCalls}
             altura={344}
             textos={{
