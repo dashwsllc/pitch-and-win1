@@ -49,6 +49,9 @@ function comRelogioFixo(fn) {
   }
 }
 
+/** Milissegundos do momento de uma call concluída: o mais cedo entre a hora marcada e a do fechamento. */
+const momentoDaCall = (c) => Math.min(...[c.scheduled_at, c.completed_at].filter(Boolean).map((v) => Date.parse(v)))
+
 /** Os números que o painel ANTIGO calculava (useDashboardData), refeitos sobre as linhas do mock. */
 function esperado(fixtures, filtro, intervalo = { start: '2026-09-01', end: '2026-09-15' }) {
   const periodo = comRelogioFixo(() => periodos.resolveDashboardPeriod(filtro, intervalo))
@@ -60,10 +63,10 @@ function esperado(fixtures, filtro, intervalo = { start: '2026-09-01', end: '202
   const conversao = abordagens.length > 0 ? (quantidade / abordagens.length) * 100 : 0
   // A barra dividida: as abordagens do mesmo recorte, pela resposta "Mostrou a IA funcionando?".
   const mostrou = abordagens.filter((a) => a.mostrou_ia === true).length
-  // Calls feitas: qualificação ou fechamento com presença registrada (performed_at), sem cancelamento, pela hora em que
-  // aconteceram (a regra da Arena para "call realizada"); só marcadas e canceladas ficam de fora.
+  // Calls feitas: qualificação ou fechamento concluída no CRM (com resultado), sem cancelamento, no momento em que
+  // aconteceu (a hora marcada, ou a do fechamento se veio antes); só marcadas e canceladas ficam de fora.
   const calls = fixtures.tables.crm_activities.filter(
-    (c) => ['qualificacao', 'fechamento_closer'].includes(c.call_type) && c.performed_at && !c.cancelled_at && dentro(c.performed_at),
+    (c) => ['qualificacao', 'fechamento_closer'].includes(c.call_type) && c.is_completed && !c.cancelled_at && dentro(new Date(momentoDaCall(c)).toISOString()),
   )
   return { periodo, vendas, abordagens, calls, total, quantidade, ticket: quantidade > 0 ? total / quantidade : 0, conversao, mostrou, naoMostrou: abordagens.length - mostrou }
 }
@@ -92,7 +95,7 @@ async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 
   contexto.on('request', (r) => {
     const u = new URL(r.url())
     if (u.pathname.endsWith('/rest/v1/vendas') && (u.searchParams.get('select') ?? '').includes('valor_venda')) pedidosDeVendas.push(u)
-    if (u.pathname.endsWith('/rest/v1/crm_activities') && (u.searchParams.get('select') ?? '').includes('performed_at')) pedidosDeCalls.push(u)
+    if (u.pathname.endsWith('/rest/v1/crm_activities') && (u.searchParams.get('select') ?? '').includes('completed_at')) pedidosDeCalls.push(u)
   })
   await contexto.addInitScript(
     ({ chave, sessao, tema, comSessao }) => {
@@ -251,15 +254,15 @@ await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e
         assert.ok(janela, `pedido de vendas para ${filtro}`)
         assert.deepEqual(janela.searchParams.getAll('created_at'), [`gte.${e.periodo.start.toISOString()}`, `lt.${e.periodo.end.toISOString()}`], `janela do filtro ${filtro}`)
       }
-      // As calls saem na mesma carga, com a mesma janela (pela hora da call), só as feitas e não canceladas, do time todo.
+      // As calls saem na mesma carga, só as concluídas e não canceladas, do time todo. A janela pega a hora marcada ou a do
+      // fechamento; o momento exato (o mais cedo dos dois) é recortado na tela.
       const calls = pedidosDeCalls.at(-1)
       assert.ok(calls, `pedido de calls para ${filtro}`)
-      const feitas = ['call_type', 'cancelled_at'].map((c) => calls.searchParams.get(c))
-      assert.deepEqual(feitas, ['in.(qualificacao,fechamento_closer)', 'is.null'], `calls de qualificação e fechamento, sem as canceladas (${filtro})`)
-      const janelaDasCalls = calls.searchParams.getAll('performed_at')
-      assert.ok(janelaDasCalls.includes('not.is.null'), `só as calls com presença registrada (${filtro})`)
-      if (e.periodo.allTime) assert.deepEqual(janelaDasCalls, ['not.is.null'], 'todo o período não recorta as calls por data')
-      else assert.deepEqual(janelaDasCalls.filter((p) => p !== 'not.is.null'), [`gte.${e.periodo.start.toISOString()}`, `lt.${e.periodo.end.toISOString()}`], `janela das calls ${filtro}`)
+      const filtros = ['call_type', 'is_completed', 'cancelled_at'].map((c) => calls.searchParams.get(c))
+      assert.deepEqual(filtros, ['in.(qualificacao,fechamento_closer)', 'eq.true', 'is.null'], `calls concluídas de qualificação e fechamento, sem as canceladas (${filtro})`)
+      const [de, ate] = e.periodo.allTime ? [] : [e.periodo.start.toISOString(), e.periodo.end.toISOString()]
+      const janelaDasCalls = e.periodo.allTime ? null : `(and(scheduled_at.gte.${de},scheduled_at.lt.${ate}),and(completed_at.gte.${de},completed_at.lt.${ate}))`
+      assert.equal(calls.searchParams.get('or'), janelaDasCalls, `janela das calls ${filtro}`)
       assert.equal(calls.searchParams.has('assigned_to'), false, 'o Executive vê as calls do time todo')
     }
 
@@ -309,8 +312,10 @@ await teste('gráfico de abordagens e calls: teclado, mira, legenda com os totai
   try {
     const e = esperado(f, 'hoje')
     assert.ok(e.calls.length > 0 && e.abordagens.length > 0, 'o mock tem calls feitas e abordagens hoje')
-    const soMarcadasHoje = f.tables.crm_activities.filter((c) => !c.performed_at && Date.parse(c.created_at) >= e.periodo.start.getTime())
+    const soMarcadasHoje = f.tables.crm_activities.filter((c) => !c.is_completed && Date.parse(c.created_at) >= e.periodo.start.getTime())
     assert.ok(soMarcadasHoje.length > 0, 'o mock também tem calls só marcadas hoje, que não podem entrar na conta')
+    assert.ok(e.calls.some((c) => !c.performed_at), 'concluídas sem presença registrada também contam (como em produção)')
+    assert.ok(e.calls.some((c) => Date.parse(c.completed_at) < Date.parse(c.scheduled_at)), 'e há call fechada antes da hora marcada')
     const grafico = pagina.getByRole('img', { name: /Calls feitas e abordagens por hora, no horário de Brasília/ })
     await expect(grafico).toBeVisible()
     assert.match((await grafico.getAttribute('aria-label')) ?? '', /Use as setas para percorrer os pontos\. Último ponto \(\d{2}h\): \d+ calls? feitas? e \d+ abordage(m|ns)\./)
@@ -835,9 +840,7 @@ await teste('papel de vendedor: números só dele e menu sem itens de administra
     // As calls seguem a mesma regra: só as que a própria pessoa fez (assigned_to, quem a Arena credita).
     await expect.poll(() => pedidosDeCalls.length).toBeGreaterThan(0)
     assert.ok(pedidosDeCalls.every((u) => u.searchParams.get('assigned_to') === `eq.${USER_ID}`), 'o vendedor só conta as próprias calls')
-    const proprias = f.tables.crm_activities.filter(
-      (c) => c.assigned_to === USER_ID && c.performed_at && !c.cancelled_at && Date.parse(c.performed_at) >= esperado(f, 'hoje').periodo.start.getTime(),
-    )
+    const proprias = esperado(f, 'hoje').calls.filter((c) => c.assigned_to === USER_ID)
     assert.ok(proprias.length > 0, 'o mock tem calls feitas hoje pela própria pessoa')
     const legenda = normalizar(await regiao(pagina, GRAFICO).getByRole('list', { name: 'Legenda' }).innerText())
     assert.ok(legenda.includes(`Calls feitas ${inteiro(proprias.length)}`), `o gráfico conta só as calls dela (veio "${legenda}")`)

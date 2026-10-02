@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
+import { callsDoPeriodo, type CallLinha } from '@/painel/lib/visao'
 import {
   buildDashboardSeries,
   createDefaultDashboardCustomRange,
@@ -38,13 +39,14 @@ interface DashboardMetrics {
 export interface DashboardRows {
   vendas: Array<{ id: string; nome_produto: string; valor_venda: number; created_at: string }>
   abordagens: Array<{ id: string; created_at: string; mostrou_ia: boolean }>
-  // Calls feitas no período: qualificação ou fechamento com presença registrada (crm_activities.performed_at, o mesmo
-  // fato que a Arena conta como "call realizada"), sem cancelamento, pela hora em que aconteceram.
-  calls: Array<{ id: string; performed_at: string }>
+  // Calls feitas no período: qualificação ou fechamento concluída no CRM (com resultado: venda, perda, repasse,
+  // avançou) e sem cancelamento, no momento em que aconteceu (momentoDaCall: a hora marcada, ou a do fechamento se
+  // ela veio antes). O time quase não registra presença (performed_at), então ela não é exigida.
+  calls: CallLinha[]
 }
 
-// Os tipos gerados ainda não têm as colunas que a Arena acrescentou às calls (performed_at, cancelled_at): a consulta das
-// calls sai pelo mesmo cliente, só sem a checagem de tipos dessas colunas.
+// Os tipos gerados ainda não têm a coluna de cancelamento que a Arena acrescentou às calls (cancelled_at): a consulta
+// das calls sai pelo mesmo cliente, só sem a checagem de tipos das colunas.
 const clienteSemTipos = supabase as unknown as SupabaseClient
 
 export function useDashboardData(
@@ -122,21 +124,22 @@ export function useDashboardData(
           if (!isExecutive) request = request.eq('user_id', userId)
           return request.range(from, to)
         }),
-        // Calls feitas: o mesmo período, pela hora da call. Quem não é Executive vê as que fez (assigned_to, a pessoa
-        // que a Arena credita pela call).
-        fetchAllPages<{ id: string; performed_at: string }>((from, to) => {
+        // Calls feitas: concluídas e não canceladas. A janela traz as que têm a hora marcada ou a do fechamento no
+        // período; o momento exato (o mais cedo dos dois) é recortado logo abaixo. Quem não é Executive vê as que fez
+        // (assigned_to, a pessoa que a Arena credita pela call).
+        fetchAllPages<{ id: string; scheduled_at: string | null; completed_at: string | null }>((from, to) => {
           let request = clienteSemTipos
             .from('crm_activities')
-            .select('id, performed_at')
+            .select('id, scheduled_at, completed_at')
             .in('call_type', ['qualificacao', 'fechamento_closer'])
-            .not('performed_at', 'is', null)
+            .eq('is_completed', true)
             .is('cancelled_at', null)
           if (period.start && period.end) {
-            request = request
-              .gte('performed_at', period.start.toISOString())
-              .lt('performed_at', period.end.toISOString())
+            const de = period.start.toISOString()
+            const ate = period.end.toISOString()
+            request = request.or(`and(scheduled_at.gte.${de},scheduled_at.lt.${ate}),and(completed_at.gte.${de},completed_at.lt.${ate})`)
           }
-          request = request.order('performed_at').order('id')
+          request = request.order('scheduled_at').order('id')
           if (!isExecutive) request = request.eq('assigned_to', userId)
           return request.range(from, to)
         }),
@@ -197,7 +200,7 @@ export function useDashboardData(
           created_at: abordagem.created_at,
           mostrou_ia: abordagem.mostrou_ia === true,
         })),
-        calls: (calls ?? []).map(call => ({ id: call.id, performed_at: call.performed_at })),
+        calls: callsDoPeriodo(calls ?? [], period),
       }
       // Background refreshes usually return the same numbers. Keeping the current
       // state then avoids re-rendering the page and restarting the chart animation.

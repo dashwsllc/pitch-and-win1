@@ -144,7 +144,7 @@ const somaDe = (pontos, campo) => pontos.reduce((t, p) => t + p[campo], 0)
   // vendas, abordagens OU calls (nenhuma hora some, nem as sem evento), com as quatro contagens de cada hora.
   const v = [{ id: 'a', created_at: UTC('2026-10-01T17:50:00Z'), nome_produto: 'P', valor_venda: 10 }, { id: 'b', created_at: UTC('2026-10-01T20:05:00Z'), nome_produto: 'P', valor_venda: 20 }]
   const a = [{ id: 'x', created_at: UTC('2026-10-01T18:10:00Z'), mostrou_ia: true }, { id: 'y', created_at: UTC('2026-10-01T18:40:00Z'), mostrou_ia: false }]
-  const c = [{ id: 'k', performed_at: UTC('2026-10-01T21:15:00Z') }]
+  const c = [{ id: 'k', feita_em: UTC('2026-10-01T21:15:00Z') }]
   const s = visao.montarIntervalos(HOJE, true, v, a, c)
   assert.deepEqual(s.map((p) => p.rotulo), ['14h', '15h', '16h', '17h', '18h'], 'a call das 18h estende a linha do tempo')
   assert.deepEqual(s.map((p) => p.vendas), [1, 0, 0, 1, 0])
@@ -157,8 +157,8 @@ const somaDe = (pontos, campo) => pontos.reduce((t, p) => t + p[campo], 0)
   assert.deepEqual(cruzando.map((p) => p.rotulo), ['30/09 22h', '30/09 23h', '01/10 00h'], 'cruzou o dia: rótulo com data')
   assert.deepEqual(cruzando.map((p) => p.chave), ['2026-09-30 22', '2026-09-30 23', '2026-10-01 00'])
   assert.deepEqual(visao.montarIntervalos(HOJE, true, [], [], []), [])
-  assert.deepEqual(visao.montarIntervalos(HOJE, true, [{ id: 'z', created_at: 'lixo' }], [], [{ id: 'w', performed_at: 'lixo' }]), [], 'horário inválido é ignorado')
-  const so = visao.montarIntervalos(HOJE, true, [], [], [{ id: '1', performed_at: UTC('2026-10-01T15:00:00Z') }])
+  assert.deepEqual(visao.montarIntervalos(HOJE, true, [{ id: 'z', created_at: 'lixo' }], [], [{ id: 'w', feita_em: 'lixo' }]), [], 'horário inválido é ignorado')
+  const so = visao.montarIntervalos(HOJE, true, [], [], [{ id: '1', feita_em: UTC('2026-10-01T15:00:00Z') }])
   assert.deepEqual(so.map((p) => [p.rotulo, p.vendas, p.abordagens, p.calls]), [['12h', 0, 0, 1]], 'só calls (o dia de um Closer) também vira série')
 }
 {
@@ -169,7 +169,7 @@ const somaDe = (pontos, campo) => pontos.reduce((t, p) => t + p[campo], 0)
     const instante = () => new Date(base + Math.floor(sorteio() * 4 * 86_400_000)).toISOString()
     const vendas = Array.from({ length: Math.floor(sorteio() * 30) }, (_, i) => ({ id: String(i), created_at: instante() }))
     const abord = Array.from({ length: Math.floor(sorteio() * 60) }, (_, i) => ({ id: String(1000 + i), created_at: instante(), mostrou_ia: sorteio() < 0.6 }))
-    const calls = Array.from({ length: Math.floor(sorteio() * 25) }, (_, i) => ({ id: String(5000 + i), performed_at: instante() }))
+    const calls = Array.from({ length: Math.floor(sorteio() * 25) }, (_, i) => ({ id: String(5000 + i), feita_em: instante() }))
     const serie = visao.montarIntervalos(HOJE, true, vendas, abord, calls)
     assert.equal(somaDe(serie, 'vendas'), vendas.length)
     assert.equal(somaDe(serie, 'abordagens'), abord.length)
@@ -200,7 +200,7 @@ const somaDe = (pontos, campo) => pontos.reduce((t, p) => t + p[campo], 0)
       const v = Array.from({ length: Math.floor(sorteio() * 40) }, (_, i) => ({ id: String(i), created_at: instante(dias) })).filter((l) => dentro(l.created_at))
       const a = Array.from({ length: Math.floor(sorteio() * 120) }, (_, i) => ({ id: String(1000 + i), created_at: instante(dias), mostrou_ia: sorteio() < 0.6 })).filter((l) => dentro(l.created_at))
       // Calls nos mesmos instantes de registros que já existem: os intervalos têm de ser exatamente os da hook.
-      const c = [...v, ...a].filter(() => sorteio() < 0.3).map((l, i) => ({ id: String(9000 + i), performed_at: l.created_at }))
+      const c = [...v, ...a].filter(() => sorteio() < 0.3).map((l, i) => ({ id: String(9000 + i), feita_em: l.created_at }))
       const s = visao.montarIntervalos(periodo, false, v, a, c)
       if (v.length + a.length === 0) {
         assert.deepEqual(s, [], `${filtro}: sem registro, sem série`)
@@ -219,7 +219,7 @@ const somaDe = (pontos, campo) => pontos.reduce((t, p) => t + p[campo], 0)
   const tudo = periodos.resolveDashboardPeriod('all', periodos.createDefaultDashboardCustomRange())
   const v = [{ id: '1', created_at: UTC('2026-09-10T15:00:00Z') }]
   const a = [{ id: '2', created_at: UTC('2026-09-12T15:00:00Z'), mostrou_ia: true }]
-  const c = [{ id: '3', performed_at: UTC('2026-09-08T15:00:00Z') }]
+  const c = [{ id: '3', feita_em: UTC('2026-09-08T15:00:00Z') }]
   const s = visao.montarIntervalos(tudo, false, v, a, c)
   assert.deepEqual(s.map((p) => p.rotulo), ['08/09', '09/09', '10/09', '11/09', '12/09'])
   assert.deepEqual(s.map((p) => [p.vendas, p.abordagens, p.mostrou, p.calls]), [[0, 0, 0, 1], [0, 0, 0, 0], [1, 0, 0, 0], [0, 0, 0, 0], [0, 1, 1, 0]])
@@ -239,6 +239,30 @@ const somaDe = (pontos, campo) => pontos.reduce((t, p) => t + p[campo], 0)
   ])
   assert.deepEqual(visao.serieDeCalls([{ chave: 'a', rotulo: '14h', vendas: 4, abordagens: 0, mostrou: 0, calls: 0 }]), [])
   assert.deepEqual(visao.serieDeCalls([]), [])
+}
+{
+  // Quando uma call concluída aconteceu: a hora marcada; se ela foi fechada antes (um repasse antecipado), a do
+  // fechamento. Nunca no futuro, porque o fechamento já aconteceu.
+  const call = (scheduled_at, completed_at) => ({ scheduled_at, completed_at })
+  assert.equal(visao.momentoDaCall(call(UTC('2026-10-01T17:00:00Z'), UTC('2026-10-01T21:00:00Z'))), UTC('2026-10-01T17:00:00Z'), 'fechada depois: vale a hora marcada')
+  assert.equal(visao.momentoDaCall(call(UTC('2026-10-01T19:00:00Z'), UTC('2026-10-01T13:00:00Z'))), UTC('2026-10-01T13:00:00Z'), 'fechada antes: vale o fechamento')
+  assert.equal(visao.momentoDaCall(call(null, UTC('2026-10-01T13:00:00Z'))), UTC('2026-10-01T13:00:00Z'), 'sem hora marcada: o fechamento')
+  assert.equal(visao.momentoDaCall(call(UTC('2026-10-01T13:00:00Z'), null)), UTC('2026-10-01T13:00:00Z'))
+  assert.equal(visao.momentoDaCall(call(null, null)), null)
+  assert.equal(visao.momentoDaCall(call('lixo', 'lixo')), null, 'horário inválido não vira data')
+  // O recorte do período é pelo mesmo momento: uma call marcada para amanhã e fechada hoje é de hoje.
+  const hoje = { allTime: false, start: new Date('2026-10-01T03:00:00Z'), end: new Date('2026-10-02T03:00:00Z') }
+  const linhas = [
+    { id: '1', scheduled_at: UTC('2026-10-01T15:00:00Z'), completed_at: UTC('2026-10-01T16:00:00Z') },
+    { id: '2', scheduled_at: UTC('2026-10-02T15:00:00Z'), completed_at: UTC('2026-10-01T20:00:00Z') },
+    { id: '3', scheduled_at: UTC('2026-09-30T23:00:00Z'), completed_at: UTC('2026-10-01T12:00:00Z') },
+    { id: '4', scheduled_at: null, completed_at: null },
+  ]
+  assert.deepEqual(visao.callsDoPeriodo(linhas, hoje), [
+    { id: '1', feita_em: UTC('2026-10-01T15:00:00Z') },
+    { id: '2', feita_em: UTC('2026-10-01T20:00:00Z') },
+  ], 'a 3 aconteceu ontem (hora marcada) e a 4 não tem horário')
+  assert.equal(visao.callsDoPeriodo(linhas, { allTime: true }).length, 3, 'todo o período: todas com horário')
 }
 assert.equal(visao.passoDaSerie([{ rotulo: '14h' }], true), 'hora')
 assert.equal(visao.passoDaSerie([{ rotulo: '29/09' }], false), 'dia')

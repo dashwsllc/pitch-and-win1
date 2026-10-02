@@ -74,19 +74,21 @@ function serieAntiga(f, filtro, soDoUsuario) {
 }
 
 /**
- * Calls feitas que o gráfico novo tem de mostrar, refeitas sobre o mock: qualificação ou fechamento com presença
- * registrada (performed_at) e sem cancelamento, no período, e só as da própria pessoa para quem não é Executive
- * (assigned_to). Por dia, mês ou ano, nos mesmos intervalos; em "todo o período", do primeiro ao último registro de tudo.
+ * Calls feitas que o gráfico novo tem de mostrar, refeitas sobre o mock: qualificação ou fechamento concluída no CRM
+ * (com resultado) e sem cancelamento, no momento em que aconteceu (a hora marcada, ou a do fechamento se veio antes), no
+ * período, e só as da própria pessoa para quem não é Executive (assigned_to). Por dia, mês ou ano, nos mesmos intervalos;
+ * em "todo o período", do primeiro ao último registro de tudo.
  */
 function callsEsperadas(f, filtro, soDoUsuario) {
   return comRelogioFixo(() => {
     const periodo = periodos.resolveDashboardPeriod(filtro, INTERVALO)
     const dentro = (iso) => periodo.allTime || (Date.parse(iso) >= periodo.start.getTime() && Date.parse(iso) < periodo.end.getTime())
     const meu = (r) => !soDoUsuario || r.user_id === USER_ID
-    const feita = (c) => ['qualificacao', 'fechamento_closer'].includes(c.call_type) && c.performed_at && !c.cancelled_at
+    const feita = (c) => ['qualificacao', 'fechamento_closer'].includes(c.call_type) && c.is_completed && !c.cancelled_at
+    const momento = (c) => new Date(Math.min(...[c.scheduled_at, c.completed_at].filter(Boolean).map((v) => Date.parse(v)))).toISOString()
     const calls = f.tables.crm_activities
-      .filter((c) => feita(c) && dentro(c.performed_at) && (!soDoUsuario || c.assigned_to === USER_ID))
-      .map((c) => ({ created_at: c.performed_at }))
+      .filter((c) => feita(c) && dentro(momento(c)) && (!soDoUsuario || c.assigned_to === USER_ID))
+      .map((c) => ({ created_at: momento(c) }))
     let fixo = periodo
     if (periodo.allTime) {
       const vendas = f.tables.vendas.filter((v) => v.approval_status === 'aprovada' && meu(v))
@@ -354,7 +356,7 @@ try {
       // Calls feitas (bloco novo): a tabela fecha com o mock intervalo a intervalo, e a legenda traz o mesmo total.
       const ce = callsEsperadas(f, filtro, soDoUsuario)
       const callsNaTela = tabela.map(([r, c]) => [r, c])
-      const notaCalls = 'bloco novo: calls com presença registrada, sem as só marcadas e as canceladas'
+      const notaCalls = 'bloco novo: calls concluídas no CRM, sem as só marcadas e as canceladas'
       if (umDia || ce.total === 0) comparar(nome, filtro, 'Calls feitas (soma do gráfico)', ce.total, callsNaTela.reduce((t, [, c]) => t + c, 0), { nota: notaCalls })
       else comparar(nome, filtro, `Calls feitas (${ce.serie.length} pontos)`, ce.serie, callsNaTela, { nota: notaCalls })
       const totalNaLegenda = (rotulo) => numero(normalizar(d.legenda).match(new RegExp(`${rotulo}\\s*([\\d.]+)`))?.[1])

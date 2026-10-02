@@ -299,7 +299,11 @@ export default function Dashboard() {
             dos indicadores. Ao lado, os dois pódios do mês, compactos e empilhados. */}
         <Bloco
           titulo="Abordagens e calls"
-          descricao={umDiaSo ? 'Abordagens registradas e calls feitas em cada hora do período.' : 'Abordagens registradas e calls feitas ao longo do período.'}
+          descricao={
+            umDiaSo
+              ? 'Abordagens registradas e calls concluídas no CRM, em cada hora do período.'
+              : 'Abordagens registradas e calls concluídas no CRM, ao longo do período.'
+          }
           dataSecao="commercial-evolution"
           className={`md:col-span-2 xl:col-span-8 ${esmaecer}`}
         >

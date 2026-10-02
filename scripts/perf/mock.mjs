@@ -168,23 +168,26 @@ export function buildFixtures({ sales = 900, approaches = 3000, days = 60, role 
     updated_at: iso(nowMs - Math.floor(r() * 5 * 86400_000)), status: 'open', product_interest: pick(products).nome, value: pick(products).valor,
   }))
 
-  // Calls do CRM (crm_activities): qualificação, do SDR, e fechamento, do Closer. "Feita" é a que tem presença registrada
-  // (performed_at) e não foi cancelada, a mesma regra da Arena; aqui também há calls só marcadas e canceladas, que o
-  // painel não pode contar. Gerador próprio, depois de tudo: as outras fixtures continuam idênticas.
+  // Calls do CRM (crm_activities): qualificação, do SDR, e fechamento, do Closer. "Feita" é a concluída no CRM com
+  // resultado (venda, perda, repasse, avançou) e sem cancelamento; como em produção, só uma parte tem presença registrada
+  // (performed_at), e algumas fecham antes da hora marcada (repasse antecipado). Há também calls só marcadas e
+  // canceladas, que o painel não pode contar. Gerador próprio, depois de tudo: as outras fixtures continuam idênticas.
   const rc = rng(seed + 1000)
   const escolher = (arr) => arr[Math.floor(rc() * arr.length)]
   const call = (n, { pessoa, qualificacao, marcadaMs, estado }) => {
     const feita = estado === 'feita'
     const cancelada = estado === 'cancelada'
-    const feitaMs = Math.min(nowMs - 60_000, marcadaMs + Math.floor(rc() * 3 * 3600_000))
-    const fimMs = feita ? feitaMs : marcadaMs + 1800_000
+    // A call é 1 h depois de marcada e fecha em até 3 h: parte fecha antes da hora marcada.
+    const fechadaMs = Math.min(nowMs - 60_000, marcadaMs + Math.floor(rc() * 3 * 3600_000))
+    const fimMs = feita ? fechadaMs : marcadaMs + 1800_000
+    const comPresenca = feita && rc() < 0.3
     return {
       id: uuid(95_000 + n), lead_id: escolher(crmLeads).id, user_id: qualificacao ? pessoa.id : escolher(sdrs).id, assigned_to: pessoa.id,
       activity_type: 'call', call_type: qualificacao ? 'qualificacao' : 'fechamento_closer', title: qualificacao ? 'Call de qualificação' : 'Call de fechamento',
       description: null, author_name: null, scheduled_at: iso(marcadaMs + 3600_000), created_at: iso(marcadaMs), updated_at: iso(feita || cancelada ? fimMs : marcadaMs),
       is_completed: feita || cancelada, completed_at: feita || cancelada ? iso(fimMs) : null,
-      outcome: feita ? (qualificacao ? 'avancou' : 'venda_perdida') : cancelada ? 'followup' : null,
-      performed_at: feita ? iso(feitaMs) : null, performed_by: feita ? pessoa.id : null,
+      outcome: feita ? escolher(qualificacao ? ['avancou', 'repassado_closer'] : ['venda_concluida', 'venda_perdida']) : cancelada ? 'followup' : null,
+      performed_at: comPresenca ? iso(fechadaMs) : null, performed_by: comPresenca ? pessoa.id : null,
       cancelled_at: cancelada ? iso(fimMs) : null, cancelled_by: cancelada ? pessoa.id : null, cancellation_reason: cancelada ? 'Cliente pediu para remarcar' : null,
       is_pinned: false, previous_state: null, new_state: null,
     }

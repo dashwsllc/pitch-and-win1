@@ -20,10 +20,10 @@ export interface AbordagemLinha {
   mostrou_ia?: boolean
 }
 
-/** Call feita no período: a hora em que ela aconteceu (crm_activities.performed_at). */
+/** Call feita no período (concluída no CRM, sem cancelamento) e o momento em que ela aconteceu (momentoDaCall). */
 export interface CallLinha {
   id: string
-  performed_at: string
+  feita_em: string
 }
 
 /** Item do feed ao vivo: o mais novo primeiro. */
@@ -35,6 +35,32 @@ const QUINZE_MIN = 15 * 60 * 1000
 const UMA_HORA = 60 * 60 * 1000
 
 const instanteValido = (iso: string) => Number.isFinite(Date.parse(iso))
+
+/**
+ * Quando uma call concluída aconteceu: a hora marcada (scheduled_at); se ela foi fechada antes disso (um repasse
+ * antecipado, por exemplo), a hora do fechamento (completed_at). Nunca cai no futuro, porque o fechamento já aconteceu.
+ */
+export function momentoDaCall(call: { scheduled_at: string | null; completed_at: string | null }): string | null {
+  const instantes = [call.scheduled_at, call.completed_at].filter((v): v is string => typeof v === 'string' && instanteValido(v))
+  if (instantes.length === 0) return null
+  return instantes.reduce((cedo, v) => (Date.parse(v) < Date.parse(cedo) ? v : cedo))
+}
+
+/** As calls concluídas cujo momento (momentoDaCall) cai no período, na forma que os gráficos usam. */
+export function callsDoPeriodo(
+  linhas: Array<{ id: string; scheduled_at: string | null; completed_at: string | null }>,
+  periodo: ResolvedDashboardPeriod,
+): CallLinha[] {
+  const calls: CallLinha[] = []
+  for (const l of linhas) {
+    const feitaEm = momentoDaCall(l)
+    if (feitaEm === null) continue
+    const ms = Date.parse(feitaEm)
+    if (!periodo.allTime && (ms < periodo.start!.getTime() || ms >= periodo.end!.getTime())) continue
+    calls.push({ id: l.id, feita_em: feitaEm })
+  }
+  return calls
+}
 
 /**
  * Horas contínuas (no fuso de Brasília) entre o primeiro e o último instante, inclusive as sem evento.
@@ -88,7 +114,7 @@ export function montarIntervalos(
   const a = abordagens.filter((l) => instanteValido(l.created_at))
   const comIa = a.filter((l) => l.mostrou_ia === true)
   // As calls na forma de registro datado (created_at = quando aconteceram), para as mesmas contas das outras linhas.
-  const c = calls.filter((l) => instanteValido(l.performed_at)).map((l) => ({ id: l.id, created_at: l.performed_at }))
+  const c = calls.filter((l) => instanteValido(l.feita_em)).map((l) => ({ id: l.id, created_at: l.feita_em }))
   if (v.length + a.length + c.length === 0) return []
 
   if (porHora) {
