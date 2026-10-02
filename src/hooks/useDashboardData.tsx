@@ -9,6 +9,7 @@ import {
   createDefaultDashboardCustomRange,
   DashboardCustomRange,
   DashboardDateFilter,
+  ResolvedDashboardPeriod,
   resolveDashboardPeriod,
 } from '@/lib/dashboard-period'
 
@@ -30,6 +31,14 @@ interface DashboardMetrics {
   }>
 }
 
+// As mesmas linhas que as métricas acima resumem (vendas aprovadas e abordagens do período). A Home nova as usa para
+// o que não cabe num total: série por hora, feed ao vivo, "na última hora" e a divisão das abordagens pela
+// demonstração da IA (campo obrigatório do formulário). Nenhuma consulta a mais.
+export interface DashboardRows {
+  vendas: Array<{ id: string; nome_produto: string; valor_venda: number; created_at: string }>
+  abordagens: Array<{ id: string; created_at: string; mostrou_ia: boolean }>
+}
+
 export function useDashboardData(
   dateFilter: DashboardDateFilter = '30dias',
   customRange: DashboardCustomRange = createDefaultDashboardCustomRange(),
@@ -46,7 +55,18 @@ export function useDashboardData(
     vendasMes: [],
     produtosMaisVendidos: []
   })
+  const [rows, setRows] = useState<DashboardRows>({ vendas: [], abordagens: [] })
   const [loading, setLoading] = useState(true)
+  // Algum pedido em andamento (inclusive os de fundo, que não mostram "carregando").
+  const [fetching, setFetching] = useState(false)
+  // Quando o último pedido terminou bem: alimenta o "atualizado há X" da barra superior.
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+  // Sobe a cada carga pedida (primeira, troca de filtro, botão Atualizar), nunca nas atualizações de fundo: quem
+  // anima só o que chega ao vivo (o feed) usa isto para tratar uma carga nova como "já visto".
+  const [generation, setGeneration] = useState(0)
+  // O recorte das linhas que estão na tela. O filtro escolhido muda na hora; este só quando os dados dele chegam, e
+  // quem desenha a série (por hora ou por dia) segue ele para nunca misturar o formato novo com os números antigos.
+  const [loadedPeriod, setLoadedPeriod] = useState<ResolvedDashboardPeriod | null>(null)
   const [error, setError] = useState<string | null>(null)
   const latestFetch = useRef(0)
   const lastSignature = useRef('')
@@ -59,6 +79,7 @@ export function useDashboardData(
 
     try {
       if (showLoading) setLoading(true)
+      setFetching(true)
       setError(null)
 
       const period = resolveDashboardPeriod(dateFilter, { start: customStart, end: customEnd })
@@ -83,7 +104,7 @@ export function useDashboardData(
         fetchAllPages((from, to) => {
           let request = supabase
             .from('abordagens')
-            .select('id, created_at')
+            .select('id, created_at, mostrou_ia')
           if (period.start && period.end) {
             request = request
               .gte('created_at', period.start.toISOString())
@@ -138,19 +159,39 @@ export function useDashboardData(
         vendasMes,
         produtosMaisVendidos
       }
+      const nextRows: DashboardRows = {
+        vendas: (vendas ?? []).map(venda => ({
+          id: venda.id,
+          nome_produto: venda.nome_produto,
+          valor_venda: Number(venda.valor_venda),
+          created_at: venda.created_at,
+        })),
+        abordagens: (abordagens ?? []).map(abordagem => ({
+          id: abordagem.id,
+          created_at: abordagem.created_at,
+          mostrou_ia: abordagem.mostrou_ia === true,
+        })),
+      }
       // Background refreshes usually return the same numbers. Keeping the current
       // state then avoids re-rendering the page and restarting the chart animation.
-      const signature = JSON.stringify(next)
+      const signature = JSON.stringify([next, nextRows])
       if (signature !== lastSignature.current) {
         lastSignature.current = signature
         setMetrics(next)
+        setRows(nextRows)
       }
+      setLoadedPeriod(period)
+      setUpdatedAt(new Date().toISOString())
+      if (showLoading) setGeneration(g => g + 1)
     } catch (err) {
       if (requestId !== latestFetch.current) return
       console.error('Erro ao buscar dados do dashboard:', err)
       setError('Erro ao carregar dados do dashboard')
     } finally {
-      if (requestId === latestFetch.current) setLoading(false)
+      if (requestId === latestFetch.current) {
+        setLoading(false)
+        setFetching(false)
+      }
     }
   }, [customEnd, customStart, dateFilter, isExecutive, rolesLoading, userId])
 
@@ -179,5 +220,5 @@ export function useDashboardData(
     return () => window.clearTimeout(timeout)
   }, [dateFilter, fetchDashboardData, rolesLoading, userId])
 
-  return { metrics, loading, error, refetch: () => fetchDashboardData(true) }
+  return { metrics, rows, loading, fetching, error, updatedAt, generation, loadedPeriod, refetch: () => fetchDashboardData(true) }
 }

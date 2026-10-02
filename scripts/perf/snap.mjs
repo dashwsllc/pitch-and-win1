@@ -53,7 +53,7 @@ for (const route of ROUTES) {
       }
       await page.evaluate(() => window.scrollTo(0, 0))
       // Interaction snapshot: change the period filter and let the metrics reload.
-      const tab = page.locator('[role="tab"]').nth(2)
+      const tab = page.locator('[role="radio"], [role="tab"]').nth(2)
       await tab.click()
       await sleep(1800)
       fs.writeFileSync(path.join(OUT, `${name}-7dias.txt`), (await page.evaluate(() => document.body.innerText)).replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim())

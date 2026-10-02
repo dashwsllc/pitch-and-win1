@@ -54,12 +54,13 @@ page.on('pageerror', error => errors.push(error.message))
 
 try {
   await page.goto(origin)
-  await expect(page.getByRole('tab', { name: 'Tempo personalizado', exact: true })).toBeVisible()
-  await expect(page.getByRole('tab', { name: 'Todo o período', exact: true })).toBeVisible()
-  const revenueCard = page.locator('[data-dashboard-section="commercial-indicators"]').getByText('Total de Vendas', { exact: true }).locator('..')
+  await expect(page.getByRole('radio', { name: 'Tempo personalizado', exact: true })).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'Todo o período', exact: true })).toBeVisible()
+  // O cartão do indicador é uma região nomeada (section aria-label); o filtro é um radiogroup (role=radio).
+  const revenueCard = page.locator('[data-dashboard-section="commercial-indicators"]').getByRole('region', { name: 'Total de Vendas', exact: true })
   await expect(revenueCard).toContainText('R$ 0,00')
 
-  await page.getByRole('tab', { name: 'Tempo personalizado', exact: true }).click()
+  await page.getByRole('radio', { name: 'Tempo personalizado', exact: true }).click()
   await expect(page.getByRole('form', { name: 'Selecionar tempo personalizado' })).toBeVisible()
   await page.getByLabel('Data inicial').fill('2026-08-01')
   await page.getByLabel('Data final').fill('2026-08-15')
@@ -74,12 +75,12 @@ try {
   })).toBe(true)
 
   dashboardSalesRequests.length = 0
-  await page.getByRole('tab', { name: 'Todo o período', exact: true }).click()
+  await page.getByRole('radio', { name: 'Todo o período', exact: true }).click()
   await expect.poll(() => dashboardSalesRequests.some(url => !url.searchParams.has('created_at'))).toBe(true)
 
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(page.getByRole('tab', { name: 'Tempo personalizado', exact: true })).toBeVisible()
-  await page.getByRole('tab', { name: 'Tempo personalizado', exact: true }).click()
+  await expect(page.getByRole('radio', { name: 'Tempo personalizado', exact: true })).toBeVisible()
+  await page.getByRole('radio', { name: 'Tempo personalizado', exact: true }).click()
   await expect(page.getByRole('form', { name: 'Selecionar tempo personalizado' })).toBeVisible()
   await page.screenshot({ path: '.verification.local/dashboard-periods-mobile.png', fullPage: true })
 

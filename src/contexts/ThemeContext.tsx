@@ -11,9 +11,11 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // A Home (src/painel) abre escura por padrão, como o resto do app sempre foi; quem escolheu Claro, Escuro ou
+  // Sistema em Configurações continua com a escolha guardada.
   const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem('theme') as Theme
-    return stored || 'system'
+    const stored = localStorage.getItem('theme')
+    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'dark'
   })
 
   const [actualTheme, setActualTheme] = useState<'light' | 'dark'>('dark')

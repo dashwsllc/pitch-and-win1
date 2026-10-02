@@ -102,11 +102,11 @@ export function buildFixtures({ sales = 900, approaches = 3000, days = 60, role 
   const abordagens = []
   for (let i = 0; i < approaches; i++) {
     const u = pick([...closers, ...sdrs]); const at = nowMs - Math.floor(r() * days * 86400_000)
-    abordagens.push({ id: uuid(30_000 + i), user_id: u.id, created_at: iso(at) })
+    abordagens.push({ id: uuid(30_000 + i), user_id: u.id, created_at: iso(at), mostrou_ia: i % 5 < 3 })
   }
   for (let i = 0; i < 60; i++) {
     const u = pick([...closers, ...sdrs]); const at = nowMs - Math.floor(r() * 10 * 3600_000)
-    abordagens.push({ id: uuid(50_000 + i), user_id: u.id, created_at: iso(at) })
+    abordagens.push({ id: uuid(50_000 + i), user_id: u.id, created_at: iso(at), mostrou_ia: i % 5 < 3 })
   }
   abordagens.sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
 

@@ -1,294 +1,372 @@
-import { useState, useEffect, useRef } from "react"
-import { DashboardLayout } from "@/components/layout/DashboardLayout"
-import { MetricCard } from "@/components/dashboard/MetricCard"
-import { SalesChart } from "@/components/dashboard/SalesChart"
-import { ProductsRanking } from "@/components/dashboard/ProductsRanking"
-import { QuickActions } from "@/components/dashboard/QuickActions"
-import { FilterTabs } from "@/components/dashboard/FilterTabs"
-import { GoalsProgress } from "@/components/dashboard/GoalsProgress"
-import { ShiftApproachGoals } from "@/components/arena/ShiftApproachGoals"
-import { LeaderboardPreview } from "@/components/dashboard/LeaderboardPreview"
-import { RecentSales } from "@/components/dashboard/RecentSales"
-import { SalesBoard } from "@/components/sales/SalesBoard"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { useDashboardData } from "@/hooks/useDashboardData"
-import { useRankingDataWithMock } from "@/hooks/useRankingDataWithMock"
-import { useAuth } from "@/hooks/useAuth"
-import { useProfile } from "@/hooks/useProfile"
-import { useRoles } from "@/hooks/useRoles"
-import { useGSAP } from "@/hooks/useGSAP"
-import { useBrasiliaToday } from "@/hooks/useGoals"
-import { HeroClock, HeroDateText, HeroGreetingText } from "@/components/dashboard/HeroClock"
-import { money } from "@/lib/sales"
+import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
-  CircleDollarSign,
-  ShoppingBag,
-  ChartSpline,
-  UsersRound,
-  Target,
-  Medal,
-  Flame,
-  RefreshCw,
-  Crown,
-  Radio,
-} from "lucide-react"
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
+  ChartSplineIcon,
+  CircleDollarSignIcon,
+  MedalIcon,
+  MessageSquareTextIcon,
+  PercentIcon,
+  ShoppingBagIcon,
+  TargetIcon,
+  UsersRoundIcon,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/useAuth'
+import { useDashboardData } from '@/hooks/useDashboardData'
+import { useDailyGoals, useBrasiliaToday } from '@/hooks/useGoals'
+import { useProfile } from '@/hooks/useProfile'
+import { useRankingDataWithMock } from '@/hooks/useRankingDataWithMock'
+import { useRoles } from '@/hooks/useRoles'
+import { resolveDashboardPeriod } from '@/lib/dashboard-period'
+import { refreshDashboardData } from '@/lib/sync'
+import { BarraDividida } from '@/painel/components/BarraDividida'
+import { Cabecalho } from '@/painel/components/Cabecalho'
+import { ChecklistDoDia } from '@/painel/components/ChecklistDoDia'
+import { FeedAoVivo } from '@/painel/components/FeedAoVivo'
+import { FiltroPainel } from '@/painel/components/FiltroPainel'
+import { Iniciais } from '@/painel/components/Iniciais'
+import { Bloco, KpiCard } from '@/painel/components/KpiCard'
+import { LinkSecao } from '@/painel/components/LinkSecao'
+import { MetasDeTurno } from '@/painel/components/MetasDeTurno'
+import { NumeroAnimado } from '@/painel/components/NumeroAnimado'
+import { Podio } from '@/painel/components/Podio'
+import { UltimasVendas } from '@/painel/components/UltimasVendas'
+import { VendasDoTime } from '@/painel/components/VendasDoTime'
+import { Barras } from '@/painel/charts/Barras'
+import { RingGauge } from '@/painel/charts/RingGauge'
+import { formatarNumero } from '@/painel/charts/scale'
+import { SeriesChart } from '@/painel/charts/SeriesChart'
+import { Sparkline } from '@/painel/charts/Sparkline'
+import { useAgora } from '@/painel/hooks/relogio'
+import { useStatusAoVivo } from '@/painel/hooks/statusAoVivo'
+import { PainelLayout } from '@/painel/layout/PainelLayout'
+import { ACAO_DO_BLOCO } from '@/painel/lib/estilos'
+import { useFiltroPainel } from '@/painel/lib/filtro'
+import { emCentavos, formatarCentavos, formatarPercentual, formatarReais, formatarReaisInteiros, pluralizar } from '@/painel/lib/formatar'
+import { formatarHoraMinuto } from '@/painel/lib/tempo'
 import {
-  createDefaultDashboardCustomRange,
-  DashboardDateFilter,
-} from '@/lib/dashboard-period'
+  acumulado,
+  barrasDeProdutos,
+  contarNaUltimaHora,
+  dividirAbordagens,
+  montarAtividade,
+  serieDaHook,
+  serieHoraria,
+  serieSemMovimento,
+  somarNaUltimaHora,
+  ultimoInstante,
+} from '@/painel/lib/visao'
 
-gsap.registerPlugin(ScrollTrigger)
+// Dinheiro tem 10 a 15 caracteres: num cartão de 3 colunas o valor encolhe com a janela em vez de vazar.
+const VALOR_EM_REAIS = 'text-[clamp(1.5rem,2.1vw,2.25rem)]'
 
+/**
+ * Home: "Visão geral", na grade da referência; os indicadores formam a seção "Indicadores comerciais". Lê a mesma camada de dados do painel antigo
+ * (useDashboardData, ranking, metas e vendas do time, todos atualizados pelo DataSync) e só compõe: cada bloco recebe
+ * dados prontos. O período vale para os blocos de vendas e abordagens; ranking, metas e vendas do time têm janela
+ * própria, dita na barra de filtros e na descrição de cada bloco.
+ */
 export default function Dashboard() {
-  const [selectedFilter, setSelectedFilter] = useState<DashboardDateFilter>("hoje")
-  const [customRange, setCustomRange] = useState(createDefaultDashboardCustomRange)
+  const filtro = useFiltroPainel()
   const { user } = useAuth()
-  const today = useBrasiliaToday()
-  const { metrics, loading, error, refetch } = useDashboardData(selectedFilter, customRange)
-  const { ranking, sdrRanking } = useRankingDataWithMock()
   const { profile } = useProfile()
   const { isExecutive } = useRoles()
-  const dashboardRef = useRef<HTMLDivElement>(null)
-  const metricsRef = useRef<HTMLDivElement>(null)
+  const today = useBrasiliaToday()
+  const queryClient = useQueryClient()
+  const navegar = useNavigate()
+  const agora = useAgora()
+  const status = useStatusAoVivo()
+  const { metrics, rows, loading, fetching, error, updatedAt, generation, loadedPeriod, refetch } = useDashboardData(filtro.valor.periodo, filtro.intervalo)
+  const { ranking, sdrRanking, loading: carregandoRanking, error: erroRanking } = useRankingDataWithMock()
+  const metas = useDailyGoals()
 
-  useGSAP()
+  const nomeCompleto = profile?.display_name || user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Usuário'
+  const primeiroNome = nomeCompleto.split(' ')[0]
 
-  const userName = profile?.display_name || user?.user_metadata?.display_name || user?.email?.split('@')[0] || "Usuário"
-  const closerPosition = ranking.findIndex(r => r.isCurrentUser) + 1
-  const sdrPosition = sdrRanking.findIndex(r => r.isCurrentUser) + 1
-  const userPosition = closerPosition || sdrPosition
-  const rankingLabel = closerPosition ? 'Closers' : sdrPosition ? 'SDRs' : ''
-  const rankingSize = closerPosition ? ranking.length : sdrRanking.length
+  const posicaoCloser = ranking.findIndex((r) => r.isCurrentUser) + 1
+  const posicaoSdr = sdrRanking.findIndex((r) => r.isCurrentUser) + 1
+  const posicao = posicaoCloser || posicaoSdr
+  const rotuloDoRanking = posicaoCloser ? 'Closers' : posicaoSdr ? 'SDRs' : ''
+  const tamanhoDoRanking = posicaoCloser ? ranking.length : sdrRanking.length
 
-  useEffect(() => {
-    if (!dashboardRef.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  // O recorte dos números que estão na tela (enquanto o filtro novo carrega, ainda o anterior): um dia só vira série
+  // por hora; o que não inclui o momento atual não tem "última hora".
+  const { umDiaSo, incluiAgora } = useMemo(() => {
+    const periodo = loadedPeriod ?? resolveDashboardPeriod(filtro.valor.periodo, filtro.intervalo)
+    const agoraMs = Date.parse(agora)
+    return {
+      umDiaSo: !periodo.allTime && periodo.startKey === periodo.endKey,
+      incluiAgora: periodo.allTime || (periodo.start!.getTime() <= agoraMs && periodo.end!.getTime() > agoraMs),
+    }
+  }, [loadedPeriod, filtro.valor.periodo, filtro.intervalo, agora])
 
-    const context = gsap.context(() => {
-      gsap.fromTo(
-        '[data-hero-item]',
-        { opacity: 0, y: 18 },
-        { opacity: 1, y: 0, duration: 0.62, stagger: 0.07, ease: 'power2.out', clearProps: 'transform' }
-      )
+  // Tudo abaixo sai das mesmas linhas que deram os totais (rows e metrics chegam juntos, na mesma carga).
+  const serie = useMemo(() => {
+    const pontos = umDiaSo ? serieHoraria(rows.vendas, rows.abordagens) : serieDaHook(metrics.vendasMes)
+    return serieSemMovimento(pontos) ? [] : pontos
+  }, [umDiaSo, rows, metrics.vendasMes])
+  const acumuladoDeVendas = useMemo(() => acumulado(serie), [serie])
+  const naUltimaHora = useMemo(() => contarNaUltimaHora(rows.vendas, agora), [rows.vendas, agora])
+  const receitaNaUltimaHora = useMemo(() => somarNaUltimaHora(rows.vendas, agora), [rows.vendas, agora])
+  const ultimaVenda = useMemo(() => ultimoInstante(rows.vendas), [rows.vendas])
+  const divisao = useMemo(() => dividirAbordagens(rows.abordagens), [rows.abordagens])
+  const atividade = useMemo(() => montarAtividade(rows.vendas, rows.abordagens), [rows])
+  const produtos = useMemo(() => barrasDeProdutos(metrics.produtosMaisVendidos, metrics.totalVendas), [metrics.produtosMaisVendidos, metrics.totalVendas])
+  const linhasDoPodio = useMemo(
+    () => ranking.slice(0, 6).map((r, i) => ({ posicao: i + 1, chave: r.user_id, nome: r.name, total: r.totalVendas, vendas: r.quantidadeVendas })),
+    [ranking],
+  )
 
-      gsap.utils.toArray<HTMLElement>('[data-scroll-reveal]').forEach((section) => {
-        gsap.fromTo(section,
-          { opacity: 0, y: 24 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.62,
-            ease: 'power2.out',
-            clearProps: 'transform',
-            scrollTrigger: {
-              trigger: section,
-              start: 'top 88%',
-              once: true,
-            },
-          }
-        )
-      })
+  const primeiraCarga = loading && updatedAt === null && !error
+  // A carga inicial falhou e não há números para mostrar: nada de zeros que parecem dados.
+  const falhouAntesDeCarregar = !loading && updatedAt === null && error !== null
+  // Troca de filtro: os números anteriores ficam na tela, só mais discretos, até os novos chegarem.
+  const recarregando = loading && updatedAt !== null
+  const esmaecer = recarregando ? 'painel-recarregando' : ''
 
-      gsap.to('[data-ambient-orb]', {
-        yPercent: 24,
-        ease: 'none',
-        scrollTrigger: {
-          trigger: dashboardRef.current,
-          start: 'top top',
-          end: 'bottom top',
-          scrub: 0.8,
-        },
-      })
-    }, dashboardRef)
-
-    return () => context.revert()
-  }, [])
-
-  useEffect(() => {
-    if (loading || !metricsRef.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-
-    const context = gsap.context(() => {
-      gsap.fromTo(metricsRef.current!.children,
-        { opacity: 0, y: 18, scale: 0.985 },
-        { opacity: 1, y: 0, scale: 1, duration: 0.48, stagger: 0.055, ease: 'power2.out', clearProps: 'transform' }
-      )
-      ScrollTrigger.refresh()
-    }, metricsRef)
-
-    return () => context.revert()
-  }, [loading, selectedFilter])
+  const conversao = metrics.abordagens > 0 ? metrics.conversao : null
+  const tarefas = metas.tasks
+  const tarefasConcluidas = tarefas.filter((t) => t.is_completed).length
+  const progressoDasTarefas = tarefas.length ? Math.round((tarefasConcluidas / tarefas.length) * 100) : 0
 
   return (
-    <DashboardLayout>
-      <div ref={dashboardRef} className="relative mx-auto max-w-[1520px] space-y-7 pb-8">
-        <section data-dashboard-section="greeting" className="surface-panel relative overflow-hidden rounded-3xl p-5 sm:p-7 lg:p-8">
-          <div data-ambient-orb aria-hidden="true" className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-electric-violet/10 blur-[90px]" />
-          <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 left-[12%] h-48 w-72 rounded-full bg-ember/[0.07] blur-[80px]" />
-          <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-ember/30 to-transparent" />
+    <PainelLayout
+      status={status}
+      atualizadoEm={updatedAt}
+      recarregando={fetching}
+      erro={updatedAt !== null ? error : null}
+      onAtualizar={() => void refreshDashboardData(queryClient)}
+    >
+      <Cabecalho nome={primeiroNome} escopo={isExecutive ? 'visão consolidada do time' : 'somente os seus números'} />
+      <FiltroPainel valor={filtro.valor} intervalo={filtro.intervalo} erro={filtro.erro} ativo={filtro.ativo} onMudar={filtro.mudar} onLimpar={filtro.limpar} />
 
-          <div className="relative flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
-            <div className="max-w-3xl">
-              <div data-hero-item className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground sm:text-sm">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.045] px-2.5 py-1 shadow-[rgba(255,255,255,0.07)_0_0_0_1px_inset]">
-                  <Radio className="h-3.5 w-3.5 text-success" />
-                  Dados ao vivo
-                </span>
-                <span className="capitalize"><HeroDateText /></span>
-              </div>
-
-              <h1 data-hero-item className="mt-5 text-balance text-[clamp(2rem,5vw,3.35rem)] font-light leading-[0.98] tracking-[-0.045em] text-white">
-                <HeroGreetingText />, <span className="text-ash">{userName}</span>
-              </h1>
-
-              <p data-hero-item className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                {isExecutive
-                  ? 'Visão consolidada da operação comercial, das metas e da performance do time.'
-                  : 'Sua performance comercial, metas e próximos movimentos em uma única visão.'}
-              </p>
-            </div>
-
-            <div data-hero-item className="flex flex-wrap items-center gap-2.5">
-              {userPosition > 0 && (
-                <Badge className="h-10 gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.045] px-3.5 text-xs font-medium text-ash hover:bg-white/[0.065]">
-                  <Crown className="h-3.5 w-3.5 text-amber-400" />
-                  #{userPosition} no ranking de {rankingLabel}
-                </Badge>
-              )}
-
-              <HeroClock />
-
-              <Button
-                onClick={() => refetch()}
-                size="sm"
-                className="h-10 rounded-lg border-0 bg-gradient-ember px-4 text-white shadow-none transition-opacity hover:opacity-90"
-              >
-                <RefreshCw className={`mr-2 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-                Atualizar
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        <section data-dashboard-section="commercial-indicators" data-scroll-reveal className="space-y-3">
-          <div className="sticky top-20 z-20 rounded-2xl border border-white/[0.05] bg-[#0e0918]/78 p-1.5 backdrop-blur-[10px]">
-            <FilterTabs
-              value={selectedFilter}
-              onValueChange={setSelectedFilter}
-              customRange={customRange}
-              onCustomRangeChange={setCustomRange}
-            />
-          </div>
-          {error && (
-            <div
-              role="alert"
-              className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-            >
-              {error}. Tente atualizar novamente.
-            </div>
-          )}
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Visão do período</span>
-              <h2 className="mt-1.5 text-xl font-normal tracking-[-0.025em] text-white sm:text-2xl">Indicadores comerciais</h2>
-            </div>
-            <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-success" />
-              Somente vendas aprovadas
-            </span>
-          </div>
-
-        <div ref={metricsRef} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <MetricCard
-            title="Total de Vendas"
-            value={money(metrics.totalVendas)}
-            subtitle="Receita aprovada no período"
-            icon={<CircleDollarSign className="h-5 w-5" strokeWidth={1.8} />}
-            gradient
-            accent="ember"
-            loading={loading}
-          />
-          
-          <MetricCard
-            title="Quantidade de Vendas"
-            value={metrics.quantidadeVendas}
-            subtitle="Negócios confirmados"
-            icon={<ShoppingBag className="h-5 w-5" strokeWidth={1.8} />}
-            accent="success"
-            loading={loading}
-          />
-          
-          <MetricCard
-            title="Ticket Médio"
-            value={money(metrics.ticketMedio)}
-            subtitle="Receita média por venda"
-            icon={<ChartSpline className="h-5 w-5" strokeWidth={1.8} />}
-            accent="electric"
-            loading={loading}
-          />
-          
-          <MetricCard
-            title="Abordagens"
-            value={metrics.abordagens}
-            subtitle="Contatos registrados"
-            icon={<UsersRound className="h-5 w-5" strokeWidth={1.8} />}
-            accent="neutral"
-            loading={loading}
-          />
-          
-          <MetricCard
-            title="Taxa Conversão"
-            value={`${metrics.conversao.toFixed(1)}%`}
-            subtitle="Vendas por abordagem"
-            icon={<Target className="h-5 w-5" strokeWidth={1.8} />}
-            accent="electric"
-            loading={loading}
-          />
-          
-          <MetricCard
-            title="Posição Ranking"
-            value={userPosition > 0 ? `#${userPosition}` : '—'}
-            subtitle={userPosition > 0 ? `de ${rankingSize} ${rankingLabel}` : 'Ranking não iniciado'}
-            icon={<Medal className="h-5 w-5" strokeWidth={1.8} />}
-            accent="ember"
-            loading={loading}
-          />
+      {primeiraCarga && (
+        <div role="status" aria-live="polite" className="flex min-h-[40dvh] items-center justify-center">
+          <span className="size-7 rounded-full border-[3px] border-muted border-t-foreground motion-safe:animate-spin" aria-hidden="true" />
+          <span className="sr-only">Carregando os indicadores…</span>
         </div>
-        </section>
+      )}
 
-        <section data-dashboard-section="goals-in-progress" data-scroll-reveal className="space-y-3">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-ember">
-                <Flame className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-[0.14em]">Performance</span>
+      {falhouAntesDeCarregar && (
+        <div role="alert" className="flex min-h-[40dvh] flex-col items-center justify-center gap-2 px-4 text-center">
+          <p className="text-lg font-semibold text-heading">Não foi possível carregar os indicadores</p>
+          <p className="text-sm text-muted-foreground">{error}.</p>
+          <Button variant="outline" size="sm" className={`mt-2 ${ACAO_DO_BLOCO}`} onClick={() => void refetch()}>
+            Tentar de novo
+          </Button>
+        </div>
+      )}
+
+      {/* Montada desde o começo: as consultas dos blocos independentes saem em paralelo com a das métricas. */}
+      <div aria-busy={recarregando} className={`${primeiraCarga || falhouAntesDeCarregar ? 'hidden' : 'grid'} gap-4 md:grid-cols-2 xl:grid-cols-12`}>
+        <section data-dashboard-section="commercial-indicators" aria-label="Indicadores comerciais" className="contents">
+          {/* Linha 1 da referência: destaque · barra dividida · taxa · meta (5 · 3 · 2 · 2). */}
+          <KpiCard
+            destaque
+            rotulo="Quantidade de Vendas"
+            icone={ShoppingBagIcon}
+            valor={<NumeroAnimado valor={metrics.quantidadeVendas} />}
+            detalhe={
+              incluiAgora ? (
+                <>
+                  <strong className="font-semibold text-heading">+{formatarNumero(naUltimaHora)}</strong> na última hora
+                  {ultimaVenda && <> · última às {formatarHoraMinuto(ultimaVenda)}</>}
+                </>
+              ) : ultimaVenda ? (
+                <>Negócios confirmados · última às {formatarHoraMinuto(ultimaVenda)}</>
+              ) : (
+                <>Negócios confirmados</>
+              )
+            }
+            lateral={
+              <div className="hidden w-40 sm:block" aria-hidden="true">
+                <Sparkline valores={acumuladoDeVendas} />
               </div>
-              <h2 className="mt-1.5 text-xl font-normal tracking-[-0.025em] text-white sm:text-2xl">Metas em andamento</h2>
-            </div>
-            <span className="hidden text-xs text-muted-foreground sm:block">Sincroniza quando os dados mudam</span>
-          </div>
-          <GoalsProgress />
-          <ShiftApproachGoals date={today} />
+            }
+            className={`md:col-span-2 xl:col-span-5 ${esmaecer}`}
+          />
+          <KpiCard rotulo="Abordagens" icone={UsersRoundIcon} valor={<NumeroAnimado valor={metrics.abordagens} />} className={`xl:col-span-3 ${esmaecer}`}>
+            <BarraDividida
+              partes={[
+                { rotulo: 'Mostrou a IA', valor: divisao.mostrou },
+                { rotulo: 'Não mostrou', valor: divisao.naoMostrou },
+              ]}
+            />
+          </KpiCard>
+          <KpiCard
+            rotulo="Conversão"
+            icone={PercentIcon}
+            valor={conversao === null ? '—' : formatarPercentual(conversao)}
+            detalhe={`${pluralizar(metrics.quantidadeVendas, 'venda', 'vendas')} para ${pluralizar(metrics.abordagens, 'abordagem', 'abordagens')}`}
+            lateral={
+              conversao !== null && (
+                <RingGauge fracao={Math.min(1, conversao / 100)} rotulo="Vendas por abordagem">
+                  <UsersRoundIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                </RingGauge>
+              )
+            }
+            className={`xl:col-span-2 ${esmaecer}`}
+          />
+          <KpiCard
+            rotulo="Meta do dia"
+            icone={TargetIcon}
+            valor={metas.error ? '—' : <NumeroAnimado valor={tarefasConcluidas} />}
+            detalhe={
+              metas.loading ? 'Carregando…' : metas.error ? 'Metas indisponíveis agora' : tarefas.length ? `${progressoDasTarefas}% das tarefas de hoje` : 'Sem tarefas hoje'
+            }
+            lateral={
+              !metas.error && (
+                <RingGauge fracao={tarefas.length ? tarefasConcluidas / tarefas.length : 0} rotulo={`${tarefasConcluidas} de ${tarefas.length} tarefas do dia concluídas`}>
+                  <span className="text-base font-semibold tabular-nums text-heading">{tarefasConcluidas}</span>
+                  <span className="text-[10px] text-muted-foreground">de {tarefas.length}</span>
+                </RingGauge>
+              )
+            }
+            className="md:col-span-2 xl:col-span-2"
+          >
+            <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
+              {tarefas.length
+                ? 'Cada tarefa concluída avança a meta do dia. O checklist completo está logo abaixo.'
+                : 'O Executive pode cadastrar o checklist do dia em Metas.'}
+            </p>
+          </KpiCard>
+
+          {/* Os outros indicadores do painel antigo, numa segunda linha (6 · 3 · 3). */}
+          <KpiCard
+            rotulo="Total de Vendas"
+            icone={CircleDollarSignIcon}
+            valor={<NumeroAnimado valor={emCentavos(metrics.totalVendas)} formatar={formatarCentavos} />}
+            detalhe={
+              <>
+                Receita aprovada no período
+                {incluiAgora && metrics.quantidadeVendas > 0 && (
+                  <>
+                    {' · '}
+                    <strong className="font-semibold text-heading">+{formatarReais(receitaNaUltimaHora)}</strong> na última hora
+                  </>
+                )}
+              </>
+            }
+            className={`md:col-span-2 xl:col-span-6 ${esmaecer}`}
+          />
+          <KpiCard
+            rotulo="Ticket Médio"
+            icone={ChartSplineIcon}
+            valor={<NumeroAnimado valor={emCentavos(metrics.ticketMedio)} formatar={formatarCentavos} />}
+            valorClasse={VALOR_EM_REAIS}
+            detalhe="Receita média por venda"
+            className={`xl:col-span-3 ${esmaecer}`}
+          />
+          <KpiCard
+            rotulo="Posição no ranking"
+            icone={MedalIcon}
+            valor={posicao > 0 ? <NumeroAnimado valor={posicao} formatar={(n) => `#${n}`} /> : '—'}
+            detalhe={carregandoRanking ? 'Carregando…' : posicao > 0 ? `de ${tamanhoDoRanking} ${rotuloDoRanking}` : 'Ranking não iniciado'}
+            className="xl:col-span-3"
+          />
         </section>
 
-        <section data-dashboard-section="commercial-evolution" data-scroll-reveal>
-          <SalesChart data={metrics.vendasMes} loading={loading} />
+        <section data-dashboard-section="goals-in-progress" aria-label="Metas em andamento" className="contents">
+          <ChecklistDoDia className="md:col-span-2 xl:col-span-6" />
+          <MetasDeTurno data={today} className="md:col-span-2 xl:col-span-6" />
         </section>
 
-        <section data-dashboard-section="featured-products" data-scroll-reveal>
-          <ProductsRanking data={metrics.produtosMaisVendidos} loading={loading} />
-        </section>
+        <Bloco
+          titulo="Evolução comercial"
+          descricao={umDiaSo ? 'Vendas e abordagens em cada hora do período.' : 'Volume de vendas e abordagens no período.'}
+          dataSecao="commercial-evolution"
+          className={`md:col-span-2 xl:col-span-8 ${esmaecer}`}
+        >
+          <SeriesChart
+            pontos={serie}
+            textos={{
+              principal: 'Vendas',
+              secundaria: 'Abordagens',
+              coluna: umDiaSo ? 'Hora' : 'Período',
+              resumo: `Vendas e abordagens ${umDiaSo ? 'por hora' : 'ao longo do período'}, no horário de Brasília`,
+              vazio: 'Aguardando as primeiras vendas.',
+            }}
+          />
+        </Bloco>
 
-        <section data-dashboard-section="recent-sales" data-scroll-reveal><RecentSales /></section>
+        <Bloco
+          titulo="Pódio dos Closers"
+          descricao={
+            linhasDoPodio[0]
+              ? `${linhasDoPodio[0].nome} lidera o mês com ${formatarReaisInteiros(linhasDoPodio[0].total)}`
+              : 'Quem mais vendeu neste mês (receita aprovada)'
+          }
+          acao={<LinkSecao para="/ranking">Ranking</LinkSecao>}
+          className="md:col-span-2 xl:col-span-4"
+        >
+          {erroRanking && (
+            <p role="alert" className="mb-3 text-xs text-destructive">
+              Não foi possível atualizar o ranking.
+            </p>
+          )}
+          {carregandoRanking ? (
+            <p role="status" className="py-8 text-center text-sm text-muted-foreground">
+              Carregando…
+            </p>
+          ) : (
+            <>
+              <div className="pt-6">
+                <Podio linhas={linhasDoPodio.slice(0, 3)} destaque={user?.id} />
+              </div>
+              {ranking.length === 0 && !erroRanking && <p className="mt-4 text-center text-xs text-muted-foreground">Nenhum Closer elegível no ranking.</p>}
+              {ranking.length > 3 && (
+                <ol className="mt-4 space-y-1.5 border-t pt-3 text-sm" start={4}>
+                  {linhasDoPodio.slice(3, 6).map((l) => (
+                    <li key={l.chave} className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="w-6 text-xs tabular-nums text-muted-foreground">{l.posicao}º</span>
+                        <span className="truncate text-heading">{l.nome}</span>
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">{formatarReaisInteiros(l.total)}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
+        </Bloco>
 
-        <section data-dashboard-section="transparent-operation" data-scroll-reveal><SalesBoard compact /></section>
+        {/* Trio da referência (4 · 4 · 4): sem funil real no negócio, o 2º lugar fica com as vendas do time. */}
+        <Bloco titulo="Produtos em destaque" descricao="Ranking por receita aprovada" dataSecao="featured-products" className={`md:col-span-2 xl:col-span-4 ${esmaecer}`}>
+          <Barras
+            rotulo="Receita aprovada por produto"
+            vazio="Nenhum produto vendido no período"
+            formatarTotal={formatarReaisInteiros}
+            itens={produtos.map((p) => ({
+              chave: p.chave,
+              rotulo: p.nome,
+              rotuloTexto: p.nome,
+              total: p.valor,
+              fracao: p.fracao,
+              complemento: pluralizar(p.quantidade, 'venda', 'vendas'),
+              inicio: <Iniciais nome={p.nome} tamanho="xs" />,
+            }))}
+          />
+        </Bloco>
 
-        <section data-scroll-reveal className="grid gap-4 xl:grid-cols-2">
-          <LeaderboardPreview />
-          <QuickActions />
-        </section>
+        <VendasDoTime className="md:col-span-2 xl:col-span-4" />
+
+        <Bloco
+          titulo="Ao vivo"
+          descricao="O que acabou de acontecer no período"
+          acao={
+            <Button size="sm" className={`botao-acao ${ACAO_DO_BLOCO}`} onClick={() => navegar('/abordagens?new=true')}>
+              <MessageSquareTextIcon aria-hidden="true" /> Nova abordagem
+            </Button>
+          }
+          className={`md:col-span-2 xl:col-span-4 ${esmaecer}`}
+        >
+          <FeedAoVivo key={generation} itens={atividade} />
+        </Bloco>
+
+        <UltimasVendas className="md:col-span-2 xl:col-span-12" />
       </div>
-    </DashboardLayout>
+    </PainelLayout>
   )
 }

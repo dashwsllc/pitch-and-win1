@@ -1,0 +1,394 @@
+/*
+  Home (Visão geral): tokens, acabamento e movimento.
+
+  Tudo vive em html.painel, classe posta no <html> só enquanto a Home está montada (usePainelEscopo.ts).
+  Assim a dica, o menu e a gaveta, que renderizam em portais fora da página, herdam os tokens, e as outras
+  telas (login incluído) continuam exatamente como estão. As cores são HSL em canais ("H S% L%"), como no
+  resto do projeto. scripts/verify-painel-unit.mjs lê estes valores e roda o validador de paleta (validar-paleta.mjs)
+  nos dois temas, então um token alterado aqui que reprove no validador quebra o teste.
+*/
+
+/* ------------------------------------------------------------------ tema claro (valores validados) */
+html.painel {
+  color-scheme: light;
+  font-family: 'DM Sans Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-optical-sizing: auto;
+
+  /* raios: múltiplos de --radius (cartão 18 px, chip e itens 14 px, controles 10 px) */
+  --radius: 0.625rem;
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* superfícies e texto */
+  --background: 260 37.5% 96.86%;
+  --foreground: 254.12 26.98% 12.35%;
+  --card: 0 0% 100%;
+  --card-foreground: 254.12 26.98% 12.35%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 254.12 26.98% 12.35%;
+  --primary: 17.47 88.35% 40.39%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 260 31.03% 94.31%;
+  --secondary-foreground: 254.12 26.98% 12.35%;
+  --muted: 260 31.03% 94.31%;
+  --muted-foreground: 258.26 11.79% 38.24%;
+  --accent: 261.43 33.33% 91.76%;
+  --accent-foreground: 254.12 26.98% 12.35%;
+  --destructive: 0 72.22% 50.59%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 258.46 25.49% 90%;
+  --input: 258.95 24.68% 84.9%;
+  --ring: 20.54 90.24% 48.24%;
+  --heading: 260 45.45% 6.47%;
+
+  /* menu lateral */
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 258.95 15.45% 24.12%;
+  --sidebar-primary: 17.47 88.35% 40.39%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 264 50% 96.08%;
+  --sidebar-accent-foreground: 260 45.45% 6.47%;
+  --sidebar-border: 260 28.57% 91.76%;
+  --sidebar-ring: 20.54 90.24% 48.24%;
+
+  /* dados: série 1 (laranja da marca), 2 (violeta) e 3 (verde). Validados sobre o cartão #ffffff. */
+  --viz-1: 21 90.16% 47.84%;
+  --viz-2: 258.18 72.69% 55.49%;
+  --viz-3: 162.08 82.76% 34.12%;
+  --viz-track: 20.4 100% 90.2%;
+  --viz-grid: 261.82 31.43% 93.14%;
+  /* reservados (estados; a Home não os usa como série) */
+  --viz-alerta: 37.69 92.13% 50.2%;
+  --viz-critico: 0 72.22% 50.59%;
+  /* rampa ordinal (um matiz só, do claro ao escuro), validada com --ordinal sobre o cartão #ffffff */
+  --viz-ord-1: 23.92 86.05% 66.27%;
+  --viz-ord-2: 21 90.16% 47.84%;
+  --viz-ord-3: 20.28 88.96% 31.96%;
+
+  /* medalhas: só no pódio */
+  --ouro: 39.79 75.71% 48.43%;
+  --prata: 216.67 17.65% 60%;
+  --bronze: 25.71 52.07% 47.45%;
+
+  /* estados */
+  --ok: 160.12 84.08% 39.41%;
+  --ok-forte: 162.93 93.55% 24.31%;
+  --aviso: 37.69 92.13% 50.2%;
+  --erro: 0 72.22% 50.59%;
+
+  /* acabamento (usados direto no CSS, nunca com modificador de opacidade do Tailwind) */
+  --filete: rgb(14 9 24 / 0.07);
+  --gradiente-acao: linear-gradient(135deg, #c2410c, #dc2626);
+  --gradiente-corrente: linear-gradient(135deg, #e8590c, #e11d48);
+  --avatar-de: rgb(232 89 12 / 0.15);
+  --avatar-ate: rgb(245 158 11 / 0.1);
+  --atmosfera-1: rgb(232 89 12 / 0.1);
+  --atmosfera-2: rgb(109 59 224 / 0.06);
+}
+
+/* ------------------------------------------------------------------ tema escuro */
+html.painel.dark {
+  color-scheme: dark;
+
+  --background: 260 45.45% 6.47%;
+  --foreground: 266.67 12% 85.29%;
+  --card: 257.14 24.14% 11.37%;
+  --card-foreground: 266.67 12% 85.29%;
+  --popover: 258.75 21.62% 14.51%;
+  --popover-foreground: 264 22.73% 91.37%;
+  --primary: 16.65 85.65% 43.73%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 258.75 17.78% 17.65%;
+  --secondary-foreground: 264 22.73% 91.37%;
+  --muted: 260 18.52% 15.88%;
+  --muted-foreground: 261.18 9.5% 64.9%;
+  --accent: 257.65 16.83% 19.8%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 90.6% 70.78%;
+  --destructive-foreground: 0 67.74% 6.08%;
+  --border: 258.75 16.67% 18.82%;
+  --input: 257.65 12.78% 26.08%;
+  --ring: 27.02 95.98% 60.98%;
+  --heading: 0 0% 100%;
+
+  --sidebar-background: 261.43 58.33% 4.71%;
+  --sidebar-foreground: 260 14.56% 79.8%;
+  --sidebar-primary: 16.65 85.65% 43.73%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 258.75 26.67% 11.76%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-border: 256 19.48% 15.1%;
+  --sidebar-ring: 27.02 95.98% 60.98%;
+
+  /* validados sobre o cartão #1a1624 */
+  --viz-1: 23.25 87.45% 46.86%;
+  --viz-2: 256 83.85% 68.43%;
+  --viz-3: 159.57 69% 39.22%;
+  --viz-track: 19.15 52.81% 17.45%;
+  --viz-grid: 257.14 16.28% 16.86%;
+  --viz-critico: 0 84.24% 60.2%;
+  /* validada com --ordinal sobre o cartão #1a1624 */
+  --viz-ord-1: 25.71 90% 72.55%;
+  --viz-ord-2: 23.25 87.45% 46.86%;
+  --viz-ord-3: 22.68 87.23% 36.86%;
+
+  --ouro: 40.11 90.2% 60%;
+  --prata: 214.29 30.43% 81.96%;
+  --bronze: 25.98 59.62% 58.24%;
+
+  --ok-forte: 158.11 64.37% 51.57%;
+  --erro: 0 84.24% 60.2%;
+
+  --filete: rgb(255 255 255 / 0.08);
+  --atmosfera-1: rgb(253 137 37 / 0.1);
+  --atmosfera-2: rgb(107 33 239 / 0.07);
+}
+
+/* ------------------------------------------------------------------ base do painel */
+html.painel body {
+  /* a fonte e as cores vêm do painel; o brilho fixo do fundo antigo sai (a atmosfera abaixo o substitui) */
+  font-family: inherit;
+  font-feature-settings: normal;
+  font-variation-settings: normal;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+html.painel body::before {
+  display: none;
+}
+html.painel ::selection {
+  background: hsl(var(--viz-1) / 0.3);
+  color: inherit;
+}
+html.painel :focus-visible {
+  outline-color: hsl(var(--ring) / 0.6);
+}
+
+/* Botão principal: degradê de ação. Texto branco por regra de contraste (>= 4,5:1 no início, >= 3:1 no fim). */
+.botao-acao {
+  background-image: var(--gradiente-acao);
+  color: #fff;
+}
+.botao-acao:hover {
+  filter: brightness(1.08) saturate(1.05);
+}
+
+/* Cartão de destaque: brilho suave no canto e filete interno. */
+.cartao-brilho {
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, hsl(var(--viz-1)) 16%, transparent), transparent 58%),
+    hsl(var(--card));
+  box-shadow: inset 0 0 0 1px var(--filete);
+}
+
+/*
+  Atmosfera da página: brilhos muito suaves nos cantos, só no escuro. Fica num pseudo-elemento fixo (uma camada
+  própria, pintada uma vez) em vez de background-attachment: fixed, que repinta a tela inteira a cada rolagem.
+*/
+html.painel.dark .atmosfera::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(60% 50% at 100% 0%, var(--atmosfera-1), transparent 70%),
+    radial-gradient(55% 45% at 0% 100%, var(--atmosfera-2), transparent 70%);
+  will-change: transform;
+}
+
+/* Menu lateral: rótulo de grupo e item ativo com filete de 2 px à esquerda. */
+html.painel [data-sidebar='group-label'] {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+html.painel [data-sidebar='menu-button'][data-active='true'] {
+  position: relative;
+}
+html.painel [data-sidebar='menu-button'][data-active='true']::before {
+  content: '';
+  position: absolute;
+  inset: 6px auto 6px 0;
+  width: 2px;
+  border-radius: 2px;
+  background-image: var(--gradiente-corrente);
+}
+
+/* Faixa de atualização: fina, na borda da barra superior, enquanto os dados recarregam (os anteriores seguem na tela). */
+@keyframes painel-progresso {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+.painel-progresso {
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 2px;
+  overflow: hidden;
+}
+.painel-progresso::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background-image: var(--gradiente-corrente);
+  animation: painel-progresso 1.1s ease-in-out infinite;
+}
+
+/* Linha que acabou de chegar ao vivo: lavagem da cor da série 1 que some. */
+@keyframes painel-linha-nova {
+  from {
+    background-color: color-mix(in oklab, hsl(var(--viz-1)) 20%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.painel-linha-nova {
+  animation: painel-linha-nova 2.6s ease-out;
+}
+
+/* Número que mudou ao vivo: sobe um pouquinho. */
+@keyframes painel-numero-subiu {
+  from {
+    transform: translateY(0.18em);
+  }
+  to {
+    transform: none;
+  }
+}
+.painel-numero-subiu {
+  display: inline-block;
+  animation: painel-numero-subiu 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Dados em recarga por troca de filtro: os números anteriores ficam na tela, só mais discretos. */
+.painel-recarregando {
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+/* ---------------------------------------------------------------------------
+   Pódio: 2º, 1º e 3º lado a lado; os degraus sobem ao abrir. Ouro, prata e bronze só aqui.
+   --------------------------------------------------------------------------- */
+.podio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.75rem;
+}
+.podio-lugar {
+  --medalha: hsl(var(--prata));
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.podio-lugar[data-lugar='1'] {
+  --medalha: hsl(var(--ouro));
+}
+.podio-lugar[data-lugar='3'] {
+  --medalha: hsl(var(--bronze));
+}
+.podio-avatar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-weight: 600;
+  color: hsl(var(--heading));
+  background: color-mix(in oklab, var(--medalha) 18%, hsl(var(--card)));
+  box-shadow:
+    0 0 0 2px hsl(var(--card)),
+    0 0 0 4px var(--medalha);
+}
+.podio-degrau {
+  position: relative;
+  width: 100%;
+  border-radius: 14px 14px 6px 6px;
+  border: 1px solid color-mix(in oklab, var(--medalha) 38%, hsl(var(--border)));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--medalha) 26%, hsl(var(--card))) 0%, hsl(var(--card)) 88%);
+  transform-origin: bottom;
+}
+.podio-lugar[data-lugar='1'] .podio-degrau {
+  box-shadow: 0 18px 40px -26px var(--medalha);
+}
+.podio-numero {
+  font-weight: 700;
+  line-height: 1;
+  color: color-mix(in oklab, var(--medalha) 70%, hsl(var(--heading)));
+}
+@keyframes podio-subir {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes podio-coroa {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    transform: translateY(-3px) rotate(4deg);
+    filter: drop-shadow(0 4px 10px color-mix(in oklab, hsl(var(--ouro)) 70%, transparent));
+  }
+}
+@keyframes podio-brilho {
+  0% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  60%,
+  100% {
+    transform: translateX(330%) skewX(-18deg);
+  }
+}
+.podio-coroa {
+  color: hsl(var(--ouro));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .podio-degrau {
+    animation: podio-subir 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .podio-lugar[data-lugar='1'] .podio-degrau {
+    animation-delay: 0.08s;
+  }
+  .podio-lugar[data-lugar='3'] .podio-degrau {
+    animation-delay: 0.16s;
+  }
+  .podio-coroa {
+    animation: podio-coroa 3.2s ease-in-out infinite;
+  }
+  .podio-lugar[data-lugar='1'] .podio-degrau::after {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 30%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, transparent, color-mix(in oklab, hsl(var(--ouro)) 28%, transparent), transparent);
+    animation: podio-brilho 4.5s ease-in-out 1s infinite;
+    pointer-events: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .painel-linha-nova,
+  .painel-numero-subiu,
+  .painel-progresso::after {
+    animation: none;
+  }
+  .painel-recarregando {
+    transition: none;
+  }
+}

@@ -103,6 +103,36 @@ export default {
         },
         ash: 'hsl(0 2% 81%)',
         fog: 'hsl(0 3% 60%)',
+        // Tokens da Home (src/painel/painel.css). Só têm valor dentro de html.painel.
+        heading: "hsl(var(--heading) / <alpha-value>)",
+        viz: {
+          1: "hsl(var(--viz-1) / <alpha-value>)",
+          2: "hsl(var(--viz-2) / <alpha-value>)",
+          3: "hsl(var(--viz-3) / <alpha-value>)",
+          track: "hsl(var(--viz-track) / <alpha-value>)",
+          grid: "hsl(var(--viz-grid) / <alpha-value>)",
+          alerta: "hsl(var(--viz-alerta) / <alpha-value>)",
+          critico: "hsl(var(--viz-critico) / <alpha-value>)",
+          "ord-1": "hsl(var(--viz-ord-1) / <alpha-value>)",
+          "ord-2": "hsl(var(--viz-ord-2) / <alpha-value>)",
+          "ord-3": "hsl(var(--viz-ord-3) / <alpha-value>)",
+        },
+        ouro: "hsl(var(--ouro) / <alpha-value>)",
+        prata: "hsl(var(--prata) / <alpha-value>)",
+        ok: {
+          DEFAULT: "hsl(var(--ok) / <alpha-value>)",
+          forte: "hsl(var(--ok-forte) / <alpha-value>)",
+        },
+        aviso: "hsl(var(--aviso) / <alpha-value>)",
+        erro: "hsl(var(--erro) / <alpha-value>)",
+        avatar: {
+          de: "var(--avatar-de)",
+          ate: "var(--avatar-ate)",
+        },
+      },
+      opacity: {
+        // Chip de ícone dos indicadores (bg-viz-1/12).
+        12: "0.12",
       },
       backgroundImage: {
         "gradient-primary": "var(--gradient-primary)",
@@ -128,6 +158,12 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        // A Home redefine estes raios em html.painel (cartão 18 px, chip 14 px, selo 26 px).
+        // Em qualquer outra tela o fallback é exatamente o padrão do Tailwind.
+        xl: "var(--radius-xl, 0.75rem)",
+        "2xl": "var(--radius-2xl, 1rem)",
+        "3xl": "var(--radius-3xl, 1.5rem)",
+        "4xl": "var(--radius-4xl, 2rem)",
       },
       keyframes: {
         "accordion-down": {

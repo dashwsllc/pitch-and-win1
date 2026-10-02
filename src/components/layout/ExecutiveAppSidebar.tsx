@@ -1,57 +1,9 @@
 import { memo } from "react"
-import { 
-  BarChart3, 
-  Home,
-  Monitor,
-  Megaphone,
-  DollarSign,
-  Trophy,
-  Users,
-  User,
-  Settings,
-  Shield,
-  Wallet,
-  Target,
-  ShoppingBag,
-  ListChecks
-} from "lucide-react"
+import { BarChart3 } from "lucide-react"
 import { NavLink } from "react-router-dom"
 import { useRoles } from '@/hooks/useRoles'
-import { canAccessArena, canAccessTraffic } from '@/lib/arena'
+import { itensDoMenu } from '@/lib/navigation'
 import { preloadRoute } from '@/lib/route-preload'
-
-const menuItems = [
-  { title: "Dashboard", url: "/", icon: Home },
-  { title: "Executive", url: "/executive", icon: Shield },
-  { title: "Arena Comercial", url: "/arena", icon: Monitor },
-  { title: "Metas", url: "/metas", icon: ListChecks },
-  { title: "Tráfego", url: "/trafego", icon: Megaphone },
-  { title: "Vendas", url: "/vendas", icon: DollarSign },
-  { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
-  { title: "Ranking", url: "/ranking", icon: Trophy },
-  { title: "Leads", url: "/leads", icon: Users },
-  { title: "Assinaturas", url: "/assinaturas", icon: ShoppingBag },
-  { title: "CRM", url: "/crm", icon: Target },
-  { title: "Saques", url: "/saques", icon: Wallet },
-  { title: "Perfil", url: "/perfil", icon: User },
-  { title: "Configurações", url: "/configuracoes", icon: Settings },
-]
-
-const sellerMenuItems = [
-  { title: "Dashboard", url: "/", icon: Home },
-  { title: "Arena Comercial", url: "/arena", icon: Monitor },
-  { title: "Metas", url: "/metas", icon: ListChecks },
-  { title: "Tráfego", url: "/trafego", icon: Megaphone },
-  { title: "Vendas", url: "/vendas", icon: DollarSign },
-  { title: "Minhas Vendas", url: "/minhas-vendas", icon: ShoppingBag },
-  { title: "Ranking", url: "/ranking", icon: Trophy },
-  { title: "Leads", url: "/leads", icon: Users },
-  { title: "Assinaturas", url: "/assinaturas", icon: ShoppingBag },
-  { title: "CRM", url: "/crm", icon: Target },
-  { title: "Saques", url: "/saques", icon: Wallet },
-  { title: "Perfil", url: "/perfil", icon: User },
-  { title: "Configurações", url: "/configuracoes", icon: Settings },
-]
 
 interface AppSidebarProps {
   isExecutive?: boolean
@@ -59,12 +11,8 @@ interface AppSidebarProps {
 
 function ExecutiveAppSidebarBase({ isExecutive = false }: AppSidebarProps) {
   const { capabilities, roles, isSuperAdmin } = useRoles()
-  const items = (isExecutive ? menuItems : sellerMenuItems).filter(item =>
-    (item.url !== '/crm' || capabilities.leads) && (item.url !== '/vendas' || capabilities.sales) &&
-    (item.url !== '/leads' || roles.some(role => ['sdr','executive','super_admin'].includes(role))) &&
-    (item.url !== '/assinaturas' || isSuperAdmin) && (item.url !== '/arena' || canAccessArena(roles)) &&
-    (item.url !== '/trafego' || canAccessTraffic(roles)))
-  
+  const items = itensDoMenu({ isExecutive, isSuperAdmin, roles, capabilities })
+
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-dvh w-16 flex-col overflow-y-auto border-r border-white/[0.055] bg-[#0c0715]/92 sm:w-[72px]" data-lenis-prevent>
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ember/70 to-transparent" />
