@@ -414,13 +414,16 @@ export function useCRMContexts(leadId: string | null) {
   };
 }
 
-export function useCRMAssignees() {
+// `fresh`: quem abre um diálogo de escolha de responsável lê a lista no banco de novo, em vez de usar a cópia
+// guardada pela tela (um cargo mudado há pouco já vale na hora).
+export function useCRMAssignees({ fresh = false }: { fresh?: boolean } = {}) {
   const { user } = useAuth();
   const { hasCRMAccess } = useRoles();
   return useQuery({
     queryKey: ["crm", "assignees", user?.id],
     enabled: !!user && hasCRMAccess,
     ...queryOptions,
+    ...(fresh ? { refetchOnMount: "always" as const } : {}),
     queryFn: async () => {
       const rows: { user_id: string; display_name: string; role: string }[] =
         [];

@@ -33,6 +33,7 @@ const stateLabels: Record<string, string> = {
   pipeline_stage: "Pipeline",
   sdr_id: "SDR",
   closer_id: "Closer",
+  call_assigned_to: "Responsável da call",
   next_followup_at: "Próximo retorno",
   version: "Revisão",
 };

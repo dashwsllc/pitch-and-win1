@@ -1438,6 +1438,10 @@ export type Database = {
         Args: { p_activity_id: string; p_scheduled_at: string; p_expected_revision: string }
         Returns: Database["public"]["Tables"]["crm_activities"]["Row"]
       }
+      update_crm_call: {
+        Args: { p_activity_id: string; p_assigned_to: string | null; p_scheduled_at: string | null; p_expected_revision: string }
+        Returns: Database["public"]["Tables"]["crm_activities"]["Row"]
+      }
       executive_create_product: { Args: { p_name: string; p_description: string | null; p_ticket_name: string; p_ticket_price: number; p_active?: boolean }; Returns: Database["public"]["Tables"]["products"]["Row"] }
       executive_save_product: { Args: { p_product_id: string | null; p_name: string; p_description?: string | null; p_active?: boolean; p_expected_updated_at?: string | null }; Returns: Database["public"]["Tables"]["products"]["Row"] }
       executive_save_product_ticket: { Args: { p_ticket_id: string | null; p_product_id: string; p_name: string; p_price: number; p_active?: boolean; p_expected_updated_at?: string | null }; Returns: Database["public"]["Tables"]["product_tickets"]["Row"] }

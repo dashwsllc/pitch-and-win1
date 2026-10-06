@@ -56,6 +56,7 @@ import { CRMResults } from "@/components/crm/CRMResults";
 import { CRMRemarketingBoard } from "@/components/crm/CRMRemarketingBoard";
 import { CRMReturnDialog } from "@/components/crm/CRMReturnDialog";
 import { leadResult } from "@/lib/crm-results";
+import { candidatesFor } from "@/lib/crm-assignees";
 import { CRMLeadPeriodFilter } from "@/components/crm/CRMLeadPeriodFilter";
 import { CRMUserManagement } from "@/components/crm/CRMUserManagement";
 import { CRMPermissionsReport } from "@/components/crm/CRMPermissionsReport";
@@ -225,7 +226,7 @@ export default function CRM() {
   const names = Object.fromEntries(
     (assignees.data || []).map((a) => [a.user_id, a.display_name]),
   );
-  const candidates = (assignees.data || []).filter((a) => a.role === "closer");
+  const candidates = candidatesFor("closer", assignees.data || []);
   const openCalls = new Map<string, CRMActivity>();
   callsQuery.activities
     .filter((activity) => !activity.is_completed)

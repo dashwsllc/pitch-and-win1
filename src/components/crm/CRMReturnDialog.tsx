@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CRMLead } from "@/hooks/useCRM";
 import { brasiliaLocalInputToIso } from "@/lib/brasilia-time";
+import { candidatesFor } from "@/lib/crm-assignees";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,9 +37,7 @@ export function CRMReturnDialog({
   onClose: () => void;
   onSave: (data: CRMReturnData) => Promise<boolean>;
 }) {
-  const candidates = assignees
-    .filter((a) => [target, "executive", "super_admin"].includes(a.role))
-    .filter((a, i, all) => all.findIndex((b) => b.user_id === a.user_id) === i);
+  const candidates = candidatesFor(target, assignees);
   const previous =
     target === "sdr"
       ? lead.sdr_id

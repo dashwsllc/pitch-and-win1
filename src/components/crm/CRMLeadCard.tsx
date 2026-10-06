@@ -109,11 +109,10 @@ export function CRMLeadCard({
     (handed
       ? capabilities.closer && !!lead.closer_id && canManage
       : capabilities.sdr);
-  const canSchedule =
-    !closed &&
-    (handed
-      ? capabilities.closer && (!lead.closer_id || canManage)
-      : capabilities.sdr);
+  // Qualquer SDR ou Closer (Executive incluído) edita a call já agendada, de qualquer tipo, a qualquer momento:
+  // troca o responsável (Closer ou SDR, conforme a call) e/ou o horário.
+  const canEditCall = !closed && !!call && !call.is_completed && capabilities.sdr;
+  const editIntent: CRMCallIntent = call?.call_type === "qualificacao" ? "qualification" : "closer";
   const canSendRemarketing = !closed && (handed
     ? capabilities.closer && canManage
     : capabilities.sdr || lead.created_by === user?.id);
@@ -181,7 +180,7 @@ export function CRMLeadCard({
       : qualificationDue
         ? { label: "Registrar resultado da qualificação", onClick: onQualifyCall }
         : qualificationCall
-          ? { label: "Reagendar call SDR", onClick: () => onSchedule("qualification") }
+          ? { label: "Editar call SDR", onClick: () => onSchedule("qualification") }
           : { label: "Agendar Call c/ SDR", onClick: () => onSchedule("qualification") };
   // O repasse ao Closer fica sempre disponível pro SDR, tenha ele feito a
   // call de qualificação ou não: a RPC handoff_and_schedule_closer_call já
@@ -445,9 +444,9 @@ export function CRMLeadCard({
             Assumir lead
           </Button>
         )}
-        {handed && capabilities.closer && !!lead.closer_id && closerCall && (
+        {handed && canEditCall && closerCall && (
           <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={() => onSchedule("closer")}>
-            Reagendar call Closer
+            Editar call Closer
           </Button>
         )}
         {handed && capabilities.closer && !!lead.closer_id && (
@@ -472,9 +471,9 @@ export function CRMLeadCard({
                 </DropdownMenuItem>
               </>
             )}
-            {handed && canSchedule && call && (
-              <DropdownMenuItem onSelect={() => onSchedule("closer")}>
-                <PhoneCall className="mr-2 h-4 w-4" /> Reagendar call
+            {canEditCall && (
+              <DropdownMenuItem onSelect={() => onSchedule(editIntent)}>
+                <PhoneCall className="mr-2 h-4 w-4" /> Editar call agendada
               </DropdownMenuItem>
             )}
             {!closed && canCreateClosing && !call && handed && (

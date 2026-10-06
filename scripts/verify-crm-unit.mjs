@@ -245,4 +245,57 @@ assert.match(qualificationSource, /Resumo para o Closer/)
 assert.match(remarketingSource, /Registrar contato e próxima tentativa/)
 assert.match(remarketingSource, /Reativar para qualificação/)
 
-console.log('PASS: CRM validation, strict roles, SDR qualification calls, remarketing queues, athlete data, lead deletion, call states, notifications, ordering and athlete-first hierarchy.')
+// Lista de Closers/SDRs dos diálogos do CRM: uma regra só, completa e sem duplicados.
+const { candidatesFor, splitSelf } = await import('../src/lib/crm-assignees.ts')
+const assigneeRows = [
+  { user_id: 'u-pedro', display_name: 'Pedro Iago', role: 'closer' },
+  { user_id: 'u-pedro', display_name: 'Pedro Iago', role: 'sdr' },
+  { user_id: 'u-ana', display_name: 'ana', role: 'closer' },
+  { user_id: 'u-exec', display_name: 'Cleiton', role: 'executive' },
+  { user_id: 'u-adm', display_name: 'Admin', role: 'super_admin' },
+  { user_id: 'u-sdr', display_name: 'Ismael', role: 'sdr' },
+]
+assert.deepEqual(candidatesFor('closer', assigneeRows).map(c => c.display_name), ['Admin', 'ana', 'Cleiton', 'Pedro Iago'])
+assert.deepEqual(candidatesFor('sdr', assigneeRows).map(c => c.display_name), ['Admin', 'Cleiton', 'Ismael', 'Pedro Iago'])
+assert.equal(candidatesFor('closer', assigneeRows).some(c => c.user_id === 'u-sdr'), false)
+assert.equal(candidatesFor('closer', assigneeRows.filter(r => r.user_id !== 'u-pedro')).some(c => c.user_id === 'u-pedro'), false)
+assert.equal(candidatesFor('closer', [{ user_id: 'u-pedro', display_name: 'Pedro Iago', role: 'sdr' }]).length, 0)
+assert.deepEqual(candidatesFor('closer', []), [])
+const closers = candidatesFor('closer', assigneeRows)
+const asPedro = splitSelf(closers, 'u-pedro')
+assert.equal(asPedro.self?.user_id, 'u-pedro')
+assert.deepEqual(asPedro.selectable.map(c => c.user_id), ['u-adm', 'u-ana', 'u-exec'])
+assert.equal(splitSelf(closers, 'u-sdr').self, null)
+assert.equal(splitSelf(closers, 'u-sdr').selectable.length, 4)
+assert.equal(splitSelf(closers, undefined).self, null)
+const schedulerSource = readFileSync(new URL('../src/components/crm/CRMCalls.tsx', import.meta.url), 'utf8')
+assert.match(schedulerSource, /useCRMAssignees\(\{ fresh: true \}\)/)
+assert.match(schedulerSource, /candidatesFor\(/)
+assert.match(readFileSync(new URL('../src/pages/CRM.tsx', import.meta.url), 'utf8'), /candidatesFor\("closer"/)
+assert.match(readFileSync(new URL('../src/components/crm/CRMReturnDialog.tsx', import.meta.url), 'utf8'), /candidatesFor\(target/)
+
+// Edição de call já agendada: só o que mudou vai ao banco, e o horário é comparado como a pessoa o vê (minuto, Brasília).
+const { planCallEdit, callEditToast } = await import('../src/lib/crm-call-edit.ts')
+const scheduledCall = { assigned_to: 'u-x', scheduled_at: '2026-10-07T18:00:30Z' }
+const refNow = Date.parse('2026-10-06T12:00:00Z')
+assert.deepEqual(planCallEdit(scheduledCall, { assignedTo: 'u-x', when: '2026-10-07T15:00' }, refNow), { ok: false, reason: 'nothing' })
+assert.deepEqual(planCallEdit(scheduledCall, { assignedTo: '', when: '2026-10-07T15:00' }, refNow), { ok: false, reason: 'nothing' })
+assert.deepEqual(planCallEdit(scheduledCall, { assignedTo: 'u-y', when: '2026-10-07T15:00' }, refNow), { ok: true, assignedTo: 'u-y', scheduledAt: null })
+assert.deepEqual(planCallEdit(scheduledCall, { assignedTo: 'u-x', when: '2026-10-08T10:30' }, refNow), { ok: true, assignedTo: null, scheduledAt: '2026-10-08T13:30:00.000Z' })
+assert.deepEqual(planCallEdit(scheduledCall, { assignedTo: 'u-y', when: '2026-10-08T10:30' }, refNow), { ok: true, assignedTo: 'u-y', scheduledAt: '2026-10-08T13:30:00.000Z' })
+assert.deepEqual(planCallEdit(scheduledCall, { assignedTo: 'u-x', when: '2026-10-05T10:00' }, refNow), { ok: false, reason: 'past_time' })
+assert.deepEqual(planCallEdit(scheduledCall, { assignedTo: 'u-x', when: '' }, refNow), { ok: false, reason: 'invalid_time' })
+const overdueCall = { assigned_to: 'u-x', scheduled_at: '2026-10-01T18:00:00Z' }
+assert.deepEqual(planCallEdit(overdueCall, { assignedTo: 'u-y', when: '2026-10-01T15:00' }, refNow), { ok: true, assignedTo: 'u-y', scheduledAt: null })
+assert.equal(callEditToast({ assignedTo: 'u-y', scheduledAt: null }), 'Responsável da call atualizado')
+assert.equal(callEditToast({ assignedTo: null, scheduledAt: 'x' }), 'Call reagendada')
+assert.equal(callEditToast({ assignedTo: 'u-y', scheduledAt: 'x' }), 'Responsável e horário da call atualizados')
+assert.match(cardSource, /const canEditCall = !closed && !!call && !call\.is_completed && capabilities\.sdr;/)
+assert.match(cardSource, /Editar call agendada/)
+assert.match(schedulerSource, /update_crm_call/)
+const editMigration = readFileSync(new URL('../supabase/migrations/20261006100000_crm_edit_scheduled_call.sql', import.meta.url), 'utf8')
+assert.match(editMigration, /PERFORM public\.crm_require_role\('sdr'\)/)
+assert.match(editMigration, /REVOKE ALL ON FUNCTION public\.update_crm_call\(uuid,uuid,timestamptz,timestamptz\) FROM PUBLIC, anon, authenticated/)
+assert.doesNotMatch(editMigration, /GRANT EXECUTE ON FUNCTION public\.update_crm_call\([^)]*\) TO (anon|PUBLIC)/)
+
+console.log('PASS: CRM validation, strict roles, SDR qualification calls, remarketing queues, athlete data, lead deletion, call states, notifications, ordering, athlete-first hierarchy and the shared Closer/SDR assignee list and editing of already scheduled calls.')
