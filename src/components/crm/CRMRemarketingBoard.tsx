@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { callDate } from "@/lib/crm";
 import { brasiliaDateKey } from "@/lib/brasilia-time";
 import { inRemarketing } from "@/lib/crm-results";
+import { isNegativeStage } from "@/lib/crm-stages";
 import { REMARKETING_STATUS_LABELS } from "@/lib/crm-qualification";
 import { CRMRemarketingImportDialog } from "./CRMRemarketingImportDialog";
 
@@ -40,9 +41,7 @@ export function CRMRemarketingBoard({
   const [owner, setOwner] = useState("all");
   const [day, setDay] = useState("");
   const [importLead, setImportLead] = useState<CRMLead | null>(null);
-  const all = leads.filter((l) =>
-    ["lead_perdido", "fechado_perdido"].includes(l.pipeline_stage),
-  );
+  const all = leads.filter((l) => isNegativeStage(l.pipeline_stage));
   const active = all.filter(inRemarketing);
   const today = brasiliaDateKey(now);
   const rows = all

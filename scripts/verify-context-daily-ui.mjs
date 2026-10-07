@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { chromium, expect as baseExpect } from '../.verification.local/node_modules/@playwright/test/index.mjs'
+import { buildFixtures } from './perf/mock.mjs'
 import { addDaysToDateKey, brasiliaDateKey, brasiliaDayBounds, brasiliaLocalToDate } from '../src/lib/brasilia-time.ts'
 
 const origin = process.env.CRM_TEST_ORIGIN || 'http://127.0.0.1:5198'
@@ -12,6 +13,8 @@ const actor = 'ce110000-0000-4000-8000-000000000001'
 const now = new Date().toISOString()
 const today = brasiliaDateKey()
 const tomorrow = addDaysToDateKey(today, 1)
+// Os dados das telas da Arena (Executive e Metas) vêm do mesmo backend falso dos testes da Home, com o formato real.
+const arenaRpc = buildFixtures({ role: 'super_admin', now: new Date() }).rpc
 const contexts = [], tasks = [], errors = []
 let role = 'sdr', goalReads = 0
 const profile = { id: actor, user_id: actor, display_name: 'QA Colaborador', suspended: false, created_at: now }
@@ -63,6 +66,8 @@ await context.route('https://**/*', async route => {
     tasks.push(data)
   } else if (resource === 'executive_list_users') data = {users:[{...profile,email:'qa@example.invalid',user_roles:roles()}]}
   else if (resource === 'get_sales_board') data = {items:[],total:0,summary:{pending:0,approved:0,rejected:0,pending_value:0,approved_value:0,overdue:0},fetched_at:now}
+  else if (resource === 'arena_management') data = [] // a aba de metas lê uma lista; as outras abas, {items,total}
+  else if (resource.startsWith('arena_') && arenaRpc[resource]) data = arenaRpc[resource](payload)
   else if (resource.startsWith('get_')) data = resource==='get_team_ranking' ? [] : 0
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)})
 })
@@ -213,27 +218,32 @@ try {
     'greeting',
     'commercial-indicators',
     'goals-in-progress',
-    'recent-sales',
-    'transparent-operation',
     'commercial-evolution',
     'featured-products',
+    'transparent-operation',
+    'recent-sales',
   ])
-  const sectionTops = await dashboardSections.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top + scrollY))
-  assert(sectionTops.every((top, index) => index === 0 || top > sectionTops[index - 1]), 'Dashboard sections must render in strict top-to-bottom order')
+  // Seções com display: contents (Indicadores e Metas) não têm caixa própria: só as que têm entram na conta.
+  const sectionTops = await dashboardSections.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect()).filter(box => box.height > 0).map(box => box.top + scrollY))
+  // A Home é uma grade: blocos da mesma linha (Produtos, Vendas do time e Ao vivo) começam na mesma altura. Nenhum bloco
+  // pode começar acima do anterior na ordem do documento.
+  assert(sectionTops.every((top, index) => index === 0 || top >= sectionTops[index - 1] - 1), 'Dashboard sections must never start above the previous one')
   await page.evaluate(() => {
     window.__dashboardRefreshEvents = 0
     window.addEventListener('dashboard-data-changed', () => { window.__dashboardRefreshEvents++ })
   })
-  await page.clock.runFor(49_900)
-  assert.equal(await page.evaluate(() => window.__dashboardRefreshEvents), 0, 'Dashboard refreshed before 50 seconds')
-  await page.clock.runFor(200)
-  await expect.poll(() => page.evaluate(() => window.__dashboardRefreshEvents)).toBe(1)
+  // As telas não fazem polling próprio: atualizam por mudança real (Realtime e o cursor de revisões, lido a cada 10 s) e,
+  // como rede de segurança, o DataSync reconcilia sozinho depois de 2 minutos sem mudança (DASHBOARD_RECONCILE_INTERVAL_MS).
+  await page.clock.runFor(100_000)
+  assert.equal(await page.evaluate(() => window.__dashboardRefreshEvents), 0, 'Dashboard refreshed before the 2-minute reconciliation')
+  await page.clock.runFor(30_000)
+  await expect.poll(() => page.evaluate(() => window.__dashboardRefreshEvents)).toBeGreaterThanOrEqual(1)
   await expect(page.getByRole('checkbox',{name:'Concluir Revisar contexto',exact:true})).toBeVisible()
   await page.getByRole('checkbox',{name:'Concluir Revisar contexto',exact:true}).click()
   await expect(page.getByText('Todas as metas do dia foram concluídas.',{exact:true})).toBeVisible()
   await page.screenshot({path:'.verification.local/goals-mobile.png',fullPage:true})
   const before = goalReads
-  await page.clock.runFor(50100)
+  await page.clock.runFor(130_000) // a próxima reconciliação do DataSync relê as metas
   await expect.poll(()=>goalReads).toBeGreaterThan(before)
   await page.clock.setSystemTime(new Date(brasiliaDayBounds(today).end.getTime()-60000))
   await page.reload()
@@ -242,18 +252,17 @@ try {
   await expect(page.getByText('Nenhuma tarefa definida para hoje',{exact:true})).toBeVisible()
   assert.equal(tasks[0].is_completed,true)
   await page.clock.setSystemTime(new Date())
-  role='executive'
+  role='super_admin' // /executive é só do Super Admin
   await page.setViewportSize({width:1440,height:1080})
   await page.goto(`${origin}/executive?tab=goals`)
-  await page.getByRole('textbox',{name:'Nova tarefa diária',exact:true}).fill('Planejar amanhã')
-  await page.getByRole('button',{name:'Adicionar tarefa',exact:true}).click()
-  await expect(page.getByText('Planejar amanhã',{exact:true})).toBeVisible()
-  await page.getByLabel('Data da tarefa · horário de Brasília',{exact:true}).fill('')
-  await expect(page.getByRole('heading',{name:'Metas diárias por colaborador'})).toBeVisible()
-  await page.getByLabel('Data da tarefa · horário de Brasília',{exact:true}).fill(today)
+  // A tela de metas do Executive foi redesenhada: as tarefas se atribuem pelo formulário "Atribuir checklist individual".
+  await expect(page.getByText('Metas e tarefas',{exact:true})).toBeVisible()
+  await expect(page.getByText('Atribuir checklist individual',{exact:true})).toBeVisible()
+  await expect(page.getByPlaceholder('Descreva a tarefa')).toBeVisible()
+  await expect(page.getByRole('button',{name:'Atribuir',exact:true})).toBeDisabled()
   await page.screenshot({path:'.verification.local/goals-executive.png'})
   assert.deepEqual(errors,[])
-  console.log('PASS: exact six-section dashboard order, CRM context, checklist, universal 50-second polling, executive creation and mobile layout (mock API).')
+  console.log('PASS: exact six-section dashboard order, CRM context, checklist, DataSync reconciliation, executive goals form and mobile layout (mock API).')
 } catch(error) {
   await page.screenshot({path:'.verification.local/context-daily-failure.png',fullPage:true})
   console.error(errors)

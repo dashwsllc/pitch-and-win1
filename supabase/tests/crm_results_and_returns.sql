@@ -34,7 +34,8 @@ DO $$ DECLARE l public.crm_leads; original_date timestamptz; original_version bi
     OR l.remarketing_status<>'pending' THEN RAISE EXCEPTION 'FAIL loss result snapshot'; END IF;
   original_date:=l.last_result_at; original_version:=l.version;
   BEGIN
-    PERFORM public.crm_reopen_result(l.id,l.version,'sdr',auth.uid(),now()+interval '2 days','Destino inválido');
+    -- O destino precisa ter a capacidade SDR. Um Closer tem (a capacidade SDR inclui Closer), então o destino inválido é a conta 5, sem papel de CRM.
+    PERFORM public.crm_reopen_result(l.id,l.version,'sdr','ce160000-0000-4000-8000-000000000005',now()+interval '2 days','Destino inválido');
     RAISE EXCEPTION 'FAIL wrong destination role allowed';
   EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
   l:=public.crm_reopen_result(l.id,l.version,'sdr','ce160000-0000-4000-8000-000000000002',now()+interval '2 days','Retomar qualificação');
@@ -86,7 +87,11 @@ DO $$ DECLARE l public.crm_leads; BEGIN
   SELECT * INTO l FROM public.crm_leads WHERE id=(SELECT lead_id FROM results_qa);
   l:=public.crm_transition(l.id,'close',l.version,'{"outcome":"venda_perdida"}');
   IF l.remarketing_status<>'pending' OR l.remarketing_next_at IS NOT NULL THEN RAISE EXCEPTION 'FAIL repeat loss remains reactivated'; END IF;
-  l:=public.crm_reopen_result(l.id,l.version,'closer',auth.uid(),now()+interval '6 days','Retomar proposta');
+  -- Regra atual (arena_call_guard): a call de fechamento nunca é agendada por quem vai atendê-la. Quem devolve o lead ao
+  -- Closer 3 é o Executive (conta 1); depois a sessão volta para o Closer, que manda o lead direto para o remarketing.
+  PERFORM set_config('request.jwt.claims','{"sub":"ce160000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+  l:=public.crm_reopen_result(l.id,l.version,'closer','ce160000-0000-4000-8000-000000000003',now()+interval '6 days','Retomar proposta');
+  PERFORM set_config('request.jwt.claims','{"sub":"ce160000-0000-4000-8000-000000000003","role":"authenticated"}',true);
   l:=public.crm_mark_negative(l.id,l.version,'Aguardar próximo mês',now()+interval '7 days','Remarketing pelo Closer');
   IF l.pipeline_stage<>'fechado_perdido' OR l.remarketing_status<>'scheduled'
     OR EXISTS(SELECT 1 FROM public.crm_activities WHERE lead_id=l.id AND call_type IS NOT NULL AND NOT is_completed)

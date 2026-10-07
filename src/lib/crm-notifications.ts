@@ -7,6 +7,7 @@ import {
   type CallReminderMilestone,
   type TimedCall,
 } from '@/lib/crm-call-status'
+import { isClosedStage } from '@/lib/crm-stages'
 
 export const SALE_APPROVAL_DELAY_MS = 60 * MINUTE_MS
 export const SALE_NOTIFICATION_GRACE_MS = 10 * MINUTE_MS
@@ -87,11 +88,7 @@ export function followupNotificationState(
   lead: Pick<CRMLead, 'next_followup_at' | 'pipeline_stage'>,
   now: number,
 ) {
-  if (
-    lead.pipeline_stage === 'fechado_ganho' ||
-    lead.pipeline_stage === 'fechado_perdido' ||
-    lead.pipeline_stage === 'lead_perdido'
-  ) {
+  if (isClosedStage(lead.pipeline_stage)) {
     return 'invalid' as const
   }
   return notificationWindowState(

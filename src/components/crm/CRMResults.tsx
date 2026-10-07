@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { callDate } from "@/lib/crm";
+import { isClosedStage, outcomeLabel } from "@/lib/crm-stages";
 import {
   canReopenResult,
   inRemarketing,
@@ -168,7 +169,7 @@ export function CRMResults({
           >
             <option value="all">Todos os resultados</option>
             <option value="won">Venda concluída</option>
-            <option value="lost">Venda recusada</option>
+            <option value="lost">Venda recusada ou lead perdido</option>
           </select>
         </label>
         <label className="space-y-1 text-xs text-muted-foreground">
@@ -281,11 +282,7 @@ export function CRMResults({
               ? "Remarketing encerrado"
               : lead.pipeline_stage === "repassado_closer"
                 ? "Em atendimento · Closer"
-                : ![
-                      "fechado_ganho",
-                      "fechado_perdido",
-                      "lead_perdido",
-                    ].includes(lead.pipeline_stage)
+                : !isClosedStage(lead.pipeline_stage)
                   ? "Em atendimento · SDR"
                   : "Atendimento encerrado";
           return (
@@ -328,7 +325,7 @@ export function CRMResults({
                         : "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400"
                     }
                   >
-                    {concluded ? "Venda concluída" : "Venda recusada"}
+                    {outcomeLabel(leadResult(lead))}
                   </Badge>
                 </div>
                 <div className="flex flex-wrap gap-2">

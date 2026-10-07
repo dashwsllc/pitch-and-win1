@@ -56,6 +56,7 @@ import {
   optionLabel,
 } from "@/lib/crm-qualification";
 import type { PaymentStatus } from "@/lib/crm-payments";
+import { isClosedStage, isNegativeStage } from "@/lib/crm-stages";
 import { CRMPaymentBadge } from "./CRMPaymentBadge";
 import { CRMPaymentDropdown } from "./CRMPaymentDropdown";
 
@@ -108,11 +109,9 @@ export function CRMLeadCard({
   const { user } = useAuth();
   const { capabilities, hasRole, canScheduleQualificationCall } = useRoles();
   const canCreateClosing = capabilities.executive || hasRole('sdr');
-  const closed = ["fechado_ganho", "fechado_perdido", "lead_perdido"].includes(
-    lead.pipeline_stage,
-  );
+  const closed = isClosedStage(lead.pipeline_stage);
   const handed = lead.pipeline_stage === "repassado_closer";
-  const negative = ["lead_perdido", "fechado_perdido"].includes(lead.pipeline_stage);
+  const negative = isNegativeStage(lead.pipeline_stage);
   const own = lead.closer_id === user?.id;
   const canManage = capabilities.executive || own;
   const canOperate =

@@ -6,6 +6,13 @@ import { resolve } from 'node:path'
 // Everything runs in one transaction that always ends in ROLLBACK.
 // Default: runs the migration body first (before it is installed). --deployed: uses what is installed.
 const root = resolve(import.meta.dirname, '..')
+// LEGADO: as parcelas (crm_lead_payments) viraram somente leitura e as RPCs crm_payment_save/set_status/delete tiveram o
+// EXECUTE revogado pela migração 20261007120000 (o pagamento agora é o status por lead). Contra o banco instalado este
+// teste falharia por desenho; a verificação atual é scripts/check-crm-payment-status-db.mjs.
+if (process.argv.includes('--deployed')) {
+  console.log('LEGADO: parcelas aposentadas pela migração 20261007120000; use scripts/check-crm-payment-status-db.mjs --deployed.')
+  process.exit(0)
+}
 const tests = readFileSync(resolve(root, 'supabase/tests/crm_lead_payments.sql'), 'utf8')
 const deployed = process.argv.includes('--deployed')
 const body = deployed

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import type { CRMLead } from "@/hooks/useCRM";
+import { PIPELINE_STAGES, type CRMLead } from "@/hooks/useCRM";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { CRMContactFields } from "./CRMContactFields";
 import {
   contactFromLead,
   contactPayload,
   emptyContact,
+  findDuplicateLeads,
   validateContact,
 } from "@/lib/crm";
 import { Button } from "@/components/ui/button";
@@ -23,11 +24,14 @@ import {
 
 export function CRMLeadEditor({
   lead,
+  existingLeads = [],
   busy,
   onClose,
   onSave,
 }: {
   lead?: CRMLead;
+  /** Os leads que o CRM já tem: base do aviso de WhatsApp ou e-mail que já existe em outro lead. */
+  existingLeads?: CRMLead[];
   busy: boolean;
   onClose: () => void;
   onSave: (data: TablesInsert<"crm_leads">) => Promise<boolean>;
@@ -42,8 +46,13 @@ export function CRMLeadEditor({
     priority: lead?.priority || "",
   });
   const [failure, setFailure] = useState("");
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const [duplicates, setDuplicates] = useState<CRMLead[]>([]);
+  const owners = (item: CRMLead) => item.athlete_name?.trim() || item.name;
+  const stageLabel = (item: CRMLead) =>
+    PIPELINE_STAGES.find((stage) => stage.value === item.pipeline_stage)?.label || item.pipeline_stage;
+  // `force`: quem viu o aviso e decidiu salvar mesmo assim. Na edição só se avisa quando o WhatsApp ou o e-mail mudou
+  // (um lead que já nasceu duplicado não pode ficar impossível de editar).
+  const submit = async (force: boolean) => {
     if (busy) return;
     const invalid = validateContact(contact);
     if (invalid) {
@@ -51,6 +60,12 @@ export function CRMLeadEditor({
       return;
     }
     setFailure("");
+    if (!force) {
+      const changed = !lead || contact.phone.trim() !== (lead.phone ?? "") || contact.email.trim() !== (lead.email ?? "");
+      const found = changed ? findDuplicateLeads(contact, existingLeads, lead?.id) : [];
+      setDuplicates(found);
+      if (found.length) return;
+    }
     const ok = await onSave({
       ...contactPayload(contact),
       lead_source: extra.lead_source.trim() || null,
@@ -66,6 +81,10 @@ export function CRMLeadEditor({
       setFailure(
         "Não foi possível salvar. Confira a mensagem de erro e tente novamente.",
       );
+  };
+  const save = (event: React.FormEvent) => {
+    event.preventDefault();
+    return submit(false);
   };
   return (
     <Dialog
@@ -90,7 +109,10 @@ export function CRMLeadEditor({
           <fieldset disabled={busy} className="space-y-3">
             <CRMContactFields
               value={contact}
-              onChange={setContact}
+              onChange={(next) => {
+                setContact(next);
+                setDuplicates([]);
+              }}
               prefix="lead-editor"
             />
             <div className="grid gap-2.5 sm:grid-cols-2">
@@ -154,6 +176,31 @@ export function CRMLeadEditor({
               <p role="alert" className="text-sm text-destructive">
                 {failure}
               </p>
+            )}
+            {duplicates.length > 0 && (
+              <div role="alert" aria-label="Lead possivelmente duplicado" className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                <p className="font-medium">
+                  {duplicates.length === 1 ? "Já existe um lead com este WhatsApp ou e-mail:" : `Já existem ${duplicates.length} leads com este WhatsApp ou e-mail:`}
+                </p>
+                <ul className="space-y-0.5 text-xs text-muted-foreground">
+                  {duplicates.map((item) => (
+                    <li key={item.id}>
+                      <span className="font-medium text-foreground">{owners(item)}</span> · responsável {item.name} · {stageLabel(item)} · {item.phone || item.email}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground">
+                  Se for a mesma pessoa, abra o lead que já existe em vez de criar outro. Se for outro atleta do mesmo responsável, salve mesmo assim.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setDuplicates([])}>
+                    Revisar os dados
+                  </Button>
+                  <Button type="button" size="sm" disabled={busy} onClick={() => void submit(true)}>
+                    Salvar mesmo assim
+                  </Button>
+                </div>
+              </div>
             )}
             <DialogFooter className="gap-1 sm:space-x-0">
               <Button className="h-9" type="button" variant="outline" onClick={onClose}>

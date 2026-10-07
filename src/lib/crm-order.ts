@@ -1,3 +1,5 @@
+import { isClosedStage } from '@/lib/crm-stages'
+
 type ScheduledLead = {
   id: string
   created_at?: string | null
@@ -6,7 +8,7 @@ type ScheduledLead = {
 }
 
 export function nextLeadSchedule(lead: ScheduledLead, callDate?: string | null) {
-  if (['fechado_ganho', 'fechado_perdido', 'lead_perdido'].includes(lead.pipeline_stage)) return null
+  if (isClosedStage(lead.pipeline_stage)) return null
   const dates = [lead.next_followup_at, callDate]
     .filter((value): value is string => !!value && Number.isFinite(Date.parse(value)))
     .sort((a, b) => Date.parse(a) - Date.parse(b))

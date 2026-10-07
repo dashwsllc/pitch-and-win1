@@ -1,5 +1,6 @@
 import type { CRMLead } from "@/hooks/useCRM";
 import { brasiliaDateKey, isValidDateKey } from "@/lib/brasilia-time";
+import { isClosedStage, isNegativeStage } from "@/lib/crm-stages";
 
 export type CRMResultSale = {
   lead_id: string;
@@ -30,7 +31,7 @@ export function resultDate(lead: CRMLead) {
 
 export function inRemarketing(lead: CRMLead) {
   return (
-    ["lead_perdido", "fechado_perdido"].includes(lead.pipeline_stage) &&
+    isNegativeStage(lead.pipeline_stage) &&
     !["reactivated", "do_not_contact"].includes(
       lead.remarketing_status || "pending",
     )
@@ -98,9 +99,7 @@ export function canReopenResult(
   capabilities: { executive: boolean; closer: boolean; sdr: boolean },
 ) {
   return (
-    ["fechado_ganho", "fechado_perdido", "lead_perdido"].includes(
-      lead.pipeline_stage,
-    ) &&
+    isClosedStage(lead.pipeline_stage) &&
     (capabilities.executive ||
       (capabilities.closer && !!userId && lead.closer_id === userId) ||
       (capabilities.sdr && !!userId && lead.sdr_id === userId))

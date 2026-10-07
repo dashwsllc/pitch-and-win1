@@ -19,17 +19,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="ml-16 flex min-h-screen flex-col sm:ml-[72px]">
         <header className="sticky top-0 z-30 h-16 border-b border-white/[0.055] bg-[#0e0918]/80 backdrop-blur-[10px]">
           <div className="flex h-full items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3">
-              <div className="relative flex h-2 w-2 items-center justify-center">
+            {/* min-w-0 + truncate: em tela estreita é o título que cede, nunca o grupo Nível/sino/avatar (1 px de rolagem horizontal em 390 px). */}
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="relative flex h-2 w-2 shrink-0 items-center justify-center">
                 <span className="absolute h-2 w-2 animate-ping-soft rounded-full bg-ember/35" />
                 <span className="relative h-1.5 w-1.5 rounded-full bg-ember" />
               </div>
-              <h1 className="text-sm font-medium tracking-[-0.01em] text-ash sm:text-base">
+              <h1 className="truncate text-sm font-medium tracking-[-0.01em] text-ash sm:text-base">
                 Dashboard Comercial
               </h1>
             </div>
             
-            <div className="flex items-center gap-2"><LevelBadge /><NotificationInbox /><UserProfile /></div>
+            <div className="flex shrink-0 items-center gap-2"><LevelBadge /><NotificationInbox /><UserProfile /></div>
           </div>
         </header>
         

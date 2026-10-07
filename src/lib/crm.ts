@@ -102,6 +102,34 @@ export function validateContact(form: ContactForm) {
   return null;
 }
 
+// O mesmo WhatsApp escrito de jeitos diferentes ("(11) 99879-2426", "+55 11 99879-2426", "11998792426") é a mesma pessoa:
+// só os dígitos contam e o código do país (55) é ignorado. Menos de 8 dígitos não é um número que se possa comparar.
+export function normalizePhone(phone: string | null | undefined) {
+  let digits = (phone ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) digits = digits.slice(2);
+  return digits.length >= 8 ? digits : "";
+}
+
+/**
+ * Os outros leads que já têm o mesmo WhatsApp ou o mesmo e-mail. O CRM não bloqueia (um responsável pode ter dois atletas
+ * no mesmo número), mas quem cadastra precisa ver antes de criar o segundo registro da mesma pessoa.
+ */
+export function findDuplicateLeads<T extends Pick<CRMLead, "id" | "phone" | "email">>(
+  contact: { phone?: string | null; email?: string | null },
+  leads: T[],
+  excludeId?: string,
+): T[] {
+  const phone = normalizePhone(contact.phone);
+  const email = (contact.email ?? "").trim().toLowerCase();
+  if (!phone && !email) return [];
+  return leads.filter(
+    (lead) =>
+      lead.id !== excludeId &&
+      ((!!phone && normalizePhone(lead.phone) === phone) ||
+        (!!email && (lead.email ?? "").trim().toLowerCase() === email)),
+  );
+}
+
 export const callDate = (value: string | null) =>
   value
     ? new Date(value).toLocaleString("pt-BR", {

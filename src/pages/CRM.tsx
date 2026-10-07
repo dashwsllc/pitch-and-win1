@@ -78,6 +78,7 @@ import {
   nextLeadSchedule,
 } from "@/lib/crm-order";
 import { CRM_CLOCK_INTERVAL_MS } from "@/lib/sync";
+import { isClosedStage, isNegativeStage } from "@/lib/crm-stages";
 import {
   createDefaultCRMPipelineRange,
   leadApproachReference,
@@ -97,8 +98,6 @@ const approachFilters = [
   { value: "abordado", label: "Abordado" },
   { value: "reabordado", label: "Re-abordado" },
 ];
-const closedStages = ["fechado_ganho", "fechado_perdido", "lead_perdido"];
-const negativeStages = ["fechado_perdido", "lead_perdido"];
 // Depois que o SDR agenda a call de fechamento, o lead passa a pertencer ao
 // Closer (repassado_closer) e permanece do lado do Closer até ser devolvido
 // (devolvido_sdr volta para em_qualificacao) ou até o próprio fechamento
@@ -254,11 +253,11 @@ export default function CRM() {
   const next = (lead: CRMLead) =>
     nextLeadSchedule(lead, openCalls.get(lead.id)?.scheduled_at);
   const overdue = (lead: CRMLead) =>
-    !closedStages.includes(lead.pipeline_stage) &&
+    !isClosedStage(lead.pipeline_stage) &&
     !!next(lead) &&
     new Date(next(lead)!) < now;
   const closed = (lead: CRMLead) => !!leadResult(lead);
-  const negative = (lead: CRMLead) => negativeStages.includes(lead.pipeline_stage);
+  const negative = (lead: CRMLead) => isNegativeStage(lead.pipeline_stage);
   const inQueue = (lead: CRMLead, value: string) => {
     if (value === "closed") return closed(lead);
     if (lead.pipeline_stage !== "repassado_closer") return false;
@@ -290,10 +289,10 @@ export default function CRM() {
       return openCalls.get(lead.id)?.call_type === "qualificacao";
     if (value === "closed") return closed(lead);
     if (value === "negative") return negative(lead);
-    return !closedStages.includes(lead.pipeline_stage) && lead.pipeline_stage !== "repassado_closer";
+    return !isClosedStage(lead.pipeline_stage) && lead.pipeline_stage !== "repassado_closer";
   };
   const visibleInTab = (lead: CRMLead) => {
-    if (tab === "leads") return !closedStages.includes(lead.pipeline_stage);
+    if (tab === "leads") return !isClosedStage(lead.pipeline_stage);
     if (tab === "closer") return inQueue(lead, queue);
     if (tab === "sdr") return inSdrQueue(lead, sdrQueue);
     if (tab === "importados") return lead.lead_source === "meta_ads_form";
@@ -577,7 +576,7 @@ export default function CRM() {
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: "Leads ativos", value: crm.leads.filter((lead) => !closedStages.includes(lead.pipeline_stage)).length, icon: Users },
+            { label: "Leads ativos", value: crm.leads.filter((lead) => !isClosedStage(lead.pipeline_stage)).length, icon: Users },
             {
               label: "Remarketing",
               value: crm.leads.filter(negative).length,
@@ -962,6 +961,7 @@ export default function CRM() {
           <CRMLeadEditor
             key={editor === "new" ? "new" : editor.id}
             lead={editor === "new" ? undefined : editor}
+            existingLeads={crm.leads}
             busy={busy}
             onClose={() => setEditor(null)}
             onSave={(data) =>

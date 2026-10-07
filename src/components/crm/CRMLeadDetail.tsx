@@ -26,6 +26,7 @@ import {
 import { formatAthleteAge, resolveAthleteAge } from "@/lib/crm-age";
 import type { Json } from "@/integrations/supabase/types";
 import { paymentStateValue } from "@/lib/crm-payments";
+import { outcomeLabel } from "@/lib/crm-stages";
 import { CRMContextPanel } from "./CRMContextPanel";
 
 const stateLabels: Record<string, string> = {
@@ -96,7 +97,7 @@ export function CRMLeadDetail({
     ],
     ["Repasse", lead.handed_off_at ? callDate(lead.handed_off_at) : null],
     ["Fechamento", lead.closed_at ? callDate(lead.closed_at) : null],
-    ["Último resultado", lead.last_result_outcome ? (lead.last_result_outcome === "venda_concluida" ? "Venda concluída" : "Venda recusada") : null],
+    ["Último resultado", outcomeLabel(lead.last_result_outcome)],
     ["Data do resultado", lead.last_result_at ? callDate(lead.last_result_at) : null],
     ["Closer do resultado", lead.last_result_closer_name],
     ["Faixa de renda", optionLabel(INCOME_RANGES, lead.qualification_income_range)],
@@ -249,15 +250,7 @@ export function CRMLeadDetail({
                   )}
                   {a.outcome && (
                     <Badge className="h-5 px-2 text-[10px]" variant="outline">
-                      {{
-                        venda_concluida: "Venda concluída",
-                        venda_perdida: "Venda perdida",
-                        followup: "Follow-up necessário",
-                        devolvido_sdr: "Devolvido ao SDR",
-                        repassado_closer: "Enviado ao Closer",
-                        avancou: "Avançou",
-                        lead_perdido: "Lead perdido",
-                      }[a.outcome] || a.outcome}
+                      {outcomeLabel(a.outcome)}
                     </Badge>
                   )}
                   {a.completed_at && (

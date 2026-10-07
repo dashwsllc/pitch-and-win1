@@ -1,4 +1,8 @@
 import { brasiliaDateKey } from '@/lib/brasilia-time'
+import { isClosedStage } from '@/lib/crm-stages'
+
+// Reexportada: as notificações e os badges sempre importaram daqui.
+export { isClosedStage }
 
 // Fonte unica do estado temporal de uma call. CRM, badges, filtros, ordenacao e
 // notificacoes leem daqui para nao divergirem sobre a mesma reuniao.
@@ -29,12 +33,6 @@ export type TimedCall = {
   scheduled_at?: string | null
   is_completed?: boolean | null
   outcome?: string | null
-}
-
-const CLOSED_STAGES = ['fechado_ganho', 'fechado_perdido', 'lead_perdido']
-
-export function isClosedStage(pipelineStage: string | null | undefined) {
-  return !!pipelineStage && CLOSED_STAGES.includes(pipelineStage)
 }
 
 export function callTimestamp(call: TimedCall | null | undefined) {

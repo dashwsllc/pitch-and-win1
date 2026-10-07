@@ -11,6 +11,8 @@ DELETE FROM public.user_roles WHERE user_id::text LIKE 'ae140000-%';
 INSERT INTO public.user_roles(user_id,role,crm_access) VALUES
   ('ae140000-0000-4000-8000-000000000001','executive',false),
   ('ae140000-0000-4000-8000-000000000002','seller',false),
+  -- Importar contexto e receber repasse exigem as capacidades SDR e Closer (o papel closer tem as duas); seller sozinho não.
+  ('ae140000-0000-4000-8000-000000000002','closer',false),
   ('ae140000-0000-4000-8000-000000000003','bdr',false);
 UPDATE public.user_roles SET commission_rate=20
   WHERE user_id='ae140000-0000-4000-8000-000000000002';

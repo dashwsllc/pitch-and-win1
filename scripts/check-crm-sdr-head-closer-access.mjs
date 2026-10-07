@@ -18,8 +18,9 @@ DECLARE v_user uuid;
 BEGIN
   SELECT id INTO STRICT v_user FROM auth.users
   WHERE lower(email)='pedro10@gmail.com' AND deleted_at IS NULL;
+  -- O Head de SDR mantém o acesso a Closer pelo papel sdr com crm_closer_access. Desde 06/10 ele também foi promovido a
+  -- Closer de verdade (papel closer), por decisão do dono: isso não é mais erro, só o acesso por crm_closer_access é exigido.
   IF (SELECT count(*) FROM public.user_roles WHERE user_id=v_user AND role::text='sdr' AND crm_closer_access) <> 1
-    OR EXISTS (SELECT 1 FROM public.user_roles WHERE user_id=v_user AND role::text='closer')
     OR NOT public.crm_user_can(v_user,'sdr')
     OR NOT public.crm_user_can(v_user,'closer')
     OR public.crm_user_can(v_user,'admin')

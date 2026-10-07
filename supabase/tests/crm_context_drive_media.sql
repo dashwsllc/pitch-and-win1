@@ -1,6 +1,8 @@
 INSERT INTO auth.users(id,email,raw_user_meta_data,raw_app_meta_data,created_at,updated_at)
 VALUES('a9123333-0000-4000-8000-000000000001','crm-drive-qa@example.invalid','{"display_name":"Drive QA"}','{}',now(),now());
 UPDATE public.registration_requests SET status='approved' WHERE user_id='a9123333-0000-4000-8000-000000000001';
+-- Importar contexto exige a capacidade SDR (papéis sdr, closer, executive ou super_admin): um cadastro aprovado sem papel de CRM não basta mais.
+INSERT INTO public.user_roles(user_id,role,crm_access) VALUES('a9123333-0000-4000-8000-000000000001','sdr',true) ON CONFLICT DO NOTHING;
 SELECT set_config('request.jwt.claims','{"sub":"a9123333-0000-4000-8000-000000000001","role":"authenticated"}',true);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE l public.crm_leads; c public.crm_lead_contexts; n integer; source text := E'Conversa fiel\r\nLinha 2'; BEGIN

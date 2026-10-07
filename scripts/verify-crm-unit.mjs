@@ -6,11 +6,13 @@ registerHooks({ resolve(specifier, context, nextResolve) {
   if (specifier === '@/lib/brasilia-time') return nextResolve(new URL('../src/lib/brasilia-time.ts', import.meta.url).href, context)
   if (specifier === '@/lib/crm-age') return nextResolve(new URL('../src/lib/crm-age.ts', import.meta.url).href, context)
   if (specifier === '@/lib/crm-call-status') return nextResolve(new URL('../src/lib/crm-call-status.ts', import.meta.url).href, context)
+  if (specifier === '@/lib/crm-stages') return nextResolve(new URL('../src/lib/crm-stages.ts', import.meta.url).href, context)
   if (specifier === '@/hooks/useCRM') return { url: 'data:text/javascript,export {}', shortCircuit: true }
   if (specifier === '@/lib/sales') return { url: 'data:text/javascript,export {}', shortCircuit: true }
   return nextResolve(specifier, context)
 } })
-const { emptyContact, validateContact, contactPayload } = await import('../src/lib/crm.ts')
+const { emptyContact, validateContact, contactPayload, normalizePhone, findDuplicateLeads } = await import('../src/lib/crm.ts')
+const { CLOSED_STAGES, NEGATIVE_STAGES, isClosedStage, isNegativeStage, outcomeLabel } = await import('../src/lib/crm-stages.ts')
 const minimal = { ...emptyContact, name: 'Responsável QA', athlete_name: 'Atleta QA', phone: '11999999999' }
 assert.equal(validateContact(minimal), null)
 for (const field of ['email','athlete_birth_date','athlete_position','athlete_height_cm','athlete_weight_kg','performance_report_url','city_state']) assert.equal(contactPayload(minimal)[field], null)
@@ -203,7 +205,7 @@ assert.match(crmPageSource, /data-call-date-option=\{option\.value\}/)
 assert.match(crmPageSource, /<span className="shrink-0">\{option\.label\}<\/span>/)
 
 // Resultados and remarketing share the same records in their dedicated views.
-assert.match(crmPageSource, /if \(tab === "leads"\) return !closedStages\.includes/)
+assert.match(crmPageSource, /if \(tab === "leads"\) return !isClosedStage\(lead\.pipeline_stage\)/)
 const { leadScheduledOn, leadResult, resultMatches, canReopenResult, inRemarketing } = await import('../src/lib/crm-results.ts')
 const emptyFilters = { search: '', outcome: 'all', approval: 'all', seller: 'all', from: '', to: '' }
 const resultLead = {
@@ -297,5 +299,46 @@ const editMigration = readFileSync(new URL('../supabase/migrations/2026100610000
 assert.match(editMigration, /PERFORM public\.crm_require_role\('sdr'\)/)
 assert.match(editMigration, /REVOKE ALL ON FUNCTION public\.update_crm_call\(uuid,uuid,timestamptz,timestamptz\) FROM PUBLIC, anon, authenticated/)
 assert.doesNotMatch(editMigration, /GRANT EXECUTE ON FUNCTION public\.update_crm_call\([^)]*\) TO (anon|PUBLIC)/)
+
+
+// ---- Lead duplicado: o mesmo WhatsApp escrito de jeitos diferentes é a mesma pessoa; o aviso nunca vem do próprio lead.
+assert.equal(normalizePhone('(11) 99879-2426'), '11998792426')
+assert.equal(normalizePhone('+55 11 99879-2426'), '11998792426', 'o código do país é ignorado')
+assert.equal(normalizePhone('5511998792426'), '11998792426')
+assert.equal(normalizePhone('11998792426'), '11998792426')
+assert.equal(normalizePhone('1234'), '', 'curto demais para comparar')
+assert.equal(normalizePhone(null), '')
+const existentes = [
+  { id: 'a', phone: '11998792426', email: 'Mae@Exemplo.com' },
+  { id: 'b', phone: '(61) 99232-2770', email: null },
+  { id: 'c', phone: null, email: 'outro@exemplo.com' },
+]
+assert.deepEqual(findDuplicateLeads({ phone: '+55 (11) 99879-2426' }, existentes).map((l) => l.id), ['a'], 'WhatsApp em outro formato')
+assert.deepEqual(findDuplicateLeads({ email: ' mae@exemplo.COM ' }, existentes).map((l) => l.id), ['a'], 'e-mail sem diferenciar maiúsculas')
+assert.deepEqual(findDuplicateLeads({ phone: '61992322770', email: 'outro@exemplo.com' }, existentes).map((l) => l.id), ['b', 'c'], 'WhatsApp de um e e-mail de outro')
+assert.deepEqual(findDuplicateLeads({ phone: '11998792426' }, existentes, 'a'), [], 'o próprio lead não é duplicado dele mesmo')
+assert.deepEqual(findDuplicateLeads({ phone: '', email: '' }, existentes), [], 'sem contato não há o que comparar')
+assert.deepEqual(findDuplicateLeads({ phone: '11900000000' }, existentes), [])
+
+// ---- Etapas e resultados: uma lista só, e lead perdido nunca aparece como "Venda recusada".
+assert.deepEqual([...CLOSED_STAGES], ['fechado_ganho', 'fechado_perdido', 'lead_perdido'])
+assert.deepEqual([...NEGATIVE_STAGES], ['fechado_perdido', 'lead_perdido'])
+for (const stage of CLOSED_STAGES) assert.equal(isClosedStage(stage), true, stage)
+for (const stage of ['novo', 'em_qualificacao', 'pronto_closer', 'repassado_closer', null, undefined]) assert.equal(isClosedStage(stage), false, String(stage))
+assert.equal(isNegativeStage('lead_perdido'), true)
+assert.equal(isNegativeStage('fechado_ganho'), false)
+assert.equal(outcomeLabel('venda_concluida'), 'Venda concluída')
+assert.equal(outcomeLabel('venda_perdida'), 'Venda recusada')
+assert.equal(outcomeLabel('lead_perdido'), 'Lead perdido', 'lead perdido não é venda recusada')
+assert.equal(outcomeLabel('followup_sdr'), 'Follow-up do SDR', 'todo desfecho que o banco aceita tem texto')
+assert.equal(outcomeLabel(null), null)
+assert.equal(outcomeLabel('algo_novo'), 'algo_novo', 'um desfecho desconhecido sai como veio, nunca vazio')
+// Nenhuma tela volta a escrever a lista de etapas fechadas à mão.
+for (const arquivo of ['src/pages/CRM.tsx', 'src/components/crm/CRMLeadCard.tsx', 'src/components/crm/CRMResults.tsx', 'src/components/crm/CRMRemarketingBoard.tsx', 'src/lib/crm-order.ts', 'src/lib/crm-results.ts', 'src/lib/crm-notifications.ts', 'src/lib/crm-call-status.ts']) {
+  assert.doesNotMatch(readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8'), /['"]fechado_ganho['"]\s*,\s*['"]fechado_perdido['"]/, `${arquivo} repete a lista de etapas fechadas`)
+}
+const detalhe = readFileSync(new URL('../src/components/crm/CRMLeadDetail.tsx', import.meta.url), 'utf8')
+assert.doesNotMatch(detalhe, /"Venda perdida"/, 'o histórico chama venda_perdida de "Venda recusada", como o resto do CRM')
+assert.match(detalhe, /outcomeLabel\(lead\.last_result_outcome\)/)
 
 console.log('PASS: CRM validation, strict roles, SDR qualification calls, remarketing queues, athlete data, lead deletion, call states, notifications, ordering, athlete-first hierarchy and the shared Closer/SDR assignee list and editing of already scheduled calls.')
