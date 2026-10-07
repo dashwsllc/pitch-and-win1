@@ -257,8 +257,11 @@ async function percorrer(navegador, url, versao, fixtures) {
     await aposCarga(pagina, () => pagina.goto(url + '/', { waitUntil: 'load' }))
     // Ranking, metas e vendas do time vêm de consultas próprias: espera elas também.
     await sleep(1500)
-    for (const [filtro, rotulo] of FILTROS) {
-      if (filtro !== 'hoje') await aposCarga(pagina, () => pagina.getByRole(papel, { name: rotulo, exact: true }).click())
+    // O painel antigo abria em "hoje"; a Home nova abre nos últimos 30 dias (as vendas anteriores à vista). O padrão da
+    // versão aberta não se clica; todos os outros filtros, inclusive "hoje" na nova, sim.
+    const padrao = versao === 'antes' ? 'hoje' : '30dias'
+    for (const [i, [filtro, rotulo]] of FILTROS.entries()) {
+      if (i > 0 || filtro !== padrao) await aposCarga(pagina, () => pagina.getByRole(papel, { name: rotulo, exact: true }).click())
       if (filtro === 'custom') {
         await pagina.getByLabel('Data inicial').fill(INTERVALO.start)
         await pagina.getByLabel('Data final').fill(INTERVALO.end)

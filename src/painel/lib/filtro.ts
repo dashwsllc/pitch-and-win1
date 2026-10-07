@@ -1,5 +1,7 @@
 // Filtro do painel no endereço (?periodo=&de=&ate=): vale para a tela toda e acompanha o link compartilhado.
-// "hoje" é o padrão do painel e não é gravado. "de" e "ate" são datas de Brasília (aaaa-mm-dd), só com "intervalo".
+// "30dias" é o padrão do painel e não é gravado: a Visão geral abre mostrando as vendas anteriores, não só as de hoje
+// (aberta em "hoje", ela ficava zerada sempre que o dia ainda não tinha venda). "de" e "ate" são datas de Brasília
+// (aaaa-mm-dd), só com "intervalo".
 import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { isValidDateKey } from '@/lib/brasilia-time'
@@ -10,7 +12,7 @@ import {
   type DashboardDateFilter,
 } from '@/lib/dashboard-period'
 
-export const FILTRO_PADRAO: DashboardDateFilter = 'hoje'
+export const FILTRO_PADRAO: DashboardDateFilter = '30dias'
 
 const PARA_ENDERECO: Record<DashboardDateFilter, string> = {
   hoje: 'hoje',

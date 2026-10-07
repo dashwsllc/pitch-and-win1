@@ -1,5 +1,6 @@
 import { exactDate, money, type TeamSale } from '@/lib/sales'
 import type { TomDoSelo } from '../lib/selos'
+import { brasiliaDateKey } from '@/lib/brasilia-time'
 import { formatarDiaMes, formatarHoraMinuto } from '../lib/tempo'
 
 // A cor fica no ponto e no fundo; o texto continua na cor de texto (a identidade nunca depende só da cor).
@@ -26,7 +27,9 @@ function Voce() {
 
 /**
  * Uma venda na lista: hora e dia, quem vendeu e o quê, e o valor com o selo. `quando` é o instante que a linha
- * destaca (aprovação ou compra) e `rotuloQuando` diz qual dos dois é; o horário exato, com segundos, fica na dica.
+ * destaca (aprovação ou compra) e `rotuloQuando` diz qual dos dois é, escrito sobre a hora: a mesma venda aparece com a
+ * data da compra em um bloco e a da aprovação em outro, e sem o rótulo isso parecia dado dessincronizado. Quando a
+ * aprovação foi em outro dia que a compra, a linha diz também o dia da compra. O horário exato fica na dica.
  *
  * `larga` segue a grade de "Últimos registros" da referência: 3 colunas no celular (o produto desce para a 2ª linha)
  * e 4 a partir de 768 px (hora · vendedor · produto · valor e selo). Sem ela, a linha cabe num bloco estreito: o
@@ -49,22 +52,25 @@ export function LinhaDeVenda({
   larga?: boolean
 }) {
   const exato = `${rotuloQuando} ${exactDate(quando)} · Brasília`
+  const rotuloCurto = rotuloQuando.replace(/ em$/, '')
+  const compraEmOutroDia = venda.created_at !== quando && brasiliaDateKey(venda.created_at) !== brasiliaDateKey(quando)
   const produto = (
     <>
       {venda.nome_produto}
       {venda.ticket_name ? ` · ${venda.ticket_name}` : ''}
+      {compraEmOutroDia ? ` · compra de ${formatarDiaMes(venda.created_at)}` : ''}
     </>
   )
   return (
     <li>
       <div
         title={exato}
-        className={`grid grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60 ${
-          larga ? 'gap-y-0.5 md:grid-cols-[3.25rem_minmax(0,1.1fr)_minmax(0,1fr)_auto]' : ''
+        className={`grid grid-cols-[3.75rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60 ${
+          larga ? 'gap-y-0.5 md:grid-cols-[3.75rem_minmax(0,1.1fr)_minmax(0,1fr)_auto]' : ''
         }`}
       >
         <time dateTime={quando} className={`text-sm tabular-nums text-muted-foreground ${larga ? 'row-span-2 md:row-span-1' : ''}`}>
-          <span className="sr-only">{rotuloQuando} </span>
+          <span className="block text-[10px] leading-tight">{rotuloCurto}</span>
           {formatarHoraMinuto(quando)}
           <span className="block text-[11px] leading-tight">{formatarDiaMes(quando)}</span>
         </time>

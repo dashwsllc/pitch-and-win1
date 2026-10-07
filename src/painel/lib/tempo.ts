@@ -1,6 +1,6 @@
 // Datas guardadas em UTC e exibidas no fuso de Brasília, com Intl e sem biblioteca de datas.
 // Tudo passa pelas funções de src/lib/brasilia-time.ts (a única fonte de "que dia e que hora é em Brasília").
-import { brasiliaParts, formatBrasiliaDate } from '@/lib/brasilia-time'
+import { brasiliaDateKey, brasiliaParts, formatBrasiliaDate } from '@/lib/brasilia-time'
 
 type Instante = string | number | Date
 
@@ -28,6 +28,15 @@ export function formatarHoraCompleta(instante: Instante): string {
 export function formatarDiaMes(instante: Instante): string {
   const p = brasiliaParts(instante)
   return `${dois(p.day)}/${dois(p.month)}`
+}
+
+/**
+ * "às 14:30" quando o instante é de hoje (no fuso de Brasília) e "em 06/10 às 18:52" quando é de outro dia: uma hora
+ * sozinha parece sempre de hoje, e a última venda de uma janela longa quase nunca é.
+ */
+export function formatarQuando(instante: Instante, agora: Instante): string {
+  const hora = `às ${formatarHoraMinuto(instante)}`
+  return brasiliaDateKey(instante) === brasiliaDateKey(agora) ? hora : `em ${formatarDiaMes(instante)} ${hora}`
 }
 
 /** "Quinta-feira, 01/10/2026": o dia exato no fuso de Brasília. */

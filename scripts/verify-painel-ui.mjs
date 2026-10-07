@@ -79,7 +79,12 @@ const percentual = (c) => `${Number(c.toFixed(1)).toLocaleString('pt-BR', { maxi
 const { server, url } = await startServer(path.resolve(argv.dist))
 const navegador = await chromium.launch({ headless: true })
 
-async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 'reduce', fixtures, ws = 'normal', caminho = '/', comSessao = true, latencia = 15, esperarTitulo = true } = {}) {
+// A Home abre nos últimos 30 dias (vendas anteriores à vista); quase todos os testes foram escritos para o recorte de
+// um dia só (por hora, "na última hora"), então pedem "hoje" no endereço. O teste do filtro e o das vendas anteriores
+// abrem em '/' de propósito, para provar o padrão.
+const HOJE = '/?periodo=hoje'
+
+async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 'reduce', fixtures, ws = 'normal', caminho = HOJE, comSessao = true, latencia = 15, esperarTitulo = true } = {}) {
   const contexto = await navegador.newContext({
     viewport: { width: largura, height: altura },
     deviceScaleFactor: 1,
@@ -228,16 +233,17 @@ await teste('login (/auth) e demais telas não ganham o escopo do painel', async
 })
 
 await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e o filtro vive na URL', async () => {
-  const { pagina, f, erros, pedidosDeVendas, pedidosDeAprovacoes, pedidosDeCalls, fechar } = await abrir()
+  const { pagina, f, erros, pedidosDeVendas, pedidosDeAprovacoes, pedidosDeCalls, fechar } = await abrir({ caminho: '/' })
   try {
-    const nomes = { hoje: 'Hoje', ontem: 'Ontem', '7dias': '7 dias', '14dias': '14 dias', '30dias': '30 dias', all: 'Todo o período' }
-    const enderecos = { hoje: null, ontem: 'ontem', '7dias': '7dias', '14dias': '14dias', '30dias': '30dias', all: 'tudo' }
+    // O primeiro é o padrão (30 dias): sem clique e sem gravar nada no endereço. Os demais saem por clique.
+    const nomes = { '30dias': '30 dias', hoje: 'Hoje', ontem: 'Ontem', '7dias': '7 dias', '14dias': '14 dias', all: 'Todo o período' }
+    const enderecos = { '30dias': null, hoje: 'hoje', ontem: 'ontem', '7dias': '7dias', '14dias': '14dias', all: 'tudo' }
     for (const [filtro, rotulo] of Object.entries(nomes)) {
       const e = esperado(f, filtro)
       pedidosDeVendas.length = 0
       pedidosDeAprovacoes.length = 0
       pedidosDeCalls.length = 0
-      if (filtro !== 'hoje') await pagina.getByRole('radio', { name: rotulo, exact: true }).click()
+      if (filtro !== '30dias') await pagina.getByRole('radio', { name: rotulo, exact: true }).click()
       await expect(pagina.getByRole('radio', { name: rotulo, exact: true })).toHaveAttribute('aria-checked', 'true')
       const url = new URL(pagina.url())
       assert.equal(url.searchParams.get('periodo'), enderecos[filtro], `URL do filtro ${filtro}`)
@@ -308,7 +314,7 @@ await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e
 
     // Limpar filtros volta ao padrão e apaga o endereço; link compartilhado abre com o filtro.
     await pagina.getByRole('button', { name: 'Limpar filtros' }).click()
-    await expect(pagina.getByRole('radio', { name: 'Hoje', exact: true })).toHaveAttribute('aria-checked', 'true')
+    await expect(pagina.getByRole('radio', { name: '30 dias', exact: true })).toHaveAttribute('aria-checked', 'true')
     assert.equal(new URL(pagina.url()).search, '')
     await pagina.goto(`${new URL(pagina.url()).origin}/?periodo=ontem&outro=1`)
     await expect(pagina.getByRole('radio', { name: 'Ontem', exact: true })).toHaveAttribute('aria-checked', 'true')

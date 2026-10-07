@@ -45,7 +45,7 @@ import { PainelLayout } from '@/painel/layout/PainelLayout'
 import { ACAO_DO_BLOCO } from '@/painel/lib/estilos'
 import { useFiltroPainel } from '@/painel/lib/filtro'
 import { emCentavos, formatarCentavos, formatarPercentual, formatarReais, formatarReaisInteiros, pluralizar } from '@/painel/lib/formatar'
-import { formatarHoraMinuto } from '@/painel/lib/tempo'
+import { formatarQuando } from '@/painel/lib/tempo'
 import {
   barrasDeProdutos,
   contarNaUltimaHora,
@@ -178,10 +178,10 @@ export default function Dashboard() {
               incluiAgora ? (
                 <>
                   <strong className="font-semibold text-heading">+{formatarNumero(naUltimaHora)}</strong> na última hora
-                  {ultimaVenda && <> · última às {formatarHoraMinuto(ultimaVenda)}</>}
+                  {ultimaVenda && <> · última {formatarQuando(ultimaVenda, agora)}</>}
                 </>
               ) : ultimaVenda ? (
-                <>Negócios confirmados · última às {formatarHoraMinuto(ultimaVenda)}</>
+                <>Negócios confirmados · última {formatarQuando(ultimaVenda, agora)}</>
               ) : (
                 <>Negócios confirmados</>
               )
