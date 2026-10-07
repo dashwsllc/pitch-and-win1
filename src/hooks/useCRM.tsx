@@ -102,7 +102,7 @@ export function useCRMRealtime() {
       .on("postgres_changes", { event: "*", schema: "public", table: "crm_leads" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "crm_activities" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "crm_lead_contexts" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "crm_lead_payments" }, refresh);
+      .on("postgres_changes", { event: "*", schema: "public", table: "crm_lead_payment_status" }, refresh);
 
     void supabase.realtime.setAuth(session.access_token)
       .then(() => {

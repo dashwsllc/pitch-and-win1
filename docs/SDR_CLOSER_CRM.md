@@ -75,3 +75,25 @@ O teste com fixtures reais é permitido somente em um projeto Supabase de stagin
 Não executar `supabase db push`. `scripts/apply-crm-migration.mjs` executa somente a migration acima, em transação com registro na tabela de histórico, recusando reaplicação. O teste `--deployed` deve passar antes do frontend.
 
 Projeto Vercel confirmado pelo alias: `pitch-and-win1`, time `ls-projects-d9965387`, projeto `prj_m8Z9WxSHwBsOZEs5LInysrd5DE1w`. A publicação manual deve usar essa vinculação. `.verification.local`, `.env` e arquivos de credenciais ficam fora do Git e do deploy. Confirmar o alias e o bundle servido pelo domínio após publicar.
+
+## Status de pagamento simplificado — 07/10/2026
+
+O ícone de pagamento fica imediatamente à esquerda de Contexto no card. Ele abre um dropdown com **Pago** (verde), **Pendente** (amarelo) e **Não pago** (vermelho). A seleção salva imediatamente, sem formulário, valores, parcelas, datas ou motivo. O ícone e o selo refletem o valor confirmado pelo banco; durante a gravação as opções ficam bloqueadas. Erros permitem tentar novamente sem exibir um status não salvo.
+
+Há um único status manual por lead. Sem seleção anterior, o ícone fica neutro e não há selo. O status não muda automaticamente com o tempo. Usuários com capacidade Closer (inclusive Executive e SDR com autorização específica) podem editar; demais usuários com acesso ao CRM apenas consultam. Cada alteração efetiva registra autor, horário e antes/depois no histórico. Repetir o mesmo status não grava uma nova atividade. O status é informativo e não muda aprovação de venda, comissões, Arena ou a revisão do lead.
+
+A migration `20261007120000_crm_lead_payment_status.sql` cria `crm_lead_payment_status` e a RPC `crm_set_payment_status`. Preserva os lançamentos antigos e seu histórico; caso existam, copia o status agregado anterior. As RPCs antigas perdem permissão de escrita, e um trigger impede chamadas antigas já iniciadas de gravarem depois da migração. Abas antigas precisam ser recarregadas. A exclusão auditada do lead continua removendo seus registros associados.
+
+Verificações específicas:
+
+```powershell
+node scripts/verify-crm-payments-unit.mjs
+node scripts/verify-crm-payments-ui.mjs
+node scripts/check-crm-payment-status-db.mjs
+```
+
+O teste de interface usa componentes reais com Auth/Supabase simulados, incluindo Realtime, teclado, celular, falhas de leitura/gravação e permissões. O teste SQL executa migração, cenários de preservação e fixtures dentro de uma transação terminada em `ROLLBACK`. Depois da instalação, usar `node scripts/check-crm-payment-status-db.mjs --deployed`.
+
+Publicar apenas esta migration com `node scripts/apply-crm-payment-status-migration.mjs` (ou `--dry-run` para preparar o SQL sem execução), verificar `--deployed` e então publicar o frontend. Não usar `supabase db push`. Para reverter, preservar/exportar os novos status, restaurar o frontend anterior, desabilitar `crm_legacy_payment_readonly` e devolver EXECUTE nas três RPCs antigas. Não apagar nenhuma tabela: os novos status não permitem reconstruir valores ou parcelas.
+
+Limitação de regressão já existente: `verify-crm-results-ui.mjs:121` espera um card na Esteira e encontra quatro. Reproduzido com o mesmo teste tanto no código desta alteração quanto no frontend publicado anterior; a conversa de origem já registrava a mesma falha. A verificação de edição de calls, os testes de pagamento/CRM e a compilação passam. O teste com Auth/PostgREST reais exige staging separado, conforme a seção de Verificação acima.

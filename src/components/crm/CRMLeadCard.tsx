@@ -14,7 +14,6 @@ import {
   UserCog,
   CheckCircle2,
   RefreshCcw,
-  CircleDollarSign,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -56,9 +55,9 @@ import {
   REMARKETING_STATUS_LABELS,
   optionLabel,
 } from "@/lib/crm-qualification";
-import { PAYMENT_STATUS_LABELS, paymentSummaryText, type PaymentSummary } from "@/lib/crm-payments";
+import type { PaymentStatus } from "@/lib/crm-payments";
 import { CRMPaymentBadge } from "./CRMPaymentBadge";
-import { PAYMENT_STATUS_STYLE } from "./payment-status-style";
+import { CRMPaymentDropdown } from "./CRMPaymentDropdown";
 
 export function CRMLeadCard({
   lead,
@@ -67,12 +66,14 @@ export function CRMLeadCard({
   busy,
   sale,
   payment,
+  paymentLoading,
+  paymentError,
+  onRetryPayment,
   emphasizeCall = false,
   hasContext = false,
   showContextStatus = false,
   pipelineDate,
   onRead,
-  onPayment,
   onEdit,
   onDelete,
   onAction,
@@ -86,13 +87,15 @@ export function CRMLeadCard({
   names: Record<string, string>;
   busy: boolean;
   sale?: { sale_id: string | null; can_open: boolean };
-  payment?: PaymentSummary;
+  payment?: PaymentStatus;
+  paymentLoading: boolean;
+  paymentError: boolean;
+  onRetryPayment: () => void;
   emphasizeCall?: boolean;
   hasContext?: boolean;
   showContextStatus?: boolean;
   pipelineDate?: string | null;
   onRead: () => void;
-  onPayment: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onAction: (action: string) => void;
@@ -224,15 +227,12 @@ export function CRMLeadCard({
           </div>
         </div>
         <div className="flex shrink-0">
+          <CRMPaymentDropdown
+            leadId={lead.id} leadName={lead.name} status={payment}
+            canEdit={capabilities.closer} disabled={busy}
+            loading={paymentLoading} loadError={paymentError} onRetry={onRetryPayment}
+          />
           {[
-            {
-              // À esquerda do Contexto, não dentro dele: o ícone ganha a cor do pagamento (verde, vermelho, amarelo).
-              label: `Pagamento de ${lead.name}`,
-              icon: CircleDollarSign,
-              action: onPayment,
-              tip: payment?.status ? `Pagamento: ${PAYMENT_STATUS_LABELS[payment.status]}` : "Pagamento",
-              tone: payment?.status ? PAYMENT_STATUS_STYLE[payment.status].soft : undefined,
-            },
             {
               label: `Contexto de ${lead.name}`,
               icon: BookOpen,
@@ -259,7 +259,7 @@ export function CRMLeadCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`h-8 w-8 ${item.destructive ? "text-destructive hover:bg-destructive/10 hover:text-destructive" : item.tone ? item.tone : item.active ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
+                  className={`h-8 w-8 ${item.destructive ? "text-destructive hover:bg-destructive/10 hover:text-destructive" : item.active ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
                   aria-label={item.label}
                   title={item.tip}
                   onClick={item.action}
@@ -282,8 +282,8 @@ export function CRMLeadCard({
           {PIPELINE_STAGES.find((s) => s.value === lead.pipeline_stage)
             ?.label || lead.pipeline_stage}
         </Badge>
-        {payment?.status && (
-          <CRMPaymentBadge status={payment.status} detail={paymentSummaryText(payment)} />
+        {payment && (
+          <CRMPaymentBadge status={payment} />
         )}
         {showContextStatus && (
           <Badge variant="outline" className={`h-5 px-2 text-[10px] ${hasContext ? 'border-primary/35 text-primary' : 'text-muted-foreground'}`}>

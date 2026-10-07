@@ -423,6 +423,18 @@ export type Database = {
           },
         ]
       }
+      crm_lead_payment_status: {
+        Row: { lead_id: string; status: string; updated_by: string; updated_at: string }
+        Insert: { lead_id: string; status: string; updated_by: string; updated_at?: string }
+        Update: { lead_id?: string; status?: string; updated_by?: string; updated_at?: string }
+        Relationships: [{
+          foreignKeyName: "crm_lead_payment_status_lead_id_fkey"
+          columns: ["lead_id"]
+          isOneToOne: true
+          referencedRelation: "crm_leads"
+          referencedColumns: ["id"]
+        }]
+      }
       crm_lead_payments: {
         Row: {
           amount: number
@@ -1472,6 +1484,10 @@ export type Database = {
       }
       crm_has_access: { Args: Record<PropertyKey, never>; Returns: boolean }
       crm_call_assignees: { Args: Record<PropertyKey, never>; Returns: { user_id: string; display_name: string; role: string }[] }
+      crm_set_payment_status: {
+        Args: { p_lead_id: string; p_status: string }
+        Returns: Database["public"]["Tables"]["crm_lead_payment_status"]["Row"]
+      }
       crm_lead_payment_summaries: {
         Args: Record<PropertyKey, never>
         Returns: { lead_id: string; total_count: number; paid_count: number; unpaid_count: number; pending_count: number; total_amount: number; paid_amount: number; status: string; next_due_date: string | null }[]

@@ -40,14 +40,13 @@ import {
   PIPELINE_STAGES,
   APPROACH_STAGES,
 } from "@/hooks/useCRM";
-import { useCRMPaymentSummaries } from "@/hooks/useCRMPayments";
+import { useCRMPaymentStatuses } from "@/hooks/useCRMPayments";
 import { useRoles } from "@/hooks/useRoles";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { errorMessage } from "@/lib/sales";
 import type { Json } from "@/integrations/supabase/types";
 import { CRMLeadDetail } from "@/components/crm/CRMLeadDetail";
-import { CRMPaymentSheet } from "@/components/crm/CRMPaymentSheet";
 import { CRMLeadEditor } from "@/components/crm/CRMLeadEditor";
 import { CRMLeadCard } from "@/components/crm/CRMLeadCard";
 import { CRMActionDialog } from "@/components/crm/CRMActionDialog";
@@ -183,7 +182,7 @@ export default function CRM() {
   const sales = useCRMSaleLinks();
   const approvedSales = useSalesBoard("aprovada", "", 0, 50);
   const contextSummary = useCRMContextSummary();
-  const paymentSummaries = useCRMPaymentSummaries();
+  const paymentStatuses = useCRMPaymentStatuses();
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
   const requestedTab = params.get("tab") || "leads";
@@ -206,7 +205,6 @@ export default function CRM() {
     requestedTab === "remarketing" ? "negative" : "active",
   );
   const [readId, setReadId] = useState<string | null>(null);
-  const [paymentId, setPaymentId] = useState<string | null>(null);
   const [editor, setEditor] = useState<CRMLead | "new" | null>(null);
   const [deleting, setDeleting] = useState<CRMLead | null>(null);
   const [action, setAction] = useState<{ lead: CRMLead; name: string } | null>(
@@ -416,7 +414,6 @@ export default function CRM() {
             ? lead.approach_stage
           : sdrGroup(lead);
   const selected = crm.leads.find((l) => l.id === readId);
-  const paymentLead = crm.leads.find((l) => l.id === paymentId);
   const run = async (
     operation: () => Promise<unknown>,
     title = "Lead atualizado",
@@ -489,14 +486,16 @@ export default function CRM() {
       call={openCalls.get(lead.id)}
       names={names}
       sale={saleMap.get(lead.id)}
-      payment={paymentSummaries.data?.get(lead.id)}
+      payment={paymentStatuses.data?.get(lead.id)}
+      paymentLoading={paymentStatuses.isLoading}
+      paymentError={paymentStatuses.isError}
+      onRetryPayment={() => { void paymentStatuses.refetch(); }}
       emphasizeCall={lead.pipeline_stage === "repassado_closer"}
       hasContext={contextSummary.leadIds.has(lead.id)}
       showContextStatus={dailyPipeline}
       pipelineDate={dailyPipeline ? leadApproachReference(lead) : null}
       busy={busy}
       onRead={() => setReadId(lead.id)}
-      onPayment={() => setPaymentId(lead.id)}
       onEdit={() => setEditor(lead)}
       onDelete={() => requestDelete(lead)}
       onAction={(name) => setAction({ lead, name })}
@@ -957,14 +956,6 @@ export default function CRM() {
               setEditor(selected);
             }}
             onDelete={() => requestDelete(selected)}
-          />
-        )}
-        {paymentLead && (
-          <CRMPaymentSheet
-            key={paymentLead.id}
-            lead={paymentLead}
-            names={names}
-            onClose={() => setPaymentId(null)}
           />
         )}
         {editor && (

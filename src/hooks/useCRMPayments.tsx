@@ -1,132 +1,60 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useRoles } from "./useRoles";
-import {
-  paymentSummaryFromRow,
-  type PaymentStatus,
-  type PaymentSummary,
-} from "@/lib/crm-payments";
+import { isPaymentStatus, type PaymentStatus } from "@/lib/crm-payments";
 
-export type CRMLeadPayment = Tables<"crm_lead_payments">;
+const statusKey = (userId?: string) => ["crm", "payment-status", userId];
 
-const queryOptions = {
-  staleTime: 5_000,
-  refetchOnWindowFocus: false,
-  retry: 1,
-};
-
-// Todas as consultas ficam sob ["crm"]: o canal em tempo real do CRM (useCRMRealtime) já as atualiza.
-export function useCRMPaymentSummaries() {
+export function useCRMPaymentStatuses() {
   const { user } = useAuth();
   const { hasCRMAccess } = useRoles();
   return useQuery({
-    queryKey: ["crm", "payments", "summary", user?.id],
+    queryKey: statusKey(user?.id),
     enabled: !!user && hasCRMAccess,
-    ...queryOptions,
+    staleTime: 5_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
     queryFn: async () => {
-      const byLead = new Map<string, PaymentSummary>();
+      const byLead = new Map<string, PaymentStatus>();
       for (let from = 0; ; from += 500) {
         const { data, error } = await supabase
-          .rpc("crm_lead_payment_summaries")
+          .from("crm_lead_payment_status")
+          .select("lead_id,status")
           .order("lead_id")
           .range(from, from + 499);
         if (error) throw error;
-        data.forEach((row) => byLead.set(row.lead_id, paymentSummaryFromRow(row)));
+        for (const row of data) {
+          if (!isPaymentStatus(row.status)) throw new Error("Status de pagamento inválido.");
+          byLead.set(row.lead_id, row.status);
+        }
         if (data.length < 500) return byLead;
       }
     },
   });
 }
 
-export function useLeadPayments(leadId: string) {
-  const { user } = useAuth();
-  const { hasCRMAccess } = useRoles();
-  return useQuery({
-    queryKey: ["crm", "payments", "lead", user?.id, leadId],
-    enabled: !!user && hasCRMAccess,
-    ...queryOptions,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("crm_lead_payments")
-        .select("*")
-        .eq("lead_id", leadId)
-        .order("created_at", { ascending: true })
-        .order("id");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
-
-export interface PaymentSaveData {
-  description: string;
-  amount: number;
-  method: string;
-  dueDate: string | null;
-  notes: string | null;
-  proofUrl: string | null;
-}
-
-export function useCRMPaymentActions() {
+export function useSetCRMPaymentStatus() {
   const client = useQueryClient();
-  // Mesmo quando a operação falha (ex.: lançamento alterado por outra pessoa), a tela relê o estado real.
-  const refresh = () => client.invalidateQueries({ queryKey: ["crm"] });
-  const save = async (
-    leadId: string,
-    payment: CRMLeadPayment | null,
-    data: PaymentSaveData,
-  ) => {
-    try {
-      const { data: saved, error } = await supabase.rpc("crm_payment_save", {
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async ({ leadId, status }: { leadId: string; status: PaymentStatus }) => {
+      const { data, error } = await supabase.rpc("crm_set_payment_status", {
         p_lead_id: leadId,
-        p_payment_id: payment?.id ?? null,
-        p_description: data.description,
-        p_amount: data.amount,
-        p_method: data.method,
-        p_due_date: data.dueDate,
-        p_notes: data.notes,
-        p_proof_url: data.proofUrl,
-        p_expected_revision: payment?.updated_at ?? null,
-      });
-      if (error) throw error;
-      return saved;
-    } finally {
-      await refresh();
-    }
-  };
-  const setStatus = async (
-    payment: CRMLeadPayment,
-    status: PaymentStatus,
-    extra: { paidAt: string | null; reason: string | null },
-  ) => {
-    try {
-      const { data, error } = await supabase.rpc("crm_payment_set_status", {
-        p_payment_id: payment.id,
         p_status: status,
-        p_paid_at: extra.paidAt,
-        p_reason: extra.reason,
-        p_expected_revision: payment.updated_at,
       });
       if (error) throw error;
-      return data;
-    } finally {
-      await refresh();
-    }
-  };
-  const remove = async (payment: CRMLeadPayment, reason: string) => {
-    try {
-      const { data, error } = await supabase.rpc("crm_payment_delete", {
-        p_payment_id: payment.id,
-        p_reason: reason,
-        p_expected_revision: payment.updated_at,
-      });
-      if (error) throw error;
-      return data;
-    } finally {
-      await refresh();
-    }
-  };
-  return { save, setStatus, remove };
+      if (!isPaymentStatus(data.status)) throw new Error("Status de pagamento inválido.");
+      return { leadId: data.lead_id, status: data.status };
+    },
+    onSuccess: async ({ leadId, status }) => {
+      // Paint only the server-confirmed value, without an older in-flight read undoing it.
+      await client.cancelQueries({ queryKey: statusKey(user?.id) });
+      client.setQueryData<Map<string, PaymentStatus>>(statusKey(user?.id), old =>
+        new Map(old).set(leadId, status),
+      );
+    },
+    // History, duplicate cards and realtime consumers reread the persisted value, also on failure.
+    onSettled: () => client.invalidateQueries({ queryKey: ["crm"] }),
+  });
 }
