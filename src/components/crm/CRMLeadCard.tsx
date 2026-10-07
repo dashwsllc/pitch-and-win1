@@ -107,8 +107,9 @@ export function CRMLeadCard({
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { capabilities, hasRole, canScheduleQualificationCall } = useRoles();
-  const canCreateClosing = capabilities.executive || hasRole('sdr');
+  const { capabilities, canScheduleQualificationCall } = useRoles();
+  // Qualquer SDR ou Closer (e Executive) agenda a call de fechamento: a capacidade SDR já inclui Closer.
+  const canCreateClosing = capabilities.sdr;
   const closed = isClosedStage(lead.pipeline_stage);
   const handed = lead.pipeline_stage === "repassado_closer";
   const negative = isNegativeStage(lead.pipeline_stage);

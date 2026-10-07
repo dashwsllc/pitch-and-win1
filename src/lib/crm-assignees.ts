@@ -32,12 +32,3 @@ export function candidatesFor(target: CRMAssigneeTarget, assignees: readonly CRM
   }
   return list.sort((a, b) => a.display_name.localeCompare(b.display_name, 'pt-BR') || a.user_id.localeCompare(b.user_id))
 }
-
-// A call de fechamento nunca vai para quem a agenda (o banco recusa: arena_call_guard). Em vez de esconder essa
-// pessoa da lista, a tela a mostra desabilitada, com o motivo, para a lista continuar completa.
-export function splitSelf(candidates: readonly CRMCandidate[], selfId: string | undefined) {
-  return {
-    selectable: candidates.filter((candidate) => candidate.user_id !== selfId),
-    self: candidates.find((candidate) => candidate.user_id === selfId) ?? null,
-  }
-}

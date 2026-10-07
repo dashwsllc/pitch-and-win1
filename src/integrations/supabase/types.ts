@@ -47,6 +47,7 @@ export type Database = {
       abordagens: {
         Row: {
           created_at: string
+          crm_lead_id: string | null
           dados_abordados: string
           id: string
           mostrou_ia: boolean
@@ -58,6 +59,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          crm_lead_id?: string | null
           dados_abordados: string
           id?: string
           mostrou_ia?: boolean
@@ -69,6 +71,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          crm_lead_id?: string | null
           dados_abordados?: string
           id?: string
           mostrou_ia?: boolean

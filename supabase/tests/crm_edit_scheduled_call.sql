@@ -129,10 +129,16 @@ BEGIN
   UPDATE edit_qa_state SET c_rev=c.updated_at;
 END; $$;
 
--- 7. The closing call never goes back to the person who scheduled it (same rule as arena_call_guard).
+-- 7. The person who scheduled a closing call can receive it (an SDR who is also a Closer picks himself): the database only
+-- requires the new responsible to hold the Closer capability. The call then goes back to the previous Closer.
 SELECT set_config('request.jwt.claims','{"sub":"ec000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
-DO $$ DECLARE s record; BEGIN SELECT * INTO s FROM edit_qa_state;
-  BEGIN PERFORM public.update_crm_call(s.c2_id,'ec000000-0000-4000-8000-000000000001'::uuid,NULL,s.c2_rev); RAISE EXCEPTION 'FAIL: call returned to its scheduler'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+DO $$ DECLARE s record; c public.crm_activities; BEGIN SELECT * INTO s FROM edit_qa_state;
+  c:=public.update_crm_call(s.c2_id,'ec000000-0000-4000-8000-000000000001'::uuid,NULL,s.c2_rev);
+  IF c.assigned_to<>'ec000000-0000-4000-8000-000000000001'::uuid THEN RAISE EXCEPTION 'FAIL: call could not go to its scheduler'; END IF;
+  c:=public.update_crm_call(s.c2_id,'ec000000-0000-4000-8000-000000000004'::uuid,NULL,c.updated_at);
+  IF c.assigned_to<>'ec000000-0000-4000-8000-000000000004'::uuid
+    OR (SELECT closer_id FROM public.crm_leads WHERE id=c.lead_id)<>'ec000000-0000-4000-8000-000000000004'::uuid THEN RAISE EXCEPTION 'FAIL: call did not return to the previous Closer'; END IF;
+  UPDATE edit_qa_state SET c2_rev=c.updated_at;
 END; $$;
 
 -- 8. A seller cannot edit a closing call either.

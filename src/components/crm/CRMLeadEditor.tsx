@@ -102,7 +102,7 @@ export function CRMLeadEditor({
           <DialogDescription>
             {lead
               ? "Atualize o cadastro compartilhado entre Leads, SDR e Closer."
-              : "Comece com responsável, atleta e WhatsApp. O lead entra na etapa Novo."}
+              : "Comece com responsável, atleta e WhatsApp. O lead entra na etapa Novo e cada lead cadastrado conta como uma abordagem."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="space-y-3">

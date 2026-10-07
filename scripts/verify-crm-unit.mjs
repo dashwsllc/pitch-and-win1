@@ -248,7 +248,8 @@ assert.match(remarketingSource, /Registrar contato e próxima tentativa/)
 assert.match(remarketingSource, /Reativar para qualificação/)
 
 // Lista de Closers/SDRs dos diálogos do CRM: uma regra só, completa e sem duplicados.
-const { candidatesFor, splitSelf } = await import('../src/lib/crm-assignees.ts')
+const assigneesModule = await import('../src/lib/crm-assignees.ts')
+const { candidatesFor } = assigneesModule
 const assigneeRows = [
   { user_id: 'u-pedro', display_name: 'Pedro Iago', role: 'closer' },
   { user_id: 'u-pedro', display_name: 'Pedro Iago', role: 'sdr' },
@@ -263,16 +264,17 @@ assert.equal(candidatesFor('closer', assigneeRows).some(c => c.user_id === 'u-sd
 assert.equal(candidatesFor('closer', assigneeRows.filter(r => r.user_id !== 'u-pedro')).some(c => c.user_id === 'u-pedro'), false)
 assert.equal(candidatesFor('closer', [{ user_id: 'u-pedro', display_name: 'Pedro Iago', role: 'sdr' }]).length, 0)
 assert.deepEqual(candidatesFor('closer', []), [])
+// Quem agenda o fechamento pode ser o Closer dele: um SDR que também é Closer (Pedro Iago) aparece na lista e se escolhe.
 const closers = candidatesFor('closer', assigneeRows)
-const asPedro = splitSelf(closers, 'u-pedro')
-assert.equal(asPedro.self?.user_id, 'u-pedro')
-assert.deepEqual(asPedro.selectable.map(c => c.user_id), ['u-adm', 'u-ana', 'u-exec'])
-assert.equal(splitSelf(closers, 'u-sdr').self, null)
-assert.equal(splitSelf(closers, 'u-sdr').selectable.length, 4)
-assert.equal(splitSelf(closers, undefined).self, null)
+assert.ok(closers.some(c => c.user_id === 'u-pedro'), 'o SDR que também é Closer está na lista de Closers')
+assert.equal(assigneesModule.splitSelf, undefined, 'não existe mais a lista que esconde quem agenda')
 const schedulerSource = readFileSync(new URL('../src/components/crm/CRMCalls.tsx', import.meta.url), 'utf8')
 assert.match(schedulerSource, /useCRMAssignees\(\{ fresh: true \}\)/)
 assert.match(schedulerSource, /candidatesFor\(/)
+assert.doesNotMatch(schedulerSource, /blockedScheduler|splitSelf|não recebe a própria call/, 'o diálogo não bloqueia mais quem agenda')
+assert.match(schedulerSource, /const canCreateClosing = capabilities\.sdr;/, 'qualquer SDR ou Closer agenda o fechamento')
+assert.doesNotMatch(schedulerSource, /disabled=\{!call && type === "fechamento_closer" && !!lead\.closer_id\}/, 'o Closer pode ser trocado ao agendar também')
+assert.match(readFileSync(new URL('../src/components/crm/CRMLeadCard.tsx', import.meta.url), 'utf8'), /const canCreateClosing = capabilities\.sdr;/)
 assert.match(readFileSync(new URL('../src/pages/CRM.tsx', import.meta.url), 'utf8'), /candidatesFor\("closer"/)
 assert.match(readFileSync(new URL('../src/components/crm/CRMReturnDialog.tsx', import.meta.url), 'utf8'), /candidatesFor\(target/)
 

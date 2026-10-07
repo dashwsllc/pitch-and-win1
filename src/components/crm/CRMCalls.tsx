@@ -10,7 +10,7 @@ import { useRoles } from "@/hooks/useRoles";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { arenaRpc } from '@/lib/arena-api';
-import { candidatesFor, splitSelf } from "@/lib/crm-assignees";
+import { candidatesFor } from "@/lib/crm-assignees";
 import { callEditToast, planCallEdit } from "@/lib/crm-call-edit";
 import { errorMessage } from "@/lib/sales";
 import { brasiliaLocalInputToIso, isoToBrasiliaLocalInput } from "@/lib/brasilia-time";
@@ -41,7 +41,7 @@ export function CRMCallScheduler({
   onClose: () => void;
 }) {
   const { user } = useAuth();
-  const { capabilities, hasRole, canScheduleQualificationCall } = useRoles();
+  const { capabilities, canScheduleQualificationCall } = useRoles();
   const assignees = useCRMAssignees({ fresh: true });
   const client = useQueryClient();
   const { toast } = useToast();
@@ -72,17 +72,11 @@ export function CRMCallScheduler({
   const [failure, setFailure] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const canCreateClosing = capabilities.executive || hasRole('sdr');
-  const everyone = candidatesFor(type === "qualificacao" ? "sdr" : "closer", assignees.data || []);
-  // O banco recusa call de fechamento para quem a agenda (nova call: quem está agendando; call já agendada:
-  // quem a agendou): essa pessoa continua na lista, desabilitada, a menos que já seja a responsável atual.
-  const scheduler = call ? call.user_id : user?.id;
-  const { selectable: candidates, self: blockedSelf } =
-    type === "fechamento_closer"
-      ? splitSelf(everyone, scheduler)
-      : { selectable: everyone, self: null };
-  const blockedScheduler = blockedSelf && blockedSelf.user_id !== call?.assigned_to ? blockedSelf : null;
-  const holdsCallWithoutAccess = !!call?.assigned_to && !everyone.some((a) => a.user_id === call.assigned_to);
+  // Qualquer SDR ou Closer (e Executive) agenda e troca o Closer de um fechamento; a capacidade SDR já inclui Closer.
+  const canCreateClosing = capabilities.sdr;
+  // Todo mundo com a função entra na lista, quem está agendando também: um SDR que também é Closer escolhe a si mesmo.
+  const candidates = candidatesFor(type === "qualificacao" ? "sdr" : "closer", assignees.data || []);
+  const holdsCallWithoutAccess = !!call?.assigned_to && !candidates.some((a) => a.user_id === call.assigned_to);
   const assignedName = candidates.find((a) => a.user_id === assigned)?.display_name;
   const nothingToSave = !!call && (() => {
     const plan = planCallEdit(call, { assignedTo: assigned, when });
@@ -133,7 +127,7 @@ export function CRMCallScheduler({
     setFailure("");
     try {
       if (type === 'qualificacao' && !canScheduleQualificationCall) throw new Error('Esta conta agenda apenas calls para o Closer.');
-      if (type === 'fechamento_closer' && !canCreateClosing) throw new Error('O SDR agenda a call de fechamento para o Closer.');
+      if (type === 'fechamento_closer' && !canCreateClosing) throw new Error('Somente SDR, Closer ou Executive agenda a call de fechamento.');
       const { error } = isSdrHandoff
         ? await supabase.rpc("handoff_and_schedule_closer_call", {
             p_lead_id: lead.id,
@@ -216,14 +210,13 @@ export function CRMCallScheduler({
         </DialogHeader>
         <form onSubmit={save} className="space-y-3">
           {call && <div className="space-y-2">{cancelling ? <><Label htmlFor="call-cancel-reason">Motivo do cancelamento</Label><Input id="call-cancel-reason" value={cancelReason} onChange={e => setCancelReason(e.target.value)} /><Button type="button" variant="destructive" disabled={saving || cancelReason.trim().length < 5} onClick={cancelCall}>Confirmar cancelamento da call</Button></> : <Button type="button" variant="ghost" className="text-rose-300" onClick={() => setCancelling(true)}>Cancelar este agendamento</Button>}</div>}
-          {!call && type === 'fechamento_closer' && !canCreateClosing && <p role="alert" className="text-sm text-amber-300">O SDR deve agendar esta call para o Closer.</p>}
+          {!call && type === 'fechamento_closer' && !canCreateClosing && <p role="alert" className="text-sm text-amber-300">Somente SDR, Closer ou Executive agenda a call de fechamento.</p>}
           <div className="space-y-1">
             <Label className="text-xs" htmlFor="call-assignee">
               {call ? `Responsável pela call (${type === "qualificacao" ? "SDR" : "Closer"})` : "Responsável"}
             </Label>
             <select
               id="call-assignee"
-              disabled={!call && type === "fechamento_closer" && !!lead.closer_id}
               required
               className="h-9 w-full rounded border bg-background px-3 text-sm"
               value={assigned}
@@ -238,19 +231,7 @@ export function CRMCallScheduler({
                   {a.display_name}
                 </option>
               ))}
-              {blockedScheduler && (
-                <option value={`self-${blockedScheduler.user_id}`} disabled>
-                  {blockedScheduler.display_name} {call ? "(agendou a call)" : "(você)"} · não recebe {call ? "a call" : "a própria call"}
-                </option>
-              )}
             </select>
-            {blockedScheduler && (
-              <p className="text-[11px] leading-4 text-muted-foreground">
-                {call
-                  ? "A call de fechamento não volta para quem a agendou."
-                  : "A call de fechamento vai para outra pessoa: quem agenda não pode ser o responsável por ela."}
-              </p>
-            )}
             {call && (
               <p className="text-[11px] leading-4 text-muted-foreground">
                 {type === "qualificacao"

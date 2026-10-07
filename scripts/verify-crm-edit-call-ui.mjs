@@ -123,11 +123,11 @@ try {
   let dialog = editDialog()
   const closerSelect = dialog.getByLabel('Responsável pela call (Closer)')
   await expect(closerSelect).toHaveValue(maria)
-  await expect.poll(() => selectable(dialog)).toEqual(['Maria Closer', 'Pedro Iago'])
+  // Quem agendou a call (Gestor QA) também pode ser o Closer: está na lista e nada fica desabilitado.
+  await expect.poll(() => selectable(dialog)).toEqual(['Gestor QA', 'Maria Closer', 'Pedro Iago'])
   const closing = await options(dialog)
-  const blocked = closing.find(o => o.disabled)
-  assert.ok(blocked, 'the person who scheduled the closing call stays on the list, disabled')
-  assert.match(blocked.text, /^Gestor QA \(agendou a call\)/)
+  assert.equal(closing.some(o => o.disabled), false, 'the scheduler of the closing call can receive it: nobody is disabled')
+  assert.equal(closing.find(o => o.text.startsWith('Gestor QA')).text, 'Gestor QA')
   assert.equal(closing.some(o => o.text.includes('João SDR')), false, 'SDRs are not offered as Closer')
   await expect(dialog.getByRole('button', { name: 'Salvar alterações' })).toBeDisabled()
   await page.screenshot({ path: '.verification.local/crm-edit-call-closer-desktop.png', fullPage: true })
@@ -180,5 +180,5 @@ try {
   await expect(dialog).toHaveCount(0)
   assert.equal(requests.length, 4)
   assert.deepEqual(errors, [])
-  console.log('PASS: any SDR edits an already scheduled call: Closer list (scheduler disabled), SDR list, responsible-only and time-only payloads, lead follows the closing call, stale revision message. Browser network mocked; no live data changed.')
+  console.log('PASS: any SDR edits an already scheduled call: Closer list (scheduler included), SDR list, responsible-only and time-only payloads, lead follows the closing call, stale revision message. Browser network mocked; no live data changed.')
 } finally { await browser.close() }

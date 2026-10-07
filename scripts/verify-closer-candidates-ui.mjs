@@ -95,11 +95,11 @@ const openScheduler = async () => {
 try {
   await page.goto(`${origin}/crm`)
   let dialog = await openScheduler()
-  await expect.poll(() => selectableNames(dialog)).toEqual(['Maria Closer'])
+  // Quem agenda é Closer também (Executive) e pode se escolher: nada fica desabilitado.
+  await expect.poll(() => selectableNames(dialog)).toEqual(['Gestor QA', 'Maria Closer'])
   const initial = await dialogOptions(dialog)
-  const self = initial.find(o => o.disabled)
-  assert.ok(self, 'the person who schedules stays on the list, disabled')
-  assert.match(self.text, /^Gestor QA \(você\)/)
+  assert.equal(initial.some(o => o.disabled), false, 'the person who schedules can be the Closer: nobody is disabled')
+  assert.equal(initial.find(o => o.text.startsWith('Gestor QA')).text, 'Gestor QA', 'sem o aviso "não recebe a própria call"')
   assert.equal(initial.some(o => o.text.includes('Pedro Iago')), false, 'a plain SDR is not offered as Closer')
   assert.equal(initial.some(o => o.text.includes('João SDR')), false)
   await expect(dialog.getByRole('button', { name: 'Agendar e enviar' })).toBeDisabled()
@@ -108,7 +108,7 @@ try {
   assignees = [...assignees.filter(a => a.user_id !== pedro),
     { user_id: pedro, display_name: 'Pedro Iago', role: 'closer' }, { user_id: pedro, display_name: 'Pedro Iago', role: 'sdr' }]
   signalChange('users')
-  await expect.poll(() => selectableNames(dialog)).toEqual(['Maria Closer', 'Pedro Iago'])
+  await expect.poll(() => selectableNames(dialog)).toEqual(['Gestor QA', 'Maria Closer', 'Pedro Iago'])
   await page.screenshot({ path: '.verification.local/crm-closer-list-desktop.png', fullPage: true })
 
   // Closing and reopening reads the list again even when no revision signal arrived in between.
@@ -117,8 +117,13 @@ try {
   assignees = [...assignees, { user_id: nova, display_name: 'Ana Nova', role: 'closer' }]
   const readsBefore = assigneeReads
   dialog = await openScheduler()
-  await expect.poll(() => selectableNames(dialog)).toEqual(['Ana Nova', 'Maria Closer', 'Pedro Iago'])
+  await expect.poll(() => selectableNames(dialog)).toEqual(['Ana Nova', 'Gestor QA', 'Maria Closer', 'Pedro Iago'])
   assert.ok(assigneeReads > readsBefore, 'opening the dialog reads the assignees again')
+
+  // Quem agenda escolhe a si mesmo e o botão libera (antes o banco recusava: "agendada pelo SDR para outro colaborador").
+  await dialog.getByLabel('Responsável').selectOption(actor)
+  await dialog.getByLabel('Data e hora (horário de Brasília)').fill(`${tomorrow}T14:00`)
+  await expect(dialog.getByRole('button', { name: 'Agendar e enviar' })).toBeEnabled()
 
   await dialog.getByLabel('Responsável').selectOption(pedro)
   await dialog.getByLabel('Data e hora (horário de Brasília)').fill(`${tomorrow}T15:00`)
@@ -139,5 +144,5 @@ try {
   await expect.poll(() => returnDialog.locator('#return-assignee option').evaluateAll(list =>
     list.filter(option => option.value).map(option => option.textContent.trim()))).toEqual(['Ana Nova', 'Gestor QA', 'Maria Closer', 'Pedro Iago'])
   assert.deepEqual(errors, [])
-  console.log('PASS: Closer list is complete and alphabetical, keeps the scheduler visible but disabled, picks up a promotion live while the dialog is open, re-reads on open, the promoted Closer receives the handoff and the return dialog lists the same Closers. Browser network mocked; no live data changed.')
+  console.log('PASS: Closer list is complete and alphabetical, lists the scheduler too and lets him pick himself, picks up a promotion live while the dialog is open, re-reads on open, the promoted Closer receives the handoff and the return dialog lists the same Closers. Browser network mocked; no live data changed.')
 } finally { await browser.close() }

@@ -39,6 +39,8 @@ interface SellerApproach {
   nomes_abordados: string
   mostrou_ia: boolean
   tempo_medio_abordagem: number
+  /** Preenchido quando a abordagem é o cadastro de um lead no CRM (um lead cadastrado conta como uma abordagem). */
+  crm_lead_id: string | null
   created_at: string
 }
 
@@ -103,7 +105,7 @@ export function ExecutiveSellerDetails() {
           .range(from, to)),
         fetchAllPages((from, to) => supabase
           .from('abordagens')
-          .select('id, nomes_abordados, mostrou_ia, tempo_medio_abordagem, created_at')
+          .select('id, nomes_abordados, mostrou_ia, tempo_medio_abordagem, crm_lead_id, created_at')
           .eq('user_id', sellerId)
           .order('created_at', { ascending: false })
           .order('id')
@@ -364,15 +366,15 @@ export function ExecutiveSellerDetails() {
                             {formatBrasiliaDate(approach.created_at)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {approach.mostrou_ia ? 'Mostrou IA' : 'Não mostrou IA'}
+                            {approach.crm_lead_id ? 'Lead cadastrado no CRM' : approach.mostrou_ia ? 'Mostrou IA' : 'Não mostrou IA'}
                           </p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-medium">
-                            {approach.tempo_medio_abordagem}min
+                            {approach.crm_lead_id ? 'CRM' : `${approach.tempo_medio_abordagem}min`}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            tempo médio
+                            {approach.crm_lead_id ? 'cadastro de lead' : 'tempo médio'}
                           </p>
                         </div>
                       </div>
