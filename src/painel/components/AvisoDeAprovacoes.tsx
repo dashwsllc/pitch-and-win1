@@ -1,4 +1,6 @@
 import { InfoIcon } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { saleDashboardPath } from '@/lib/sales'
 import { formatarReais, pluralizar } from '../lib/formatar'
 import { formatarDiaMes, formatarHoraMinuto } from '../lib/tempo'
 import { instanteDoRegistro, type VendaLinha } from '../lib/visao'
@@ -35,9 +37,10 @@ export function AvisoDeAprovacoes({ vendas, className = '' }: { vendas: VendaLin
             {visiveis.map((v) => {
               const aprovadaEm = instanteDoRegistro(v)
               return (
-                <li key={v.id} className="truncate" title={v.nome_produto}>
+                <li key={v.id} className="break-words" title={v.nome_produto}>
                   <span className="font-medium text-heading">{v.nome_produto}</span> · {formatarReais(v.valor_venda)} · compra de {formatarDiaMes(v.created_at)} · aprovada em{' '}
                   {formatarDiaMes(aprovadaEm)} às {formatarHoraMinuto(aprovadaEm)}
+                  {' · '}<Link className="font-medium text-heading underline underline-offset-2" to={saleDashboardPath(v.created_at)}>Ver dia da compra</Link>
                 </li>
               )
             })}

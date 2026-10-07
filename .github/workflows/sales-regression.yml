@@ -1,0 +1,33 @@
+name: Sales synchronization regression
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  sales-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: https://benchmock.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: bench-anon-key
+      VITE_TURNSTILE_SITE_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --prefix .verification.local --no-package-lock --no-save @playwright/test@1.63.0
+      - run: node .verification.local/node_modules/playwright/cli.js install --with-deps chromium
+      - run: node scripts/verify-sale-visibility-unit.mjs
+      - run: node scripts/verify-dashboard-sync-unit.mjs
+      - run: npx tsc --noEmit -p tsconfig.app.json
+      - run: npx vite build --outDir .verification.local/perf/dist-aprovacao --emptyOutDir
+      - run: node scripts/verify-approval-sync-ui.mjs --dist .verification.local/perf/dist-aprovacao
+      - run: node scripts/verify-sale-visibility-ui.mjs --dist .verification.local/perf/dist-aprovacao

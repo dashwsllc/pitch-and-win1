@@ -44,6 +44,7 @@ import {
   type ArenaDashboard,
 } from "@/lib/arena";
 import { exactDate, money, errorMessage } from "@/lib/sales";
+import { brasiliaDateKey, formatDateKey } from "@/lib/brasilia-time";
 import { PersonGoalProgress } from "@/components/arena/PersonGoalProgress";
 import { ArenaSoundToggle } from "@/components/arena/ArenaSoundToggle";
 import { ScoreWeightsDialog } from "@/components/arena/GoalManagement";
@@ -201,7 +202,8 @@ function RankingList({
     const nextPositions = new Map<string, number>();
     for (const row of rows) {
       const id = row.dataset.person!;
-      const top = row.getBoundingClientRect().top;
+      const top = row.getBoundingClientRect().top -
+        (list.current?.getBoundingClientRect().top ?? 0) + (list.current?.scrollTop ?? 0);
       const old = positions.current.get(id);
       if (
         old != null &&
@@ -233,8 +235,12 @@ function RankingList({
           {linkLabel} ↗
         </Link>
       </div>
-      <div ref={list} className="space-y-2">
-        {people.slice(0, 4).map((person, i) => {
+      {cycle && <p className="mb-3 text-xs text-muted-foreground">
+        {formatDateKey(brasiliaDateKey(cycle.starts_at))} a {formatDateKey(brasiliaDateKey(Date.parse(cycle.ends_at) - 1))}
+        {!sharedGoal && " · vendas pela data da compra; domingo conta na semana seguinte"}
+      </p>}
+      <div ref={list} className="arena-ranking-list space-y-2" tabIndex={0} role="region" aria-label={`Participantes de ${title}`}>
+        {people.map((person, i) => {
           const member = cycle?.result.members.find(
             (m) => m.user_id === person.user_id,
           );
@@ -284,6 +290,7 @@ function RankingList({
           </p>
         )}
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">{people.length} {people.length === 1 ? 'participante' : 'participantes'}{people.length > 4 && ' · role a lista para ver todos'}</p>
     </section>
   );
 }

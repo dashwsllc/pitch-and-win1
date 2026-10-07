@@ -1,3 +1,11 @@
+import { brasiliaDateKey } from '@/lib/brasilia-time'
+
+// Open the same purchase-day window used by dashboard totals, including UTC-midnight sales.
+export function saleDashboardPath(createdAt: string) {
+  const day = brasiliaDateKey(createdAt)
+  return `/?periodo=intervalo&de=${day}&ate=${day}`
+}
+
 // Intl formatters are expensive to construct and these run once per row on every
 // render of the sales lists, so they are built a single time.
 const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })

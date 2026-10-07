@@ -28,6 +28,18 @@
 .arena-person-identity > span {
   flex-shrink: 0;
 }
+.arena-ranking-list {
+  max-height: 520px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #70637e #ffffff08;
+  padding-right: 4px;
+}
+.arena-ranking-list:focus-visible {
+  outline: 2px solid #ff8e5d;
+  outline-offset: 3px;
+  border-radius: 10px;
+}
 .arena-person-stats {
   overflow-wrap: anywhere;
 }

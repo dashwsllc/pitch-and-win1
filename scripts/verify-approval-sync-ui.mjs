@@ -25,7 +25,7 @@ const FIXED = new Date('2026-09-29T18:00:00Z') // 15:00 em Brasília, uma terça
 const normalizar = (s) => s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim()
 
 const { server, url } = await startServer(path.resolve(argv.dist))
-const navegador = await chromium.launch({ headless: true })
+const navegador = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
 
 /**
  * Home aberta só com as vendas pendentes dadas e mais nada (sem abordagens nem calls: o feed só tem o que o teste cria).
@@ -107,6 +107,10 @@ await teste('compra de sexta aprovada agora: o aviso e o feed aparecem, os totai
     // O período é o da compra (regra de 23/09): o total de HOJE não muda, e o aviso explica por quê.
     assert.ok((await texto('Total de Vendas')).includes('R$ 0,00'), 'o total de hoje continua pela data da compra')
     assert.equal((await regiao('Quantidade de Vendas').locator('p').first().innerText()).trim(), '0')
+    await aviso.getByRole('link', { name: 'Ver dia da compra' }).click()
+    await expect(pagina).toHaveURL(/periodo=intervalo&de=2026-09-25&ate=2026-09-25/)
+    await expect(regiao('Total de Vendas')).toContainText('R$ 500,00')
+    await expect(regiao('Quantidade de Vendas').locator('p').first()).toHaveText('1')
     assert.deepEqual(erros, [])
   } finally {
     await fechar()
