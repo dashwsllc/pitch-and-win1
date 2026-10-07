@@ -82,3 +82,8 @@ de ler os logs reais.
   guia de setup nunca foi rodado).
 - Token do Usuário de Sistema: nunca gerado com sucesso (bloqueado pelos itens do Passo 2).
 - Conta de anúncios CA 2 - MILHAO: desabilitada por pagamento em 2026-09-29.
+- `supabase/functions/_shared/meta-lead-ingest.ts` agora usa Jev (TypeSafe) pra extrair
+  nome/telefone/email do `field_data` do lead, em vez de casamento exato de rótulo — ver
+  `meta-lead-extract.ts`. Precisa do secret `TYPESAFE_API_KEY` em Edge Functions → Secrets pra
+  ativar; sem ele (ou se a API falhar), cai sozinho pro casamento exato de sempre, sem quebrar o
+  ingest de leads.
