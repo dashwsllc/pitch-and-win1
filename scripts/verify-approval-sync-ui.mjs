@@ -31,7 +31,7 @@ const navegador = await chromium.launch({ headless: true, channel: process.env.P
  * Home aberta só com as vendas pendentes dadas e mais nada (sem abordagens nem calls: o feed só tem o que o teste cria).
  * `venda` é uma venda ou uma lista delas; `papel` é o de quem olha a tela.
  */
-async function abrir(venda, { papel = 'super_admin', caminho = '/?periodo=hoje' } = {}) {
+async function abrir(venda, { papel = 'super_admin', caminho = '/', periodo = 'hoje' } = {}) {
   const f = buildFixtures({ role: papel, now: FIXED })
   const modelo = f.tables.vendas[0]
   f.tables.vendas = [venda].flat().map((v) => ({ ...modelo, ...v, approval_status: 'pendente', reviewed_at: null }))
@@ -56,6 +56,14 @@ async function abrir(venda, { papel = 'super_admin', caminho = '/?periodo=hoje' 
   pagina.on('pageerror', (e) => erros.push(`pageerror: ${String(e.message).slice(0, 220)}`))
   await pagina.goto(url + caminho, { waitUntil: 'load' })
   await expect(pagina.getByRole('heading', { level: 1, name: caminho.startsWith('/executive') ? 'Central Executive' : 'Visão geral' })).toBeVisible()
+  // A Home sempre abre nos últimos 30 dias; estes testes são do dia, então escolhem "Hoje" depois que ela abre.
+  if (!caminho.startsWith('/executive') && periodo) {
+    await expect(pagina.getByRole('region', { name: 'Total de Vendas', exact: true })).toBeVisible()
+    const resposta = pagina.waitForResponse((r) => r.url().includes('/rest/v1/rpc/dashboard_home_sales') && !(r.request().postData() ?? '').includes('"p_late":true'))
+    await pagina.getByRole('radio', { name: 'Hoje', exact: true }).click()
+    await resposta
+    await new Promise((resolver) => setTimeout(resolver, 400))
+  }
   const regiao = (nome) => pagina.getByRole('region', { name: nome, exact: true })
   const texto = async (nome) => normalizar(await regiao(nome).innerText())
   // O momento exato em que o executivo aprova: o banco grava reviewed_at e avisa o painel (Realtime).

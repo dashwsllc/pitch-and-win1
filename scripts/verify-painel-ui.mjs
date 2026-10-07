@@ -79,12 +79,13 @@ const percentual = (c) => `${Number(c.toFixed(1)).toLocaleString('pt-BR', { maxi
 const { server, url } = await startServer(path.resolve(argv.dist))
 const navegador = await chromium.launch({ headless: true })
 
-// A Home abre nos últimos 30 dias (vendas anteriores à vista); quase todos os testes foram escritos para o recorte de
-// um dia só (por hora, "na última hora"), então pedem "hoje" no endereço. O teste do filtro e o das vendas anteriores
-// abrem em '/' de propósito, para provar o padrão.
-const HOJE = '/?periodo=hoje'
+// A Home SEMPRE abre nos últimos 30 dias numa carga nova da página (vendas anteriores à vista), mesmo que o endereço traga
+// outro filtro. Quase todos os testes foram escritos para o recorte de um dia só (por hora, "na última hora"), então
+// `periodo` (padrão 'hoje') escolhe esse recorte clicando no filtro depois que a Home abre, como a pessoa faria. Passe
+// `periodo: null` para ficar no padrão da abertura (30 dias): o teste do filtro, o da primeira pintura e os de animação.
+const ROTULO_DO_PERIODO = { hoje: 'Hoje', ontem: 'Ontem', '7dias': '7 dias', '14dias': '14 dias', '30dias': '30 dias', all: 'Todo o período' }
 
-async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 'reduce', fixtures, ws = 'normal', caminho = HOJE, comSessao = true, latencia = 15, esperarTitulo = true } = {}) {
+async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 'reduce', fixtures, ws = 'normal', caminho = '/', periodo = 'hoje', comSessao = true, latencia = 15, esperarTitulo = true } = {}) {
   const contexto = await navegador.newContext({
     viewport: { width: largura, height: altura },
     deviceScaleFactor: 1,
@@ -129,6 +130,15 @@ async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 
   })
   await pagina.goto(url + caminho, { waitUntil: 'load' })
   if (esperarTitulo) await expect(pagina.getByRole('heading', { level: 1, name: 'Visão geral' })).toBeVisible()
+  if (esperarTitulo && periodo) {
+    const radio = pagina.getByRole('radio', { name: ROTULO_DO_PERIODO[periodo], exact: true })
+    await expect(regiao(pagina, 'Total de Vendas')).toBeVisible({ timeout: 20_000 })
+    const resposta = pagina.waitForResponse((r) => r.url().includes('/rest/v1/rpc/dashboard_home_sales') && !(r.request().postData() ?? '').includes('"p_late":true'), { timeout: 20_000 })
+    await radio.click()
+    await expect(radio).toHaveAttribute('aria-checked', 'true')
+    await resposta
+    await new Promise((resolver) => setTimeout(resolver, 400))
+  }
   return { contexto, pagina, mock, f, erros, pedidosDeVendas, pedidosDeAprovacoes, pedidosDeCalls, fechar: () => contexto.close() }
 }
 
@@ -238,7 +248,7 @@ await teste('login (/auth) e demais telas não ganham o escopo do painel', async
 })
 
 await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e o filtro vive na URL', async () => {
-  const { pagina, f, erros, pedidosDeVendas, pedidosDeAprovacoes, pedidosDeCalls, fechar } = await abrir({ caminho: '/' })
+  const { pagina, f, erros, pedidosDeVendas, pedidosDeAprovacoes, pedidosDeCalls, fechar } = await abrir({ periodo: null })
   try {
     // O primeiro é o padrão (30 dias): sem clique e sem gravar nada no endereço. Os demais saem por clique.
     const nomes = { '30dias': '30 dias', hoje: 'Hoje', ontem: 'Ontem', '7dias': '7 dias', '14dias': '14 dias', all: 'Todo o período' }
@@ -302,23 +312,30 @@ await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e
     const e = esperado(f, 'custom')
     await expect(regiao(pagina, 'Total de Vendas')).toContainText(normalizar(money(e.total)))
 
-    // Um link com intervalo invertido não filtra em silêncio: a mensagem vermelha diz o que vale enquanto isso.
+    // Navegação DENTRO da visita (o botão voltar do navegador, por exemplo) respeita o filtro do endereço, e um intervalo
+    // invertido não filtra em silêncio: a mensagem vermelha diz o que vale enquanto isso.
     const origem = new URL(pagina.url()).origin
-    await pagina.goto(`${origem}/?periodo=intervalo&de=2026-09-10&ate=2026-09-01`)
+    const irPara = (caminho) => pagina.evaluate((c) => { history.pushState({}, '', c); window.dispatchEvent(new PopStateEvent('popstate')) }, caminho)
+    await irPara('/?periodo=intervalo&de=2026-09-10&ate=2026-09-01')
     await expect(pagina.getByRole('alert').filter({ hasText: 'A data inicial deve ser anterior ou igual à data final. Enquanto isso, valem os últimos 7 dias.' })).toBeVisible()
     const invertido = esperado(f, 'custom', { start: '2026-09-10', end: '2026-09-01' })
     await expect(regiao(pagina, 'Total de Vendas')).toContainText(normalizar(money(invertido.total)))
     assert.equal(invertido.total, esperado(f, '7dias').total, 'o que vale é o mesmo recorte dos últimos 7 dias')
-    await pagina.goto(`${origem}/?periodo=intervalo&de=2026-09-01&ate=2026-09-15`)
+    await irPara('/?periodo=intervalo&de=2026-09-01&ate=2026-09-15')
     await expect(pagina.getByText(/Período aplicado: 01\/09\/2026 a 15\/09\/2026/)).toBeVisible()
 
-    // Limpar filtros volta ao padrão e apaga o endereço; link compartilhado abre com o filtro.
+    // Limpar filtros volta ao padrão e apaga o endereço.
     await pagina.getByRole('button', { name: 'Limpar filtros' }).click()
     await expect(pagina.getByRole('radio', { name: '30 dias', exact: true })).toHaveAttribute('aria-checked', 'true')
     assert.equal(new URL(pagina.url()).search, '')
-    await pagina.goto(`${new URL(pagina.url()).origin}/?periodo=ontem&outro=1`)
-    await expect(pagina.getByRole('radio', { name: 'Ontem', exact: true })).toHaveAttribute('aria-checked', 'true')
+    // Uma carga NOVA da página (link salvo, colado ou F5) começa sempre nos 30 dias, mesmo com um filtro no endereço, e o
+    // limpa; os outros parâmetros do endereço ficam.
+    await pagina.goto(`${origem}/?periodo=ontem&outro=1`)
+    await expect(pagina.getByRole('radio', { name: '30 dias', exact: true })).toHaveAttribute('aria-checked', 'true')
+    assert.equal(new URL(pagina.url()).searchParams.has('periodo'), false, 'o filtro velho do endereço foi limpo')
+    assert.equal(new URL(pagina.url()).searchParams.get('outro'), '1', 'preserva os outros parâmetros do endereço')
     await pagina.getByRole('radio', { name: '7 dias', exact: true }).click()
+    assert.equal(new URL(pagina.url()).searchParams.get('periodo'), '7dias')
     assert.equal(new URL(pagina.url()).searchParams.get('outro'), '1', 'preserva os outros parâmetros do endereço')
     assert.deepEqual(erros, [])
   } finally {
@@ -664,7 +681,7 @@ await teste('ao vivo: um evento novo muda KPI, gráfico, feed e tabela juntos, s
 })
 
 await teste('primeira pintura do feed não pisca e a carga inicial mostra o carregando do painel', async () => {
-  const { pagina, erros, fechar } = await abrir({ latencia: 600 })
+  const { pagina, erros, fechar } = await abrir({ latencia: 600, periodo: null })
   try {
     await expect(pagina.getByRole('status').filter({ hasText: 'Carregando os indicadores…' })).toBeAttached()
     await expect(regiao(pagina, 'Total de Vendas')).toBeVisible({ timeout: 20_000 })
@@ -837,18 +854,18 @@ await teste('acessibilidade: papéis, rótulos, anéis, tempos e foco visível',
 })
 
 await teste('movimento: com preferência de menos movimento os números aparecem exatos; sem ela, contam até o exato', async () => {
-  const reduzido = await abrir({ movimento: 'reduce' })
+  const reduzido = await abrir({ movimento: 'reduce', periodo: null })
   try {
     const f = reduzido.f
-    const e = esperado(f, 'hoje')
+    const e = esperado(f, '30dias')
     assert.ok((await textoDe(reduzido.pagina, 'Quantidade de Vendas')).includes(inteiro(e.quantidade)))
     assert.equal(await reduzido.pagina.evaluate(() => getComputedStyle(document.querySelector('.painel-numero-subiu')).animationName), 'none', 'sem animação com prefers-reduced-motion')
   } finally {
     await reduzido.fechar()
   }
-  const animado = await abrir({ movimento: 'no-preference' })
+  const animado = await abrir({ movimento: 'no-preference', periodo: null })
   try {
-    const e = esperado(animado.f, 'hoje')
+    const e = esperado(animado.f, '30dias')
     await expect(regiao(animado.pagina, 'Quantidade de Vendas')).toContainText(inteiro(e.quantidade), { timeout: 5000 })
     await expect(regiao(animado.pagina, 'Total de Vendas')).toContainText(normalizar(money(e.total)), { timeout: 5000 })
     assert.notEqual(await animado.pagina.evaluate(() => getComputedStyle(document.querySelector('.painel-numero-subiu')).animationName), 'none', 'com movimento o número "sobe"')

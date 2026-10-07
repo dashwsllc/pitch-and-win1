@@ -214,6 +214,56 @@ await teste('quem não é Executive vê o time todo: vendas anteriores, totais e
   }
 })
 
+await teste('a Visão geral SEMPRE abre nos últimos 30 dias: recarregar (F5) ou abrir um endereço salvo com outro filtro volta aos 30 dias', async () => {
+  const { pagina, regiao, quantidade, erros, fechar } = await abrir(VENDAS_REAIS)
+  try {
+    await pagina.getByRole('radio', { name: 'Hoje', exact: true }).click()
+    assert.equal(new URL(pagina.url()).searchParams.get('periodo'), 'hoje')
+    await expect(regiao('Quantidade de Vendas').locator('p').first()).toHaveText('0')
+    // Recarregar: a pessoa tinha escolhido "Hoje" e antes continuava vendo zeros depois do F5.
+    await pagina.reload()
+    await expect(pagina.getByRole('radio', { name: '30 dias', exact: true })).toHaveAttribute('aria-checked', 'true')
+    await expect(regiao('Total de Vendas')).toContainText('R$ 6.764,00')
+    assert.equal(await quantidade(), '4')
+    assert.equal(new URL(pagina.url()).search, '', 'o filtro velho saiu do endereço')
+    // Endereço salvo (favorito, histórico, link colado) com qualquer filtro: mesma coisa, e os outros parâmetros ficam.
+    const origem = new URL(pagina.url()).origin
+    for (const salvo of ['?periodo=hoje', '?periodo=ontem&outro=1', '?periodo=intervalo&de=2026-09-01&ate=2026-09-15', '?periodo=tudo']) {
+      await pagina.goto(`${origem}/${salvo}`)
+      await expect(pagina.getByRole('radio', { name: '30 dias', exact: true })).toHaveAttribute('aria-checked', 'true')
+      await expect(regiao('Total de Vendas')).toContainText('R$ 6.764,00')
+      const busca = new URL(pagina.url()).searchParams
+      assert.equal(busca.has('periodo') || busca.has('de') || busca.has('ate'), false, `o filtro de ${salvo} foi limpo`)
+    }
+    assert.deepEqual(erros, [])
+  } finally {
+    await fechar()
+  }
+})
+
+await teste('a escolha feita na tela vale durante a visita: sair da Home e voltar pelo histórico mantém o período; entrar pelo menu abre em 30 dias', async () => {
+  const { pagina, regiao, erros, fechar } = await abrir(VENDAS_REAIS)
+  try {
+    await pagina.getByRole('radio', { name: '7 dias', exact: true }).click()
+    await expect(pagina.getByRole('radio', { name: '7 dias', exact: true })).toHaveAttribute('aria-checked', 'true')
+    await pagina.getByRole('link', { name: 'Ranking', exact: true }).first().click()
+    await expect(pagina).toHaveURL(/\/ranking/)
+    await pagina.goBack()
+    await expect(pagina.getByRole('heading', { level: 1, name: 'Visão geral' })).toBeVisible()
+    await expect(pagina.getByRole('radio', { name: '7 dias', exact: true })).toHaveAttribute('aria-checked', 'true')
+    // Entrar na Home pelo menu (logo ou "Dashboard") abre no padrão, sem filtro carregado do endereço.
+    await pagina.getByRole('link', { name: 'Ranking', exact: true }).first().click()
+    await expect(pagina).toHaveURL(/\/ranking/)
+    await pagina.getByRole('link', { name: 'Dashboard', exact: true }).first().click()
+    await expect(pagina.getByRole('heading', { level: 1, name: 'Visão geral' })).toBeVisible()
+    await expect(pagina.getByRole('radio', { name: '30 dias', exact: true })).toHaveAttribute('aria-checked', 'true')
+    await expect(regiao('Total de Vendas')).toContainText('R$ 6.764,00')
+    assert.deepEqual(erros, [])
+  } finally {
+    await fechar()
+  }
+})
+
 await navegador.close()
 server.close()
 const falhas = resultados.filter((r) => !r.ok)
