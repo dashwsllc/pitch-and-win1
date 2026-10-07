@@ -10,7 +10,10 @@ export interface VendaLinha {
   id: string
   nome_produto: string
   valor_venda: number
+  /** Quando foi comprada: é ela que define o período dos totais e dos gráficos. */
   created_at: string
+  /** Quando o executivo aprovou. Vazia só em registro antigo, importado sem revisão: vale a hora da compra. */
+  reviewed_at?: string | null
 }
 
 /** Abordagem do período. `mostrou_ia` é a resposta obrigatória do formulário ("Mostrou a IA funcionando?"). */
@@ -26,15 +29,33 @@ export interface CallLinha {
   feita_em: string
 }
 
-/** Item do feed ao vivo: o mais novo primeiro. */
+/**
+ * Item do feed ao vivo: o mais novo primeiro. Numa venda, `em` é a hora da aprovação (o que aconteceu agora) e
+ * `compraEm` só existe quando a compra foi em outro dia.
+ */
 export type AtividadeItem =
-  | { tipo: 'venda'; chave: string; em: string; produto: string; valor: number }
+  | { tipo: 'venda'; chave: string; em: string; produto: string; valor: number; compraEm?: string }
   | { tipo: 'abordagem'; chave: string; em: string; mostrouIa: boolean }
 
 const QUINZE_MIN = 15 * 60 * 1000
 const UMA_HORA = 60 * 60 * 1000
 
 const instanteValido = (iso: string) => Number.isFinite(Date.parse(iso))
+
+/** Um registro com hora: venda (compra e, depois, aprovação) ou abordagem (só a hora do registro). */
+interface Datado {
+  created_at: string
+  reviewed_at?: string | null
+}
+
+/**
+ * Quando o registro "aconteceu" para os sinais ao vivo (feed, "na última hora", "última às"): a aprovação, se a venda
+ * já foi aprovada, senão a hora do registro. O período dos totais e dos gráficos continua sendo o da compra
+ * (created_at); só o que a tela anuncia como "agora" segue a aprovação.
+ */
+export function instanteDoRegistro(l: Datado): string {
+  return l.reviewed_at && instanteValido(l.reviewed_at) ? l.reviewed_at : l.created_at
+}
 
 /**
  * Quando uma call concluída aconteceu: a hora marcada (scheduled_at); se ela foi fechada antes disso (um repasse
@@ -171,31 +192,32 @@ export function serieDeCalls(intervalos: IntervaloDoPainel[]): PontoDaSerie[] {
 }
 
 
-/** Registros com horário a partir de `agora − 1 h`. */
-export function contarNaUltimaHora(linhas: AbordagemLinha[], agoraIso: string): number {
+/** Registros que aconteceram a partir de `agora − 1 h` (numa venda, a aprovação: ver instanteDoRegistro). */
+export function contarNaUltimaHora(linhas: Datado[], agoraIso: string): number {
   const limite = Date.parse(agoraIso) - UMA_HORA
   let total = 0
-  for (const l of linhas) if (Date.parse(l.created_at) >= limite) total++
+  for (const l of linhas) if (Date.parse(instanteDoRegistro(l)) >= limite) total++
   return total
 }
 
-/** Soma dos valores das vendas a partir de `agora − 1 h`. */
+/** Soma dos valores das vendas aprovadas a partir de `agora − 1 h`. */
 export function somarNaUltimaHora(vendas: VendaLinha[], agoraIso: string): number {
   const limite = Date.parse(agoraIso) - UMA_HORA
   let soma = 0
-  for (const v of vendas) if (Date.parse(v.created_at) >= limite) soma += Number(v.valor_venda)
+  for (const v of vendas) if (Date.parse(instanteDoRegistro(v)) >= limite) soma += Number(v.valor_venda)
   return soma
 }
 
-/** Horário (ISO) do registro mais recente, ou null sem registros. */
-export function ultimoInstante(linhas: AbordagemLinha[]): string | null {
+/** Horário (ISO) do registro mais recente (numa venda, o da aprovação), ou null sem registros. */
+export function ultimoInstante(linhas: Datado[]): string | null {
   let melhor: string | null = null
   let melhorMs = -Infinity
   for (const l of linhas) {
-    const ms = Date.parse(l.created_at)
+    const instante = instanteDoRegistro(l)
+    const ms = Date.parse(instante)
     if (ms > melhorMs) {
       melhorMs = ms
-      melhor = l.created_at
+      melhor = instante
     }
   }
   return melhor
@@ -222,10 +244,24 @@ export function passoDaSerie(serie: Array<{ rotulo: string }>, porHora: boolean)
   return 'mês'
 }
 
-/** União de vendas e abordagens, do mais novo para o mais antigo, cortada em `limite`. */
-export function montarAtividade(vendas: VendaLinha[], abordagens: AbordagemLinha[], limite = 9): AtividadeItem[] {
+/** A venda como item do feed: na hora da aprovação, dizendo quando foi a compra se ela foi em outro dia. */
+function eventoDeVenda(v: VendaLinha): AtividadeItem {
+  const em = instanteDoRegistro(v)
+  const item: AtividadeItem = { tipo: 'venda', chave: `v${v.id}`, em, produto: v.nome_produto, valor: Number(v.valor_venda) }
+  if (instanteValido(v.created_at) && instanteValido(em) && brasiliaDateKey(v.created_at) !== brasiliaDateKey(em)) item.compraEm = v.created_at
+  return item
+}
+
+/**
+ * União de vendas e abordagens, do mais novo para o mais antigo, cortada em `limite`. As vendas entram pela hora da
+ * aprovação, e `compradasAntes` (aprovadas no período, mas compradas antes dele) também: aprovar é um acontecimento
+ * de agora, seja qual for o dia da compra. A mesma venda nas duas listas aparece uma vez.
+ */
+export function montarAtividade(vendas: VendaLinha[], abordagens: AbordagemLinha[], limite = 9, compradasAntes: VendaLinha[] = []): AtividadeItem[] {
+  const vendasDoFeed = new Map<string, VendaLinha>()
+  for (const v of [...vendas, ...compradasAntes]) vendasDoFeed.set(v.id, v)
   const itens: AtividadeItem[] = [
-    ...vendas.map((v): AtividadeItem => ({ tipo: 'venda', chave: `v${v.id}`, em: v.created_at, produto: v.nome_produto, valor: Number(v.valor_venda) })),
+    ...[...vendasDoFeed.values()].map(eventoDeVenda),
     ...abordagens.map((a): AtividadeItem => ({ tipo: 'abordagem', chave: `a${a.id}`, em: a.created_at, mostrouIa: a.mostrou_ia === true })),
   ].filter((i) => instanteValido(i.em))
   return itens.sort((x, y) => Date.parse(y.em) - Date.parse(x.em) || (x.chave < y.chave ? 1 : -1)).slice(0, limite)

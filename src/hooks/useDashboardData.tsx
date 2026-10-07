@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
-import { callsDoPeriodo, type CallLinha } from '@/painel/lib/visao'
+import { callsDoPeriodo, type CallLinha, type VendaLinha } from '@/painel/lib/visao'
 import {
   buildDashboardSeries,
   createDefaultDashboardCustomRange,
@@ -37,7 +37,13 @@ interface DashboardMetrics {
 // o que não cabe num total: série por hora, feed ao vivo, "na última hora" e a divisão das abordagens pela
 // demonstração da IA (campo obrigatório do formulário).
 export interface DashboardRows {
-  vendas: Array<{ id: string; nome_produto: string; valor_venda: number; created_at: string }>
+  // Vendas aprovadas COMPRADAS no período (created_at): é o que dá os totais e os gráficos. reviewed_at é a hora da
+  // aprovação, que o feed, o "na última hora" e a "última às" usam.
+  vendas: VendaLinha[]
+  // Vendas aprovadas NO período (reviewed_at) cuja compra veio ANTES dele. Não entram nos totais (a venda conta no dia
+  // da compra, regra de 23/09: aprovar não faz uma compra antiga virar venda nova), mas aprovar é algo que acabou de
+  // acontecer: o feed as mostra e um aviso diz onde elas foram contadas.
+  compradasAntes: VendaLinha[]
   abordagens: Array<{ id: string; created_at: string; mostrou_ia: boolean }>
   // Calls feitas no período: qualificação ou fechamento concluída no CRM (com resultado: venda, perda, repasse,
   // avançou) e sem cancelamento, no momento em que aconteceu (momentoDaCall: a hora marcada, ou a do fechamento se
@@ -65,7 +71,7 @@ export function useDashboardData(
     vendasMes: [],
     produtosMaisVendidos: []
   })
-  const [rows, setRows] = useState<DashboardRows>({ vendas: [], abordagens: [], calls: [] })
+  const [rows, setRows] = useState<DashboardRows>({ vendas: [], compradasAntes: [], abordagens: [], calls: [] })
   const [loading, setLoading] = useState(true)
   // Algum pedido em andamento (inclusive os de fundo, que não mostram "carregando").
   const [fetching, setFetching] = useState(false)
@@ -96,11 +102,13 @@ export function useDashboardData(
 
       // Executives see the consolidated commercial operation. Sellers see only
       // their own data. RLS remains the final source of authorization.
-      const [vendas, abordagens, calls] = await Promise.all([
+      const inicioDoPeriodo = period.start
+      const fimDoPeriodo = period.end
+      const [vendas, compradasAntes, abordagens, calls] = await Promise.all([
         fetchAllPages((from, to) => {
           let request = supabase
             .from('vendas')
-            .select('id, nome_produto, valor_venda, created_at')
+            .select('id, nome_produto, valor_venda, created_at, reviewed_at')
             .eq('approval_status', 'aprovada')
           if (period.start && period.end) {
             request = request
@@ -111,6 +119,23 @@ export function useDashboardData(
           if (!isExecutive) request = request.eq('user_id', userId)
           return request.range(from, to)
         }),
+        // Aprovadas NESTE período, compradas ANTES dele (ver DashboardRows.compradasAntes). Em "todo o período" não há
+        // compra anterior: nada a buscar.
+        inicioDoPeriodo && fimDoPeriodo
+          ? fetchAllPages((from, to) => {
+              let request = supabase
+                .from('vendas')
+                .select('id, nome_produto, valor_venda, created_at, reviewed_at')
+                .eq('approval_status', 'aprovada')
+                .gte('reviewed_at', inicioDoPeriodo.toISOString())
+                .lt('reviewed_at', fimDoPeriodo.toISOString())
+                .lt('created_at', inicioDoPeriodo.toISOString())
+                .order('reviewed_at')
+                .order('id')
+              if (!isExecutive) request = request.eq('user_id', userId)
+              return request.range(from, to)
+            })
+          : Promise.resolve([]),
         fetchAllPages((from, to) => {
           let request = supabase
             .from('abordagens')
@@ -188,13 +213,16 @@ export function useDashboardData(
         vendasMes,
         produtosMaisVendidos
       }
+      const comoLinha = (venda: { id: string; nome_produto: string; valor_venda: number | string; created_at: string; reviewed_at: string | null }): VendaLinha => ({
+        id: venda.id,
+        nome_produto: venda.nome_produto,
+        valor_venda: Number(venda.valor_venda),
+        created_at: venda.created_at,
+        reviewed_at: venda.reviewed_at,
+      })
       const nextRows: DashboardRows = {
-        vendas: (vendas ?? []).map(venda => ({
-          id: venda.id,
-          nome_produto: venda.nome_produto,
-          valor_venda: Number(venda.valor_venda),
-          created_at: venda.created_at,
-        })),
+        vendas: (vendas ?? []).map(comoLinha),
+        compradasAntes: (compradasAntes ?? []).map(comoLinha),
         abordagens: (abordagens ?? []).map(abordagem => ({
           id: abordagem.id,
           created_at: abordagem.created_at,

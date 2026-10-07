@@ -49,6 +49,8 @@ export function buildFixtures({ sales = 900, approaches = 3000, days = 60, role 
   const pick = (arr) => arr[Math.floor(r() * arr.length)]
   const iso = (d) => new Date(d).toISOString()
   const nowMs = now.getTime()
+  // Uma venda nunca é aprovada no futuro: a aprovação vem depois da compra, mas nunca depois de "agora" (com folga de 2 min).
+  const aprovadaEm = (compraMs, depoisMs) => Math.max(compraMs, Math.min(compraMs + depoisMs, nowMs - 120_000))
   const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
   const names = ['Ana Souza', 'Bruno Lima', 'Carla Dias', 'Diego Rocha', 'Elisa Prado', 'Felipe Nunes', 'Gabi Torres', 'Hugo Matos', 'Iara Melo', 'João Pires', 'Karen Alves', 'Lucas Reis']
@@ -83,7 +85,7 @@ export function buildFixtures({ sales = 900, approaches = 3000, days = 60, role 
     const status = r() < 0.86 ? 'aprovada' : r() < 0.7 ? 'pendente' : 'rejeitada'
     vendas.push({
       id: uuid(10_000 + i), user_id: seller.id, nome_produto: product.nome, valor_venda: product.valor,
-      approval_status: status, created_at: iso(at), updated_at: iso(at), reviewed_at: status === 'pendente' ? null : iso(at + 3600_000),
+      approval_status: status, created_at: iso(at), updated_at: iso(at), reviewed_at: status === 'pendente' ? null : iso(aprovadaEm(at, 3600_000)),
       nome_comprador: `Cliente ${i}`, email_comprador: `cliente${i}@example.test`, whatsapp_comprador: '11999990000',
       commission_amount: product.valor * 0.1, withdrawn: false, withdrawal_id: null, consideracoes_gerais: null,
     })
@@ -93,7 +95,7 @@ export function buildFixtures({ sales = 900, approaches = 3000, days = 60, role 
     const seller = pick(closers); const product = pick(products); const at = nowMs - Math.floor(r() * 10 * 3600_000)
     vendas.push({
       id: uuid(20_000 + i), user_id: seller.id, nome_produto: product.nome, valor_venda: product.valor, approval_status: 'aprovada',
-      created_at: iso(at), updated_at: iso(at), reviewed_at: iso(at + 600_000), nome_comprador: `Hoje ${i}`, email_comprador: `hoje${i}@example.test`,
+      created_at: iso(at), updated_at: iso(at), reviewed_at: iso(aprovadaEm(at, 600_000)), nome_comprador: `Hoje ${i}`, email_comprador: `hoje${i}@example.test`,
       whatsapp_comprador: '11988880000', commission_amount: product.valor * 0.1, withdrawn: false, withdrawal_id: null, consideracoes_gerais: null,
     })
   }

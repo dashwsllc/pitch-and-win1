@@ -20,6 +20,7 @@ import { useRankingDataWithMock } from '@/hooks/useRankingDataWithMock'
 import { useRoles } from '@/hooks/useRoles'
 import { resolveDashboardPeriod } from '@/lib/dashboard-period'
 import { refreshDashboardData } from '@/lib/sync'
+import { AvisoDeAprovacoes } from '@/painel/components/AvisoDeAprovacoes'
 import { Cabecalho } from '@/painel/components/Cabecalho'
 import { CartaoDoPodio } from '@/painel/components/CartaoDoPodio'
 import { ChecklistDoDia } from '@/painel/components/ChecklistDoDia'
@@ -102,7 +103,7 @@ export default function Dashboard() {
   }, [loadedPeriod, filtro.valor.periodo, filtro.intervalo, agora])
 
   // Tudo abaixo sai das mesmas linhas que deram os totais (rows e metrics chegam juntos, na mesma carga). Uma linha do
-  // tempo só para os três gráficos: as colunas de vendas, as de abordagens (com a divisão pela IA) e o de abordagens e calls.
+  // tempo só para os três gráficos: vendas, colunas de abordagens (com a divisão pela IA) e abordagens e calls.
   const intervalos = useMemo(() => montarIntervalos(periodo, umDiaSo, rows.vendas, rows.abordagens, rows.calls), [periodo, umDiaSo, rows])
   const pontosDeCalls = useMemo(() => serieDeCalls(intervalos), [intervalos])
   const passo = passoDaSerie(intervalos, umDiaSo)
@@ -110,10 +111,9 @@ export default function Dashboard() {
   const receitaNaUltimaHora = useMemo(() => somarNaUltimaHora(rows.vendas, agora), [rows.vendas, agora])
   const ultimaVenda = useMemo(() => ultimoInstante(rows.vendas), [rows.vendas])
   const divisao = useMemo(() => dividirAbordagens(rows.abordagens), [rows.abordagens])
-  const atividade = useMemo(() => montarAtividade(rows.vendas, rows.abordagens), [rows])
+  const atividade = useMemo(() => montarAtividade(rows.vendas, rows.abordagens, 9, rows.compradasAntes), [rows])
   const produtos = useMemo(() => barrasDeProdutos(metrics.produtosMaisVendidos, metrics.totalVendas), [metrics.produtosMaisVendidos, metrics.totalVendas])
-  // Os pódios do mês, na ordem que o servidor devolve (a mesma da tela Ranking): Closers pela receita aprovada, SDRs pelos
-  // repasses para Closers.
+  // A mesma ordem e as mesmas janelas do Ranking: Closers pela receita do mês, SDRs pelos repasses acumulados.
   const podioDosClosers = useMemo(
     () => ranking.slice(0, 3).map((r, i) => ({ posicao: i + 1, chave: r.user_id, nome: r.name, valor: r.totalVendas, apoio: pluralizar(r.quantidadeVendas, 'venda', 'vendas') })),
     [ranking],
@@ -165,8 +165,10 @@ export default function Dashboard() {
 
       {/* Montada desde o começo: as consultas dos blocos independentes saem em paralelo com a das métricas. */}
       <div aria-busy={recarregando} className={`${primeiraCarga || falhouAntesDeCarregar ? 'hidden' : 'grid'} gap-4 md:grid-cols-2 xl:grid-cols-12`}>
+        {/* Aprovar uma compra de outro dia não mexe nos totais do período (contam na data da compra): o aviso mostra onde ela foi parar. */}
+        <AvisoDeAprovacoes vendas={rows.compradasAntes} className={`md:col-span-2 xl:col-span-12 ${esmaecer}`} />
         <section data-dashboard-section="commercial-indicators" aria-label="Indicadores comerciais" className="contents">
-          {/* Linha 1: destaque · abordagens · taxa sobre meta (5 · 4 · 3). */}
+          {/* Indicadores na organização existente: vendas, abordagens e conversão sobre meta (5 · 4 · 3). */}
           <KpiCard
             destaque
             rotulo="Quantidade de Vendas"
@@ -186,8 +188,6 @@ export default function Dashboard() {
             }
             className={`md:col-span-2 xl:col-span-5 ${esmaecer}`}
           >
-            {/* O modelo do gráfico de abordagens e calls, em verde (a cor das vendas no feed): área, pico e último ponto
-                escritos, média e a mira que acompanha os outros gráficos da mesma linha do tempo. */}
             <div className="mt-4">
               <AreaKpi
                 id="vendas"
@@ -201,8 +201,8 @@ export default function Dashboard() {
               />
             </div>
           </KpiCard>
+          {/* Abordagens do mesmo recorte, com a divisão pela IA. */}
           <KpiCard rotulo="Abordagens" icone={UsersRoundIcon} valor={<NumeroAnimado valor={metrics.abordagens} />} className={`xl:col-span-4 ${esmaecer}`}>
-            {/* Altura maior que a das vendas: o número é menor, e assim as duas molduras terminam alinhadas no xl. */}
             <div className="mt-4">
               <ColunasKpi
                 id="abordagens"
@@ -225,7 +225,6 @@ export default function Dashboard() {
               />
             </div>
           </KpiCard>
-          {/* Os dois indicadores de anel dividem uma coluna: cada um ganha largura para o número e a frase. */}
           <div className="grid grid-rows-2 gap-4 xl:col-span-3">
             <KpiCard
               rotulo="Conversão"
@@ -259,7 +258,7 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Os outros indicadores do painel antigo, numa segunda linha (6 · 3 · 3). */}
+          {/* Valores do período e posição no ranking (6 · 3 · 3). */}
           <KpiCard
             rotulo="Total de Vendas"
             icone={CircleDollarSignIcon}
@@ -299,8 +298,7 @@ export default function Dashboard() {
           <MetasDeTurno data={today} className="md:col-span-2 xl:col-span-6" />
         </section>
 
-        {/* O funil logo depois da abordagem: as calls feitas (área) contra as abordagens (linha), na mesma linha do tempo
-            dos indicadores. Ao lado, os dois pódios do mês, compactos e empilhados. */}
+        {/* Calls e abordagens compartilham o período dos indicadores; os dois pódios mantêm a janela do Ranking. */}
         <Bloco
           titulo="Abordagens e calls"
           descricao={
@@ -309,13 +307,13 @@ export default function Dashboard() {
               : 'Abordagens registradas e calls concluídas no CRM, ao longo do período.'
           }
           dataSecao="commercial-evolution"
-          className={`md:col-span-2 xl:col-span-8 ${esmaecer}`}
+          className={`flex flex-col md:col-span-2 xl:col-span-8 ${esmaecer}`}
         >
-          {/* Mais alto que o padrão: ocupa a altura dos dois pódios ao lado, sem vão embaixo. */}
           <SeriesChart
             foco="calls"
             pontos={pontosDeCalls}
-            altura={344}
+            altura={400}
+            preencher
             textos={{
               principal: 'Calls feitas',
               secundaria: 'Abordagens',
@@ -326,14 +324,12 @@ export default function Dashboard() {
             }}
           />
         </Bloco>
-
-        {/* Empilhados ao lado do gráfico (xl); abaixo dele, lado a lado só quando cada um ainda tem largura (lg). */}
         <div className="grid gap-4 md:col-span-2 lg:grid-cols-2 xl:col-span-4 xl:grid-cols-1 xl:grid-rows-2">
           <CartaoDoPodio
             titulo="Pódio dos Closers"
-            descricao="Receita aprovada no mês"
             linhas={podioDosClosers}
             formatar={formatarReaisInteiros}
+            descricao="Receita aprovada no mês"
             carregando={carregandoRanking}
             erro={erroRanking !== null}
             vazio="Nenhum Closer elegível no ranking."
@@ -341,9 +337,9 @@ export default function Dashboard() {
           />
           <CartaoDoPodio
             titulo="Pódio dos SDRs"
-            descricao="Repasses para Closers no mês"
             linhas={podioDosSdrs}
             formatar={(n) => pluralizar(n, 'repasse', 'repasses')}
+            descricao="Repasses para Closers · todo o período"
             carregando={carregandoRanking}
             erro={erroSdr !== null}
             vazio="Nenhum SDR elegível no ranking."

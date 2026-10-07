@@ -2,7 +2,7 @@ import { BadgeDollarSignIcon, MessageSquareTextIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useHa } from '../hooks/relogio'
 import { formatarReais } from '../lib/formatar'
-import { formatarHoraCompleta } from '../lib/tempo'
+import { formatarDiaMes, formatarHoraCompleta } from '../lib/tempo'
 import type { AtividadeItem } from '../lib/visao'
 
 function Quando({ em }: { em: string }) {
@@ -16,7 +16,8 @@ function Quando({ em }: { em: string }) {
 
 /**
  * O que está acontecendo agora, no mesmo recorte da tela: vendas aprovadas e abordagens, do mais novo para o mais antigo.
- * O que chega enquanto a tela está aberta aparece com um realce que some.
+ * A venda aparece na hora da aprovação (dizendo quando foi a compra, se foi em outro dia). O que chega enquanto a tela
+ * está aberta aparece com um realce que some.
  */
 export function FeedAoVivo({ itens }: { itens: AtividadeItem[] }) {
   // Chaves já vistas na primeira pintura: só o que chegar depois ganha o realce (e perde quando a lavagem termina).
@@ -37,6 +38,7 @@ export function FeedAoVivo({ itens }: { itens: AtividadeItem[] }) {
         const novo = !vistos.has(i.chave)
         const classe = `flex items-start gap-3 rounded-xl px-1.5 py-2 ${novo ? 'painel-linha-nova' : ''}`
         if (i.tipo === 'venda') {
+          const detalhe = i.compraEm ? `${i.produto} · compra de ${formatarDiaMes(i.compraEm)}` : i.produto
           return (
             <li key={i.chave} className={classe}>
               <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-ok/15 text-ok-forte" aria-hidden="true">
@@ -44,8 +46,8 @@ export function FeedAoVivo({ itens }: { itens: AtividadeItem[] }) {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-heading">Venda aprovada · {formatarReais(i.valor)}</p>
-                <p className="truncate text-xs text-muted-foreground" title={i.produto}>
-                  {i.produto}
+                <p className="truncate text-xs text-muted-foreground" title={detalhe}>
+                  {detalhe}
                 </p>
               </div>
               <Quando em={i.em} />

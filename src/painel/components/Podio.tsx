@@ -72,7 +72,7 @@ export function Podio({
               <span className="mt-0.5 text-[0.95rem] font-semibold leading-tight tracking-tight text-heading">
                 <NumeroAnimado valor={Math.round(l.valor)} formatar={formatar} />
               </span>
-              <span className="text-[11px] leading-tight text-muted-foreground">{l.apoio}</span>
+              <span data-apoio className="text-[11px] leading-tight text-muted-foreground">{l.apoio}</span>
               <span className={`podio-degrau mt-1.5 flex items-start justify-center pt-1 ${altura}`}>
                 <span className="podio-numero flex items-center gap-0.5 text-sm">
                   {lugar}

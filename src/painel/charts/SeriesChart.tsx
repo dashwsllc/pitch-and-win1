@@ -12,7 +12,7 @@ export interface PontoDaSerie {
   chave: string
   /** '14h', '30/09 14h', '30/09', 'set 26'... */
   rotulo: string
-  /** Série da ÁREA (azul): a medida mais funda do funil. */
+  /** Série da ÁREA (azul): as calls feitas. */
   principal: number
   /** Série da LINHA (laranja): a medida de topo de funil. */
   secundaria: number
@@ -55,14 +55,15 @@ function Legenda({ textos, totais }: { textos: TextosDaSerie; totais: [number, n
 }
 
 /**
- * Duas medidas no tempo, num só eixo: a principal em área azul com degradê (e o valor do último ponto escrito), a
- * secundária em linha laranja, com mira e dica. A mira é a mesma dos outros gráficos da linha do tempo (FocoNoTempo): a
+ * Duas medidas no tempo, num só eixo: calls em área azul com degradê e abordagens em linha laranja, com mira e dica.
+ * A mira é a mesma dos outros gráficos da linha do tempo (FocoNoTempo): a
  * dica só aparece no gráfico apontado. Com `onSelecionar`, clicar num ponto (ou Enter) abre aquele intervalo.
  */
 export function SeriesChart({
   pontos,
   textos,
-  altura = 280,
+  altura: alturaMinima = 280,
+  preencher = false,
   foco,
   onSelecionar,
 }: {
@@ -70,11 +71,14 @@ export function SeriesChart({
   textos: TextosDaSerie
   /** Altura do desenho em px (a largura acompanha o cartão). */
   altura?: number
+  /** Expande o desenho para acompanhar a altura dos pódios ao lado. */
+  preencher?: boolean
   /** Quem aponta na mira sincronizada ("calls"); sem ele, um id próprio. */
   foco?: string
   onSelecionar?(chave: string): void
 }) {
-  const { ref, largura } = useLargura()
+  const { ref, largura, altura: alturaDisponivel } = useLargura()
+  const altura = preencher ? Math.max(alturaMinima, alturaDisponivel) : alturaMinima
   const idGradiente = useId().replace(/:/g, '')
   const { ativo, origem, focar, entrar } = useFocoNoTempo(foco ?? idGradiente, pontos.map((p) => p.chave))
   const totais: [number, number] = [pontos.reduce((t, p) => t + p.principal, 0), pontos.reduce((t, p) => t + p.secundaria, 0)]
@@ -82,9 +86,9 @@ export function SeriesChart({
   if (pontos.length === 0) {
     // Sem nenhum registro: a moldura do gráfico aparece vazia (nenhum valor inventado).
     return (
-      <figure>
+      <figure className={preencher ? 'flex flex-1 flex-col' : undefined}>
         <Legenda textos={textos} totais={totais} />
-        <div className="relative mt-4 rounded-lg border border-dashed" style={{ height: altura }}>
+        <div className={`relative mt-4 rounded-lg border border-dashed ${preencher ? 'flex-1' : ''}`} style={{ minHeight: alturaMinima, height: preencher ? undefined : altura }}>
           <div aria-hidden="true" className="absolute inset-x-0 bottom-8 border-t border-border" />
           <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-muted-foreground">{textos.vazio}</p>
         </div>
@@ -129,7 +133,7 @@ export function SeriesChart({
   const xAtivo = ativo === null ? 0 : x(ativo)
 
   return (
-    <figure>
+    <figure className={preencher ? 'flex flex-1 flex-col' : undefined}>
       <Legenda textos={textos} totais={totais} />
       <div
         ref={ref}
@@ -139,13 +143,14 @@ export function SeriesChart({
         onFocus={entrar}
         onBlur={() => focar(null)}
         onKeyDown={teclar}
-        className="relative mt-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        className={`relative mt-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${preencher ? 'flex-1' : ''}`}
+        style={preencher ? { minHeight: alturaMinima } : undefined}
       >
         <svg
           width={W}
           height={altura}
           viewBox={`0 0 ${W} ${altura}`}
-          className={`block h-auto max-w-full touch-pan-y select-none ${onSelecionar ? 'cursor-pointer' : ''}`}
+          className={`${preencher ? 'absolute inset-0' : 'block h-auto'} max-w-full touch-pan-y select-none ${onSelecionar ? 'cursor-pointer' : ''}`}
           onPointerMove={mover}
           onClick={() => {
             if (onSelecionar && ativo !== null) onSelecionar(pontos[ativo].chave)
@@ -188,14 +193,14 @@ export function SeriesChart({
             </text>
           ))}
 
-          {areaPrincipal && <path d={areaPrincipal} fill={`url(#${idGradiente})`} />}
+          {areaPrincipal && <path data-area d={areaPrincipal} fill={`url(#${idGradiente})`} />}
           <path d={linhaSecundaria} fill="none" className="stroke-viz-1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           <path d={linhaPrincipal} fill="none" className="stroke-viz-4" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
 
           {/* Ponto e rótulo só no fim da série principal (rotulagem seletiva). */}
           <circle cx={x(n - 1)} cy={y(ultimo.principal)} r={4.5} className="fill-viz-4 stroke-card" strokeWidth={2} />
           {ativo === null && (
-            <text x={x(n - 1)} y={y(ultimo.principal) - 12} textAnchor={n === 1 ? 'middle' : 'end'} className="fill-foreground text-xs font-semibold tabular-nums">
+            <text data-rotulo-ponto="ultimo" x={x(n - 1)} y={y(ultimo.principal) - 12} textAnchor={n === 1 ? 'middle' : 'end'} className="fill-foreground text-xs font-semibold tabular-nums">
               {formatarNumero(ultimo.principal)}
             </text>
           )}

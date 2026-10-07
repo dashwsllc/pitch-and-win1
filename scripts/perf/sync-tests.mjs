@@ -31,7 +31,7 @@ async function open({ ws = 'normal', wsJoinDelayMs = 0, latencyMs = 40 } = {}) {
   const page = await context.newPage()
   const t0 = Date.now()
   await page.goto(url + '/', { waitUntil: 'commit' })
-  await page.waitForSelector('section[aria-label="Últimas dez vendas aprovadas"] article', { timeout: 45000 })
+  await page.waitForSelector('ol[aria-label="Últimas dez vendas aprovadas"] li', { timeout: 45000 })
   return { context, page, mock, t0 }
 }
 async function quiet(mock, ms = 1200, max = 15000) {
@@ -102,9 +102,11 @@ const since = (mock, t) => mock.stats.requests.filter((r) => r.t >= t)
   const { context, mock } = await open()
   await sleep(6000); await quiet(mock)
   const counts = {}
-  for (const r of mock.stats.requests) { const k = `${r.kind}:${r.name}`; counts[k] = (counts[k] ?? 0) + 1 }
+  // A repeat is the SAME query (table or function plus its filters) sent again; two different queries to one table
+  // (sales bought in the period, and sales approved in it) are two page queries, not a duplicate.
+  for (const r of mock.stats.requests) { const k = `${r.kind}:${r.name}?${r.query ?? ''}`; counts[k] = (counts[k] ?? 0) + 1 }
   const dupes = Object.entries(counts).filter(([k, v]) => v > 1 && !/profiles|user_roles|crm_can_schedule|daily_goal_tasks|get_sales_board|dashboard_events/.test(k))
-  record('T6 boot does not fetch page data twice', dupes.length === 0, `total=${mock.stats.requests.length} requests; duplicated page queries: ${dupes.map(([k, v]) => `${k}x${v}`).join(', ') || 'none'}`)
+  record('T6 boot does not fetch page data twice', dupes.length === 0, `total=${mock.stats.requests.length} requests; duplicated page queries: ${dupes.map(([k, v]) => `${k.split('?')[0]}x${v}`).join(', ') || 'none'}`)
   await context.close()
 }
 

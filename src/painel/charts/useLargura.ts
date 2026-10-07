@@ -7,19 +7,22 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  */
 export function useLargura(padrao = 640) {
   const [largura, setLargura] = useState(padrao)
+  const [altura, setAltura] = useState(0)
   const observador = useRef<ResizeObserver | null>(null)
   const ref = useCallback((el: HTMLDivElement | null) => {
     observador.current?.disconnect()
     observador.current = null
     if (!el || typeof ResizeObserver === 'undefined') return
-    const medir = (w: number) => {
+    const medir = (w: number, h: number) => {
       if (w > 0) setLargura(Math.round(w))
+      setAltura(Math.round(h))
     }
-    medir(el.getBoundingClientRect().width)
-    const ro = new ResizeObserver(([e]) => medir(e.contentRect.width))
+    const caixa = el.getBoundingClientRect()
+    medir(caixa.width, caixa.height)
+    const ro = new ResizeObserver(([e]) => medir(e.contentRect.width, e.contentRect.height))
     ro.observe(el)
     observador.current = ro
   }, [])
   useEffect(() => () => observador.current?.disconnect(), [])
-  return { ref, largura }
+  return { ref, largura, altura }
 }

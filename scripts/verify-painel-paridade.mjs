@@ -165,7 +165,7 @@ const EXTRAI_DEPOIS = () => {
     [...document.querySelectorAll(`ol[aria-label="${nome}"] > li:not(.opacity-50)`)].map((li) => [
       limpo(li.querySelector('.truncate')?.textContent),
       limpo(li.querySelector('.painel-numero-subiu')?.textContent),
-      limpo(li.querySelector('.text-\\[11px\\]')?.textContent),
+      limpo(li.querySelector('[data-apoio]')?.textContent),
     ])
   const linha = (li) => [
     limpo(li.querySelector('p.font-medium .truncate')?.textContent),

@@ -307,6 +307,26 @@ assert.equal(visao.passoDaSerie([{ rotulo: '2026' }], false), 'ano')
   assert.equal(visao.montarAtividade(muitos, []).length, 9, 'o feed mostra 9 itens')
 }
 {
+  // Aprovar é o que acontece AGORA: o feed, a "última hora" e a "última às" seguem a hora da aprovação (reviewed_at),
+  // não a da compra. O período (totais e gráficos) continua sendo o da compra; só os sinais ao vivo mudam.
+  const agora = '2026-10-06T22:00:00.000Z' // 19:00 em Brasília
+  const antiga = { id: 'a', nome_produto: 'Mentoria', valor_venda: 500, created_at: '2026-10-02T21:57:00.000Z', reviewed_at: '2026-10-06T21:52:00.000Z' } // comprada sexta, aprovada terça 18:52
+  const doDia = { id: 'b', nome_produto: 'Curso', valor_venda: 100, created_at: '2026-10-06T12:00:00.000Z', reviewed_at: '2026-10-06T21:30:00.000Z' } // comprada 09:00, aprovada 18:30
+  const semRevisao = { id: 'c', nome_produto: 'Plano', valor_venda: 7, created_at: '2026-10-06T21:40:00.000Z', reviewed_at: null }
+  assert.equal(visao.contarNaUltimaHora([doDia], agora), 1, 'comprada às 09:00 e aprovada há 30 min: entra na última hora')
+  assert.equal(visao.somarNaUltimaHora([doDia], agora), 100)
+  assert.equal(visao.ultimoInstante([doDia]), doDia.reviewed_at, 'a "última às" é a da aprovação')
+  assert.equal(visao.contarNaUltimaHora([semRevisao], agora), 1, 'sem hora de aprovação, vale a da compra')
+  assert.equal(visao.ultimoInstante([semRevisao]), semRevisao.created_at)
+  assert.equal(visao.contarNaUltimaHora([{ ...doDia, reviewed_at: '2026-10-06T20:00:00.000Z' }], agora), 0, 'aprovada há mais de uma hora: fora, mesmo comprada depois')
+  const feed = visao.montarAtividade([doDia], [], 9, [antiga])
+  assert.deepEqual(feed.map((i) => i.chave), ['va', 'vb'], 'a venda de compra anterior aprovada agora entra no feed, pela hora da aprovação')
+  assert.equal(feed[0].em, antiga.reviewed_at)
+  assert.equal(feed[0].compraEm, antiga.created_at, 'comprada em outro dia: o feed diz quando foi a compra')
+  assert.equal(feed[1].compraEm, undefined, 'comprada e aprovada no mesmo dia: sem dica')
+  assert.equal(visao.montarAtividade([antiga], [], 9, [antiga]).length, 1, 'a mesma venda nas duas listas aparece uma vez')
+}
+{
   const b = visao.barrasDeProdutos([{ nome: 'A', quantidade: 3, valor: 300 }, { nome: 'B', quantidade: 1, valor: 100 }], 400)
   assert.deepEqual(b.map((x) => x.fracao), [0.75, 0.25])
   assert.equal(visao.barrasDeProdutos([{ nome: 'A', quantidade: 0, valor: 0 }], 0)[0].fracao, null, 'sem receita não há fração')

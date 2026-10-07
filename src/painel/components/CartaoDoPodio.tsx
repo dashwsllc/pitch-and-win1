@@ -3,7 +3,7 @@ import { LinkSecao } from './LinkSecao'
 import { Podio, type LinhaDoPodio } from './Podio'
 
 /**
- * Um pódio do mês num cartão compacto: título, a régua do ranking, o atalho para Ranking e os estados de carga, erro e
+ * Um pódio num cartão compacto: título, a régua do ranking, o atalho para Ranking e os estados de carga, erro e
  * vazio. Os degraus ficam no pé do cartão, alinhados com o cartão ao lado quando a coluna estica.
  */
 export function CartaoDoPodio({

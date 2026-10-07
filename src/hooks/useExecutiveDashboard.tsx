@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from './useAuth'
 import { fetchAllPages } from '@/lib/supabase-pages'
-import { millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
+import { brasiliaDateKey, millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
+import { instanteDoRegistro } from '@/painel/lib/visao'
+import { formatarDiaMes } from '@/painel/lib/tempo'
 import {
   buildDashboardSeries,
   createDefaultDashboardCustomRange,
@@ -73,10 +75,12 @@ export function useExecutiveDashboard(
     try {
       const period = resolveDashboardPeriod(dateFilter, { start: customStart, end: customEnd })
 
-      // The five reads are independent of each other. They used to run one after the
+      // The reads are independent of each other. They used to run one after the
       // other, paying a full network round trip (~150 ms to the database region)
       // for each; running them together costs a single one.
-      const [profilesData, sellerRoles, salesData, approachesData, subscriptionsData] = await Promise.all([
+      const inicioDoPeriodo = period.start
+      const fimDoPeriodo = period.end
+      const [profilesData, sellerRoles, salesData, compradasAntes, approachesData, subscriptionsData] = await Promise.all([
         // Profiles for name resolution
         fetchAllPages((from, to) => supabase
           .from('profiles')
@@ -92,7 +96,7 @@ export function useExecutiveDashboard(
         fetchAllPages((from, to) => {
           let request = supabase
             .from('vendas')
-            .select('id, user_id, nome_produto, valor_venda, created_at')
+            .select('id, user_id, nome_produto, valor_venda, created_at, reviewed_at')
             .eq('approval_status', 'aprovada')
           if (period.start && period.end) {
             request = request
@@ -104,6 +108,20 @@ export function useExecutiveDashboard(
             .order('id')
             .range(from, to)
         }),
+        // Aprovadas NO período, mas compradas ANTES dele: fora dos totais (a venda conta no dia da compra), porém
+        // aprovar aconteceu agora e a atividade recente precisa mostrar. Em "todo o período" não há compra anterior.
+        inicioDoPeriodo && fimDoPeriodo
+          ? fetchAllPages((from, to) => supabase
+              .from('vendas')
+              .select('id, user_id, nome_produto, valor_venda, created_at, reviewed_at')
+              .eq('approval_status', 'aprovada')
+              .gte('reviewed_at', inicioDoPeriodo.toISOString())
+              .lt('reviewed_at', fimDoPeriodo.toISOString())
+              .lt('created_at', inicioDoPeriodo.toISOString())
+              .order('reviewed_at', { ascending: false })
+              .order('id')
+              .range(from, to))
+          : Promise.resolve([]),
         // Approaches in period
         fetchAllPages((from, to) => {
           let request = supabase
@@ -194,14 +212,24 @@ export function useExecutiveDashboard(
         .sort((a, b) => b.total_revenue - a.total_revenue)
         .slice(0, 5)
 
-      // Recent activity
+      // Recent activity: a sale shows up when it was APPROVED (what just happened), whatever day it was bought; the
+      // totals above still follow the purchase date.
+      const approvedSales = new Map<string, NonNullable<typeof salesData>[number]>()
+      for (const sale of [...(salesData ?? []), ...(compradasAntes ?? [])]) approvedSales.set(sale.id, sale)
+      const recentSales = [...approvedSales.values()]
+        .sort((a, b) => Date.parse(instanteDoRegistro(b)) - Date.parse(instanteDoRegistro(a)))
+        .slice(0, 5)
       const recentActivity: ExecutiveDashboardData['recentActivity'] = [
-        ...(salesData?.slice(0, 5).map(sale => ({
-          type: 'sale' as const,
-          seller_name: profileMap.get(sale.user_id) || `Seller ${sale.user_id.substring(0, 8)}`,
-          details: `Venda de ${sale.nome_produto} - R$ ${Number(sale.valor_venda).toLocaleString('pt-BR')}`,
-          created_at: sale.created_at
-        })) || []),
+        ...recentSales.map(sale => {
+          const approvedAt = instanteDoRegistro(sale)
+          const boughtOtherDay = brasiliaDateKey(sale.created_at) !== brasiliaDateKey(approvedAt)
+          return {
+            type: 'sale' as const,
+            seller_name: profileMap.get(sale.user_id) || `Seller ${sale.user_id.substring(0, 8)}`,
+            details: `Venda aprovada de ${sale.nome_produto} - R$ ${Number(sale.valor_venda).toLocaleString('pt-BR')}${boughtOtherDay ? ` · compra de ${formatarDiaMes(sale.created_at)}` : ''}`,
+            created_at: approvedAt
+          }
+        }),
         ...(approachesData?.slice(0, 5).map(approach => ({
           type: 'approach' as const,
           seller_name: profileMap.get(approach.user_id) || `Seller ${approach.user_id.substring(0, 8)}`,

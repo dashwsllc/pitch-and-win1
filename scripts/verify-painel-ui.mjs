@@ -91,10 +91,12 @@ async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 
   const f = fixtures ?? buildFixtures({ role: 'super_admin', now: FIXED })
   const mock = installMock(contexto, f, { latencyMs: latencia, ws })
   const pedidosDeVendas = []
+  // Aprovadas NO período e compradas antes dele (reviewed_at): alimentam o aviso e o feed, nunca os totais.
+  const pedidosDeAprovacoes = []
   const pedidosDeCalls = []
   contexto.on('request', (r) => {
     const u = new URL(r.url())
-    if (u.pathname.endsWith('/rest/v1/vendas') && (u.searchParams.get('select') ?? '').includes('valor_venda')) pedidosDeVendas.push(u)
+    if (u.pathname.endsWith('/rest/v1/vendas') && (u.searchParams.get('select') ?? '').includes('valor_venda')) (u.searchParams.has('reviewed_at') ? pedidosDeAprovacoes : pedidosDeVendas).push(u)
     if (u.pathname.endsWith('/rest/v1/crm_activities') && (u.searchParams.get('select') ?? '').includes('completed_at')) pedidosDeCalls.push(u)
   })
   await contexto.addInitScript(
@@ -117,7 +119,7 @@ async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 
   })
   await pagina.goto(url + caminho, { waitUntil: 'load' })
   if (esperarTitulo) await expect(pagina.getByRole('heading', { level: 1, name: 'Visão geral' })).toBeVisible()
-  return { contexto, pagina, mock, f, erros, pedidosDeVendas, pedidosDeCalls, fechar: () => contexto.close() }
+  return { contexto, pagina, mock, f, erros, pedidosDeVendas, pedidosDeAprovacoes, pedidosDeCalls, fechar: () => contexto.close() }
 }
 
 const regiao = (pagina, nome) => pagina.getByRole('region', { name: nome, exact: true })
@@ -135,7 +137,7 @@ const linhasDaTabela = (pagina) =>
   pagina.locator('[data-dashboard-section="commercial-evolution"] details tbody tr').evaluateAll((trs) => trs.map((tr) => [...tr.cells].map((c) => c.textContent.trim())))
 const GRAFICO = 'Abordagens e calls'
 const PODIOS = ['Pódio dos Closers', 'Pódio dos SDRs']
-/** Tabela gêmea do gráfico de vendas (área): [intervalo, vendas, acumulado]. */
+/** Tabela do gráfico de vendas: [intervalo, vendas, acumulado]. */
 const pontosDeVendas = (pagina) =>
   regiao(pagina, 'Quantidade de Vendas')
     .locator('details tbody tr')
@@ -164,25 +166,21 @@ await teste('estrutura, ordem das seções, tokens escopados e navegação intac
     // As 5 primeiras na ordem que os testes antigos do repositório conferem (verify-sales-management-ui).
     assert.deepEqual(secoes, ['greeting', 'commercial-indicators', 'goals-in-progress', 'commercial-evolution', 'featured-products', 'transparent-operation', 'recent-sales'])
     for (const nome of [...KPIS, GRAFICO, ...PODIOS]) await expect(regiao(pagina, nome)).toBeVisible()
-    // A grade a 1440 px: indicadores 5 · 4 · 3 (Conversão sobre Meta do dia na coluna de 3), a linha extra 6 · 3 · 3,
-    // metas 6 · 6, o gráfico de abordagens e calls 8 com os dois pódios empilhados no 4, trio 4 · 4 · 4 e a lista 12.
-    const span = (loc) => loc.evaluate((el) => getComputedStyle(el).gridColumnStart)
-    const pai = (nome) => regiao(pagina, nome).locator('xpath=..')
-    const diretos = ['Quantidade de Vendas', 'Abordagens', 'Total de Vendas', 'Ticket Médio', 'Posição no ranking']
-    assert.deepEqual(await Promise.all(diretos.map((n) => span(regiao(pagina, n)))), ['span 5', 'span 4', 'span 6', 'span 3', 'span 3'])
-    assert.equal(await span(pai('Conversão')), 'span 3')
-    const blocos = ['Checklist de hoje', 'Metas de abordagens por turno', GRAFICO, 'Produtos em destaque', 'Vendas do time', 'Ao vivo', 'Últimas vendas']
-    assert.deepEqual(await Promise.all(blocos.map((n) => span(regiao(pagina, n)))), ['span 6', 'span 6', 'span 8', 'span 4', 'span 4', 'span 4', 'span 12'])
-    assert.equal(await span(pai(PODIOS[0])), 'span 4')
-    // Empilhados e sem buraco: cada coluna termina na mesma linha do cartão ao lado.
+    // Os indicadores conservam sua linha; os DOIS pódios ficam ao lado de calls/abordagens.
     const caixa = (nome) => regiao(pagina, nome).boundingBox()
-    const [conv, meta, qv] = await Promise.all(['Conversão', 'Meta do dia', 'Quantidade de Vendas'].map(caixa))
+    const [qv, closers, grafico, sdrs, conv, meta, abord] = await Promise.all(['Quantidade de Vendas', PODIOS[0], GRAFICO, PODIOS[1], 'Conversão', 'Meta do dia', 'Abordagens'].map(caixa))
+    for (const [dir, nome] of [[closers, PODIOS[0]], [sdrs, PODIOS[1]]]) {
+      assert.ok(dir.x >= grafico.x + grafico.width, `${nome}: ao lado do gráfico de calls e abordagens`)
+    }
+    assert.ok(Math.abs(closers.y - grafico.y) <= 1, 'Closers começa junto com o gráfico')
+    assert.ok(sdrs.y > closers.y + closers.height && Math.abs(sdrs.x - closers.x) <= 1, 'SDRs logo abaixo dos Closers')
+    assert.ok(Math.abs(sdrs.y + sdrs.height - (grafico.y + grafico.height)) <= 1, 'o gráfico ocupa a altura dos dois pódios')
+    assert.ok(Math.abs(qv.y - abord.y) <= 1 && Math.abs(qv.y - conv.y) <= 1, 'indicadores permanecem na mesma linha')
     assert.ok(Math.abs(conv.x - meta.x) < 1 && meta.y > conv.y + conv.height, 'Meta do dia logo abaixo da Conversão')
-    assert.ok(Math.abs(meta.y + meta.height - (qv.y + qv.height)) <= 1, 'a coluna dos dois termina com o cartão de vendas')
-    const [grafico, closers, sdrs] = await Promise.all([GRAFICO, ...PODIOS].map(caixa))
-    assert.ok(Math.abs(closers.x - sdrs.x) < 1 && sdrs.y > closers.y + closers.height, 'pódio dos SDRs logo abaixo do dos Closers')
-    assert.ok(closers.x > grafico.x + grafico.width, 'os pódios ficam ao lado do gráfico')
-    assert.ok(Math.abs(closers.y - grafico.y) <= 1 && Math.abs(sdrs.y + sdrs.height - (grafico.y + grafico.height)) <= 1, 'os pódios ocupam a altura do gráfico')
+    assert.ok(Math.abs(meta.y + meta.height - (abord.y + abord.height)) <= 1, 'a coluna dos dois termina com o cartão de abordagens')
+    const desenho = await regiao(pagina, GRAFICO).getByRole('img').locator('svg').boundingBox()
+    assert.ok(desenho.height >= 380, `gráfico ampliado: desenho de ${desenho.height}px`)
+    assert.ok(grafico.y + grafico.height - (desenho.y + desenho.height) < 75, 'desenho preenche o cartão até a tabela, sem vão embaixo')
     // Medidas da referência: cartão de 18 px, chip de 14 px, controle segmentado de 14 px e botão interno de 9,6 px.
     const raio = (loc) => loc.evaluate((el) => getComputedStyle(el).borderTopLeftRadius)
     assert.equal(await raio(regiao(pagina, 'Total de Vendas')), '18px')
@@ -230,13 +228,14 @@ await teste('login (/auth) e demais telas não ganham o escopo do painel', async
 })
 
 await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e o filtro vive na URL', async () => {
-  const { pagina, f, erros, pedidosDeVendas, pedidosDeCalls, fechar } = await abrir()
+  const { pagina, f, erros, pedidosDeVendas, pedidosDeAprovacoes, pedidosDeCalls, fechar } = await abrir()
   try {
     const nomes = { hoje: 'Hoje', ontem: 'Ontem', '7dias': '7 dias', '14dias': '14 dias', '30dias': '30 dias', all: 'Todo o período' }
     const enderecos = { hoje: null, ontem: 'ontem', '7dias': '7dias', '14dias': '14dias', '30dias': '30dias', all: 'tudo' }
     for (const [filtro, rotulo] of Object.entries(nomes)) {
       const e = esperado(f, filtro)
       pedidosDeVendas.length = 0
+      pedidosDeAprovacoes.length = 0
       pedidosDeCalls.length = 0
       if (filtro !== 'hoje') await pagina.getByRole('radio', { name: rotulo, exact: true }).click()
       await expect(pagina.getByRole('radio', { name: rotulo, exact: true })).toHaveAttribute('aria-checked', 'true')
@@ -258,6 +257,15 @@ await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e
       else {
         assert.ok(janela, `pedido de vendas para ${filtro}`)
         assert.deepEqual(janela.searchParams.getAll('created_at'), [`gte.${e.periodo.start.toISOString()}`, `lt.${e.periodo.end.toISOString()}`], `janela do filtro ${filtro}`)
+      }
+      // As aprovações do período de compras anteriores a ele: aprovadas na janela (reviewed_at), compradas antes dela.
+      // Em "todo o período" não existe compra anterior, então nem se pergunta.
+      if (e.periodo.allTime) assert.equal(pedidosDeAprovacoes.length, 0, 'todo o período não tem compra anterior a buscar')
+      else {
+        const aprovacoes = pedidosDeAprovacoes.at(-1)
+        assert.ok(aprovacoes, `pedido das aprovações de compras anteriores para ${filtro}`)
+        assert.deepEqual(aprovacoes.searchParams.getAll('reviewed_at'), [`gte.${e.periodo.start.toISOString()}`, `lt.${e.periodo.end.toISOString()}`], `aprovadas na janela do filtro ${filtro}`)
+        assert.deepEqual(aprovacoes.searchParams.getAll('created_at'), [`lt.${e.periodo.start.toISOString()}`], `compradas antes da janela do filtro ${filtro}`)
       }
       // As calls saem na mesma carga, só as concluídas e não canceladas, do time todo. A janela pega a hora marcada ou a do
       // fechamento; o momento exato (o mais cedo dos dois) é recortado na tela.
@@ -557,6 +565,7 @@ await teste('pódios dos Closers e dos SDRs: 0, 1, 2, 3 e 6 posições, só o to
       for (const nome of PODIOS) {
         const podio = regiao(pagina, nome).getByRole('list', { name: nome })
         await expect(podio).toBeVisible()
+        await expect(regiao(pagina, nome)).toContainText(nome === PODIOS[0] ? 'Receita aprovada no mês' : 'Repasses para Closers · todo o período')
         const lugares = await podio.locator('li').evaluateAll((lis) => lis.map((li) => ({ lugar: li.dataset.lugar, ordemVisual: li.style.order })))
         assert.deepEqual(lugares.map((l) => l.lugar), ['1', '2', '3'], `${nome}: a ordem do DOM é 1º, 2º, 3º`)
         assert.deepEqual(lugares.map((l) => l.ordemVisual), ['2', '1', '3'], `${nome}: a ordem visual é 2º, 1º, 3º`)
