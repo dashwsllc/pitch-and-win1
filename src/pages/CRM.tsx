@@ -40,6 +40,7 @@ import {
   PIPELINE_STAGES,
   APPROACH_STAGES,
 } from "@/hooks/useCRM";
+import { useCRMPaymentSummaries } from "@/hooks/useCRMPayments";
 import { useRoles } from "@/hooks/useRoles";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -181,6 +182,7 @@ export default function CRM() {
   const sales = useCRMSaleLinks();
   const approvedSales = useSalesBoard("aprovada", "", 0, 50);
   const contextSummary = useCRMContextSummary();
+  const paymentSummaries = useCRMPaymentSummaries();
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
   const requestedTab = params.get("tab") || "leads";
@@ -484,6 +486,7 @@ export default function CRM() {
       call={openCalls.get(lead.id)}
       names={names}
       sale={saleMap.get(lead.id)}
+      payment={paymentSummaries.data?.get(lead.id)}
       emphasizeCall={lead.pipeline_stage === "repassado_closer"}
       hasContext={contextSummary.leadIds.has(lead.id)}
       showContextStatus={dailyPipeline}

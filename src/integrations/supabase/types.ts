@@ -423,6 +423,68 @@ export type Database = {
           },
         ]
       }
+      crm_lead_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string
+          description: string
+          due_date: string | null
+          id: string
+          lead_id: string
+          method: string
+          notes: string | null
+          paid_at: string | null
+          proof_url: string | null
+          status: string
+          status_reason: string | null
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by: string
+          description: string
+          due_date?: string | null
+          id?: string
+          lead_id: string
+          method?: string
+          notes?: string | null
+          paid_at?: string | null
+          proof_url?: string | null
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
+          updated_by: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string
+          description?: string
+          due_date?: string | null
+          id?: string
+          lead_id?: string
+          method?: string
+          notes?: string | null
+          paid_at?: string | null
+          proof_url?: string | null
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_lead_payments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "crm_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_leads: {
         Row: {
           approach_stage: string
@@ -1410,6 +1472,19 @@ export type Database = {
       }
       crm_has_access: { Args: Record<PropertyKey, never>; Returns: boolean }
       crm_call_assignees: { Args: Record<PropertyKey, never>; Returns: { user_id: string; display_name: string; role: string }[] }
+      crm_lead_payment_summaries: {
+        Args: Record<PropertyKey, never>
+        Returns: { lead_id: string; total_count: number; paid_count: number; unpaid_count: number; pending_count: number; total_amount: number; paid_amount: number; status: string; next_due_date: string | null }[]
+      }
+      crm_payment_save: {
+        Args: { p_lead_id: string; p_payment_id: string | null; p_description: string; p_amount: number; p_method: string; p_due_date: string | null; p_notes: string | null; p_proof_url: string | null; p_expected_revision: string | null }
+        Returns: Database["public"]["Tables"]["crm_lead_payments"]["Row"]
+      }
+      crm_payment_set_status: {
+        Args: { p_payment_id: string; p_status: string; p_paid_at: string | null; p_reason: string | null; p_expected_revision: string }
+        Returns: Database["public"]["Tables"]["crm_lead_payments"]["Row"]
+      }
+      crm_payment_delete: { Args: { p_payment_id: string; p_reason: string; p_expected_revision: string }; Returns: Json }
       handoff_and_schedule_closer_call: {
         Args: { p_lead_id: string; p_expected_version: number; p_scheduled_at: string; p_assigned_to: string; p_context?: string }
         Returns: Database["public"]["Tables"]["crm_activities"]["Row"]

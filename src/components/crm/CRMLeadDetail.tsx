@@ -25,7 +25,9 @@ import {
 } from "@/lib/crm-qualification";
 import { formatAthleteAge, resolveAthleteAge } from "@/lib/crm-age";
 import type { Json } from "@/integrations/supabase/types";
+import { paymentStateValue } from "@/lib/crm-payments";
 import { CRMContextPanel } from "./CRMContextPanel";
+import { CRMPaymentsPanel } from "./CRMPaymentsPanel";
 
 const stateLabels: Record<string, string> = {
   temperature: "Aquecimento",
@@ -36,8 +38,14 @@ const stateLabels: Record<string, string> = {
   call_assigned_to: "Responsável da call",
   next_followup_at: "Próximo retorno",
   version: "Revisão",
+  payment_status: "Pagamento",
+  payment_amount: "Valor do lançamento",
+  payment_method: "Forma de pagamento",
+  payment_due_date: "Vencimento",
+  payment_paid_at: "Pago em",
 };
-const valueLabel = (value: Json | undefined, names: Record<string, string>) => {
+const valueLabel = (value: Json | undefined, names: Record<string, string>, key = "") => {
+  if (key.startsWith("payment_")) return paymentStateValue(key, value);
   if (value === null || value === undefined) return "Sem definição";
   const text = String(value);
   return (
@@ -159,6 +167,7 @@ export function CRMLeadDetail({
                 ?.label || lead.pipeline_stage}
             </Badge>
           </div>
+          <CRMPaymentsPanel lead={lead} names={names} />
           <CRMContextPanel lead={lead} />
           <dl className="grid gap-x-3 gap-y-2 sm:grid-cols-3">
             {fields.map(([label, value]) => (
@@ -230,8 +239,8 @@ export function CRMLeadDetail({
                     .map(([key, value]) => (
                       <p className="text-xs" key={key}>
                         {stateLabels[key] || key}:{" "}
-                        {valueLabel(before[key], names)} →{" "}
-                        {valueLabel(value, names)}
+                        {valueLabel(before[key], names, key)} →{" "}
+                        {valueLabel(value, names, key)}
                       </p>
                     ))}
                   {a.scheduled_at && (

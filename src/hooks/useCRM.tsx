@@ -101,7 +101,8 @@ export function useCRMRealtime() {
       .channel(`crm-live-${user.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "crm_leads" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "crm_activities" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "crm_lead_contexts" }, refresh);
+      .on("postgres_changes", { event: "*", schema: "public", table: "crm_lead_contexts" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "crm_lead_payments" }, refresh);
 
     void supabase.realtime.setAuth(session.access_token)
       .then(() => {

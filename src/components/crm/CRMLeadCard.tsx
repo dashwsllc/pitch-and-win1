@@ -55,6 +55,8 @@ import {
   REMARKETING_STATUS_LABELS,
   optionLabel,
 } from "@/lib/crm-qualification";
+import { paymentSummaryText, type PaymentSummary } from "@/lib/crm-payments";
+import { CRMPaymentBadge } from "./CRMPaymentBadge";
 
 export function CRMLeadCard({
   lead,
@@ -62,6 +64,7 @@ export function CRMLeadCard({
   names,
   busy,
   sale,
+  payment,
   emphasizeCall = false,
   hasContext = false,
   showContextStatus = false,
@@ -80,6 +83,7 @@ export function CRMLeadCard({
   names: Record<string, string>;
   busy: boolean;
   sale?: { sale_id: string | null; can_open: boolean };
+  payment?: PaymentSummary;
   emphasizeCall?: boolean;
   hasContext?: boolean;
   showContextStatus?: boolean;
@@ -266,6 +270,9 @@ export function CRMLeadCard({
           {PIPELINE_STAGES.find((s) => s.value === lead.pipeline_stage)
             ?.label || lead.pipeline_stage}
         </Badge>
+        {payment?.status && (
+          <CRMPaymentBadge status={payment.status} detail={paymentSummaryText(payment)} />
+        )}
         {showContextStatus && (
           <Badge variant="outline" className={`h-5 px-2 text-[10px] ${hasContext ? 'border-primary/35 text-primary' : 'text-muted-foreground'}`}>
             <BookOpen className="mr-1 h-3 w-3" />
