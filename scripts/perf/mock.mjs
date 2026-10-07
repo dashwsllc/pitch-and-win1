@@ -273,6 +273,23 @@ function matchFilter(row, col, spec) {
   }
 }
 
+// As funções dashboard_home_* (migração 20261007130000): o time TODO para qualquer conta, só com as colunas que a Home usa.
+// Leem f.tables na hora, para o teste poder trocar as linhas depois de montar as fixtures.
+const dentro = (iso, de, ate) => (de == null || Date.parse(iso) >= Date.parse(de)) && (ate == null || Date.parse(iso) < Date.parse(ate))
+const HOME_RPCS = {
+  dashboard_home_sales: (f, a) => f.tables.vendas
+    .filter((v) => v.approval_status === 'aprovada')
+    .filter((v) => (a.p_late ? v.reviewed_at && dentro(v.reviewed_at, a.p_start, a.p_end) && Date.parse(v.created_at) < Date.parse(a.p_start) : dentro(v.created_at, a.p_start, a.p_end)))
+    .map((v) => ({ id: v.id, nome_produto: v.nome_produto, valor_venda: v.valor_venda, created_at: v.created_at, reviewed_at: v.reviewed_at })),
+  dashboard_home_approaches: (f, a) => f.tables.abordagens
+    .filter((x) => dentro(x.created_at, a.p_start, a.p_end))
+    .map((x) => ({ id: x.id, created_at: x.created_at, mostrou_ia: x.mostrou_ia })),
+  dashboard_home_calls: (f, a) => f.tables.crm_activities
+    .filter((c) => ['qualificacao', 'fechamento_closer'].includes(c.call_type) && c.is_completed === true && c.cancelled_at == null)
+    .filter((c) => a.p_start == null || a.p_end == null || (c.scheduled_at && dentro(c.scheduled_at, a.p_start, a.p_end)) || (c.completed_at && dentro(c.completed_at, a.p_start, a.p_end)))
+    .map((c) => ({ id: c.id, scheduled_at: c.scheduled_at, completed_at: c.completed_at })),
+}
+
 export function queryTable(rows, params) {
   const reserved = new Set(['select', 'order', 'limit', 'offset', 'or', 'and', 'on_conflict', 'columns'])
   let out = rows
@@ -336,9 +353,12 @@ export function installMock(context, fixtures, { onRequest, latencyMs = 70, ws =
       record.kind = 'rpc'; record.name = name
       let args = {}
       try { args = method === 'GET' ? Object.fromEntries(url.searchParams) : JSON.parse(request.postData() || '{}') } catch { /* ignore */ }
-      const fn = f.rpc[name]
+      const fn = f.rpc[name] ?? (HOME_RPCS[name] && ((a) => HOME_RPCS[name](f, a)))
       if (!fn) { record.unmocked = true; return json(route, null) }
-      return json(route, fn(args))
+      let saida = fn(args)
+      // O PostgREST aplica order/limit/offset (o .order().range() do cliente) ao resultado das funções que devolvem tabela.
+      if (method === 'POST' && Array.isArray(saida) && ['order', 'limit', 'offset'].some((k) => url.searchParams.has(k))) saida = queryTable(saida, url.searchParams).rows
+      return json(route, saida)
     }
 
     if (url.pathname.startsWith('/rest/v1/')) {

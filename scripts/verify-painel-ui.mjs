@@ -96,13 +96,18 @@ async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 
   const f = fixtures ?? buildFixtures({ role: 'super_admin', now: FIXED })
   const mock = installMock(contexto, f, { latencyMs: latencia, ws })
   const pedidosDeVendas = []
-  // Aprovadas NO período e compradas antes dele (reviewed_at): alimentam o aviso e o feed, nunca os totais.
+  // Aprovadas NO período e compradas antes dele (p_late): alimentam o aviso e o feed, nunca os totais.
   const pedidosDeAprovacoes = []
   const pedidosDeCalls = []
+  // Os números da Home saem das funções dashboard_home_* (o time todo, para qualquer conta); cada pedido guarda os
+  // argumentos que foram no corpo (p_start, p_end e, nas aprovações tardias, p_late).
   contexto.on('request', (r) => {
     const u = new URL(r.url())
-    if (u.pathname.endsWith('/rest/v1/vendas') && (u.searchParams.get('select') ?? '').includes('valor_venda')) (u.searchParams.has('reviewed_at') ? pedidosDeAprovacoes : pedidosDeVendas).push(u)
-    if (u.pathname.endsWith('/rest/v1/crm_activities') && (u.searchParams.get('select') ?? '').includes('completed_at')) pedidosDeCalls.push(u)
+    const funcao = u.pathname.split('/rest/v1/rpc/')[1]
+    if (!funcao?.startsWith('dashboard_home_')) return
+    const args = JSON.parse(r.postData() || '{}')
+    if (funcao === 'dashboard_home_sales') (args.p_late ? pedidosDeAprovacoes : pedidosDeVendas).push(args)
+    if (funcao === 'dashboard_home_calls') pedidosDeCalls.push(args)
   })
   await contexto.addInitScript(
     ({ chave, sessao, tema, comSessao }) => {
@@ -257,32 +262,27 @@ await teste('KPIs batem com as fórmulas do painel antigo em todos os filtros, e
       assert.equal(divisao.mostrou + divisao.naoMostrou, e.abordagens.length)
       const conv = await textoDe(pagina, 'Conversão')
       assert.ok(e.abordagens.length > 0 ? conv.includes(percentual(e.conversao)) : conv.includes('—'), `conversão ${filtro}: ${conv}`)
-      // Mesma fonte, mesma consulta: a janela pedida ao banco é a do período.
+      // Mesma fonte, mesma consulta: a janela pedida ao banco é a do período (nula em "todo o período").
+      const [de, ate] = e.periodo.allTime ? [null, null] : [e.periodo.start.toISOString(), e.periodo.end.toISOString()]
       const janela = pedidosDeVendas.at(-1)
-      if (e.periodo.allTime) assert.equal(janela?.searchParams.has('created_at'), false, 'todo o período não filtra por data')
-      else {
-        assert.ok(janela, `pedido de vendas para ${filtro}`)
-        assert.deepEqual(janela.searchParams.getAll('created_at'), [`gte.${e.periodo.start.toISOString()}`, `lt.${e.periodo.end.toISOString()}`], `janela do filtro ${filtro}`)
-      }
-      // As aprovações do período de compras anteriores a ele: aprovadas na janela (reviewed_at), compradas antes dela.
+      assert.ok(janela, `pedido de vendas para ${filtro}`)
+      assert.deepEqual([janela.p_start, janela.p_end], [de, ate], `janela do filtro ${filtro}`)
+      assert.deepEqual(Object.keys(janela).sort(), ['p_end', 'p_start'], 'o pedido não leva filtro de usuário: é o time todo')
+      // As aprovações do período de compras anteriores a ele (p_late: aprovadas na janela, compradas antes dela).
       // Em "todo o período" não existe compra anterior, então nem se pergunta.
       if (e.periodo.allTime) assert.equal(pedidosDeAprovacoes.length, 0, 'todo o período não tem compra anterior a buscar')
       else {
         const aprovacoes = pedidosDeAprovacoes.at(-1)
         assert.ok(aprovacoes, `pedido das aprovações de compras anteriores para ${filtro}`)
-        assert.deepEqual(aprovacoes.searchParams.getAll('reviewed_at'), [`gte.${e.periodo.start.toISOString()}`, `lt.${e.periodo.end.toISOString()}`], `aprovadas na janela do filtro ${filtro}`)
-        assert.deepEqual(aprovacoes.searchParams.getAll('created_at'), [`lt.${e.periodo.start.toISOString()}`], `compradas antes da janela do filtro ${filtro}`)
+        assert.deepEqual([aprovacoes.p_start, aprovacoes.p_end, aprovacoes.p_late], [de, ate, true], `aprovadas na janela do filtro ${filtro}, compradas antes dela`)
       }
-      // As calls saem na mesma carga, só as concluídas e não canceladas, do time todo. A janela pega a hora marcada ou a do
-      // fechamento; o momento exato (o mais cedo dos dois) é recortado na tela.
+      // As calls saem na mesma carga, do time todo; quais contam (concluídas e não canceladas) é regra da função no
+      // banco (supabase/tests/home_team_rows.sql). A janela pega a hora marcada ou a do fechamento; o momento exato
+      // (o mais cedo dos dois) é recortado na tela.
       const calls = pedidosDeCalls.at(-1)
       assert.ok(calls, `pedido de calls para ${filtro}`)
-      const filtros = ['call_type', 'is_completed', 'cancelled_at'].map((c) => calls.searchParams.get(c))
-      assert.deepEqual(filtros, ['in.(qualificacao,fechamento_closer)', 'eq.true', 'is.null'], `calls concluídas de qualificação e fechamento, sem as canceladas (${filtro})`)
-      const [de, ate] = e.periodo.allTime ? [] : [e.periodo.start.toISOString(), e.periodo.end.toISOString()]
-      const janelaDasCalls = e.periodo.allTime ? null : `(and(scheduled_at.gte.${de},scheduled_at.lt.${ate}),and(completed_at.gte.${de},completed_at.lt.${ate}))`
-      assert.equal(calls.searchParams.get('or'), janelaDasCalls, `janela das calls ${filtro}`)
-      assert.equal(calls.searchParams.has('assigned_to'), false, 'o Executive vê as calls do time todo')
+      assert.deepEqual([calls.p_start, calls.p_end], [de, ate], `janela das calls ${filtro}`)
+      assert.deepEqual(Object.keys(calls).sort(), ['p_end', 'p_start'], 'o Executive e o vendedor veem as calls do time todo')
     }
 
     // Tempo personalizado: valida, aplica e vai para o endereço. Invertido no formulário, o próprio navegador barra o
@@ -681,7 +681,7 @@ await teste('falha de rede: os dados anteriores ficam na tela e o erro aparece n
   try {
     const antes = await textoDe(pagina, 'Total de Vendas')
     let falhar = false
-    await contexto.route(/benchmock\.supabase\.co\/rest\/v1\/vendas/, (route) => (falhar ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'falha simulada' }) }) : route.fallback()))
+    await contexto.route(/benchmock\.supabase\.co\/rest\/v1\/rpc\/dashboard_home_sales/, (route) => (falhar ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'falha simulada' }) }) : route.fallback()))
     falhar = true
     await pagina.evaluate(() => window.dispatchEvent(new Event('dashboard-data-changed')))
     const aviso = pagina.getByRole('alert').filter({ hasText: 'Falha ao atualizar' })
@@ -912,22 +912,26 @@ await teste('checklist: marcar uma tarefa chama a mesma RPC e as metas avançam 
   }
 })
 
-await teste('papel de vendedor: números só dele e menu sem itens de administração', async () => {
+await teste('papel de vendedor: o time todo, igual ao Executive, e menu sem itens de administração', async () => {
   const f = buildFixtures({ role: 'seller', now: FIXED })
   const { pagina, pedidosDeVendas, pedidosDeCalls, erros, fechar } = await abrir({ fixtures: f })
   try {
+    // Sem filtro de usuário: a consulta é a mesma de quem é Executive (as tabelas só entregariam as linhas dele).
     await expect.poll(() => pedidosDeVendas.length).toBeGreaterThan(0)
-    assert.ok(pedidosDeVendas.every((u) => u.searchParams.get('user_id')?.startsWith('eq.')), 'a consulta do vendedor filtra pelo próprio usuário (a regra do painel antigo)')
-    // As calls seguem a mesma regra: só as que a própria pessoa fez (assigned_to, quem a Arena credita).
+    assert.ok(pedidosDeVendas.every((a) => !('user_id' in a) && !('p_user' in a)), 'o pedido do vendedor não filtra por usuário')
     await expect.poll(() => pedidosDeCalls.length).toBeGreaterThan(0)
-    assert.ok(pedidosDeCalls.every((u) => u.searchParams.get('assigned_to') === `eq.${USER_ID}`), 'o vendedor só conta as próprias calls')
-    const proprias = esperado(f, 'hoje').calls.filter((c) => c.assigned_to === USER_ID)
-    assert.ok(proprias.length > 0, 'o mock tem calls feitas hoje pela própria pessoa')
+    assert.ok(pedidosDeCalls.every((a) => !('assigned_to' in a)), 'as calls são as do time todo')
+    const time = esperado(f, 'hoje')
+    const proprias = time.calls.filter((c) => c.assigned_to === USER_ID)
+    assert.ok(proprias.length > 0 && proprias.length < time.calls.length, 'o mock tem calls do time além das da própria pessoa')
+    await expect(regiao(pagina, 'Total de Vendas')).toContainText(normalizar(money(time.total)))
+    assert.ok((await textoDe(pagina, 'Quantidade de Vendas')).includes(inteiro(time.quantidade)), 'a quantidade é a do time')
+    assert.ok((await textoDe(pagina, 'Abordagens')).includes(inteiro(time.abordagens.length)), 'as abordagens são as do time')
     const legenda = normalizar(await regiao(pagina, GRAFICO).getByRole('list', { name: 'Legenda' }).innerText())
-    assert.ok(legenda.includes(`Calls feitas ${inteiro(proprias.length)}`), `o gráfico conta só as calls dela (veio "${legenda}")`)
+    assert.ok(legenda.includes(`Calls feitas ${inteiro(time.calls.length)}`), `o gráfico conta as calls do time (veio "${legenda}")`)
     const itens = (await pagina.locator('[data-sidebar="content"] [data-sidebar="menu-button"]').allInnerTexts()).map((t) => t.trim())
     assert.ok(!itens.includes('Executive') && !itens.includes('Assinaturas'), `vendedor não vê Executive nem Assinaturas (veio ${itens.join(', ')})`)
-    await expect(pagina.getByText('somente os seus números')).toBeVisible()
+    await expect(pagina.getByText('visão consolidada do time')).toBeVisible()
     assert.deepEqual(erros, [])
   } finally {
     await fechar()
@@ -939,7 +943,7 @@ await teste('carga inicial com falha: nada de zeros que parecem dados, mensagem 
   try {
     // Esta página abriu normalmente; a falha é simulada numa segunda aba do mesmo contexto, desde o primeiro pedido.
     let falhar = true
-    await contexto.route(/benchmock\.supabase\.co\/rest\/v1\/(vendas|abordagens)/, (route) =>
+    await contexto.route(/benchmock\.supabase\.co\/rest\/v1\/rpc\/dashboard_home_(sales|approaches)/, (route) =>
       falhar ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'falha simulada' }) }) : route.fallback(),
     )
     const outra = await contexto.newPage()

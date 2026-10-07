@@ -145,7 +145,7 @@ await teste('compra de hoje aprovada agora: entra nos totais e na última hora p
   }
 })
 
-await teste('vendedor: o aviso e o feed mostram só as aprovações das vendas dele, de compras anteriores', async () => {
+await teste('vendedor: o aviso e o feed mostram as aprovações do time todo, como para o Executive', async () => {
   const outro = '00000000-0000-4000-8000-0000000000aa'
   const compra = '2026-09-25T21:57:00.000Z' // sexta
   const { pagina, aprovar, erros, fechar } = await abrir(
@@ -161,11 +161,11 @@ await teste('vendedor: o aviso e o feed mostram só as aprovações das vendas d
     const aviso = pagina.locator(AVISO)
     await expect(aviso).toBeVisible()
     const textoDoAviso = normalizar(await aviso.innerText())
-    assert.ok(textoDoAviso.includes('Uma venda aprovada neste período foi comprada antes'), textoDoAviso)
+    assert.ok(textoDoAviso.includes('2 vendas aprovadas neste período foram compradas antes'), textoDoAviso)
     assert.ok(textoDoAviso.includes('Minha Mentoria') && textoDoAviso.includes('R$ 500,00'), textoDoAviso)
-    assert.ok(!textoDoAviso.includes('Venda de outra pessoa') && !textoDoAviso.includes('2.997'), `o vendedor não vê a venda de outra pessoa: ${textoDoAviso}`)
+    assert.ok(textoDoAviso.includes('Venda de outra pessoa') && textoDoAviso.includes('R$ 2.997,00'), `o vendedor também vê a venda de outra pessoa: ${textoDoAviso}`)
     const itemDoFeed = normalizar(await pagina.getByRole('list', { name: 'Atividade ao vivo' }).innerText())
-    assert.ok(itemDoFeed.includes('Venda aprovada · R$ 500,00') && !itemDoFeed.includes('2.997'), itemDoFeed)
+    assert.ok(itemDoFeed.includes('Venda aprovada · R$ 500,00') && itemDoFeed.includes('Venda aprovada · R$ 2.997,00'), itemDoFeed)
     assert.deepEqual(erros, [])
   } finally {
     await fechar()

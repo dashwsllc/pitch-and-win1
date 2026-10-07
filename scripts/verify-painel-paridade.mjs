@@ -235,7 +235,10 @@ async function abrir(navegador, url, fixtures) {
   return { contexto, pagina, erros }
 }
 
-const pedidoDasMetricas = (r) => r.url().includes('/rest/v1/vendas') && decodeURIComponent(r.url()).includes('valor_venda')
+// O painel antigo lia a tabela de vendas; a Home nova lê a função dashboard_home_sales (o time todo, para qualquer conta).
+const pedidoDasMetricas = (r) =>
+  (r.url().includes('/rest/v1/vendas') && decodeURIComponent(r.url()).includes('valor_venda')) ||
+  (r.url().includes('/rest/v1/rpc/dashboard_home_sales') && !(r.request().postData() ?? '').includes('"p_late":true'))
 
 /** Espera a carga das métricas que o clique dispara (e o desenho dela). */
 async function aposCarga(pagina, acao) {
@@ -324,12 +327,15 @@ const cenarios = [
       return f
     },
   ],
-  ['vendedor (só os próprios números)', () => buildFixtures({ role: 'seller', now: FIXED })],
+  // O painel antigo mostrava ao vendedor só os próprios números; a Home nova mostra o time todo para qualquer conta. Então
+  // o "antes" deste cenário é o painel antigo visto por quem é Executive (o time todo) e o "depois" é a Home nova vista
+  // por um vendedor: os dois têm de bater número a número.
+  ['vendedor (vê o time todo, igual ao Executive)', () => buildFixtures({ role: 'seller', now: FIXED }), () => buildFixtures({ role: 'super_admin', now: FIXED })],
 ]
 const saida = {}
 try {
-  for (const [nome, fabricar] of cenarios) {
-    const antes = await percorrer(navegador, servidorAntes.url, 'antes', fabricar())
+  for (const [nome, fabricar, fabricarAntes = fabricar] of cenarios) {
+    const antes = await percorrer(navegador, servidorAntes.url, 'antes', fabricarAntes())
     const depois = await percorrer(navegador, servidorDepois.url, 'depois', fabricar())
     const f = fabricar()
     saida[nome] = { antes, depois }
@@ -343,7 +349,7 @@ try {
       // intervalo estão nas colunas do indicador e as abordagens na tabela do gráfico de abordagens e calls; num dia só
       // as duas abrem por hora e a soma das horas é o ponto do dia. Um intervalo que só a linha nova tem (uma call fora do
       // alcance das vendas e abordagens, em "todo o período") só pode vir zerado de vendas e abordagens.
-      const soDoUsuario = nome.startsWith('vendedor')
+      const soDoUsuario = false // a Home mostra o time todo a qualquer conta
       const antiga = serieAntiga(f, filtro, soDoUsuario)
       const tabela = d.serie.map(([rotulo, calls, ab]) => [rotulo, Number(calls), Number(ab)])
       const vendasPorRotulo = new Map(d.colunasDeVendas)

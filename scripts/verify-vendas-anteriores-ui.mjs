@@ -194,16 +194,20 @@ await teste('escolher "Hoje" é uma escolha: indicadores do dia, as vendas anter
   }
 })
 
-await teste('vendedor: abre nos 30 dias só com as vendas dele; as do time seguem nos blocos de vendas', async () => {
+await teste('quem não é Executive vê o time todo: vendas anteriores, totais e feed iguais aos do Executive', async () => {
   const { f, pagina, regiao, quantidade, erros, fechar } = await abrir(VENDAS_REAIS, { papel: 'seller', donoDasVendas: { id: '00000000-0000-4000-8000-0000000000aa', name: 'Outra Pessoa' } })
   try {
-    // Duas das quatro vendas são do vendedor que olha a tela; as outras duas, de outra pessoa.
+    // Só duas das quatro vendas são de quem olha a tela; as outras duas são de outra pessoa. As tabelas só entregariam as
+    // dele (RLS); a Home lê o time todo pelas funções dashboard_home_*.
     for (const v of f.tables.vendas.slice(0, 2)) v.user_id = USER_ID
     await pagina.reload()
     await expect(pagina.getByRole('heading', { level: 1, name: 'Visão geral' })).toBeVisible()
-    await expect(regiao('Total de Vendas')).toContainText('R$ 1.997,00')
-    assert.equal(await quantidade(), '2')
-    await expect(regiao('Vendas do time')).toContainText('4 resultados') // o time todo continua visível no bloco do time
+    await expect(regiao('Total de Vendas')).toContainText('R$ 6.764,00')
+    assert.equal(await quantidade(), '4')
+    await expect(pagina.getByText('visão consolidada do time')).toBeVisible()
+    const feed = normalizar(await pagina.getByRole('list', { name: 'Atividade ao vivo' }).innerText())
+    for (const trecho of ['R$ 500,00', 'R$ 1.497,00', 'R$ 2.997,00', 'R$ 1.770,00']) assert.ok(feed.includes(trecho), `o feed do vendedor diz "${trecho}": ${feed}`)
+    await expect(regiao('Vendas do time')).toContainText('4 resultados')
     assert.deepEqual(erros, [])
   } finally {
     await fechar()

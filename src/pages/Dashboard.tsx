@@ -17,7 +17,6 @@ import { useDashboardData } from '@/hooks/useDashboardData'
 import { useDailyGoals, useBrasiliaToday } from '@/hooks/useGoals'
 import { useProfile } from '@/hooks/useProfile'
 import { useRankingDataWithMock } from '@/hooks/useRankingDataWithMock'
-import { useRoles } from '@/hooks/useRoles'
 import { resolveDashboardPeriod } from '@/lib/dashboard-period'
 import { refreshDashboardData } from '@/lib/sync'
 import { AvisoDeAprovacoes } from '@/painel/components/AvisoDeAprovacoes'
@@ -71,7 +70,6 @@ export default function Dashboard() {
   const filtro = useFiltroPainel()
   const { user } = useAuth()
   const { profile } = useProfile()
-  const { isExecutive } = useRoles()
   const today = useBrasiliaToday()
   const queryClient = useQueryClient()
   const navegar = useNavigate()
@@ -143,7 +141,7 @@ export default function Dashboard() {
       erro={updatedAt !== null ? error : null}
       onAtualizar={() => void refreshDashboardData(queryClient)}
     >
-      <Cabecalho nome={primeiroNome} escopo={isExecutive ? 'visão consolidada do time' : 'somente os seus números'} />
+      <Cabecalho nome={primeiroNome} escopo="visão consolidada do time" />
       <FiltroPainel valor={filtro.valor} intervalo={filtro.intervalo} erro={filtro.erro} ativo={filtro.ativo} onMudar={filtro.mudar} onLimpar={filtro.limpar} />
 
       {primeiraCarga && (

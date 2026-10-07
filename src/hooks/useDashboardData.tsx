@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
-import { useRoles } from '@/hooks/useRoles'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { millisecondsUntilBrasiliaMidnight } from '@/lib/brasilia-time'
 import { callsDoPeriodo, type CallLinha, type VendaLinha } from '@/painel/lib/visao'
@@ -51,16 +50,23 @@ export interface DashboardRows {
   calls: CallLinha[]
 }
 
-// Os tipos gerados ainda não têm a coluna de cancelamento que a Arena acrescentou às calls (cancelled_at): a consulta
-// das calls sai pelo mesmo cliente, só sem a checagem de tipos das colunas.
+// As funções dashboard_home_* (migração 20261007130000) ainda não estão nos tipos gerados: as consultas saem pelo mesmo
+// cliente e a mesma sessão, só sem a checagem de tipos delas.
 const clienteSemTipos = supabase as unknown as SupabaseClient
+
+interface VendaDoBanco {
+  id: string
+  nome_produto: string
+  valor_venda: number | string
+  created_at: string
+  reviewed_at: string | null
+}
 
 export function useDashboardData(
   dateFilter: DashboardDateFilter = '30dias',
   customRange: DashboardCustomRange = createDefaultDashboardCustomRange(),
 ) {
   const { user } = useAuth()
-  const { isExecutive, loading: rolesLoading } = useRoles()
   const userId = user?.id
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     totalVendas: 0,
@@ -91,7 +97,7 @@ export function useDashboardData(
 
   const fetchDashboardData = useCallback(async (showLoading = false) => {
     const requestId = ++latestFetch.current
-    if (!userId || rolesLoading) return
+    if (!userId) return
 
     try {
       if (showLoading) setLoading(true)
@@ -100,74 +106,31 @@ export function useDashboardData(
 
       const period = resolveDashboardPeriod(dateFilter, { start: customStart, end: customEnd })
 
-      // Executives see the consolidated commercial operation. Sellers see only
-      // their own data. RLS remains the final source of authorization.
+      // A Visão geral é a do time todo, para qualquer conta ativa (não só Executive): as tabelas só entregam a cada pessoa
+      // as próprias linhas (RLS, e vendas carrega os dados do comprador), então a leitura passa pelas funções
+      // dashboard_home_*, que devolvem só as colunas que a Home desenha e exigem conta ativa e aprovada.
       const inicioDoPeriodo = period.start
       const fimDoPeriodo = period.end
+      const janela = { p_start: inicioDoPeriodo?.toISOString() ?? null, p_end: fimDoPeriodo?.toISOString() ?? null }
       const [vendas, compradasAntes, abordagens, calls] = await Promise.all([
-        fetchAllPages((from, to) => {
-          let request = supabase
-            .from('vendas')
-            .select('id, nome_produto, valor_venda, created_at, reviewed_at')
-            .eq('approval_status', 'aprovada')
-          if (period.start && period.end) {
-            request = request
-              .gte('created_at', period.start.toISOString())
-              .lt('created_at', period.end.toISOString())
-          }
-          request = request.order('created_at').order('id')
-          if (!isExecutive) request = request.eq('user_id', userId)
-          return request.range(from, to)
-        }),
+        fetchAllPages<VendaDoBanco>((from, to) =>
+          clienteSemTipos.rpc('dashboard_home_sales', janela).order('created_at').order('id').range(from, to),
+        ),
         // Aprovadas NESTE período, compradas ANTES dele (ver DashboardRows.compradasAntes). Em "todo o período" não há
         // compra anterior: nada a buscar.
         inicioDoPeriodo && fimDoPeriodo
-          ? fetchAllPages((from, to) => {
-              let request = supabase
-                .from('vendas')
-                .select('id, nome_produto, valor_venda, created_at, reviewed_at')
-                .eq('approval_status', 'aprovada')
-                .gte('reviewed_at', inicioDoPeriodo.toISOString())
-                .lt('reviewed_at', fimDoPeriodo.toISOString())
-                .lt('created_at', inicioDoPeriodo.toISOString())
-                .order('reviewed_at')
-                .order('id')
-              if (!isExecutive) request = request.eq('user_id', userId)
-              return request.range(from, to)
-            })
-          : Promise.resolve([]),
-        fetchAllPages((from, to) => {
-          let request = supabase
-            .from('abordagens')
-            .select('id, created_at, mostrou_ia')
-          if (period.start && period.end) {
-            request = request
-              .gte('created_at', period.start.toISOString())
-              .lt('created_at', period.end.toISOString())
-          }
-          request = request.order('created_at').order('id')
-          if (!isExecutive) request = request.eq('user_id', userId)
-          return request.range(from, to)
-        }),
-        // Calls feitas: concluídas e não canceladas. A janela traz as que têm a hora marcada ou a do fechamento no
-        // período; o momento exato (o mais cedo dos dois) é recortado logo abaixo. Quem não é Executive vê as que fez
-        // (assigned_to, a pessoa que a Arena credita pela call).
-        fetchAllPages<{ id: string; scheduled_at: string | null; completed_at: string | null }>((from, to) => {
-          let request = clienteSemTipos
-            .from('crm_activities')
-            .select('id, scheduled_at, completed_at')
-            .in('call_type', ['qualificacao', 'fechamento_closer'])
-            .eq('is_completed', true)
-            .is('cancelled_at', null)
-          if (period.start && period.end) {
-            const de = period.start.toISOString()
-            const ate = period.end.toISOString()
-            request = request.or(`and(scheduled_at.gte.${de},scheduled_at.lt.${ate}),and(completed_at.gte.${de},completed_at.lt.${ate})`)
-          }
-          request = request.order('scheduled_at').order('id')
-          if (!isExecutive) request = request.eq('assigned_to', userId)
-          return request.range(from, to)
-        }),
+          ? fetchAllPages<VendaDoBanco>((from, to) =>
+              clienteSemTipos.rpc('dashboard_home_sales', { ...janela, p_late: true }).order('reviewed_at').order('id').range(from, to),
+            )
+          : Promise.resolve([] as VendaDoBanco[]),
+        fetchAllPages<{ id: string; created_at: string; mostrou_ia: boolean | null }>((from, to) =>
+          clienteSemTipos.rpc('dashboard_home_approaches', janela).order('created_at').order('id').range(from, to),
+        ),
+        // Calls feitas: concluídas e não canceladas, do time todo. A janela traz as que têm a hora marcada ou a do
+        // fechamento no período; o momento exato (o mais cedo dos dois) é recortado logo abaixo.
+        fetchAllPages<{ id: string; scheduled_at: string | null; completed_at: string | null }>((from, to) =>
+          clienteSemTipos.rpc('dashboard_home_calls', janela).order('scheduled_at').order('id').range(from, to),
+        ),
       ])
 
       // Calculate metrics
@@ -213,7 +176,7 @@ export function useDashboardData(
         vendasMes,
         produtosMaisVendidos
       }
-      const comoLinha = (venda: { id: string; nome_produto: string; valor_venda: number | string; created_at: string; reviewed_at: string | null }): VendaLinha => ({
+      const comoLinha = (venda: VendaDoBanco): VendaLinha => ({
         id: venda.id,
         nome_produto: venda.nome_produto,
         valor_venda: Number(venda.valor_venda),
@@ -251,10 +214,10 @@ export function useDashboardData(
         setFetching(false)
       }
     }
-  }, [customEnd, customStart, dateFilter, isExecutive, rolesLoading, userId])
+  }, [customEnd, customStart, dateFilter, userId])
 
   useEffect(() => {
-    if (!userId || rolesLoading) return
+    if (!userId) return
 
     void fetchDashboardData(true)
     const refresh = () => { void fetchDashboardData(false) }
@@ -263,10 +226,10 @@ export function useDashboardData(
     return () => {
       window.removeEventListener('dashboard-data-changed', refresh)
     }
-  }, [fetchDashboardData, isExecutive, rolesLoading, userId])
+  }, [fetchDashboardData, userId])
 
   useEffect(() => {
-    if (!userId || rolesLoading || dateFilter === 'all' || dateFilter === 'custom') return
+    if (!userId || dateFilter === 'all' || dateFilter === 'custom') return
     let timeout: number
     const schedule = () => {
       timeout = window.setTimeout(() => {
@@ -276,7 +239,7 @@ export function useDashboardData(
     }
     schedule()
     return () => window.clearTimeout(timeout)
-  }, [dateFilter, fetchDashboardData, rolesLoading, userId])
+  }, [dateFilter, fetchDashboardData, userId])
 
   return { metrics, rows, loading, fetching, error, updatedAt, generation, loadedPeriod, refetch: () => fetchDashboardData(true) }
 }
