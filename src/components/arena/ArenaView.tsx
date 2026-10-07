@@ -223,8 +223,8 @@ function RankingList({
     return () => animations.forEach((a) => a.cancel());
   }, [people]);
   return (
-    <section className="arena-panel min-h-0 min-w-0">
-      <div className="mb-3 flex items-center justify-between">
+    <section className="arena-panel arena-ranking min-h-0 min-w-0" aria-label={title}>
+      <div className="arena-ranking-header mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-medium">
           <Trophy className="h-4 w-4 text-ember" />
           {title}
@@ -244,7 +244,7 @@ function RankingList({
               data-person={person.user_id}
               className="arena-person rounded-xl px-3 py-2.5"
             >
-              <div className="flex items-center gap-3">
+              <div className="arena-person-identity flex items-center gap-3">
                 <span
                   className={`w-4 text-sm tabular-nums ${i === 0 ? "text-ember" : "text-muted-foreground"}`}
                 >
@@ -252,7 +252,7 @@ function RankingList({
                 </span>
                 <PersonAvatar name={person.name} url={person.avatarUrl} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm">
+                  <p className="truncate text-sm" title={person.name}>
                     {person.name}
                     {person.suspended && (
                       <span className="ml-2 text-[10px] text-muted-foreground">
@@ -260,7 +260,7 @@ function RankingList({
                       </span>
                     )}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground" title={person.repasses != null ? `${person.no_handoff ?? 0} sem avanço · ${person.cancelled ?? 0} cancelamentos` : undefined}>
+                  <p className="arena-person-stats text-xs text-muted-foreground">
                     {person.repasses != null
                       ? person.qualificationCallsDisabled
                         ? `Calls para Closer ${person.repasses} · canc. ${person.cancelled ?? 0}`
@@ -669,7 +669,7 @@ export function ArenaView({ query, today, filter, setFilter, custom, setCustom, 
               ))}
             </div>
           </div>
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="arena-rankings">
             <RankingList title="SDRs · hoje" people={data.sdrs} cycle={sdr} sharedGoal />
             <RankingList title="Closers · semana" people={data.closers} cycle={closer} linkLabel="Ranking mensal" />
           </div>

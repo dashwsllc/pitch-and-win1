@@ -6,11 +6,11 @@ import { progressPercent, type ArenaCycle, type ArenaMember } from "@/lib/arena"
 type GoalProgressSource = Pick<ArenaMember, "actual" | "target">;
 
 const states = {
-  low: { label: "Vamos acelerar", emoji: "😔" },
-  middle: { label: "No caminho", emoji: "😐" },
-  achieved: { label: "Meta batida!", emoji: "🤑" },
-  exceeded: { label: "Além da meta!", emoji: "🤑" },
-  unassigned: { label: "Sem meta definida", emoji: "—" },
+  low: { label: "Vamos acelerar", emoji: "pensive" },
+  middle: { label: "No caminho", emoji: "neutral" },
+  achieved: { label: "Meta batida!", emoji: "money-mouth" },
+  exceeded: { label: "Além da meta!", emoji: "money-mouth" },
+  unassigned: { label: "Sem meta definida", emoji: null },
 } as const;
 
 const periods = { daily: "Meta de hoje", weekly: "Meta da semana", monthly: "Meta do mês" };
@@ -41,8 +41,10 @@ export function PersonGoalProgress({ name, member, shared, period }: {
   return (
     <div className="arena-person-progress" data-state={state}>
       <div className="arena-progress-mood" aria-hidden="true">
-        <span className="arena-progress-emoji" key={state}>{emoji}</span>
-        {state === "exceeded" && <span className="arena-progress-sparkle">✨</span>}
+        {emoji ? (
+          <img className="arena-progress-emoji" key={state} src={`/emoji/apple/${emoji}.png`} alt="" width={26} height={26} draggable={false} />
+        ) : <span className="arena-progress-emoji">—</span>}
+        {state === "exceeded" && <img className="arena-progress-sparkle" src="/emoji/apple/sparkles.png" alt="" width={14} height={14} draggable={false} />}
       </div>
       <div className="arena-progress-body">
         <div className="arena-progress-heading">

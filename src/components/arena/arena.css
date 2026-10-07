@@ -18,6 +18,26 @@
   font-size: 11px;
   height: 100%;
 }
+.arena-rankings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+.arena-ranking-header > a,
+.arena-person-identity > span {
+  flex-shrink: 0;
+}
+.arena-person-stats {
+  overflow-wrap: anywhere;
+}
+.arena-ranking .arena-person {
+  padding: 8px 10px;
+}
+.arena-ranking .arena-person-progress {
+  margin-top: 7px;
+  padding-top: 7px;
+}
 .arena-person {
   border: 1px solid hsl(264 20% 80% / 0.07);
   background: linear-gradient(115deg, hsl(264 20% 80% / 0.035), hsl(264 20% 80% / 0.01));
@@ -67,6 +87,10 @@
 }
 .arena-progress-emoji {
   display: inline-block;
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  text-align: center;
   font-size: 23px;
   line-height: 1;
   transform-origin: center 75%;
@@ -87,7 +111,9 @@
   position: absolute;
   top: -6px;
   right: -5px;
-  font-size: 13px;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
   animation: arena-sparkle 2.8s ease-in-out infinite;
 }
 .arena-progress-body {
@@ -241,6 +267,19 @@
   70% {
     border-color: #c4a3ff;
   }
+}
+@media (max-width: 600px) {
+  .arena-rankings { gap: 8px; }
+  .arena-ranking { padding: 10px 8px; }
+  .arena-ranking-header { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .arena-ranking-header h2 { gap: 5px; font-size: 13px; }
+  .arena-ranking-header > a { font-size: 10px; }
+  .arena-ranking .arena-person { padding: 8px; }
+  .arena-person-identity { flex-wrap: wrap; gap: 6px; }
+  .arena-person-identity > div { flex-basis: 100%; }
+  .arena-person-stats { font-size: 10px; }
+  .arena-ranking .arena-person-progress { flex-wrap: wrap; gap: 6px; }
+  .arena-ranking .arena-progress-body { flex-basis: 100%; }
 }
 @media (min-width: 1280px) and (max-height: 850px) {
   .arena-shell {
