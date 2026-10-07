@@ -85,6 +85,15 @@ DO $$ DECLARE l public.crm_leads; c public.crm_activities; BEGIN
   UPDATE self_qa SET lead_id=l.id,call_id=c.id WHERE label='base';
 END; $$;
 RESET ROLE;
+-- Decisão do dono (07/10): quem agenda o fechamento para si mesmo recebe os dois créditos. O repasse (closing.scheduled)
+-- segue creditado a quem agendou, com o peso de sempre do SDR; a venda continua creditada ao Closer. A Arena não muda.
+DO $$ DECLARE s record; e public.activity_feed; BEGIN
+  SELECT * INTO s FROM self_qa WHERE label='base';
+  SELECT * INTO e FROM public.activity_feed WHERE event_key='closing.scheduled:'||s.call_id;
+  IF e.id IS NULL OR e.responsible_id<>'cf170000-0000-4000-8000-000000000001' OR e.responsible_role<>'sdr'
+    OR e.score_delta IS DISTINCT FROM public.arena_score_weight('closing.scheduled')
+  THEN RAISE EXCEPTION 'FAIL o SDR que se escolheu como Closer não recebeu o crédito do repasse: %', to_jsonb(e); END IF;
+END; $$;
 
 -- ------------------------------------------------------------- 2: SDR puro troca o Closer; o dono da call se escolhe de volta
 SELECT set_config('request.jwt.claims','{"sub":"cf170000-0000-4000-8000-000000000002","role":"authenticated"}',true);
