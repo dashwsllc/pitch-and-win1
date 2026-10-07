@@ -226,19 +226,19 @@ export function CRMLeadCard({
         <div className="flex shrink-0">
           {[
             {
-              label: `Contexto de ${lead.name}`,
-              icon: BookOpen,
-              action: onRead,
-              tip: "Contexto",
-              active: hasContext,
-            },
-            {
-              // Ao lado do Contexto, não dentro dele: o ícone ganha a cor do pagamento (verde, vermelho, amarelo).
+              // À esquerda do Contexto, não dentro dele: o ícone ganha a cor do pagamento (verde, vermelho, amarelo).
               label: `Pagamento de ${lead.name}`,
               icon: CircleDollarSign,
               action: onPayment,
               tip: payment?.status ? `Pagamento: ${PAYMENT_STATUS_LABELS[payment.status]}` : "Pagamento",
               tone: payment?.status ? PAYMENT_STATUS_STYLE[payment.status].soft : undefined,
+            },
+            {
+              label: `Contexto de ${lead.name}`,
+              icon: BookOpen,
+              action: onRead,
+              tip: "Contexto",
+              active: hasContext,
             },
             {
               label: `Editar ${lead.name}`,

@@ -126,11 +126,12 @@ try {
   await expect(card('Gama')).toContainText('R$ 1.500,00')
   await page.screenshot({ path: '.verification.local/crm-payments-cards.png', fullPage: true })
 
-  // O pagamento tem o próprio ícone, logo depois do de Contexto (nunca dentro dele), na cor do status.
+  // O pagamento tem o próprio ícone, logo à esquerda do de Contexto (nunca dentro dele), na cor do status.
   const iconNames = lead => card(lead).getByRole('button').evaluateAll(buttons => buttons.map(b => b.getAttribute('aria-label')).filter(Boolean))
   for (const name of ['Alfa', 'Beta', 'Gama', 'Delta']) {
     const names = await iconNames(name)
-    assert.equal(names.indexOf(`Pagamento de ${name}`), names.indexOf(`Contexto de ${name}`) + 1, `payment icon sits right after the context icon (${name})`)
+    assert.equal(names.indexOf(`Pagamento de ${name}`), names.indexOf(`Contexto de ${name}`) - 1, `payment icon sits right before (left of) the context icon (${name})`)
+    assert.equal(names.indexOf(`Pagamento de ${name}`), 0, `payment icon is the first card action (${name})`)
   }
   await expect(card('Alfa').getByRole('button', { name: 'Pagamento de Alfa', exact: true })).toHaveClass(/text-yellow-400/)
   await expect(card('Beta').getByRole('button', { name: 'Pagamento de Beta', exact: true })).toHaveClass(/text-red-400/)
@@ -278,5 +279,5 @@ try {
   await sdr.context.close()
 
   assert.deepEqual(errors, [])
-  console.log('PASS: CRM lead payments in the browser: green/red/yellow badges with icons on cards, own payment icon right after the context icon (and nothing inside Contexto), payment sheet, mark Pago/Não pago/Pendente (reason, revision, default date), new/edit/remove entries, stale revision message, phone width, read-only for roles without Closer access. Browser network mocked; no live data changed.')
+  console.log('PASS: CRM lead payments in the browser: green/red/yellow badges with icons on cards, own payment icon right to the left of the context icon (and nothing inside Contexto), payment sheet, mark Pago/Não pago/Pendente (reason, revision, default date), new/edit/remove entries, stale revision message, phone width, read-only for roles without Closer access. Browser network mocked; no live data changed.')
 } finally { await browser.close() }
