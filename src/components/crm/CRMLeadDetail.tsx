@@ -27,7 +27,6 @@ import { formatAthleteAge, resolveAthleteAge } from "@/lib/crm-age";
 import type { Json } from "@/integrations/supabase/types";
 import { paymentStateValue } from "@/lib/crm-payments";
 import { CRMContextPanel } from "./CRMContextPanel";
-import { CRMPaymentsPanel } from "./CRMPaymentsPanel";
 
 const stateLabels: Record<string, string> = {
   temperature: "Aquecimento",
@@ -167,7 +166,6 @@ export function CRMLeadDetail({
                 ?.label || lead.pipeline_stage}
             </Badge>
           </div>
-          <CRMPaymentsPanel lead={lead} names={names} />
           <CRMContextPanel lead={lead} />
           <dl className="grid gap-x-3 gap-y-2 sm:grid-cols-3">
             {fields.map(([label, value]) => (

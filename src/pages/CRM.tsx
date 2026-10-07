@@ -47,6 +47,7 @@ import { useToast } from "@/hooks/use-toast";
 import { errorMessage } from "@/lib/sales";
 import type { Json } from "@/integrations/supabase/types";
 import { CRMLeadDetail } from "@/components/crm/CRMLeadDetail";
+import { CRMPaymentSheet } from "@/components/crm/CRMPaymentSheet";
 import { CRMLeadEditor } from "@/components/crm/CRMLeadEditor";
 import { CRMLeadCard } from "@/components/crm/CRMLeadCard";
 import { CRMActionDialog } from "@/components/crm/CRMActionDialog";
@@ -205,6 +206,7 @@ export default function CRM() {
     requestedTab === "remarketing" ? "negative" : "active",
   );
   const [readId, setReadId] = useState<string | null>(null);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
   const [editor, setEditor] = useState<CRMLead | "new" | null>(null);
   const [deleting, setDeleting] = useState<CRMLead | null>(null);
   const [action, setAction] = useState<{ lead: CRMLead; name: string } | null>(
@@ -414,6 +416,7 @@ export default function CRM() {
             ? lead.approach_stage
           : sdrGroup(lead);
   const selected = crm.leads.find((l) => l.id === readId);
+  const paymentLead = crm.leads.find((l) => l.id === paymentId);
   const run = async (
     operation: () => Promise<unknown>,
     title = "Lead atualizado",
@@ -493,6 +496,7 @@ export default function CRM() {
       pipelineDate={dailyPipeline ? leadApproachReference(lead) : null}
       busy={busy}
       onRead={() => setReadId(lead.id)}
+      onPayment={() => setPaymentId(lead.id)}
       onEdit={() => setEditor(lead)}
       onDelete={() => requestDelete(lead)}
       onAction={(name) => setAction({ lead, name })}
@@ -953,6 +957,14 @@ export default function CRM() {
               setEditor(selected);
             }}
             onDelete={() => requestDelete(selected)}
+          />
+        )}
+        {paymentLead && (
+          <CRMPaymentSheet
+            key={paymentLead.id}
+            lead={paymentLead}
+            names={names}
+            onClose={() => setPaymentId(null)}
           />
         )}
         {editor && (

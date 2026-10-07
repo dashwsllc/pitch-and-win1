@@ -126,8 +126,25 @@ try {
   await expect(card('Gama')).toContainText('R$ 1.500,00')
   await page.screenshot({ path: '.verification.local/crm-payments-cards.png', fullPage: true })
 
+  // O pagamento tem o próprio ícone, logo depois do de Contexto (nunca dentro dele), na cor do status.
+  const iconNames = lead => card(lead).getByRole('button').evaluateAll(buttons => buttons.map(b => b.getAttribute('aria-label')).filter(Boolean))
+  for (const name of ['Alfa', 'Beta', 'Gama', 'Delta']) {
+    const names = await iconNames(name)
+    assert.equal(names.indexOf(`Pagamento de ${name}`), names.indexOf(`Contexto de ${name}`) + 1, `payment icon sits right after the context icon (${name})`)
+  }
+  await expect(card('Alfa').getByRole('button', { name: 'Pagamento de Alfa', exact: true })).toHaveClass(/text-yellow-400/)
+  await expect(card('Beta').getByRole('button', { name: 'Pagamento de Beta', exact: true })).toHaveClass(/text-red-400/)
+  await expect(card('Gama').getByRole('button', { name: 'Pagamento de Gama', exact: true })).toHaveClass(/text-green-400/)
+  await expect(card('Delta').getByRole('button', { name: 'Pagamento de Delta', exact: true })).toHaveClass(/text-muted-foreground/)
   await card('Alfa').getByRole('button', { name: 'Contexto de Alfa', exact: true }).click()
-  const sheet = page.getByRole('dialog', { name: 'Ficha de Atleta Alfa' })
+  const contextSheet = page.getByRole('dialog', { name: 'Ficha de Atleta Alfa' })
+  await expect(contextSheet).toBeVisible()
+  await expect(contextSheet.getByRole('region', { name: 'Pagamento' })).toHaveCount(0)
+  await expect(contextSheet.getByRole('button', { name: 'Novo lançamento' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(contextSheet).toHaveCount(0)
+  await card('Alfa').getByRole('button', { name: 'Pagamento de Alfa', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pagamento de Atleta Alfa' })
   const panel = sheet.getByRole('region', { name: 'Pagamento' })
   await expect(badge(panel, 'Pendente').first()).toHaveClass(/text-yellow-400/)
   await expect(panel).toContainText('R$ 0,00 de R$ 1.200,00 recebidos')
@@ -243,8 +260,8 @@ try {
   // ---- Phone width: the sheet and its actions stay inside the screen. ----
   const phone = await launch(browser, 'closer', { width: 390, height: 844 })
   await phone.page.goto(`${origin}/crm`)
-  await phone.page.getByRole('article', { name: 'Lead Atleta Alfa' }).getByRole('button', { name: 'Contexto de Alfa', exact: true }).click()
-  const phonePanel = phone.page.getByRole('dialog', { name: 'Ficha de Atleta Alfa' }).getByRole('region', { name: 'Pagamento' })
+  await phone.page.getByRole('article', { name: 'Lead Atleta Alfa' }).getByRole('button', { name: 'Pagamento de Alfa', exact: true }).click()
+  const phonePanel = phone.page.getByRole('dialog', { name: 'Pagamento de Atleta Alfa' }).getByRole('region', { name: 'Pagamento' })
   await expect(phonePanel).toBeVisible()
   assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'no horizontal page scroll')
   await phone.page.screenshot({ path: '.verification.local/crm-payments-sheet-mobile.png', fullPage: true })
@@ -254,12 +271,12 @@ try {
   const sdr = await launch(browser, 'sdr', { width: 1440, height: 1050 })
   await sdr.page.goto(`${origin}/crm`)
   await expect(badge(sdr.page.getByRole('article', { name: 'Lead Atleta Beta' }), 'Não pago')).toBeVisible()
-  await sdr.page.getByRole('article', { name: 'Lead Atleta Alfa' }).getByRole('button', { name: 'Contexto de Alfa', exact: true }).click()
-  const readOnly = sdr.page.getByRole('dialog', { name: 'Ficha de Atleta Alfa' }).getByRole('region', { name: 'Pagamento' })
+  await sdr.page.getByRole('article', { name: 'Lead Atleta Alfa' }).getByRole('button', { name: 'Pagamento de Alfa', exact: true }).click()
+  const readOnly = sdr.page.getByRole('dialog', { name: 'Pagamento de Atleta Alfa' }).getByRole('region', { name: 'Pagamento' })
   await expect(readOnly).toContainText('Parcela 2/2')
   await expect(readOnly.getByRole('button')).toHaveCount(0)
   await sdr.context.close()
 
   assert.deepEqual(errors, [])
-  console.log('PASS: CRM lead payments in the browser: green/red/yellow badges with icons on cards and sheet, mark Pago/Não pago/Pendente (reason, revision, default date), new/edit/remove entries, stale revision message, phone width, read-only for roles without Closer access. Browser network mocked; no live data changed.')
+  console.log('PASS: CRM lead payments in the browser: green/red/yellow badges with icons on cards, own payment icon right after the context icon (and nothing inside Contexto), payment sheet, mark Pago/Não pago/Pendente (reason, revision, default date), new/edit/remove entries, stale revision message, phone width, read-only for roles without Closer access. Browser network mocked; no live data changed.')
 } finally { await browser.close() }

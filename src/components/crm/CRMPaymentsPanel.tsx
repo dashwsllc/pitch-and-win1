@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, Pencil, Plus, Trash2, WalletCards } from "lucide-react";
+import { ExternalLink, Pencil, Plus, Trash2, CircleDollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -70,7 +70,7 @@ export function CRMPaymentsPanel({
     <section aria-labelledby={`payments-${lead.id}`} className="space-y-3 rounded-lg border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id={`payments-${lead.id}`} className="flex items-center gap-2 text-sm font-semibold">
-          <WalletCards className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <CircleDollarSign className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           Pagamento
         </h2>
         {canEdit && (
@@ -96,7 +96,7 @@ export function CRMPaymentsPanel({
               <CRMPaymentBadge status={summary.status} large />
             ) : (
               <Badge variant="outline" className="h-7 px-3 text-sm text-muted-foreground">
-                <WalletCards className="mr-1 h-4 w-4" aria-hidden="true" />
+                <CircleDollarSign className="mr-1 h-4 w-4" aria-hidden="true" />
                 Sem pagamento registrado
               </Badge>
             )}

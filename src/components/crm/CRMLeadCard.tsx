@@ -14,6 +14,7 @@ import {
   UserCog,
   CheckCircle2,
   RefreshCcw,
+  CircleDollarSign,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -55,8 +56,9 @@ import {
   REMARKETING_STATUS_LABELS,
   optionLabel,
 } from "@/lib/crm-qualification";
-import { paymentSummaryText, type PaymentSummary } from "@/lib/crm-payments";
+import { PAYMENT_STATUS_LABELS, paymentSummaryText, type PaymentSummary } from "@/lib/crm-payments";
 import { CRMPaymentBadge } from "./CRMPaymentBadge";
+import { PAYMENT_STATUS_STYLE } from "./payment-status-style";
 
 export function CRMLeadCard({
   lead,
@@ -70,6 +72,7 @@ export function CRMLeadCard({
   showContextStatus = false,
   pipelineDate,
   onRead,
+  onPayment,
   onEdit,
   onDelete,
   onAction,
@@ -89,6 +92,7 @@ export function CRMLeadCard({
   showContextStatus?: boolean;
   pipelineDate?: string | null;
   onRead: () => void;
+  onPayment: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onAction: (action: string) => void;
@@ -229,6 +233,14 @@ export function CRMLeadCard({
               active: hasContext,
             },
             {
+              // Ao lado do Contexto, não dentro dele: o ícone ganha a cor do pagamento (verde, vermelho, amarelo).
+              label: `Pagamento de ${lead.name}`,
+              icon: CircleDollarSign,
+              action: onPayment,
+              tip: payment?.status ? `Pagamento: ${PAYMENT_STATUS_LABELS[payment.status]}` : "Pagamento",
+              tone: payment?.status ? PAYMENT_STATUS_STYLE[payment.status].soft : undefined,
+            },
+            {
               label: `Editar ${lead.name}`,
               icon: Pencil,
               action: onEdit,
@@ -247,7 +259,7 @@ export function CRMLeadCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`h-8 w-8 ${item.destructive ? "text-destructive hover:bg-destructive/10 hover:text-destructive" : item.active ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
+                  className={`h-8 w-8 ${item.destructive ? "text-destructive hover:bg-destructive/10 hover:text-destructive" : item.tone ? item.tone : item.active ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
                   aria-label={item.label}
                   title={item.tip}
                   onClick={item.action}
