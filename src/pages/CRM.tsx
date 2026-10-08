@@ -127,6 +127,8 @@ const sdrQueues = [
 ];
 const selectClass =
   "h-9 min-w-0 w-full rounded-md border border-input bg-background px-2 text-xs";
+// A aba Leads abre na Esteira do LEAD; as demais abrem na lista.
+const defaultView = (tab: string) => (tab === "leads" ? "pipeline" : "list");
 
 function MultiSelectFilter({
   label,
@@ -198,7 +200,7 @@ export default function CRM() {
   const [callDateFilter, setCallDateFilter] = useState<CallDateFilter>("all");
   const [callDateKey, setCallDateKey] = useState("");
   const [order, setOrder] = useState("newest");
-  const [view, setView] = useState("list");
+  const [view, setView] = useState(() => defaultView(tab));
   const [pipelinePeriod, setPipelinePeriod] = useState<CRMPipelinePeriod>("today");
   const [pipelineCustomRange, setPipelineCustomRange] = useState(createDefaultCRMPipelineRange);
   const [queue, setQueue] = useState("queue");
@@ -611,7 +613,7 @@ export default function CRM() {
           value={tab}
           onValueChange={(value) => {
             setParams({ tab: value });
-            setView("list");
+            setView(defaultView(value));
             setOrder("newest");
             setSdrQueue("active");
             setQueue("queue");
