@@ -23,6 +23,17 @@ const leads = [
     sdr_id: ownerSdr, closer_id: ownerCloser, negative_reason: 'Pediu os planos', followup_status: 'pending',
     followup_next_at: null, next_followup_at: null, last_result_outcome: 'venda_perdida', last_result_at: now },
 ]
+const directoryUser = (name, roles, suspended = false) => ({
+  id: randomUUID(), user_id: randomUUID(), display_name: name, avatar_url: null, suspended,
+  email: `${name.toLowerCase().replace(/\s+/g, '.')}@example.invalid`, phone: null, email_confirmed_at: now, phone_confirmed_at: null,
+  created_at: now, updated_at: now, last_sign_in_at: now, account_revision: '1',
+  user_roles: roles.map(role => ({ id: randomUUID(), role, crm_access: true, crm_closer_access: false, commission_rate: 10 })),
+})
+const directory = [
+  directoryUser('Pessoa SDR', ['sdr']), directoryUser('Pessoa Closer', ['closer']), directoryUser('Pessoa Executive', ['executive']),
+  directoryUser('Pessoa Super Admin', ['super_admin']), directoryUser('Pessoa Seller', ['seller']),
+  directoryUser('Pessoa Suspensa', ['closer'], true),
+]
 let actorRole = 'sdr'
 const requests = [], errors = []
 const browser = await chromium.launch({ headless: true })
@@ -43,6 +54,7 @@ await context.route('https://**/*', async route => {
     { user_id: ownerCloser, display_name: 'Closer Dono', role: 'closer' },
   ]
   else if (resource === 'get_sales_board') data = { items: [], total: 0, summary: { pending: 0, approved: 0, rejected: 0 }, fetched_at: now }
+  else if (resource === 'executive_list_users') data = { users: directory, fetched_at: now }
   else if (resource === 'crm_update_followup') {
     requests.push({ resource, payload })
     data = { ...leads.find(l => l.id === payload.p_lead_id), followup_status: 'nurturing', version: 4 }
@@ -120,8 +132,16 @@ try {
   await expect(page.getByRole('alert')).toContainText('Sua função não permite acessar esta área.')
   await expect(page.getByRole('region', { name: 'Fila de follow-up' })).toHaveCount(0)
 
+  // The Super Admin audits who has the permission: it is listed for SDR, Closer, Executive and Super Admin only.
+  actorRole = 'super_admin'
+  await page.goto(`${origin}/crm?tab=permissions`)
+  await expect(page.getByText('Pessoa SDR', { exact: true })).toBeVisible()
+  const permissionBadge = name => page.locator('article').filter({ hasText: name }).getByText('Follow-up', { exact: true })
+  for (const name of ['Pessoa SDR', 'Pessoa Closer', 'Pessoa Executive', 'Pessoa Super Admin']) await expect(permissionBadge(name)).toHaveCount(1)
+  for (const name of ['Pessoa Seller', 'Pessoa Suspensa']) await expect(permissionBadge(name)).toHaveCount(0)
+
   assert.deepEqual(errors, [])
-  console.log('PASS: Follow-up is its own CRM area; every SDR and Closer (and Executive) opens it and works any lead in it, old Remarketing links still land there, and Seller stays out. Browser network mocked; no live data changed.')
+  console.log('PASS: Follow-up is its own CRM area; every SDR and Closer (and Executive) opens it and works any lead in it, old Remarketing links still land there, Seller stays out, and the permissions report lists the Follow-up permission for exactly those roles. Browser network mocked; no live data changed.')
 } finally {
   await browser.close()
 }

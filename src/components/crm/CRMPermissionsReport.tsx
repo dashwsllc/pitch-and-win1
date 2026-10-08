@@ -91,6 +91,9 @@ export function CRMPermissionsReport() {
                           </Badge>
                         ))
                     )}
+                    {!u.suspended && (access.sdr || access.closer) && (
+                      <Badge className="h-5 px-2 text-[10px]" variant="secondary">Follow-up</Badge>
+                    )}
                     {!u.suspended && !access.leads && (
                       <Badge className="h-5 px-2 text-[10px]" variant="outline">Sem acesso CRM</Badge>
                     )}

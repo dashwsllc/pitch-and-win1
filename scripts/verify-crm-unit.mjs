@@ -256,6 +256,8 @@ assert.equal(followupAccess(['seller'], true), false, 'acesso ao CRM sozinho nã
 assert.equal(followupAccess([]), false)
 assert.equal(followupAccess(['sdr'], true, false), false, 'conta suspensa continua bloqueada')
 const followupBoardSource = readFileSync(new URL('../src/components/crm/CRMFollowupBoard.tsx', import.meta.url), 'utf8')
+const permissionsReportSource = readFileSync(new URL('../src/components/crm/CRMPermissionsReport.tsx', import.meta.url), 'utf8')
+assert.match(permissionsReportSource, /!u\.suspended && \(access\.sdr \|\| access\.closer\) && \(\s*<Badge[^>]*>Follow-up<\/Badge>/, 'o Relatório de Permissões mostra o Follow-up de quem tem SDR ou Closer')
 assert.match(followupBoardSource, /const canManage = capabilities\.sdr \|\| capabilities\.closer/)
 assert.doesNotMatch(followupBoardSource, /sdr_id === user|useAuth/, 'o follow-up não prende o lead ao SDR responsável')
 assert.match(crmPageSource, /\(capabilities\.sdr \|\| capabilities\.closer\) && \(\s*<TabsTrigger[^>]*value="followup"/)
