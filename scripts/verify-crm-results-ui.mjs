@@ -14,8 +14,8 @@ const at = (day, hour = '14:00:00') => brasiliaLocalToDate(day, hour).toISOStrin
 const profile = { id: actor, user_id: actor, display_name: 'Gestor QA', suspended: false, avatar_url: null, created_at: now, updated_at: now }
 const lead = (name, extra = {}) => ({ id: randomUUID(), name, athlete_name: `Atleta ${name}`, phone: '11999999999', email: null,
   pipeline_stage: 'novo', approach_stage: 'nao_abordado', temperature: 'morno', sdr_id: sdr, closer_id: null, created_by: actor,
-  created_at: now, updated_at: now, next_followup_at: null, version: 1, remarketing_status: null, remarketing_next_at: null,
-  remarketing_attempt_count: 0, ...extra })
+  created_at: now, updated_at: now, next_followup_at: null, version: 1, followup_status: null, followup_next_at: null,
+  followup_attempt_count: 0, ...extra })
 const leads = [
   lead('Retorno hoje', { next_followup_at: at(today) }),
   lead('Call amanhã'),
@@ -23,7 +23,7 @@ const leads = [
   lead('Dia anterior', { next_followup_at: at(addDaysToDateKey(today, -1)) }),
   lead('Aprovado', { pipeline_stage: 'fechado_ganho', closer_id: closer, last_result_closer_id: closer, last_result_closer_name: 'Maria Closer', last_result_outcome: 'venda_concluida', last_result_at: at(today), closed_at: at(today) }),
   lead('Rejeitado', { pipeline_stage: 'fechado_ganho', closer_id: actor, last_result_closer_id: actor, last_result_closer_name: 'Gestor QA', last_result_outcome: 'venda_concluida', last_result_at: at(addDaysToDateKey(today, -1)), closed_at: at(addDaysToDateKey(today, -1)) }),
-  lead('Recusado', { pipeline_stage: 'fechado_perdido', closer_id: closer, last_result_closer_id: closer, last_result_closer_name: 'Maria Closer', last_result_outcome: 'venda_perdida', last_result_at: at(today), closed_at: at(today), negative_reason: 'Sem orçamento agora', remarketing_status: 'scheduled', remarketing_next_at: at(tomorrow) }),
+  lead('Recusado', { pipeline_stage: 'fechado_perdido', closer_id: closer, last_result_closer_id: closer, last_result_closer_name: 'Maria Closer', last_result_outcome: 'venda_perdida', last_result_at: at(today), closed_at: at(today), negative_reason: 'Sem orçamento agora', followup_status: 'scheduled', followup_next_at: at(tomorrow) }),
 ]
 const byName = name => leads.find(l => l.name === name)
 const calls = [{ id: randomUUID(), lead_id: byName('Call amanhã').id, call_type: 'qualificacao', scheduled_at: at(tomorrow), is_completed: false, assigned_to: sdr, updated_at: now }]
@@ -91,8 +91,8 @@ await context.route('https://**/*', async route => {
   } else if (resource === 'crm_mark_negative') {
     requests.push({ resource, payload })
     data = leads.find(l => l.id === payload.p_lead_id)
-    Object.assign(data, { pipeline_stage: 'lead_perdido', negative_reason: payload.p_reason, remarketing_status: 'scheduled',
-      remarketing_next_at: payload.p_next_at, next_followup_at: payload.p_next_at,
+    Object.assign(data, { pipeline_stage: 'lead_perdido', negative_reason: payload.p_reason, followup_status: 'scheduled',
+      followup_next_at: payload.p_next_at, next_followup_at: payload.p_next_at,
       last_result_outcome: 'lead_perdido', last_result_at: now, version: data.version + 1 })
   } else if (resource === 'crm_reopen_result') {
     requests.push({ resource, payload })
@@ -100,7 +100,7 @@ await context.route('https://**/*', async route => {
     Object.assign(data, { pipeline_stage: payload.p_target === 'sdr' ? 'em_qualificacao' : 'repassado_closer',
       sdr_id: payload.p_target === 'sdr' ? payload.p_assigned_to : data.sdr_id,
       closer_id: payload.p_target === 'closer' ? payload.p_assigned_to : null,
-      next_followup_at: payload.p_next_at, remarketing_status: 'reactivated', remarketing_next_at: null, closed_at: null, version: data.version + 1 })
+      next_followup_at: payload.p_next_at, followup_status: 'reactivated', followup_next_at: null, closed_at: null, version: data.version + 1 })
     calls.push({ id: randomUUID(), lead_id: data.id, call_type: payload.p_target === 'sdr' ? 'qualificacao' : 'fechamento_closer',
       assigned_to: payload.p_assigned_to, scheduled_at: payload.p_next_at, is_completed: false, updated_at: now })
   }
@@ -175,46 +175,46 @@ try {
   await page.screenshot({ path: '.verification.local/crm-results-mobile.png', fullPage: true })
   await page.getByRole('tab', { name: 'SDR', exact: true }).click()
   await page.getByRole('button', { name: 'Ações de Sem agenda', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Enviar para Remarketing', exact: true }).click()
-  dialog = page.getByRole('dialog', { name: 'Enviar para Remarketing', exact: true })
+  await page.getByRole('menuitem', { name: 'Enviar para Follow-up', exact: true }).click()
+  dialog = page.getByRole('dialog', { name: 'Enviar para Follow-up', exact: true })
   await dialog.getByLabel('Motivo da negativa *').fill('Retomar em outro momento')
-  await dialog.getByLabel('Primeiro follow-up de remarketing · Brasília *').fill(`${tomorrow}T18:00`)
+  await dialog.getByLabel('Primeiro follow-up · Brasília *').fill(`${tomorrow}T18:00`)
   await dialog.getByLabel('Anotação', { exact: true }).fill('Aguardando disponibilidade')
   await dialog.getByRole('button', { name: 'Confirmar', exact: true }).click()
   await expect(dialog).toHaveCount(0)
   await expect(page.getByRole('article', { name: 'Lead Atleta Sem agenda' })).toHaveCount(0)
-  await page.getByRole('tab', { name: /^Remarketing \d/ }).click()
-  const board = page.getByRole('region', { name: 'Fila de remarketing' })
+  await page.getByRole('tab', { name: 'Follow-up', exact: true }).click()
+  const board = page.getByRole('region', { name: 'Fila de follow-up' })
   await expect(board.getByRole('article')).toHaveCount(1)
   await expect(board.getByRole('article')).toContainText('Sem agenda')
   await board.getByLabel('Data do próximo contato').fill(today)
   await expect(board.getByRole('article')).toHaveCount(0)
   await board.getByLabel('Data do próximo contato').fill(tomorrow)
   await expect(board.getByRole('article')).toHaveCount(1)
-  await board.getByRole('article', { name: 'Remarketing de Sem agenda' }).getByRole('button', { name: 'Importar .txt' }).click()
-  dialog = page.getByRole('dialog', { name: 'Importar contexto para remarketing' })
+  await board.getByRole('article', { name: 'Follow-up de Sem agenda' }).getByRole('button', { name: 'Importar .txt' }).click()
+  dialog = page.getByRole('dialog', { name: 'Importar contexto para follow-up' })
   await expect(dialog).toContainText('não cria leads nem altera a situação')
   await dialog.getByLabel('Tipo do conteúdo *').selectOption('call_transcript')
   await dialog.getByLabel('Arquivo de texto do lead *').setInputFiles({
-    name: 'conversa.txt', mimeType: 'text/plain', buffer: Buffer.from('Contato do remarketing\r\nObjeção: preço', 'utf8'),
+    name: 'conversa.txt', mimeType: 'text/plain', buffer: Buffer.from('Contato do follow-up\r\nObjeção: preço', 'utf8'),
   })
   await expect(dialog.getByText('conversa.txt → conversa.md pronto para importar.')).toBeVisible()
   await checkOverflow()
-  await page.screenshot({ path: '.verification.local/crm-remarketing-import-mobile.png', fullPage: true })
+  await page.screenshot({ path: '.verification.local/crm-followup-import-mobile.png', fullPage: true })
   await dialog.getByRole('button', { name: 'Importar para este lead' }).click()
   await expect(dialog).toHaveCount(0)
   const imported = requests.find(r => r.resource === 'crm_import_txt_context_with_media')
   assert.equal(imported.payload.p_lead_id, byName('Sem agenda').id)
   assert.equal(imported.payload.p_context_type, 'call_transcript')
   assert.equal(imported.payload.p_source_name, 'conversa.txt')
-  assert.equal(imported.payload.p_source_content, 'Contato do remarketing\r\nObjeção: preço')
+  assert.equal(imported.payload.p_source_content, 'Contato do follow-up\r\nObjeção: preço')
   await checkOverflow()
-  await page.screenshot({ path: '.verification.local/crm-remarketing-mobile.png', fullPage: true })
+  await page.screenshot({ path: '.verification.local/crm-followup-mobile.png', fullPage: true })
   await page.setViewportSize({ width: 1440, height: 1050 })
-  await page.screenshot({ path: '.verification.local/crm-remarketing-desktop.png', fullPage: true })
+  await page.screenshot({ path: '.verification.local/crm-followup-desktop.png', fullPage: true })
   await page.getByRole('tab', { name: 'Leads', exact: true }).click()
   await page.getByRole('button', { name: 'Ações de Retorno hoje', exact: true }).click()
-  await expect(page.getByRole('menuitem', { name: 'Enviar para Remarketing', exact: true })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Enviar para Follow-up', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   // An external sales revision must update both mounted CRM clients without reloads.
   await page.getByRole('tab', { name: 'Resultados', exact: true }).click()
@@ -230,5 +230,5 @@ try {
   await expect(secondApproval.getByText('Rejeitada', { exact: true })).toBeVisible()
   await secondPage.close()
   assert.deepEqual(errors, [])
-  console.log('PASS: Esteira do LEAD by approach-stage period, editable approach, approval/seller/date filters, both result layouts, SDR/Closer returns, linked sale preservation, remarketing TXT import and actions, mobile layouts and automatic synchronization in two browser clients. Browser network mocked; no live data changed.')
+  console.log('PASS: Esteira do LEAD by approach-stage period, editable approach, approval/seller/date filters, both result layouts, SDR/Closer returns, linked sale preservation, follow-up TXT import and actions, mobile layouts and automatic synchronization in two browser clients. Browser network mocked; no live data changed.')
 } finally { await browser.close() }

@@ -12,7 +12,7 @@ const profile = { id: viewer, user_id: viewer, display_name: 'Ana Closer', suspe
 const leads = ['Alfa', 'Beta', 'Gama', 'Delta'].map(name => ({
   id: randomUUID(), name, athlete_name: `Atleta ${name}`, phone: '11999999999', email: null,
   pipeline_stage: 'em_qualificacao', approach_stage: 'abordado', temperature: 'morno', sdr_id: other, closer_id: null, created_by: viewer,
-  created_at: now, updated_at: now, next_followup_at: null, version: 1, remarketing_status: null, remarketing_next_at: null, remarketing_attempt_count: 0,
+  created_at: now, updated_at: now, next_followup_at: null, version: 1, followup_status: null, followup_next_at: null, followup_attempt_count: 0,
 }))
 const id = name => leads.find(l => l.name === name).id
 const statuses = ['pendente', 'nao_pago', 'pago'].map((status, i) => ({ lead_id: leads[i].id, status, updated_by: other, updated_at: now }))

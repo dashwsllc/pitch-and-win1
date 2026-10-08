@@ -19,7 +19,7 @@ import { callDate } from "@/lib/crm";
 import { isClosedStage, outcomeLabel } from "@/lib/crm-stages";
 import {
   canReopenResult,
-  inRemarketing,
+  inFollowup,
   leadResult,
   resultDate,
   resultMatches,
@@ -43,7 +43,7 @@ export function CRMResults({
   busy,
   onRead,
   onReturn,
-  onRemarketing,
+  onManageFollowup,
 }: {
   leads: CRMLead[];
   sales: Map<string, CRMResultSale>;
@@ -52,7 +52,7 @@ export function CRMResults({
   busy: boolean;
   onRead: (lead: CRMLead) => void;
   onReturn: (lead: CRMLead, target: "sdr" | "closer") => void;
-  onRemarketing: (lead: CRMLead) => void;
+  onManageFollowup: (lead: CRMLead) => void;
 }) {
   const { user } = useAuth();
   const { capabilities } = useRoles();
@@ -93,7 +93,7 @@ export function CRMResults({
         a.id.localeCompare(b.id),
     );
   const won = rows.filter((l) => leadResult(l) === "venda_concluida").length;
-  const remarketing = rows.filter(inRemarketing).length;
+  const followup = rows.filter(inFollowup).length;
   return (
     <section
       className="space-y-4"
@@ -136,8 +136,8 @@ export function CRMResults({
             color: "text-rose-500",
           },
           {
-            label: "Em remarketing",
-            count: remarketing,
+            label: "Em follow-up",
+            count: followup,
             icon: RefreshCcw,
             color: "text-violet-500",
           },
@@ -271,15 +271,11 @@ export function CRMResults({
             names[lead.last_result_closer_id || lead.closer_id || ""] ||
             "Sem Closer atribuído";
           const canReturn = canReopenResult(lead, user?.id, capabilities);
-          const canRemarket =
-            capabilities.sdr &&
-            (capabilities.executive ||
-              !lead.sdr_id ||
-              lead.sdr_id === user?.id);
-          const current = inRemarketing(lead)
-            ? "Em remarketing"
-            : lead.remarketing_status === "do_not_contact"
-              ? "Remarketing encerrado"
+          const canFollowup = capabilities.sdr || capabilities.closer;
+          const current = inFollowup(lead)
+            ? "Em follow-up"
+            : lead.followup_status === "do_not_contact"
+              ? "Follow-up encerrado"
               : lead.pipeline_stage === "repassado_closer"
                 ? "Em atendimento · Closer"
                 : !isClosedStage(lead.pipeline_stage)
@@ -335,7 +331,7 @@ export function CRMResults({
                   <Badge
                     variant="outline"
                     className={
-                      inRemarketing(lead)
+                      inFollowup(lead)
                         ? "border-violet-500/30 text-violet-500"
                         : "text-muted-foreground"
                     }
@@ -348,10 +344,10 @@ export function CRMResults({
                     {lead.negative_reason}
                   </p>
                 )}
-                {inRemarketing(lead) && (
+                {inFollowup(lead) && (
                   <p className="text-xs text-muted-foreground">
-                    Próximo contato: {callDate(lead.remarketing_next_at)} ·{" "}
-                    {lead.remarketing_attempt_count} tentativa(s)
+                    Próximo contato: {callDate(lead.followup_next_at)} ·{" "}
+                    {lead.followup_attempt_count} tentativa(s)
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2 border-t pt-3">
@@ -384,12 +380,12 @@ export function CRMResults({
                       </Button>
                     </>
                   )}
-                  {inRemarketing(lead) && canRemarket && (
+                  {inFollowup(lead) && canFollowup && (
                     <Button
                       size="sm"
                       variant="outline"
                       disabled={busy}
-                      onClick={() => onRemarketing(lead)}
+                      onClick={() => onManageFollowup(lead)}
                     >
                       <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
                       Acompanhar

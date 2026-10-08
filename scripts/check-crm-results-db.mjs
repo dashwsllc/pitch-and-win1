@@ -19,4 +19,4 @@ const result = spawnSync('npx', ['supabase','db','query','--linked','--project-r
 if (result.status !== 0) {
   console.error(result.stderr || result.stdout || result.error?.message)
   process.exitCode = result.status ?? 1
-} else console.log(apply ? result.stdout : 'PASS: Result snapshots, SDR/Closer returns, calls, remarketing cycles, approval metadata, permissions and stale versions; all test data rolled back.')
+} else console.log(apply ? result.stdout : 'PASS: Result snapshots, SDR/Closer returns, calls, follow-up cycles, approval metadata, permissions and stale versions; all test data rolled back.')

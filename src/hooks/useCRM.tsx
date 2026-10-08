@@ -221,12 +221,12 @@ export function useCRMLeads() {
       await refresh();
     }
   };
-  const updateRemarketing = async (
+  const updateFollowup = async (
     lead: CRMLead,
     data: { action: string; nextAt?: string | null; note?: string },
   ) => {
     try {
-      const { data: updated, error } = await supabase.rpc("crm_update_remarketing", {
+      const { data: updated, error } = await supabase.rpc("crm_update_followup", {
         p_lead_id: lead.id,
         p_expected_version: lead.version,
         p_action: data.action,
@@ -260,7 +260,7 @@ export function useCRMLeads() {
     transition,
     deleteLead,
     markNegative,
-    updateRemarketing,
+    updateFollowup,
     reopenResult,
   };
 }

@@ -31,7 +31,7 @@ DO $$ DECLARE l public.crm_leads; original_date timestamptz; original_version bi
   l:=public.crm_transition(l.id,'close',l.version,'{"outcome":"venda_perdida","note":"Recusou a proposta"}');
   IF l.last_result_outcome<>'venda_perdida' OR l.last_result_at IS NULL
     OR l.last_result_closer_id<>auth.uid() OR l.last_result_closer_name<>'Resultados QA 3'
-    OR l.remarketing_status<>'pending' THEN RAISE EXCEPTION 'FAIL loss result snapshot'; END IF;
+    OR l.followup_status<>'pending' THEN RAISE EXCEPTION 'FAIL loss result snapshot'; END IF;
   original_date:=l.last_result_at; original_version:=l.version;
   BEGIN
     -- O destino precisa ter a capacidade SDR. Um Closer tem (a capacidade SDR inclui Closer), então o destino inválido é a conta 5, sem papel de CRM.
@@ -41,7 +41,7 @@ DO $$ DECLARE l public.crm_leads; original_date timestamptz; original_version bi
   l:=public.crm_reopen_result(l.id,l.version,'sdr','ce160000-0000-4000-8000-000000000002',now()+interval '2 days','Retomar qualificação');
   IF l.pipeline_stage<>'em_qualificacao' OR l.closed_at IS NOT NULL OR l.closer_id IS NOT NULL
     OR l.last_result_at<>original_date OR l.last_result_outcome<>'venda_perdida'
-    OR l.last_result_closer_id<>auth.uid() OR l.remarketing_next_at IS NOT NULL OR l.remarketing_status<>'reactivated'
+    OR l.last_result_closer_id<>auth.uid() OR l.followup_next_at IS NOT NULL OR l.followup_status<>'reactivated'
     OR NOT EXISTS(SELECT 1 FROM public.crm_activities WHERE lead_id=l.id AND call_type='qualificacao' AND NOT is_completed
       AND assigned_to=l.sdr_id AND scheduled_at=l.next_followup_at) THEN RAISE EXCEPTION 'FAIL synchronized SDR return'; END IF;
   BEGIN
@@ -56,12 +56,12 @@ SET LOCAL ROLE authenticated;
 DO $$ DECLARE l public.crm_leads; BEGIN
   SELECT * INTO l FROM public.crm_leads WHERE id=(SELECT lead_id FROM results_qa);
   l:=public.crm_mark_negative(l.id,l.version,'Sem orçamento',now()+interval '3 days','Retomar no próximo mês');
-  IF l.pipeline_stage<>'lead_perdido' OR l.remarketing_status<>'scheduled'
-    OR l.remarketing_next_at<>l.next_followup_at OR l.last_result_outcome<>'lead_perdido'
+  IF l.pipeline_stage<>'lead_perdido' OR l.followup_status<>'scheduled'
+    OR l.followup_next_at<>l.next_followup_at OR l.last_result_outcome<>'lead_perdido'
     OR EXISTS(SELECT 1 FROM public.crm_activities WHERE lead_id=l.id AND call_type IS NOT NULL AND NOT is_completed)
-    THEN RAISE EXCEPTION 'FAIL SDR remarketing'; END IF;
-  l:=public.crm_update_remarketing(l.id,l.version,'contacted',now()+interval '4 days','Novo contato realizado');
-  IF l.remarketing_attempt_count<>1 THEN RAISE EXCEPTION 'FAIL contact count'; END IF;
+    THEN RAISE EXCEPTION 'FAIL SDR follow-up'; END IF;
+  l:=public.crm_update_followup(l.id,l.version,'contacted',now()+interval '4 days','Novo contato realizado');
+  IF l.followup_attempt_count<>1 THEN RAISE EXCEPTION 'FAIL contact count'; END IF;
   l:=public.crm_reopen_result(l.id,l.version,'closer','ce160000-0000-4000-8000-000000000003',now()+interval '5 days','Lead pronto para retomar fechamento');
   IF l.pipeline_stage<>'repassado_closer' OR l.last_result_outcome<>'lead_perdido'
     OR NOT EXISTS(SELECT 1 FROM public.crm_activities WHERE lead_id=l.id AND call_type='fechamento_closer'
@@ -76,7 +76,7 @@ DO $$ DECLARE l public.crm_leads; BEGIN
   SELECT * INTO l FROM public.crm_leads WHERE id=(SELECT lead_id FROM results_qa);
   BEGIN
     PERFORM public.crm_mark_negative(l.id,l.version,'Recusa indevida',now()+interval '6 days','Outro closer');
-    RAISE EXCEPTION 'FAIL other closer changed remarketing';
+    RAISE EXCEPTION 'FAIL other closer changed follow-up';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END; $$;
 RESET ROLE;
@@ -86,16 +86,16 @@ SET LOCAL ROLE authenticated;
 DO $$ DECLARE l public.crm_leads; BEGIN
   SELECT * INTO l FROM public.crm_leads WHERE id=(SELECT lead_id FROM results_qa);
   l:=public.crm_transition(l.id,'close',l.version,'{"outcome":"venda_perdida"}');
-  IF l.remarketing_status<>'pending' OR l.remarketing_next_at IS NOT NULL THEN RAISE EXCEPTION 'FAIL repeat loss remains reactivated'; END IF;
+  IF l.followup_status<>'pending' OR l.followup_next_at IS NOT NULL THEN RAISE EXCEPTION 'FAIL repeat loss remains reactivated'; END IF;
   -- Regra atual (arena_call_guard): a call de fechamento nunca é agendada por quem vai atendê-la. Quem devolve o lead ao
-  -- Closer 3 é o Executive (conta 1); depois a sessão volta para o Closer, que manda o lead direto para o remarketing.
+  -- Closer 3 é o Executive (conta 1); depois a sessão volta para o Closer, que manda o lead direto para o follow-up.
   PERFORM set_config('request.jwt.claims','{"sub":"ce160000-0000-4000-8000-000000000001","role":"authenticated"}',true);
   l:=public.crm_reopen_result(l.id,l.version,'closer','ce160000-0000-4000-8000-000000000003',now()+interval '6 days','Retomar proposta');
   PERFORM set_config('request.jwt.claims','{"sub":"ce160000-0000-4000-8000-000000000003","role":"authenticated"}',true);
-  l:=public.crm_mark_negative(l.id,l.version,'Aguardar próximo mês',now()+interval '7 days','Remarketing pelo Closer');
-  IF l.pipeline_stage<>'fechado_perdido' OR l.remarketing_status<>'scheduled'
+  l:=public.crm_mark_negative(l.id,l.version,'Aguardar próximo mês',now()+interval '7 days','Follow-up pelo Closer');
+  IF l.pipeline_stage<>'fechado_perdido' OR l.followup_status<>'scheduled'
     OR EXISTS(SELECT 1 FROM public.crm_activities WHERE lead_id=l.id AND call_type IS NOT NULL AND NOT is_completed)
-    THEN RAISE EXCEPTION 'FAIL Closer direct remarketing'; END IF;
+    THEN RAISE EXCEPTION 'FAIL Closer direct follow-up'; END IF;
 END; $$;
 RESET ROLE;
 
@@ -116,7 +116,7 @@ SET LOCAL ROLE authenticated;
 DO $$ DECLARE l public.crm_leads; BEGIN
   INSERT INTO public.crm_leads(name,athlete_name,phone) VALUES('Lead vendedor','Atleta vendedor','11999999998') RETURNING * INTO l;
   l:=public.crm_mark_negative(l.id,l.version,'Sem disponibilidade',now()+interval '8 days','Agendar nova tentativa');
-  IF l.remarketing_status<>'scheduled' THEN RAISE EXCEPTION 'FAIL seller Lead action'; END IF;
+  IF l.followup_status<>'scheduled' THEN RAISE EXCEPTION 'FAIL seller Lead action'; END IF;
   IF public.crm_can('sdr') THEN RAISE EXCEPTION 'FAIL expanded seller permissions'; END IF;
   BEGIN
     PERFORM public.crm_reopen_result(l.id,l.version,'closer','ce160000-0000-4000-8000-000000000003',now()+interval '9 days','Sem permissão');

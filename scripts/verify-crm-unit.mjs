@@ -204,9 +204,9 @@ assert.match(crmPageSource, /callDateFilter !== "all"[\s\S]*compareCallProximity
 assert.match(crmPageSource, /data-call-date-option=\{option\.value\}/)
 assert.match(crmPageSource, /<span className="shrink-0">\{option\.label\}<\/span>/)
 
-// Resultados and remarketing share the same records in their dedicated views.
+// Resultados and follow-up share the same records in their dedicated views.
 assert.match(crmPageSource, /if \(tab === "leads"\) return !isClosedStage\(lead\.pipeline_stage\)/)
-const { leadScheduledOn, leadResult, resultMatches, canReopenResult, inRemarketing } = await import('../src/lib/crm-results.ts')
+const { leadScheduledOn, leadResult, resultMatches, canReopenResult, inFollowup } = await import('../src/lib/crm-results.ts')
 const emptyFilters = { search: '', outcome: 'all', approval: 'all', seller: 'all', from: '', to: '' }
 const resultLead = {
   id: 'result', name: 'Responsável', athlete_name: 'Atleta', pipeline_stage: 'fechado_ganho',
@@ -228,9 +228,9 @@ assert.equal(resultMatches({ ...resultLead, pipeline_stage: 'em_qualificacao' },
 assert.equal(canReopenResult(resultLead, 'other', { executive: false, closer: true, sdr: false }), false)
 assert.equal(canReopenResult(resultLead, 'closer', { executive: false, closer: true, sdr: false }), true)
 assert.equal(canReopenResult({ ...resultLead, pipeline_stage: 'em_qualificacao' }, 'closer', { executive: true, closer: true, sdr: true }), false)
-assert.equal(inRemarketing({ pipeline_stage: 'fechado_perdido', remarketing_status: 'scheduled' }), true)
-assert.equal(inRemarketing({ pipeline_stage: 'fechado_perdido', remarketing_status: 'do_not_contact' }), false)
-assert.equal(inRemarketing({ pipeline_stage: 'em_qualificacao', remarketing_status: 'reactivated' }), false)
+assert.equal(inFollowup({ pipeline_stage: 'fechado_perdido', followup_status: 'scheduled' }), true)
+assert.equal(inFollowup({ pipeline_stage: 'fechado_perdido', followup_status: 'do_not_contact' }), false)
+assert.equal(inFollowup({ pipeline_stage: 'em_qualificacao', followup_status: 'reactivated' }), false)
 assert.equal(leadScheduledOn({ next_followup_at: null }, ['2026-09-22T02:30:00Z'], '2026-09-21'), true)
 assert.equal(leadScheduledOn({ next_followup_at: null }, ['2026-09-22T02:30:00Z'], '2026-09-22'), false)
 assert.equal(leadScheduledOn({ next_followup_at: '2026-09-21T16:00:00Z' }, ['2026-09-23T16:00:00Z'], '2026-09-23'), true)
@@ -240,12 +240,31 @@ assert.equal(leadScheduledOn({ next_followup_at: 'bad-date' }, [], '2026-09-21')
 assert.equal(leadScheduledOn({ next_followup_at: '2026-09-21T16:00:00Z' }, [], ''), false)
 
 const qualificationSource = readFileSync(new URL('../src/components/crm/CRMQualificationDialog.tsx', import.meta.url), 'utf8')
-const remarketingSource = readFileSync(new URL('../src/components/crm/CRMRemarketingDialog.tsx', import.meta.url), 'utf8')
+const followupSource = readFileSync(new URL('../src/components/crm/CRMFollowupDialog.tsx', import.meta.url), 'utf8')
 assert.match(qualificationSource, /Faixa de renda média/)
 assert.match(qualificationSource, /Quem decide/)
 assert.match(qualificationSource, /Resumo para o Closer/)
-assert.match(remarketingSource, /Registrar contato e próxima tentativa/)
-assert.match(remarketingSource, /Reativar para qualificação/)
+assert.match(followupSource, /Registrar contato e próxima tentativa/)
+assert.match(followupSource, /Reativar para qualificação/)
+
+// Follow-up é uma fila compartilhada: todo SDR e todo Closer (Executive e Super Admin incluídos) abre a aba e acompanha qualquer lead;
+// Seller e conta sem função ficam de fora. O banco aplica a mesma regra em crm_update_followup.
+const followupAccess = (roles, ...rest) => { const c = crmCapabilities(roles, ...rest); return c.sdr || c.closer }
+for (const role of ['sdr', 'closer', 'executive', 'super_admin']) assert.equal(followupAccess([role]), true, role)
+assert.equal(followupAccess(['seller']), false, 'Seller não acompanha o follow-up')
+assert.equal(followupAccess(['seller'], true), false, 'acesso ao CRM sozinho não abre o follow-up')
+assert.equal(followupAccess([]), false)
+assert.equal(followupAccess(['sdr'], true, false), false, 'conta suspensa continua bloqueada')
+const followupBoardSource = readFileSync(new URL('../src/components/crm/CRMFollowupBoard.tsx', import.meta.url), 'utf8')
+assert.match(followupBoardSource, /const canManage = capabilities\.sdr \|\| capabilities\.closer/)
+assert.doesNotMatch(followupBoardSource, /sdr_id === user|useAuth/, 'o follow-up não prende o lead ao SDR responsável')
+assert.match(crmPageSource, /\(capabilities\.sdr \|\| capabilities\.closer\) && \(\s*<TabsTrigger[^>]*value="followup"/)
+assert.match(crmPageSource, /tab === "followup" && \(capabilities\.sdr \|\| capabilities\.closer\)/)
+assert.doesNotMatch(crmPageSource, /value: "negative"/, 'o follow-up deixou de ser uma subfila da aba SDR')
+assert.match(crmPageSource, /requestedTab === "remarketing" \? "followup"/, 'links antigos continuam abrindo o follow-up')
+assert.match(cardSource, /onAction\("send_followup"\)/)
+assert.match(cardSource, /Enviar para Follow-up/)
+assert.match(crmHookSource, /supabase\.rpc\("crm_update_followup"/)
 
 // Lista de Closers/SDRs dos diálogos do CRM: uma regra só, completa e sem duplicados.
 const assigneesModule = await import('../src/lib/crm-assignees.ts')
@@ -336,11 +355,11 @@ assert.equal(outcomeLabel('followup_sdr'), 'Follow-up do SDR', 'todo desfecho qu
 assert.equal(outcomeLabel(null), null)
 assert.equal(outcomeLabel('algo_novo'), 'algo_novo', 'um desfecho desconhecido sai como veio, nunca vazio')
 // Nenhuma tela volta a escrever a lista de etapas fechadas à mão.
-for (const arquivo of ['src/pages/CRM.tsx', 'src/components/crm/CRMLeadCard.tsx', 'src/components/crm/CRMResults.tsx', 'src/components/crm/CRMRemarketingBoard.tsx', 'src/lib/crm-order.ts', 'src/lib/crm-results.ts', 'src/lib/crm-notifications.ts', 'src/lib/crm-call-status.ts']) {
+for (const arquivo of ['src/pages/CRM.tsx', 'src/components/crm/CRMLeadCard.tsx', 'src/components/crm/CRMResults.tsx', 'src/components/crm/CRMFollowupBoard.tsx', 'src/lib/crm-order.ts', 'src/lib/crm-results.ts', 'src/lib/crm-notifications.ts', 'src/lib/crm-call-status.ts']) {
   assert.doesNotMatch(readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8'), /['"]fechado_ganho['"]\s*,\s*['"]fechado_perdido['"]/, `${arquivo} repete a lista de etapas fechadas`)
 }
 const detalhe = readFileSync(new URL('../src/components/crm/CRMLeadDetail.tsx', import.meta.url), 'utf8')
 assert.doesNotMatch(detalhe, /"Venda perdida"/, 'o histórico chama venda_perdida de "Venda recusada", como o resto do CRM')
 assert.match(detalhe, /outcomeLabel\(lead\.last_result_outcome\)/)
 
-console.log('PASS: CRM validation, strict roles, SDR qualification calls, remarketing queues, athlete data, lead deletion, call states, notifications, ordering, athlete-first hierarchy and the shared Closer/SDR assignee list and editing of already scheduled calls.')
+console.log('PASS: CRM validation, strict roles, SDR qualification calls, follow-up queues and shared access, athlete data, lead deletion, call states, notifications, ordering, athlete-first hierarchy and the shared Closer/SDR assignee list and editing of already scheduled calls.')

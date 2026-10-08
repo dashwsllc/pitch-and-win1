@@ -1,10 +1,10 @@
-// Fonte única de quais etapas do CRM encerram o atendimento, quais mandam o lead para remarketing e como cada resultado é
+// Fonte única de quais etapas do CRM encerram o atendimento, quais mandam o lead para o follow-up e como cada resultado é
 // escrito. Estas listas estavam copiadas em sete arquivos (cartão, quadro, resultados, notificações, ordenação, estado das
 // calls e a própria tela): quando uma etapa muda, todos têm de mudar juntos, então ela vive aqui.
 
 /** Etapas em que o atendimento acabou (ganho, venda recusada ou lead perdido). */
 export const CLOSED_STAGES = ['fechado_ganho', 'fechado_perdido', 'lead_perdido'] as const
-/** Etapas negativas: o lead não comprou e segue para o remarketing. */
+/** Etapas negativas: o lead não comprou e segue para o follow-up. */
 export const NEGATIVE_STAGES = ['fechado_perdido', 'lead_perdido'] as const
 
 export function isClosedStage(pipelineStage: string | null | undefined) {

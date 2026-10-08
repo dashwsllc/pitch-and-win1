@@ -30,7 +30,7 @@ const lead = (id, name, approach_stage, date, context = false) => ({
   approached: ['abordado', 'reabordado'].includes(approach_stage), version: 1,
   next_followup_at: null, handed_off_at: null, closed_at: null, closed_by: null,
   last_result_outcome: null, last_result_at: null, last_result_closer_id: null,
-  last_result_closer_name: null, remarketing_status: null, remarketing_attempt_count: 0,
+  last_result_closer_name: null, followup_status: null, followup_attempt_count: 0,
   _context: context,
 })
 

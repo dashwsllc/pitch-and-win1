@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export function CRMRemarketingDialog({
+export function CRMFollowupDialog({
   lead,
   busy,
   onClose,
@@ -51,14 +51,14 @@ export function CRMRemarketingDialog({
     <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
       <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
-          <DialogTitle>Acompanhamento de remarketing</DialogTitle>
+          <DialogTitle>Registrar follow-up</DialogTitle>
           <DialogDescription>{lead.athlete_name || lead.name} · {lead.negative_reason || "Negativa registrada"}</DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="space-y-4">
           <fieldset disabled={busy} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="remarketing-action">Ação *</Label>
-              <select id="remarketing-action" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={action} onChange={(event) => setAction(event.target.value)}>
+              <Label htmlFor="followup-action">Ação *</Label>
+              <select id="followup-action" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={action} onChange={(event) => setAction(event.target.value)}>
                 <option value="schedule">Agendar follow-up</option>
                 <option value="contacted">Registrar contato e próxima tentativa</option>
                 <option value="reactivate">Reativar para qualificação</option>
@@ -67,19 +67,19 @@ export function CRMRemarketingDialog({
             </div>
             {needsNext && (
               <div className="space-y-2">
-                <Label htmlFor="remarketing-next-at">Próximo follow-up · Brasília *</Label>
-                <Input id="remarketing-next-at" type="datetime-local" required value={nextAt} onChange={(event) => setNextAt(event.target.value)} />
+                <Label htmlFor="followup-next-at">Próximo follow-up · Brasília *</Label>
+                <Input id="followup-next-at" type="datetime-local" required value={nextAt} onChange={(event) => setNextAt(event.target.value)} />
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="remarketing-note">Registro {action === "schedule" ? "(opcional)" : "*"}</Label>
-              <Textarea id="remarketing-note" maxLength={5000} required={["contacted", "do_not_contact"].includes(action)} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Mensagem enviada, retorno recebido, objeções e próximo passo" />
+              <Label htmlFor="followup-note">Registro {action === "schedule" ? "(opcional)" : "*"}</Label>
+              <Textarea id="followup-note" maxLength={5000} required={["contacted", "do_not_contact"].includes(action)} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Mensagem enviada, retorno recebido, objeções e próximo passo" />
             </div>
             {action === "reactivate" && <p className="text-xs text-muted-foreground">O lead volta para Em qualificação e reaparece na operação ativa do SDR.</p>}
             {failure && <p role="alert" className="text-sm text-destructive">{failure}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancelar</Button>
-              <Button type="submit" disabled={busy}>{busy ? "Salvando..." : "Salvar acompanhamento"}</Button>
+              <Button type="submit" disabled={busy}>{busy ? "Salvando..." : "Salvar follow-up"}</Button>
             </DialogFooter>
           </fieldset>
         </form>
@@ -87,4 +87,3 @@ export function CRMRemarketingDialog({
     </Dialog>
   );
 }
-

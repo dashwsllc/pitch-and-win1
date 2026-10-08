@@ -23,7 +23,7 @@ const actionTitles: Record<string, string> = {
   close: "Registrar fechamento",
   return: "Devolver ao SDR",
   lose: "Marcar lead perdido",
-  remarketing: "Enviar para Remarketing",
+  send_followup: "Enviar para Follow-up",
 };
 export function CRMActionDialog({
   lead,
@@ -47,9 +47,9 @@ export function CRMActionDialog({
   const [negativeReason, setNegativeReason] = useState("");
   const [when, setWhen] = useState("");
   const [failure, setFailure] = useState("");
-  const sendingRemarketing = action === "lose" || action === "remarketing";
+  const sendingFollowup = action === "lose" || action === "send_followup";
   const needsDate =
-    action === "followup" || sendingRemarketing || (action === "close" && outcome === "followup");
+    action === "followup" || sendingFollowup || (action === "close" && outcome === "followup");
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -141,7 +141,7 @@ export function CRMActionDialog({
                 </label>
               </div>
             )}
-            {sendingRemarketing && (
+            {sendingFollowup && (
               <div className="space-y-1">
                 <Label className="text-xs" htmlFor="negative-reason">Motivo da negativa *</Label>
                 <Input
@@ -158,7 +158,7 @@ export function CRMActionDialog({
             {needsDate && (
               <div className="space-y-1">
                 <Label className="text-xs" htmlFor="next-at">
-                  {sendingRemarketing ? "Primeiro follow-up de remarketing" : "Próxima data e hora"} · Brasília *
+                  {sendingFollowup ? "Primeiro follow-up" : "Próxima data e hora"} · Brasília *
                 </Label>
                 <Input
                   className="h-9"
@@ -177,16 +177,16 @@ export function CRMActionDialog({
               <Textarea
                 id="action-note"
                 className="min-h-20"
-                maxLength={sendingRemarketing ? 5000 : 10000}
-                required={["contact", "note"].includes(action) || sendingRemarketing}
+                maxLength={sendingFollowup ? 5000 : 10000}
+                required={["contact", "note"].includes(action) || sendingFollowup}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder={sendingRemarketing ? "Registre o contexto para a próxima abordagem do SDR" : undefined}
+                placeholder={sendingFollowup ? "Registre o contexto para o próximo follow-up" : undefined}
               />
             </div>
-            {sendingRemarketing && (
+            {sendingFollowup && (
               <p className="text-xs text-muted-foreground">
-                O lead entrará em Remarketing com o retorno agendado e todo o histórico preservado.
+                O lead entrará em Follow-up com o retorno agendado e todo o histórico preservado.
               </p>
             )}
             {action === "close" && (

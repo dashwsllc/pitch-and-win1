@@ -22,7 +22,7 @@ const checks = [
   ['ERRO', 'lead em qualificação já com Closer', `SELECT count(*) FROM crm_leads WHERE pipeline_stage='em_qualificacao' AND closer_id IS NOT NULL`],
   ['ERRO', 'lead sem SDR', `SELECT count(*) FROM crm_leads WHERE sdr_id IS NULL`],
   ['ERRO', 'abordado marcado e etapa de abordagem divergentes', `SELECT count(*) FROM crm_leads WHERE (approached AND approach_stage='nao_abordado') OR (NOT approached AND approach_stage IN ('abordado','reabordado'))`],
-  ['ERRO', 'lead encerrado com retorno agendado fora do remarketing', `SELECT count(*) FROM crm_leads WHERE pipeline_stage IN ${closed} AND next_followup_at IS NOT NULL AND coalesce(remarketing_status,'') NOT IN ('scheduled','pending','contacted')`],
+  ['ERRO', 'lead encerrado com retorno agendado fora do follow-up', `SELECT count(*) FROM crm_leads WHERE pipeline_stage IN ${closed} AND next_followup_at IS NOT NULL AND coalesce(followup_status,'') NOT IN ('scheduled','pending','contacted')`],
   ['ERRO', 'call pendente em lead encerrado', `SELECT count(*) FROM crm_activities a JOIN crm_leads l ON l.id=a.lead_id WHERE ${openCall} AND l.pipeline_stage IN ${closed}`],
   ['ERRO', 'call de fechamento pendente em lead que ainda não foi repassado', `SELECT count(*) FROM crm_activities a JOIN crm_leads l ON l.id=a.lead_id WHERE ${openCall} AND a.call_type='fechamento_closer' AND l.pipeline_stage='em_qualificacao'`],
   ['ERRO', 'call de fechamento pendente com responsável diferente do Closer do lead', `SELECT count(*) FROM crm_activities a JOIN crm_leads l ON l.id=a.lead_id WHERE ${openCall} AND a.call_type='fechamento_closer' AND l.closer_id IS DISTINCT FROM a.assigned_to`],

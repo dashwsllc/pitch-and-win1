@@ -15,8 +15,8 @@ const profile = { id: actor, user_id: actor, display_name: 'Gestor QA', suspende
 const lead = {
   id: randomUUID(), name: 'Alfa', athlete_name: 'Atleta Alfa', phone: '11999999999', email: null,
   pipeline_stage: 'em_qualificacao', approach_stage: 'abordado', temperature: 'quente', sdr_id: joao, closer_id: null, created_by: actor,
-  created_at: now, updated_at: now, next_followup_at: null, version: 1, remarketing_status: null, remarketing_next_at: null,
-  remarketing_attempt_count: 0,
+  created_at: now, updated_at: now, next_followup_at: null, version: 1, followup_status: null, followup_next_at: null,
+  followup_attempt_count: 0,
 }
 const closedLead = {
   ...lead, id: randomUUID(), name: 'Beta', athlete_name: 'Atleta Beta', pipeline_stage: 'fechado_ganho', closer_id: maria,

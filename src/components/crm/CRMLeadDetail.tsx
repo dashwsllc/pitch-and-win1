@@ -20,7 +20,7 @@ import {
   DECISION_MAKERS,
   INCOME_RANGES,
   PURCHASE_TIMELINES,
-  REMARKETING_STATUS_LABELS,
+  FOLLOWUP_STATUS_LABELS,
   optionLabel,
 } from "@/lib/crm-qualification";
 import { formatAthleteAge, resolveAthleteAge } from "@/lib/crm-age";
@@ -106,9 +106,9 @@ export function CRMLeadDetail({
     ["Objetivo", lead.qualification_goal],
     ["Resumo da qualificação", lead.qualification_summary],
     ["Motivo da negativa", lead.negative_reason],
-    ["Remarketing", lead.remarketing_status ? REMARKETING_STATUS_LABELS[lead.remarketing_status] || lead.remarketing_status : null],
-    ["Próximo remarketing", lead.remarketing_next_at ? callDate(lead.remarketing_next_at) : null],
-    ["Tentativas de remarketing", lead.remarketing_attempt_count ? String(lead.remarketing_attempt_count) : null],
+    ["Follow-up", lead.followup_status ? FOLLOWUP_STATUS_LABELS[lead.followup_status] || lead.followup_status : null],
+    ["Próximo follow-up", lead.followup_next_at ? callDate(lead.followup_next_at) : null],
+    ["Tentativas de follow-up", lead.followup_attempt_count ? String(lead.followup_attempt_count) : null],
     ["Tentativas de contato", lead.approach_count],
     ["Empresa (histórico)", lead.company],
     ["Cargo (histórico)", lead.job_title],

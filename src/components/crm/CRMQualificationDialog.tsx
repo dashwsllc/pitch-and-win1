@@ -89,7 +89,7 @@ export function CRMQualificationDialog({
           outcome === "avancou"
             ? "Qualificação concluída"
             : outcome === "lead_perdido"
-              ? "Lead enviado ao remarketing"
+              ? "Lead enviado ao follow-up"
               : "Acompanhamento do SDR agendado",
       });
       onClose();
@@ -117,7 +117,7 @@ export function CRMQualificationDialog({
               <select id="qualification-outcome" className={selectClass} value={outcome} onChange={(event) => setOutcome(event.target.value)}>
                 <option value="avancou">Qualificado para o Closer</option>
                 <option value="followup_sdr">Manter em acompanhamento pelo SDR</option>
-                <option value="lead_perdido">Negativa — enviar para remarketing</option>
+                <option value="lead_perdido">Negativa — enviar para follow-up</option>
               </select>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -160,7 +160,7 @@ export function CRMQualificationDialog({
             {requiresNext && (
               <div className="space-y-2">
                 <Label htmlFor="qualification-next-at">
-                  {outcome === "lead_perdido" ? "Primeiro follow-up de remarketing" : "Próxima ação do SDR"} · Brasília *
+                  {outcome === "lead_perdido" ? "Primeiro follow-up" : "Próxima ação do SDR"} · Brasília *
                 </Label>
                 <Input id="qualification-next-at" type="datetime-local" required value={nextAt} onChange={(event) => setNextAt(event.target.value)} />
               </div>

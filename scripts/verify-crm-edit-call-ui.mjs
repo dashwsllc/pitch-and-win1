@@ -17,8 +17,8 @@ const profile = { id: viewer, user_id: viewer, display_name: 'Ana SDR', suspende
 const lead = (name, extra = {}) => ({
   id: randomUUID(), name, athlete_name: `Atleta ${name}`, phone: '11999999999', email: null,
   pipeline_stage: 'em_qualificacao', approach_stage: 'abordado', temperature: 'morno', sdr_id: joao, closer_id: null, created_by: viewer,
-  created_at: now, updated_at: now, next_followup_at: null, version: 1, remarketing_status: null, remarketing_next_at: null,
-  remarketing_attempt_count: 0, ...extra,
+  created_at: now, updated_at: now, next_followup_at: null, version: 1, followup_status: null, followup_next_at: null,
+  followup_attempt_count: 0, ...extra,
 })
 const leads = [
   lead('Alfa', { pipeline_stage: 'repassado_closer', closer_id: maria, handed_off_at: now, next_followup_at: at(2, '15:00') }),

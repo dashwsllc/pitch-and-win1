@@ -7,19 +7,18 @@ import {
   Upload,
 } from "lucide-react";
 import type { CRMLead } from "@/hooks/useCRM";
-import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { callDate } from "@/lib/crm";
 import { brasiliaDateKey } from "@/lib/brasilia-time";
-import { inRemarketing } from "@/lib/crm-results";
+import { inFollowup } from "@/lib/crm-results";
 import { isNegativeStage } from "@/lib/crm-stages";
-import { REMARKETING_STATUS_LABELS } from "@/lib/crm-qualification";
-import { CRMRemarketingImportDialog } from "./CRMRemarketingImportDialog";
+import { FOLLOWUP_STATUS_LABELS } from "@/lib/crm-qualification";
+import { CRMFollowupImportDialog } from "./CRMFollowupImportDialog";
 
-export function CRMRemarketingBoard({
+export function CRMFollowupBoard({
   leads,
   names,
   now,
@@ -34,7 +33,6 @@ export function CRMRemarketingBoard({
   onRead: (lead: CRMLead) => void;
   onManage: (lead: CRMLead) => void;
 }) {
-  const { user } = useAuth();
   const { capabilities } = useRoles();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("active");
@@ -42,8 +40,10 @@ export function CRMRemarketingBoard({
   const [day, setDay] = useState("");
   const [importLead, setImportLead] = useState<CRMLead | null>(null);
   const all = leads.filter((l) => isNegativeStage(l.pipeline_stage));
-  const active = all.filter(inRemarketing);
+  const active = all.filter(inFollowup);
   const today = brasiliaDateKey(now);
+  // A fila é compartilhada: todo SDR e todo Closer acompanha qualquer lead, não só o do próprio cadastro.
+  const canManage = capabilities.sdr || capabilities.closer;
   const rows = all
     .filter(
       (l) =>
@@ -52,21 +52,21 @@ export function CRMRemarketingBoard({
           .includes(search.toLocaleLowerCase()) &&
         (status === "all" ||
           (status === "active"
-            ? inRemarketing(l)
-            : (l.remarketing_status || "pending") === status)) &&
-        (owner === "all" || l.sdr_id === owner) &&
+            ? inFollowup(l)
+            : (l.followup_status || "pending") === status)) &&
+        (owner === "all" || l.sdr_id === owner || l.closer_id === owner) &&
         (!day ||
-          (!!l.remarketing_next_at &&
-            brasiliaDateKey(l.remarketing_next_at) === day)),
+          (!!l.followup_next_at &&
+            brasiliaDateKey(l.followup_next_at) === day)),
     )
     .sort(
       (a, b) =>
-        (a.remarketing_next_at ? Date.parse(a.remarketing_next_at) : 0) -
-          (b.remarketing_next_at ? Date.parse(b.remarketing_next_at) : 0) ||
+        (a.followup_next_at ? Date.parse(a.followup_next_at) : 0) -
+          (b.followup_next_at ? Date.parse(b.followup_next_at) : 0) ||
         a.id.localeCompare(b.id),
     );
   return (
-    <section aria-label="Fila de remarketing" className="space-y-4">
+    <section aria-label="Fila de follow-up" className="space-y-4">
       <div className="rounded-xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 to-card p-5">
         <div className="mb-2 flex items-center gap-2 text-violet-500">
           <RefreshCcw className="h-5 w-5" />
@@ -74,10 +74,10 @@ export function CRMRemarketingBoard({
             Novas oportunidades
           </span>
         </div>
-        <h2 className="text-xl font-semibold">Remarketing</h2>
+        <h2 className="text-xl font-semibold">Follow-up</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Organize os retornos, registre cada tentativa e retome o atendimento
-          no momento certo.
+          no momento certo. A fila é compartilhada entre SDRs e Closers.
         </p>
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -87,21 +87,21 @@ export function CRMRemarketingBoard({
             "Contatos de hoje",
             active.filter(
               (l) =>
-                l.remarketing_next_at &&
-                brasiliaDateKey(l.remarketing_next_at) === today,
+                l.followup_next_at &&
+                brasiliaDateKey(l.followup_next_at) === today,
             ).length,
           ],
           [
             "Retornos atrasados",
             active.filter(
               (l) =>
-                l.remarketing_next_at &&
-                Date.parse(l.remarketing_next_at) < now.getTime(),
+                l.followup_next_at &&
+                Date.parse(l.followup_next_at) < now.getTime(),
             ).length,
           ],
           [
             "Aguardando agenda",
-            active.filter((l) => !l.remarketing_next_at).length,
+            active.filter((l) => !l.followup_next_at).length,
           ],
         ].map(([label, count]) => (
           <div key={label} className="rounded-xl border bg-card p-4">
@@ -112,7 +112,7 @@ export function CRMRemarketingBoard({
       </div>
       <div className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-4">
         <label className="space-y-1 text-xs text-muted-foreground">
-          Buscar no remarketing
+          Buscar no follow-up
           <Input
             placeholder="Lead, atleta ou motivo"
             value={search}
@@ -128,7 +128,7 @@ export function CRMRemarketingBoard({
           >
             <option value="active">Em acompanhamento</option>
             <option value="all">Todas as situações</option>
-            {Object.entries(REMARKETING_STATUS_LABELS)
+            {Object.entries(FOLLOWUP_STATUS_LABELS)
               .filter(([value]) => value !== "reactivated")
               .map(([value, label]) => (
                 <option key={value} value={value}>
@@ -138,7 +138,7 @@ export function CRMRemarketingBoard({
           </select>
         </label>
         <label className="space-y-1 text-xs text-muted-foreground">
-          SDR responsável
+          Responsável
           <select
             className="h-10 w-full rounded-md border bg-background px-2 text-sm"
             value={owner}
@@ -179,18 +179,13 @@ export function CRMRemarketingBoard({
       <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
         {rows.map((lead) => {
           const overdue =
-            inRemarketing(lead) &&
-            !!lead.remarketing_next_at &&
-            Date.parse(lead.remarketing_next_at) < now.getTime();
-          const canManage =
-            capabilities.sdr &&
-            (capabilities.executive ||
-              !lead.sdr_id ||
-              lead.sdr_id === user?.id);
+            inFollowup(lead) &&
+            !!lead.followup_next_at &&
+            Date.parse(lead.followup_next_at) < now.getTime();
           return (
             <article
               key={lead.id}
-              aria-label={`Remarketing de ${lead.name}`}
+              aria-label={`Follow-up de ${lead.name}`}
               className="space-y-4 rounded-xl border bg-card p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -206,8 +201,8 @@ export function CRMRemarketingBoard({
                   variant="outline"
                   className="border-violet-500/30 text-violet-500"
                 >
-                  {REMARKETING_STATUS_LABELS[
-                    lead.remarketing_status || "pending"
+                  {FOLLOWUP_STATUS_LABELS[
+                    lead.followup_status || "pending"
                   ] || "Pendente"}
                 </Badge>
               </div>
@@ -222,24 +217,29 @@ export function CRMRemarketingBoard({
               <div className="space-y-2 text-xs">
                 <p className="flex items-center gap-2 text-muted-foreground">
                   <UserRound className="h-3.5 w-3.5" />
-                  {names[lead.sdr_id || ""] || "Fila compartilhada SDR"}
+                  SDR:{" "}
+                  {names[lead.sdr_id || ""] ||
+                    (lead.sdr_id ? "Usuário anterior" : "Sem responsável")}{" "}
+                  · Closer:{" "}
+                  {names[lead.closer_id || ""] ||
+                    (lead.closer_id ? "Usuário anterior" : "Sem responsável")}
                 </p>
                 <p
                   className={`flex items-center gap-2 ${overdue ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
                 >
                   <CalendarClock className="h-3.5 w-3.5" />
-                  {lead.remarketing_status === "do_not_contact"
+                  {lead.followup_status === "do_not_contact"
                     ? "Não contatar"
-                    : lead.remarketing_next_at
-                      ? `${overdue ? "Atrasado · " : ""}${callDate(lead.remarketing_next_at)}`
+                    : lead.followup_next_at
+                      ? `${overdue ? "Atrasado · " : ""}${callDate(lead.followup_next_at)}`
                       : "Agendar próximo contato"}
                 </p>
                 <p className="flex items-center gap-2 text-muted-foreground">
                   <MessageSquareText className="h-3.5 w-3.5" />
-                  {lead.remarketing_attempt_count} tentativa(s) · Último
+                  {lead.followup_attempt_count} tentativa(s) · Último
                   contato:{" "}
-                  {lead.remarketing_last_contact_at
-                    ? callDate(lead.remarketing_last_contact_at)
+                  {lead.followup_last_contact_at
+                    ? callDate(lead.followup_last_contact_at)
                     : "Ainda não realizado"}
                 </p>
               </div>
@@ -271,7 +271,7 @@ export function CRMRemarketingBoard({
           Nenhum lead encontrado para este acompanhamento.
         </div>
       )}
-      {importLead && <CRMRemarketingImportDialog key={importLead.id} lead={importLead} onClose={() => setImportLead(null)} />}
+      {importLead && <CRMFollowupImportDialog key={importLead.id} lead={importLead} onClose={() => setImportLead(null)} />}
     </section>
   );
 }

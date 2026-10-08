@@ -13,7 +13,7 @@ import { errorMessage } from '@/lib/sales'
 
 type ContextType = 'whatsapp_summary' | 'call_transcript' | 'manual_note'
 
-export function CRMRemarketingImportDialog({ lead, onClose }: { lead: CRMLead; onClose: () => void }) {
+export function CRMFollowupImportDialog({ lead, onClose }: { lead: CRMLead; onClose: () => void }) {
   const context = useCRMContexts(lead.id)
   const { toast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -66,7 +66,7 @@ export function CRMRemarketingImportDialog({ lead, onClose }: { lead: CRMLead; o
       setSaving(true)
       setFailure('')
       await context.importContext(type, checked, attachment)
-      toast({ title: 'Contexto de remarketing importado', description: `O arquivo ${attachment.file.name} foi associado ao lead ${lead.name}.` })
+      toast({ title: 'Contexto de follow-up importado', description: `O arquivo ${attachment.file.name} foi associado ao lead ${lead.name}.` })
       onClose()
     } catch (cause) {
       setFailure(errorMessage(cause))
@@ -79,17 +79,17 @@ export function CRMRemarketingImportDialog({ lead, onClose }: { lead: CRMLead; o
     <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[640px]" data-lenis-prevent
       onDrop={handleDrop} onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}>
       <DialogHeader>
-        <DialogTitle>Importar contexto para remarketing</DialogTitle>
+        <DialogTitle>Importar contexto para follow-up</DialogTitle>
         <DialogDescription className="space-y-2 text-left">
           <span className="block">Você está importando uma conversa, transcrição ou anotação para <strong>{lead.athlete_name || lead.name}</strong> (lead: {lead.name}).</span>
           <span className="block">O texto será convertido para .md e acrescentado ao histórico de contextos deste lead, disponível para SDR e Closer.</span>
-          <span className="block">A importação não cria leads nem altera a situação ou o agendamento do remarketing.</span>
+          <span className="block">A importação não cria leads nem altera a situação ou o agendamento do follow-up.</span>
         </DialogDescription>
       </DialogHeader>
       <form onSubmit={save} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="remarketing-context-type">Tipo do conteúdo *</Label>
-          <select id="remarketing-context-type" required className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={type} onChange={(event) => setType(event.target.value as ContextType | '')} disabled={saving}>
+          <Label htmlFor="followup-context-type">Tipo do conteúdo *</Label>
+          <select id="followup-context-type" required className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={type} onChange={(event) => setType(event.target.value as ContextType | '')} disabled={saving}>
             <option value="">Classificar antes de salvar</option>
             <option value="whatsapp_summary">Conversa de WhatsApp / resumo</option>
             <option value="call_transcript">Transcrição de ligação</option>
@@ -97,9 +97,9 @@ export function CRMRemarketingImportDialog({ lead, onClose }: { lead: CRMLead; o
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="remarketing-context-file">Arquivo de texto do lead *</Label>
-          <Input ref={fileRef} id="remarketing-context-file" type="file" accept=".txt" aria-describedby="remarketing-context-help" disabled={saving || reading} onChange={(event) => void importFile(event.target.files?.[0])} />
-          <p id="remarketing-context-help" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Label htmlFor="followup-context-file">Arquivo de texto do lead *</Label>
+          <Input ref={fileRef} id="followup-context-file" type="file" accept=".txt" aria-describedby="followup-context-help" disabled={saving || reading} onChange={(event) => void importFile(event.target.files?.[0])} />
+          <p id="followup-context-help" className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             Apenas um .txt de até 256 KB e 50.000 caracteres. Conversão automática para .md, preservando o texto original.
           </p>
@@ -108,10 +108,10 @@ export function CRMRemarketingImportDialog({ lead, onClose }: { lead: CRMLead; o
         </div>
         {attachment && <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <Label htmlFor="remarketing-context-content">Conteúdo que será exibido no contexto do lead *</Label>
+            <Label htmlFor="followup-context-content">Conteúdo que será exibido no contexto do lead *</Label>
             <span className="text-xs tabular-nums text-muted-foreground">{content.length}/{MAX_CONTEXT_LENGTH}</span>
           </div>
-          <Textarea id="remarketing-context-content" className="min-h-48 resize-y" value={content} onChange={(event) => setContent(event.target.value)} required disabled={saving} />
+          <Textarea id="followup-context-content" className="min-h-48 resize-y" value={content} onChange={(event) => setContent(event.target.value)} required disabled={saving} />
           <p className="text-xs text-muted-foreground">Se editar este texto, o .md original continuará disponível para download no histórico.</p>
         </div>}
         {failure && <p role="alert" className="text-sm text-destructive">{failure}</p>}

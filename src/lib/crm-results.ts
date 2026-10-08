@@ -29,11 +29,11 @@ export function resultDate(lead: CRMLead) {
   return lead.last_result_at || lead.closed_at;
 }
 
-export function inRemarketing(lead: CRMLead) {
+export function inFollowup(lead: CRMLead) {
   return (
     isNegativeStage(lead.pipeline_stage) &&
     !["reactivated", "do_not_contact"].includes(
-      lead.remarketing_status || "pending",
+      lead.followup_status || "pending",
     )
   );
 }

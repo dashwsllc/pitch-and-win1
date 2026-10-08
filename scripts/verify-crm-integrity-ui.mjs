@@ -17,15 +17,15 @@ const at = (day, hour = '14:00:00') => brasiliaLocalToDate(day, hour).toISOStrin
 const profile = { id: actor, user_id: actor, display_name: 'Gestor QA', suspended: false, avatar_url: null, created_at: now, updated_at: now }
 const lead = (name, extra = {}) => ({ id: randomUUID(), name, athlete_name: `Atleta ${name}`, phone: '11900000000', email: null,
   pipeline_stage: 'novo', approach_stage: 'nao_abordado', temperature: 'morno', sdr_id: sdr, closer_id: null, created_by: actor,
-  created_at: now, updated_at: now, next_followup_at: null, version: 1, remarketing_status: null, remarketing_next_at: null,
-  remarketing_attempt_count: 0, ...extra })
+  created_at: now, updated_at: now, next_followup_at: null, version: 1, followup_status: null, followup_next_at: null,
+  followup_attempt_count: 0, ...extra })
 const leads = [
   lead('Maria Responsável', { phone: '(11) 99879-2426', email: 'maria@exemplo.com', pipeline_stage: 'em_qualificacao' }),
   lead('Joana Responsável', { phone: '61992322770', pipeline_stage: 'repassado_closer', closer_id: closer }),
   lead('Perdido pelo SDR', { phone: '11911111111', pipeline_stage: 'lead_perdido', last_result_outcome: 'lead_perdido', last_result_at: at(today), closed_at: at(today),
-    last_result_closer_name: null, negative_reason: 'Não respondeu', remarketing_status: 'do_not_contact' }),
+    last_result_closer_name: null, negative_reason: 'Não respondeu', followup_status: 'do_not_contact' }),
   lead('Recusado pelo Closer', { phone: '11922222222', pipeline_stage: 'fechado_perdido', closer_id: closer, last_result_outcome: 'venda_perdida', last_result_at: at(today),
-    closed_at: at(today), last_result_closer_id: closer, last_result_closer_name: 'Maria Closer', negative_reason: 'Sem orçamento', remarketing_status: 'do_not_contact' }),
+    closed_at: at(today), last_result_closer_id: closer, last_result_closer_name: 'Maria Closer', negative_reason: 'Sem orçamento', followup_status: 'do_not_contact' }),
 ]
 const requests = [], errors = []
 const browser = await chromium.launch({ headless: true })

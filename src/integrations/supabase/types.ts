@@ -529,10 +529,10 @@ export type Database = {
           qualification_completed_at: string | null
           qualification_completed_by: string | null
           negative_reason: string | null
-          remarketing_status: string | null
-          remarketing_next_at: string | null
-          remarketing_last_contact_at: string | null
-          remarketing_attempt_count: number
+          followup_status: string | null
+          followup_next_at: string | null
+          followup_last_contact_at: string | null
+          followup_attempt_count: number
           age: number | null
           approach_count: number
           approached: boolean
@@ -592,10 +592,10 @@ export type Database = {
           qualification_completed_at?: string | null
           qualification_completed_by?: string | null
           negative_reason?: string | null
-          remarketing_status?: string | null
-          remarketing_next_at?: string | null
-          remarketing_last_contact_at?: string | null
-          remarketing_attempt_count?: number
+          followup_status?: string | null
+          followup_next_at?: string | null
+          followup_last_contact_at?: string | null
+          followup_attempt_count?: number
           age?: number | null
           approach_count?: number
           approached?: boolean
@@ -655,10 +655,10 @@ export type Database = {
           qualification_completed_at?: string | null
           qualification_completed_by?: string | null
           negative_reason?: string | null
-          remarketing_status?: string | null
-          remarketing_next_at?: string | null
-          remarketing_last_contact_at?: string | null
-          remarketing_attempt_count?: number
+          followup_status?: string | null
+          followup_next_at?: string | null
+          followup_last_contact_at?: string | null
+          followup_attempt_count?: number
           age?: number | null
           approach_count?: number
           approached?: boolean
@@ -1524,7 +1524,7 @@ export type Database = {
         Args: { p_lead_id: string; p_expected_version: number; p_reason: string; p_next_at: string; p_note?: string }
         Returns: Database["public"]["Tables"]["crm_leads"]["Row"]
       }
-      crm_update_remarketing: {
+      crm_update_followup: {
         Args: { p_lead_id: string; p_expected_version: number; p_action: string; p_next_at?: string | null; p_note?: string }
         Returns: Database["public"]["Tables"]["crm_leads"]["Row"]
       }

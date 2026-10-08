@@ -23,7 +23,7 @@ export const PURCHASE_TIMELINES = [
   { value: "sem_previsao", label: "Sem previsão" },
 ] as const;
 
-export const REMARKETING_STATUS_LABELS: Record<string, string> = {
+export const FOLLOWUP_STATUS_LABELS: Record<string, string> = {
   pending: "Aguardando planejamento",
   scheduled: "Follow-up agendado",
   nurturing: "Em acompanhamento",

@@ -52,9 +52,9 @@ import { CRMLeadCard } from "@/components/crm/CRMLeadCard";
 import { CRMActionDialog } from "@/components/crm/CRMActionDialog";
 import { CRMCallScheduler, type CRMCallIntent } from "@/components/crm/CRMCalls";
 import { CRMQualificationDialog } from "@/components/crm/CRMQualificationDialog";
-import { CRMRemarketingDialog } from "@/components/crm/CRMRemarketingDialog";
+import { CRMFollowupDialog } from "@/components/crm/CRMFollowupDialog";
 import { CRMResults } from "@/components/crm/CRMResults";
-import { CRMRemarketingBoard } from "@/components/crm/CRMRemarketingBoard";
+import { CRMFollowupBoard } from "@/components/crm/CRMFollowupBoard";
 import { CRMReturnDialog } from "@/components/crm/CRMReturnDialog";
 import { leadResult } from "@/lib/crm-results";
 import { candidatesFor } from "@/lib/crm-assignees";
@@ -124,7 +124,6 @@ const sdrQueues = [
   { value: "active", label: "Em atendimento" },
   { value: "calls", label: "Calls de qualificação" },
   { value: "closed", label: "Resultados" },
-  { value: "negative", label: "Remarketing" },
 ];
 const selectClass =
   "h-9 min-w-0 w-full rounded-md border border-input bg-background px-2 text-xs";
@@ -185,8 +184,11 @@ export default function CRM() {
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
   const requestedTab = params.get("tab") || "leads";
-  // Keep existing Remarketing bookmarks in the SDR workspace.
-  const tab = requestedTab === "remarketing" ? "sdr" : requestedTab;
+  // Favoritos e links antigos da aba Remarketing (?tab=remarketing) abrem o Follow-up.
+  const tab = requestedTab === "remarketing" ? "followup" : requestedTab;
+  useEffect(() => {
+    if (requestedTab === "remarketing") setParams({ tab: "followup" }, { replace: true });
+  }, [requestedTab, setParams]);
   const [search, setSearch] = useState("");
   const [temperature, setTemperature] = useState<string[]>([]);
   const [approach, setApproach] = useState<string[]>([]);
@@ -200,9 +202,7 @@ export default function CRM() {
   const [pipelinePeriod, setPipelinePeriod] = useState<CRMPipelinePeriod>("today");
   const [pipelineCustomRange, setPipelineCustomRange] = useState(createDefaultCRMPipelineRange);
   const [queue, setQueue] = useState("queue");
-  const [sdrQueue, setSdrQueue] = useState(
-    requestedTab === "remarketing" ? "negative" : "active",
-  );
+  const [sdrQueue, setSdrQueue] = useState("active");
   const [readId, setReadId] = useState<string | null>(null);
   const [editor, setEditor] = useState<CRMLead | "new" | null>(null);
   const [deleting, setDeleting] = useState<CRMLead | null>(null);
@@ -218,7 +218,7 @@ export default function CRM() {
     lead: CRMLead;
     call: CRMActivity;
   } | null>(null);
-  const [remarketing, setRemarketing] = useState<CRMLead | null>(null);
+  const [followupLead, setFollowupLead] = useState<CRMLead | null>(null);
   const [returning, setReturning] = useState<{ lead: CRMLead; target: "sdr" | "closer" } | null>(null);
   const [busy, setBusy] = useState(false);
   const now = useLiveClock(CRM_CLOCK_INTERVAL_MS);
@@ -288,7 +288,6 @@ export default function CRM() {
     if (value === "calls")
       return openCalls.get(lead.id)?.call_type === "qualificacao";
     if (value === "closed") return closed(lead);
-    if (value === "negative") return negative(lead);
     return !isClosedStage(lead.pipeline_stage) && lead.pipeline_stage !== "repassado_closer";
   };
   const visibleInTab = (lead: CRMLead) => {
@@ -296,11 +295,12 @@ export default function CRM() {
     if (tab === "closer") return inQueue(lead, queue);
     if (tab === "sdr") return inSdrQueue(lead, sdrQueue);
     if (tab === "importados") return lead.lead_source === "meta_ads_form";
+    if (tab === "followup") return negative(lead);
     return true;
   };
   const showResults = tab === "results" || (tab === "closer" && queue === "closed") || (tab === "sdr" && sdrQueue === "closed");
-  const showRemarketing = tab === "remarketing" || (tab === "sdr" && sdrQueue === "negative");
-  const dailyPipeline = view === "pipeline" && ["leads", "sdr", "importados"].includes(tab) && !showResults && !showRemarketing;
+  const showFollowup = tab === "followup";
+  const dailyPipeline = view === "pipeline" && ["leads", "sdr", "importados"].includes(tab) && !showResults && !showFollowup;
   const todayKey = brasiliaDateKey(now);
   const tomorrowKey = addDaysToDateKey(todayKey, 1);
   const pipelineRange = resolveCRMPipelinePeriod(pipelinePeriod, pipelineCustomRange, todayKey);
@@ -448,7 +448,7 @@ export default function CRM() {
             : "Lead atualizado",
     );
   const saveAction = (lead: CRMLead, name: string, data: Json) => {
-    if (name !== "lose" && name !== "remarketing") return transition(lead, name, data);
+    if (name !== "lose" && name !== "send_followup") return transition(lead, name, data);
     const payload = data as {
       negative_reason?: string;
       next_at?: string;
@@ -460,7 +460,7 @@ export default function CRM() {
         nextAt: payload.next_at || "",
         note: payload.note,
       }),
-      "Lead enviado para Remarketing",
+      "Lead enviado para Follow-up",
     );
   };
   const requestDelete = (lead: CRMLead) => {
@@ -469,7 +469,7 @@ export default function CRM() {
     setAction(null);
     setSchedule(null);
     setQualification(null);
-    setRemarketing(null);
+    setFollowupLead(null);
     setReturning(null);
     setDeleting(lead);
   };
@@ -513,7 +513,7 @@ export default function CRM() {
         const call = openCalls.get(lead.id);
         if (call) setQualification({ lead, call });
       }}
-      onRemarketing={() => setRemarketing(lead)}
+      onManageFollowup={() => setFollowupLead(lead)}
     />
   );
   const retry = () => {
@@ -539,7 +539,8 @@ export default function CRM() {
     sales.isLoading ||
     contextSummary.loading;
   const permittedTab =
-    ["leads", "results", "remarketing", "importados"].includes(tab) ||
+    ["leads", "results", "importados"].includes(tab) ||
+    (tab === "followup" && (capabilities.sdr || capabilities.closer)) ||
     (tab === "sdr" && capabilities.sdr) ||
     (tab === "closer" && capabilities.closer) ||
     (["users", "permissions"].includes(tab) && capabilities.admin);
@@ -578,7 +579,7 @@ export default function CRM() {
           {[
             { label: "Leads ativos", value: crm.leads.filter((lead) => !isClosedStage(lead.pipeline_stage)).length, icon: Users },
             {
-              label: "Remarketing",
+              label: "Follow-up",
               value: crm.leads.filter(negative).length,
               icon: RefreshCcw,
             },
@@ -622,6 +623,9 @@ export default function CRM() {
             {capabilities.sdr && <TabsTrigger className="h-8 px-3 text-xs" value="sdr">SDR</TabsTrigger>}
             {capabilities.closer && (
               <TabsTrigger className="h-8 px-3 text-xs" value="closer">Closer</TabsTrigger>
+            )}
+            {(capabilities.sdr || capabilities.closer) && (
+              <TabsTrigger className="h-8 px-3 text-xs" value="followup">Follow-up</TabsTrigger>
             )}
             <TabsTrigger className="h-8 px-3 text-xs" value="results">Resultados</TabsTrigger>
             {capabilities.admin && (
@@ -722,7 +726,7 @@ export default function CRM() {
                         </Tabs>
                       </div>
                     )}
-                    {!showResults && !showRemarketing && <Tabs value={mode} onValueChange={value => {
+                    {!showResults && !showFollowup && <Tabs value={mode} onValueChange={value => {
                       setView(value);
                       if (value === "pipeline" && callDateFilter !== "all" && selectedCallDateKey) {
                         setPipelineCustomRange({ start: selectedCallDateKey, end: selectedCallDateKey });
@@ -745,8 +749,8 @@ export default function CRM() {
                   </div>
                 ) : null}
                 {showResults ? <CRMResults leads={crm.leads} sales={saleMap} names={names} closerView={tab === "closer"} busy={busy}
-                  onRead={lead => setReadId(lead.id)} onReturn={(lead, target) => setReturning({ lead, target })} onRemarketing={setRemarketing} />
-                  : showRemarketing ? <CRMRemarketingBoard leads={crm.leads} names={names} now={now} busy={busy} onRead={lead => setReadId(lead.id)} onManage={setRemarketing} />
+                  onRead={lead => setReadId(lead.id)} onReturn={(lead, target) => setReturning({ lead, target })} onManageFollowup={setFollowupLead} />
+                  : showFollowup ? <CRMFollowupBoard leads={crm.leads} names={names} now={now} busy={busy} onRead={lead => setReadId(lead.id)} onManage={setFollowupLead} />
                   : <>
                 {dailyPipeline && <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
                   <div>
@@ -997,14 +1001,14 @@ export default function CRM() {
             onClose={() => setQualification(null)}
           />
         )}
-        {remarketing && (
-          <CRMRemarketingDialog
-            lead={remarketing}
+        {followupLead && (
+          <CRMFollowupDialog
+            lead={followupLead}
             busy={busy}
-            onClose={() => setRemarketing(null)}
+            onClose={() => setFollowupLead(null)}
             onSave={(data) => run(
-              () => crm.updateRemarketing(remarketing, data),
-              data.action === "reactivate" ? "Lead reativado" : "Remarketing atualizado",
+              () => crm.updateFollowup(followupLead, data),
+              data.action === "reactivate" ? "Lead reativado" : "Follow-up atualizado",
             )}
           />
         )}

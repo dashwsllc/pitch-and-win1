@@ -52,7 +52,7 @@ import { formatAthleteAge } from "@/lib/crm-age";
 import type { CRMCallIntent } from "./CRMCalls";
 import {
   INCOME_RANGES,
-  REMARKETING_STATUS_LABELS,
+  FOLLOWUP_STATUS_LABELS,
   optionLabel,
 } from "@/lib/crm-qualification";
 import type { PaymentStatus } from "@/lib/crm-payments";
@@ -81,7 +81,7 @@ export function CRMLeadCard({
   onTransition,
   onSchedule,
   onQualifyCall,
-  onRemarketing,
+  onManageFollowup,
 }: {
   lead: CRMLead;
   call?: CRMActivity;
@@ -103,7 +103,7 @@ export function CRMLeadCard({
   onTransition: (action: string, data?: Json) => void;
   onSchedule: (intent: CRMCallIntent) => void;
   onQualifyCall: () => void;
-  onRemarketing: () => void;
+  onManageFollowup: () => void;
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -124,7 +124,7 @@ export function CRMLeadCard({
   // troca o responsável (Closer ou SDR, conforme a call) e/ou o horário.
   const canEditCall = !closed && !!call && !call.is_completed && capabilities.sdr;
   const editIntent: CRMCallIntent = call?.call_type === "qualificacao" ? "qualification" : "closer";
-  const canSendRemarketing = !closed && (handed
+  const canSendFollowup = !closed && (handed
     ? capabilities.closer && canManage
     : capabilities.sdr || lead.created_by === user?.id);
   const next = nextLeadSchedule(lead, call?.scheduled_at);
@@ -318,9 +318,9 @@ export function CRMLeadCard({
             Renda: {optionLabel(INCOME_RANGES, lead.qualification_income_range)}
           </Badge>
         )}
-        {negative && lead.remarketing_status && (
+        {negative && lead.followup_status && (
           <Badge variant="outline" className="h-5 px-2 text-[10px] text-violet-300">
-            {REMARKETING_STATUS_LABELS[lead.remarketing_status] || lead.remarketing_status}
+            {FOLLOWUP_STATUS_LABELS[lead.followup_status] || lead.followup_status}
           </Badge>
         )}
       </div>
@@ -356,8 +356,8 @@ export function CRMLeadCard({
         {negative && lead.negative_reason && (
           <p className="line-clamp-2" title={lead.negative_reason}>Negativa: {lead.negative_reason}</p>
         )}
-        {negative && lead.remarketing_next_at && (
-          <p className="truncate">Próximo remarketing: {callDate(lead.remarketing_next_at)}</p>
+        {negative && lead.followup_next_at && (
+          <p className="truncate">Próximo follow-up: {callDate(lead.followup_next_at)}</p>
         )}
       </div>
       {emphasizeCall && (
@@ -453,9 +453,9 @@ export function CRMLeadCard({
             Agendar Call c/ Closer
           </Button>
         )}
-        {negative && capabilities.sdr && (capabilities.executive || !lead.sdr_id || lead.sdr_id === user?.id) && (
-          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={onRemarketing}>
-            <RefreshCcw className="mr-1.5 h-3.5 w-3.5" /> Remarketing
+        {negative && (capabilities.sdr || capabilities.closer) && (
+          <Button className="h-8 flex-1 px-2 text-xs" size="sm" disabled={busy} onClick={onManageFollowup}>
+            <RefreshCcw className="mr-1.5 h-3.5 w-3.5" /> Follow-up
           </Button>
         )}
         {handed && capabilities.closer && !lead.closer_id && (
@@ -510,8 +510,8 @@ export function CRMLeadCard({
                 )}
               </>
             )}
-            {canSendRemarketing && <DropdownMenuItem onSelect={() => onAction("remarketing")}>
-              <RefreshCcw className="mr-2 h-4 w-4" /> Enviar para Remarketing
+            {canSendFollowup && <DropdownMenuItem onSelect={() => onAction("send_followup")}>
+              <RefreshCcw className="mr-2 h-4 w-4" /> Enviar para Follow-up
             </DropdownMenuItem>}
             {handed && capabilities.closer && !!lead.closer_id && canManage && (
               <>
