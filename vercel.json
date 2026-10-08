@@ -24,9 +24,9 @@
   ],
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "has": [{ "type": "host", "value": "^wsltda\\.com$" }],
-      "destination": "https://www.wsltda.com/:path*",
+      "destination": "https://www.wsltda.com/$1",
       "permanent": false
     }
   ],
