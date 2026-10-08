@@ -171,7 +171,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRegistrationError(false)
     setSession(null)
     try {
-      const { error } = await supabase.auth.signOut()
+      // Only this browser signs out. The default scope ("global") also revokes the account's sessions on every other device and
+      // tab, which logged people out of places they were still using.
+      const { error } = await supabase.auth.signOut({ scope: 'local' })
       // A transport failure prevents supabase-js from reaching its normal
       // local cleanup. Never leave a refresh token behind after the UI exits.
       if (error) clearStoredSupabaseSession()

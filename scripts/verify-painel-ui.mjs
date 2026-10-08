@@ -113,7 +113,7 @@ async function abrir({ tema = 'dark', largura = 1440, altura = 900, movimento = 
   await contexto.addInitScript(
     ({ chave, sessao, tema, comSessao }) => {
       try {
-        if (comSessao) sessionStorage.setItem(chave, JSON.stringify(sessao))
+        if (comSessao) localStorage.setItem(chave, JSON.stringify(sessao))
         localStorage.setItem('theme', tema)
       } catch {
         /* sem armazenamento */

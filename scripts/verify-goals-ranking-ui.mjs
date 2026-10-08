@@ -44,7 +44,7 @@ await context.addInitScript(({ actor, project }) => {
     refresh_token: 'test', expires_at: 4102444800, expires_in: 3600, token_type: 'bearer',
     user: { id: actor, email: 'goals@example.invalid', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: { display_name: 'Closer de teste' }, created_at: new Date().toISOString() },
   }
-  sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
+  localStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
 }, { actor, project })
 
 const page = await context.newPage()

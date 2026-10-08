@@ -80,7 +80,7 @@ await context.route('https://**/*', async route => {
 })
 await context.addInitScript(({ actor, project }) => {
   const enc = value => btoa(JSON.stringify(value)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-  sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify({ access_token: `${enc({ alg: 'HS256' })}.${enc({ sub: actor, role: 'authenticated', exp: 4102444800 })}.qa`, refresh_token: 'qa', expires_at: 4102444800,
+  localStorage.setItem(`sb-${project}-auth-token`, JSON.stringify({ access_token: `${enc({ alg: 'HS256' })}.${enc({ sub: actor, role: 'authenticated', exp: 4102444800 })}.qa`, refresh_token: 'qa', expires_at: 4102444800,
     user: { id: actor, email: 'closers@example.invalid', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: { display_name: 'Gestor QA' }, created_at: new Date().toISOString() } }))
 }, { actor, project })
 const page = await context.newPage()

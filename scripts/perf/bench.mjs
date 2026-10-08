@@ -88,7 +88,7 @@ async function run(baseUrl, runIndex) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' })
   const fixtures = buildFixtures({ role: ROLE })
   const mock = installMock(context, fixtures, { latencyMs: Number(argv['api-latency'] ?? 70) })
-  await context.addInitScript(({ key, session }) => { try { sessionStorage.setItem(key, JSON.stringify(session)) } catch (e) { /* ignore */ } }, { key: STORAGE_KEY, session: fakeSession() })
+  await context.addInitScript(({ key, session }) => { try { localStorage.setItem(key, JSON.stringify(session)) } catch (e) { /* ignore */ } }, { key: STORAGE_KEY, session: fakeSession() })
   await context.addInitScript(INIT_OBSERVERS)
   const page = await context.newPage()
   const consoleErrors = []

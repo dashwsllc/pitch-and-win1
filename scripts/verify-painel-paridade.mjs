@@ -223,7 +223,7 @@ async function abrir(navegador, url, fixtures) {
   installMock(contexto, fixtures, { latencyMs: 10 })
   await contexto.addInitScript(
     ({ chave, sessao }) => {
-      sessionStorage.setItem(chave, JSON.stringify(sessao))
+      localStorage.setItem(chave, JSON.stringify(sessao))
       localStorage.setItem('theme', 'dark')
     },
     { chave: STORAGE_KEY, sessao: fakeSession(FIXED.getTime()) },

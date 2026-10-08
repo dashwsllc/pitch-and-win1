@@ -30,7 +30,7 @@ await realFixtures(async ({ clients, sessions, users, anon, name, productId, tic
       window.setInterval = (callback, delay, ...args) => interval(callback, delay === 50000 ? 3600000 : delay, ...args)
     })
     await context.addInitScript(({ project, session }) => {
-      if (!sessionStorage.getItem(`sb-${project}-auth-token`)) sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
+      if (!localStorage.getItem(`sb-${project}-auth-token`)) localStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
     }, { project, session: sessions[role] })
     const tab = await context.newPage()
     tab.on('pageerror', error => errors.push(error.message))

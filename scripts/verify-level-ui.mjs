@@ -118,7 +118,7 @@ await context.addInitScript(({ actor, project }) => {
     refresh_token: 'test', expires_at: 4102444800, expires_in: 3600, token_type: 'bearer',
     user: { id: actor, email: 'level@example.invalid', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: { display_name: 'Closer de teste' }, created_at: new Date().toISOString() },
   }
-  sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
+  localStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
 }, { actor, project })
 
 const page = await context.newPage()
@@ -221,7 +221,7 @@ try {
       refresh_token: 'test', expires_at: 4102444800, expires_in: 3600, token_type: 'bearer',
       user: { id: actor, email: 'zero-level@example.invalid', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: { display_name: 'Closer zerado' }, created_at: new Date().toISOString() },
     }
-    sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
+    localStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
   }, { actor: zeroActor, project })
   const zeroPage = await zeroContext.newPage()
   zeroPage.on('pageerror', (error) => zeroErrors.push(error.message))
@@ -276,7 +276,7 @@ try {
       refresh_token: 'test', expires_at: 4102444800, expires_in: 3600, token_type: 'bearer',
       user: { id: actor, email: 'broken-level@example.invalid', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: { display_name: 'Closer quebrado' }, created_at: new Date().toISOString() },
     }
-    sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
+    localStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
   }, { actor: brokenActor, project })
   const brokenPage = await brokenContext.newPage()
   brokenPage.on('pageerror', (error) => brokenErrors.push(error.message))

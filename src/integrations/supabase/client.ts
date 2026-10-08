@@ -1,5 +1,7 @@
 import { createClient, type Session } from '@supabase/supabase-js';
 import type { Database } from './types';
+import { adoptTabSession, pickAuthStorage } from '@/lib/auth-storage';
+import { withTokenRefreshRetry } from '@/lib/auth-resilient-fetch';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -32,20 +34,33 @@ export const hasRecoveryLinkError = initialHash.has('error') ||
 export const isRecoverySession = (session: Session | null) =>
   Boolean(initialRecoveryToken && session?.access_token === initialRecoveryToken);
 
+// The login must survive closing a tab or the browser and be shared by every tab of the same browser, so it lives in
+// localStorage (it used to be tab-scoped, which signed people out for no visible reason). HttpOnly cookies would be safer
+// against XSS but need a server-rendered application or an authentication proxy; see SECURITY.md.
+const authStorage = pickAuthStorage(window);
+// Logins made before this change sit in the tab's sessionStorage: carry them over once instead of asking for the password.
+adoptTabSession(authStorageKey, authStorage, window.sessionStorage);
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    // Limits token persistence to the current tab. HttpOnly cookies require a
-    // server-rendered application or an authentication proxy.
-    storage: sessionStorage,
+    storage: authStorage,
     storageKey: authStorageKey,
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: 'implicit',
   },
+  // A server hiccup while renewing the login must not delete the stored session (supabase-js does that on HTTP 500).
+  global: { fetch: withTokenRefreshRetry((input, init) => fetch(input, init)) },
 });
 
 export function clearStoredSupabaseSession() {
-  sessionStorage.removeItem(authStorageKey);
-  sessionStorage.removeItem(`${authStorageKey}-code-verifier`);
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    try {
+      storage.removeItem(authStorageKey);
+      storage.removeItem(`${authStorageKey}-code-verifier`);
+    } catch {
+      // Blocked storage has nothing stored to remove.
+    }
+  }
 }

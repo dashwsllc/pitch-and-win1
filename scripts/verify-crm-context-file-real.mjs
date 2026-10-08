@@ -47,7 +47,7 @@ try {
   browser = await chromium.launch({ headless: true })
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true })
   await context.addInitScript(({ project, session }) => {
-    sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
+    localStorage.setItem(`sb-${project}-auth-token`, JSON.stringify(session))
   }, { project, session })
   const page = await context.newPage()
   const pageErrors = []

@@ -39,7 +39,7 @@ async function open(route = '/vendas', { namesFail = false, width = 1440 } = {})
     return route.fulfill({ status: 400, headers: { 'access-control-allow-origin': '*' }, contentType: 'application/json', body: JSON.stringify({ message: 'Profile lookup failure' }) })
   })
   await context.addInitScript(({ key, session }) => {
-    sessionStorage.setItem(key, JSON.stringify(session))
+    localStorage.setItem(key, JSON.stringify(session))
     localStorage.setItem('theme', 'dark')
   }, { key: STORAGE_KEY, session: fakeSession(now.getTime()) })
   const page = await context.newPage()

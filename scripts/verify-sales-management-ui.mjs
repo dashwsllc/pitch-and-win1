@@ -87,7 +87,7 @@ await context.route('https://**/*', async route => {
 })
 await context.addInitScript(({ actor, project }) => {
   const enc = value => btoa(JSON.stringify(value)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_')
-  sessionStorage.setItem(`sb-${project}-auth-token`, JSON.stringify({ access_token: `${enc({ alg:'HS256',typ:'JWT' })}.${enc({ sub:actor,role:'authenticated',exp:4102444800 })}.test`, refresh_token:'test',expires_at:4102444800,expires_in:3600,token_type:'bearer',user:{id:actor,email:'qa@example.invalid',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{display_name:'QA Admin'},created_at:new Date().toISOString()} }))
+  localStorage.setItem(`sb-${project}-auth-token`, JSON.stringify({ access_token: `${enc({ alg:'HS256',typ:'JWT' })}.${enc({ sub:actor,role:'authenticated',exp:4102444800 })}.test`, refresh_token:'test',expires_at:4102444800,expires_in:3600,token_type:'bearer',user:{id:actor,email:'qa@example.invalid',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{display_name:'QA Admin'},created_at:new Date().toISOString()} }))
 }, { actor, project })
 const page = await context.newPage()
 page.on('pageerror', error => errors.push(error.message))

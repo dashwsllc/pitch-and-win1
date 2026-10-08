@@ -21,7 +21,11 @@ Supabase encrypts hosted database storage and traffic at the platform layer. Aut
 
 Do not add browser-side field encryption: its key would ship to every browser. If application-level field encryption is required, move the affected reads and writes to a server/Edge Function backed by a managed key service, then remove direct table access for those columns.
 
-This is a static SPA, so Supabase access and refresh tokens cannot be placed in true HttpOnly cookies by frontend code. Sessions are stored in `sessionStorage` and use PKCE. Moving to HttpOnly, `Secure` cookies requires an SSR/BFF authentication layer.
+This is a static SPA, so Supabase access and refresh tokens cannot be placed in true HttpOnly cookies by frontend code. Moving to HttpOnly, `Secure` cookies requires an SSR/BFF authentication layer.
+
+Sessions are stored in `localStorage` (the implicit flow is used, not PKCE) so that a login survives closing the tab or the browser and is shared by every tab of the same browser. They used to be tab-scoped (`sessionStorage`), which signed people out whenever a tab was closed or reopened and let duplicated tabs share one refresh token that the server then revoked. The trade-off is that any script running on the origin can read the tokens, so the strict CSP in `vercel.json` (`script-src 'self'` plus Cloudflare Turnstile) is the control that matters and must not be loosened. On a shared computer, use **Sair**: it ends only that browser's session, not the account's sessions on other devices.
+
+The app is served from one address, `https://www.wsltda.com`; `https://wsltda.com` redirects to it. The browser keeps a separate login per address, so serving both signed people out whenever they switched between them.
 
 ## Secret incident response
 

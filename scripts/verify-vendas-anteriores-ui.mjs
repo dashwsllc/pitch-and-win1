@@ -73,7 +73,7 @@ async function abrir(vendas, { papel = 'super_admin', caminho = '/', donoDasVend
   await contexto.addInitScript(
     ({ chave, sessao }) => {
       try {
-        sessionStorage.setItem(chave, JSON.stringify(sessao))
+        localStorage.setItem(chave, JSON.stringify(sessao))
         localStorage.setItem('theme', 'dark')
       } catch {
         /* sem armazenamento */

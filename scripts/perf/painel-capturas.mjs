@@ -63,7 +63,7 @@ for (const c of CENARIOS) {
   await contexto.addInitScript(
     ({ chave, sessao, tema }) => {
       try {
-        sessionStorage.setItem(chave, JSON.stringify(sessao))
+        localStorage.setItem(chave, JSON.stringify(sessao))
         localStorage.setItem('theme', tema)
       } catch {
         /* sem armazenamento */

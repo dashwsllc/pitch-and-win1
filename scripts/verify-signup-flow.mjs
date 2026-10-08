@@ -58,7 +58,7 @@ try {
     })
   })
   const executiveContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
-  await executiveContext.addInitScript(({ key, session }) => sessionStorage.setItem(key, JSON.stringify(session)), { key: `sb-${project}-auth-token`, session: executiveSession })
+  await executiveContext.addInitScript(({ key, session }) => localStorage.setItem(key, JSON.stringify(session)), { key: `sb-${project}-auth-token`, session: executiveSession })
   const executivePage = await executiveContext.newPage()
   executivePage.on('pageerror', error => errors.push(error.message))
   await executivePage.goto(`${origin}/executive`)

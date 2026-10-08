@@ -35,7 +35,7 @@ async function openAs(client, user, url, viewport) {
   const login = must(await client.auth.verifyOtp({ token_hash: link.properties.hashed_token, type: 'magiclink' }))
   const context = await browser.newContext({ viewport })
   context.setDefaultTimeout(15000)
-  await context.addInitScript(({ key, session }) => { sessionStorage.setItem(key, JSON.stringify(session)) }, { key: `sb-${project}-auth-token`, session: login.session })
+  await context.addInitScript(({ key, session }) => { localStorage.setItem(key, JSON.stringify(session)) }, { key: `sb-${project}-auth-token`, session: login.session })
   const page = await context.newPage()
   page.on('pageerror', error => errors.push(error.message))
   page.on('response', response => { if (response.status() >= 400 && response.url().includes('.supabase.co/rest/')) errors.push(`${response.status()} ${new URL(response.url()).pathname}`) })

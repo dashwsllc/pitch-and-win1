@@ -27,7 +27,7 @@ async function open({ ws = 'normal', wsJoinDelayMs = 0, latencyMs = 40 } = {}) {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (window.__hidden ? 'hidden' : 'visible') })
   })
   const mock = installMock(context, buildFixtures({}), { latencyMs, ws, wsJoinDelayMs })
-  await context.addInitScript(({ key, session }) => { try { sessionStorage.setItem(key, JSON.stringify(session)) } catch (e) { /* ignore */ } }, { key: STORAGE_KEY, session: fakeSession() })
+  await context.addInitScript(({ key, session }) => { try { localStorage.setItem(key, JSON.stringify(session)) } catch (e) { /* ignore */ } }, { key: STORAGE_KEY, session: fakeSession() })
   const page = await context.newPage()
   const t0 = Date.now()
   await page.goto(url + '/', { waitUntil: 'commit' })

@@ -27,7 +27,7 @@ const context = await browser.newContext({
   viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', reducedMotion: 'reduce',
 })
 installMock(context, buildFixtures({ role: ROLE, now: FIXED }), { latencyMs: 20 })
-await context.addInitScript(({ key, session }) => { try { sessionStorage.setItem(key, JSON.stringify(session)) } catch (e) { /* ignore */ } }, { key: STORAGE_KEY, session: fakeSession(FIXED.getTime()) })
+await context.addInitScript(({ key, session }) => { try { localStorage.setItem(key, JSON.stringify(session)) } catch (e) { /* ignore */ } }, { key: STORAGE_KEY, session: fakeSession(FIXED.getTime()) })
 const page = await context.newPage()
 await page.clock.setFixedTime(FIXED)
 const errors = []
