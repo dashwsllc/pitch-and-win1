@@ -735,10 +735,11 @@ export default function CRM() {
                     }}>
                       <TabsList className="h-auto flex flex-wrap justify-start gap-1">
                         {[
+                          ...(tab === "leads" ? [{ value: "pipeline", label: "Esteira do LEAD" }] : []),
                           { value: "list", label: tab === "leads" ? "Todos ativos" : "Lista" },
                           { value: "temperature", label: "Aquecimento" },
                           { value: "approach", label: "Abordagem" },
-                          { value: "pipeline", label: "Esteira do LEAD" },
+                          ...(tab === "leads" ? [] : [{ value: "pipeline", label: "Esteira do LEAD" }]),
                         ].map((v) => (
                           <TabsTrigger className="h-8 px-3 text-xs" value={v.value} key={v.value}>
                             {v.label}
