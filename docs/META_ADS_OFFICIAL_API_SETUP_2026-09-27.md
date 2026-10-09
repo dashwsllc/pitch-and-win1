@@ -78,8 +78,8 @@ Como Executive ou Super Admin: `/trafego` → aba **Conexão** → preencher ID 
 Rode nesta ordem, sempre conferindo o resultado antes de seguir para o próximo item:
 
 1. **Webhook GET**: `curl "https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/meta-lead-webhook?hub.mode=subscribe&hub.verify_token=SEU_TOKEN&hub.challenge=123"` → deve devolver `123` (200). Com token errado, deve devolver 403.
-2. **Lead Ads Testing Tool** (dentro do App Dashboard → Marketing API → Lead Ads Testing Tool): envie um lead de teste → confira que aparece em `/leads` com status "Novo" e que "Diagnóstico do webhook" não mostra erro crescente.
-3. **Sincronizar agora** (aba Conexão): clique e confira que uma nova linha aparece em `meta_sync_runs` (visível na própria UI) com status Sucesso e a contagem de linhas.
+2. **Lead Ads Testing Tool** (dentro do App Dashboard → Marketing API → Lead Ads Testing Tool): envie um lead de teste → confira que aparece em **Tráfego → Aprovações → Leads automáticos**. Revise e aprove com Gestor de tráfego, Executive ou Super Admin. Cadastro completo segue para a fila compartilhada do CRM; cadastro incompleto aparece em `/leads` para o SDR completar.
+3. **Sincronizar agora** (aba Conexão): clique e confira que uma nova linha aparece em `meta_sync_runs` (visível na própria UI) com status Sucesso e a contagem de linhas capturadas. As métricas ficam pendentes em **Aprovações**; revise o lote antes de publicar no desempenho.
 4. **Comparação com o Ads Manager**: filtre a aba Desempenho por Origem=API e compare investimento/leads/CPL com o Gerenciador de Anúncios no mesmo período — **faça isso antes de tomar qualquer decisão de investimento com base nesses números**. Se os valores não baterem, o mapeamento de `action_type` em `supabase/functions/_shared/meta-graph.ts` provavelmente precisa de ajuste para esta conta.
 5. **Erro tratado**: se ocorrer uma falha de permissão ou de persistência, confira o motivo em `meta_sync_runs.error_message`. As funções corrigidas respondem HTTP 502 e `ok=false` quando alguma execução falha. Não altere permissões de produção apenas para provocar um erro.
 6. **Desconexão**: desconecte a conta pela UI e confirme que o próximo ciclo de sync a ignora (nenhuma linha nova de `source='api'` aparece).
@@ -95,6 +95,7 @@ O mapeamento de `action_type` da Meta para leads/compras/mensagens (`LEAD_ACTION
 - A reconciliação diferencia leads encontrados, processados, ignorados e com falha. A contagem sincronizada exige persistência bem-sucedida.
 - Erros na finalização do registro de execução não são apresentados como sucesso.
 - Um lead recebido por planilha mantém suas respostas originais quando o mesmo ID chega posteriormente pela integração automática.
+- Leads automáticos, planilhas e métricas da API exigem aprovação explícita em Tráfego. A aba Auditoria registra origem, responsável, decisão e resultado.
 - A importação manual pode ser usada enquanto o acesso automático aos formulários é regularizado: veja [o fluxo de importação](META_IMPORTACAO_MANUAL_2026-10-09.md).
 
 Para corrigir o erro de permissão acima, o administrador da Meta deve conferir o acesso do usuário de sistema à página, conceder `pages_manage_ads` ao app/token adequado e atualizar o segredo correspondente no Supabase. Tokens devem ser inseridos diretamente em Edge Functions → Secrets, sem enviá-los por conversa.

@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import type { ArenaNotification, ArenaEvent } from "./arena";
 import type { ImportRow, MetaDailyRow } from "./meta-traffic";
-import type { MetaFormLead } from "./meta-leads";
+import type { MetaFormLead, MetaAuditEvent } from "./meta-leads";
 import type { MetaAdAccount, MetaSyncRun } from "./meta-connection";
 import type { LeadImportRow, LeadImportResult } from "./meta-lead-import";
 
@@ -138,6 +138,7 @@ type ExtraFunctions = {
   meta_review_traffic_import: FunctionDef<{ p_batch_id: string; p_action: 'aprovar' | 'rejeitar'; p_expected_updated_at: string; p_note?: string }>;
   meta_import_leads: FunctionDef<{ p_filename: string; p_rows: Json }>;
   meta_review_lead_import: FunctionDef<{ p_batch_id: string; p_action: 'aprovar' | 'rejeitar'; p_expected_updated_at: string; p_note?: string }>;
+  meta_review_form_lead: FunctionDef<{ p_id: string; p_action: 'aprovar' | 'rejeitar'; p_expected_updated_at: string; p_note?: string }>;
   traffic_create_suggestion: FunctionDef<{ p_subject: string; p_body: string; p_campaign_id?: string | null }>;
   traffic_reply_suggestion: FunctionDef<{ p_id: string; p_body: string }>;
   traffic_set_suggestion_status: FunctionDef<{ p_id: string; p_status: string }>;
@@ -163,13 +164,15 @@ type ArenaDatabase = Omit<Database, "public"> & {
       meta_traffic_daily: ReadTable<MetaDailyRow>;
       traffic_suggestions: ReadTable<{ id: string; author_id: string; author_name: string; subject: string; body: string; campaign_id: string | null; status: string; created_at: string; updated_at: string }>;
       traffic_suggestion_replies: ReadTable<{ id: string; suggestion_id: string; author_id: string; author_name: string; body: string; created_at: string }>;
-      meta_import_batches: ReadTable<{ id: string; imported_by: string; filename: string; row_count: number; created_at: string;
+      meta_import_batches: ReadTable<{ id: string; imported_by: string | null; filename: string; row_count: number; created_at: string;
         status: 'pendente' | 'aprovado' | 'rejeitado'; rows: ImportRow[]; updated_at: string;
+        source: 'csv' | 'api'; sync_run_id: string | null; account_id: string | null; level: 'campaign' | 'adset' | 'ad' | null;
         reviewed_by: string | null; reviewed_at: string | null; review_note: string | null }>;
       meta_lead_import_batches: ReadTable<{ id: string; imported_by: string; filename: string; row_count: number; created_at: string;
         status: 'pendente' | 'aprovado' | 'rejeitado'; rows: LeadImportRow[]; updated_at: string;
         reviewed_by: string | null; reviewed_at: string | null; review_note: string | null; result: LeadImportResult | null }>;
       meta_form_leads: ReadTable<MetaFormLead>;
+      meta_audit_events: ReadTable<MetaAuditEvent>;
       meta_ad_accounts: ReadTable<MetaAdAccount>;
       meta_sync_runs: ReadTable<MetaSyncRun>;
       meta_webhook_events: ReadTable<{ id: string; leadgen_id: string; page_id: string; form_id: string; status: 'pending' | 'processed' | 'error' | 'ignored'; attempts: number; last_error: string | null; meta_form_lead_id: string | null; received_at: string; processed_at: string | null; updated_at: string }>;

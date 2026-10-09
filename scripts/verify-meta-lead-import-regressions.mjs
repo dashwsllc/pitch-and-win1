@@ -73,3 +73,15 @@ test('the completion dialog starts with the imported mapping and preserves free 
     athlete_height_cm: '172', athlete_weight_kg: '65', city_state: 'São Paulo/SP', performance_report_url: 'https://example.com/relatorio',
   })
 })
+
+test('SDR completion prefills normalized birth date and position from webhook answers', () => {
+  const lead={full_name:'Maria',phone:'11999990000',email:'',field_data:[
+    {name:'Nome do atleta',values:['João']},{name:'Data de nascimento do atleta',values:['15/03/2010']},
+    {name:'Posição',values:['meia']},{name:'Cidade/Estado',values:['São Paulo/SP']},
+  ]};
+  const defaults=metaContactDefaults(lead);
+  assert.equal(defaults.athlete_name,'João');
+  assert.equal(defaults.athlete_birth_date,'2010-03-15');
+  assert.equal(defaults.athlete_position,'Meia');
+  assert.equal(defaults.city_state,'São Paulo/SP');
+});

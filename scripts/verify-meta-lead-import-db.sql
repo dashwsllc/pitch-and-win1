@@ -18,9 +18,12 @@ BEGIN
   invalid_row := complete_row || jsonb_build_object('meta_lead_id', prefix || '-invalid', 'created_time', 'data inválida', 'source_row', 5);
   response := public.meta_import_leads('qa-manual.csv', jsonb_build_array(complete_row, incomplete_row,
     complete_row || jsonb_build_object('source_row',4), invalid_row));
-  IF response->>'status' IS DISTINCT FROM 'aprovado' THEN
-    RAISE EXCEPTION 'FAIL: Executive import must publish immediately';
+  IF response->>'status' IS DISTINCT FROM 'pendente' THEN
+    RAISE EXCEPTION 'FAIL: Executive import must await manual approval';
   END IF;
+  SELECT * INTO STRICT batch FROM public.meta_lead_import_batches WHERE id=(response->>'batch_id')::uuid;
+  batch := public.meta_review_lead_import(batch.id,'aprovar',batch.updated_at);
+  response := jsonb_build_object('result',batch.result);
   IF response->'result'->>'crm' IS DISTINCT FROM '1'
     OR response->'result'->>'queued' IS DISTINCT FROM '1'
     OR response->'result'->>'duplicates' IS DISTINCT FROM '1'
@@ -44,6 +47,9 @@ BEGIN
   IF (SELECT observations FROM public.crm_leads WHERE id=crm_id) NOT LIKE '%Motivação: Ser profissional%'
     THEN RAISE EXCEPTION 'FAIL: promotion lost original responses'; END IF;
   response := public.meta_import_leads('renomeado.csv',jsonb_build_array(complete_row));
+  SELECT * INTO STRICT batch FROM public.meta_lead_import_batches WHERE id=(response->>'batch_id')::uuid;
+  batch := public.meta_review_lead_import(batch.id,'aprovar',batch.updated_at);
+  response := jsonb_build_object('result',batch.result);
   IF response->'result'->>'duplicates' IS DISTINCT FROM '1' OR response->'result'->>'crm' IS DISTINCT FROM '0'
     THEN RAISE EXCEPTION 'FAIL: a repeated file duplicated a CRM lead'; END IF;
 
@@ -56,11 +62,6 @@ BEGIN
   IF response->>'status' IS DISTINCT FROM 'pendente' OR EXISTS(SELECT 1 FROM public.meta_form_leads WHERE meta_lead_id=prefix || '-pending')
     THEN RAISE EXCEPTION 'FAIL: collaborator import bypassed approval'; END IF;
   SELECT * INTO STRICT batch FROM public.meta_lead_import_batches WHERE id=(response->>'batch_id')::uuid;
-  BEGIN
-    PERFORM public.meta_review_lead_import(batch.id,'aprovar',batch.updated_at);
-    RAISE EXCEPTION 'FAIL: collaborator approved own import';
-  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-  PERFORM set_config('request.jwt.claim.sub', executive_id::text, true);
   batch := public.meta_review_lead_import(batch.id,'aprovar',batch.updated_at);
   IF batch.status<>'aprovado' OR batch.result->>'crm' IS DISTINCT FROM '1' THEN RAISE EXCEPTION 'FAIL: approval did not publish pending rows'; END IF;
   BEGIN
@@ -72,5 +73,5 @@ BEGIN
   IF has_function_privilege('authenticated','public.meta_ingest_lead_import_row(jsonb,uuid,uuid)','EXECUTE')
     THEN RAISE EXCEPTION 'FAIL: internal ingest exposed to browser'; END IF;
 END $$;
-SELECT 'manual import: immediate publish, approval, outcomes, preservation and dedup verified (rollback)' AS verification;
+SELECT 'manual import: explicit approval, outcomes, preservation and dedup verified (rollback)' AS verification;
 ROLLBACK;

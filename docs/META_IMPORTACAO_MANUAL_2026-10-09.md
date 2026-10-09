@@ -1,44 +1,54 @@
-# Importação manual de leads da Meta
+# Importação e aprovação de leads da Meta
 
 Data: 09/10/2026.
 
-## Usar a planilha
+## Enviar uma planilha
 
-1. Acesse `/trafego` → **Importar leads** e selecione CSV, XLS ou XLSX.
-2. Confira o mapeamento e a prévia. Colunas de contato ausentes não impedem o envio da planilha.
-3. Envie o arquivo, com até 2.000 linhas.
-4. Confira o resultado informado pelo servidor: cadastros no CRM, recebidos para completar, duplicatas e linhas com falha. As explicações apontam a linha do arquivo.
+1. Acesse /trafego → **Importar leads** e selecione CSV, XLS ou XLSX.
+2. Confira o mapeamento e a prévia. Colunas de contato ausentes não impedem o envio.
+3. Envie até 2.000 linhas. O lote fica **Pendente**, inclusive quando enviado por Executive ou Super Admin.
+4. Em **Aprovações**, confira as linhas e respostas originais antes de clicar em **Aprovar**. A rejeição exige um motivo.
+5. Confira o resultado: cadastros no CRM, cadastros para completar, duplicatas e linhas com falha. As explicações indicam a linha do arquivo.
 
-| Quem envia | Publicação |
+Gestor de tráfego (traffic_manager), Executive e Super Admin podem aprovar ou rejeitar, desde que o acesso esteja aprovado e a conta esteja ativa. Enviar o arquivo e aprovar o lote são ações separadas. O servidor aplica essas permissões.
+
+## Receber automaticamente
+
+Leads capturados por webhook ou reconciliação ficam em **Tráfego → Aprovações → Leads automáticos**. Confira contato, campanha, respostas e consentimentos. Aprovar ou rejeitar registra responsável e horário.
+
+SDRs não visualizam nem encaminham leads pendentes. Uma nova entrega do mesmo ID não modifica as respostas depois da aprovação ou rejeição.
+
+## Encaminhar aos SDRs
+
+Após a aprovação:
+
+| Cadastro | Destino |
 |---|---|
-| Executive ou Super Admin | Imediata |
-| Outro usuário autorizado ao Tráfego | Após aprovação de Executive ou Super Admin |
+| Responsável, WhatsApp, e-mail, nome do atleta, nascimento e posição válidos | CRM, etapa **Novo**, fila compartilhada sem SDR atribuído |
+| Campos obrigatórios incompletos ou inválidos | /leads, fila **Recebidos**, para **Completar cadastro** |
 
-O servidor aplica as permissões. Um colaborador não pode aprovar seu próprio lote.
-
-## Completar um lead
-
-Leads com responsável, WhatsApp, e-mail e dados obrigatórios do atleta válidos entram no CRM. Os demais aparecem em `/leads`, na fila **Recebidos**, para o SDR completar.
-
-O diálogo inicia com os campos mapeados da planilha. Todas as colunas preenchidas ficam nas respostas originais, inclusive as usadas no mapeamento. A promoção para o CRM preserva as observações. Se a atualização da tela falhar depois de salvar, o aviso informa que o lead foi salvo.
+O SDR assume o atendimento pelo fluxo existente do CRM. Ao completar um cadastro em Leads, o sistema mantém o vínculo com o formulário e preserva as respostas originais e consentimentos. Uma segunda tentativa de encaminhamento retorna o mesmo cadastro, sem duplicá-lo.
 
 ## Reimportar
 
-O ID real da Meta é usado quando existe; o prefixo `l:` é normalizado. Sem ID, o sistema gera um identificador pelo conteúdo das respostas. Renomear o arquivo ou mudar a ordem das linhas mantém esse identificador. Alterar respostas ou cabeçalhos pode gerar um novo identificador; nesse caso, a deduplicação por conteúdo não equivale à identificação da mesma pessoa.
+O ID real da Meta é usado quando existe; o prefixo l: é normalizado. Sem ID, o sistema gera um identificador pelo conteúdo das respostas. Renomear o arquivo ou mudar a ordem das linhas mantém esse identificador. Alterar respostas ou cabeçalhos pode gerar um novo identificador; nesse caso, a deduplicação por conteúdo não identifica necessariamente a mesma pessoa.
 
-As respostas de um registro de planilha não são sobrescritas pela entrega automática posterior do mesmo ID.
+Se uma planilha contiver o ID de um lead automático ainda pendente, essa linha é informada como falha com a orientação para revisar o registro em **Leads automáticos**. Ela permanece pendente até essa revisão. Registros já revisados são contabilizados como duplicatas, sem sobrescrever o original.
+
+## Auditoria
+
+Em **Tráfego → Auditoria**, confira recebimentos, decisões e sincronizações, com origem, responsável, papéis no momento da ação, horário de Brasília e resultado por linha. Rejeições registram o motivo. A auditoria começa na ativação desse fluxo; não inventa decisões anteriores.
+
+Métricas capturadas pela API também ficam pendentes em **Aprovações** antes de entrar em Desempenho. Recapturas atualizam o lote pendente por conta e nível; se os dados mudarem durante a revisão, é preciso recarregar a prévia.
 
 ## Verificação técnica
 
-Regressões do parser e das funções:
-
-```powershell
+~~~powershell
 node --experimental-vm-modules --test scripts/verify-meta-lead-import-regressions.mjs scripts/verify-meta-sync-regressions.mjs
 npx.cmd tsc --noEmit -p tsconfig.app.json
-deno check supabase/functions/meta-insights-sync/index.ts supabase/functions/meta-leads-reconciliation/index.ts supabase/functions/meta-lead-webhook/index.ts
 npm.cmd run build
-```
+~~~
 
-`scripts/verify-meta-lead-import-db.sql` verifica publicação imediata, aprovação, contagens, preservação e duplicatas em uma transação com rollback. Ele requer o schema atualizado e usuários existentes nos papéis usados pelos testes; não mantém registros de teste.
+scripts/verify-meta-approval-db.sql e scripts/verify-meta-lead-import-db.sql verificam permissões, isolamento dos SDRs, aprovação explícita, rejeição, sincronização, preservação das respostas, duplicatas, origem das métricas e auditoria em transações com rollback. Requerem o schema atualizado e usuários ativos existentes; não mantêm fixtures.
 
-A migration bloqueia aplicação em projetos com antigos IDs `csv:<arquivo>:<linha>` até que seja feito um backfill de compatibilidade. O projeto vinculado foi consultado antes da aplicação e não continha lotes nem leads recebidos nesse formato.
+Consulte [implantação e recuperação](META_APROVACAO_IMPLANTACAO_2026-10-09.md) e [configuração da API](META_ADS_OFFICIAL_API_SETUP_2026-09-27.md).
