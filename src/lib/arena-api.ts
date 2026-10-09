@@ -139,6 +139,10 @@ type ExtraFunctions = {
   meta_import_leads: FunctionDef<{ p_filename: string; p_rows: Json }>;
   meta_review_lead_import: FunctionDef<{ p_batch_id: string; p_action: 'aprovar' | 'rejeitar'; p_expected_updated_at: string; p_note?: string }>;
   meta_review_form_lead: FunctionDef<{ p_id: string; p_action: 'aprovar' | 'rejeitar'; p_expected_updated_at: string; p_note?: string }>;
+  meta_get_traffic_lead: FunctionDef<{ p_id: string }>;
+  meta_edit_form_lead: FunctionDef<{ p_id: string; p_expected_updated_at: string; p_expected_crm_version: number | null; p_patch: Json; p_reason: string }>;
+  meta_edit_import_row: FunctionDef<{ p_kind: 'leads' | 'metrics'; p_batch_id: string; p_row_index: number; p_expected_updated_at: string; p_patch: Json; p_reason: string }>;
+  meta_edit_traffic_row: FunctionDef<{ p_id: string; p_expected_updated_at: string; p_patch: Json; p_reason: string }>;
   traffic_create_suggestion: FunctionDef<{ p_subject: string; p_body: string; p_campaign_id?: string | null }>;
   traffic_reply_suggestion: FunctionDef<{ p_id: string; p_body: string }>;
   traffic_set_suggestion_status: FunctionDef<{ p_id: string; p_status: string }>;

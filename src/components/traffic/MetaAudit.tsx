@@ -6,15 +6,18 @@ import { arenaClient } from '@/lib/arena-api'
 import { ROLE_LABELS, type UserRole } from '@/hooks/useRoles'
 import type { MetaAuditEvent } from '@/lib/meta-leads'
 import { errorMessage } from '@/lib/sales'
+import { metaEditLabels } from '@/lib/meta-edit'
 
 const actions: Record<string, string> = {
+  'lead.edited': 'Lead editado', 'batch.row_edited': 'Linha de importação editada',
+  'metric.edited': 'Métrica editada', 'metric.updated': 'Métrica atualizada por aprovação', 'metric.published': 'Métrica publicada',
   'lead.received': 'Lead recebido', 'lead.approved': 'Lead aprovado', 'lead.rejected': 'Lead rejeitado',
   'lead.synced': 'Lead sincronizado com o CRM', 'lead.discarded': 'Lead descartado pelo SDR',
   'lead.completion_required': 'Cadastro pendente de complemento', 'lead.updated': 'Recebimento atualizado',
   'batch.received': 'Importação recebida', 'batch.approved': 'Importação aprovada',
   'batch.rejected': 'Importação rejeitada', 'batch.updated': 'Importação atualizada',
 }
-const entities = { lead: 'Lead', lead_batch: 'Planilha de leads', metrics_batch: 'Métricas' }
+const entities = { lead: 'Lead', lead_batch: 'Planilha de leads', metrics_batch: 'Importação de métricas', metrics_row: 'Métrica publicada' }
 
 export function MetaAudit() {
   const { user } = useAuth()
@@ -29,7 +32,7 @@ export function MetaAudit() {
     },
   })
   return <section className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-medium">Auditoria de Tráfego</h2><p className="mt-1 text-sm text-muted-foreground">Recebimentos, aprovações, rejeições e sincronizações registrados com origem, responsável e horário. Registros disponíveis a partir da ativação deste fluxo.</p></div><Button size="sm" variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>Atualizar</Button></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-medium">Auditoria de Tráfego</h2><p className="mt-1 text-sm text-muted-foreground">Recebimentos, edições, aprovações, rejeições e sincronizações registrados com origem, responsável e horário. Registros disponíveis a partir da ativação deste fluxo.</p></div><Button size="sm" variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>Atualizar</Button></div>
     {query.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(query.error)}</p>}
     {query.isLoading && <p role="status" className="text-sm text-muted-foreground">Carregando auditoria…</p>}
     {query.data?.count === 0 && <p className="text-sm text-muted-foreground">Nenhum evento registrado ainda.</p>}
@@ -39,6 +42,8 @@ export function MetaAudit() {
       <p className="break-words text-sm">{event.actor_name || event.actor_id || 'Integração automática'}{event.actor_roles.length > 0 && ' · ' + event.actor_roles.map(role => ROLE_LABELS[role as UserRole] || role).join(', ')}</p>
       {event.summary.rows !== undefined && <p className="text-xs text-muted-foreground">{event.summary.rows} linhas</p>}
       {(event.summary.note || event.summary.reason) && <p className="whitespace-pre-wrap break-words text-sm">Motivo: {event.summary.note || event.summary.reason}</p>}
+      {event.summary.row !== undefined && <p className="text-xs text-muted-foreground">Linha {event.summary.row}</p>}
+      {event.summary.changes?.length > 0 && <details><summary className="cursor-pointer text-sm">Conferir valores antes e depois</summary><div className="mt-2 overflow-x-auto"><table className="w-full table-fixed text-left text-xs"><thead><tr><th className="p-2">Campo</th><th className="p-2">Antes</th><th className="p-2">Depois</th></tr></thead><tbody>{event.summary.changes.map((change, index) => <tr key={index} className="border-t"><td className="p-2 align-top">{metaEditLabels[change.field] || change.field}</td><td className="whitespace-pre-wrap break-words p-2 align-top">{typeof change.before === 'object' && change.before !== null ? JSON.stringify(change.before, null, 2) : String(change.before ?? '—')}</td><td className="whitespace-pre-wrap break-words p-2 align-top">{typeof change.after === 'object' && change.after !== null ? JSON.stringify(change.after, null, 2) : String(change.after ?? '—')}</td></tr>)}</tbody></table></div></details>}
       {event.summary.warning && <p className="break-words text-sm">Para completar: {event.summary.warning}</p>}
       {event.summary.result && <div className="space-y-2 text-sm"><p>{event.summary.result.crm} no CRM · {event.summary.result.queued} para completar · {event.summary.result.duplicates} duplicados · {event.summary.result.failed} com falha</p>{event.summary.result.issues?.length > 0 && <details><summary className="cursor-pointer">Conferir linhas com pendência</summary><ul className="mt-2 space-y-1">{event.summary.result.issues.map((issue, index) => <li key={index} className="break-words">Linha {issue.row}: {issue.reason}</li>)}</ul></details>}</div>}
       {event.summary.crm_lead_id && <p className="break-words text-xs text-muted-foreground">CRM: {event.summary.crm_lead_id}</p>}
