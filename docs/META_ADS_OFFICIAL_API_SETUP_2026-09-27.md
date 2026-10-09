@@ -107,3 +107,11 @@ Para corrigir o erro de permissão acima, o administrador da Meta deve conferir 
 - Às 14h28 de Brasília, a sincronização real de métricas respondeu HTTP 200 e `ok=true`: 11 registros em campanha, 11 em conjunto e 11 em anúncio. As três execuções ficaram com status `success` no banco.
 - A reconciliação de leads respondeu HTTP 502 e `ok=false`, com status `error` no banco: a Meta continua exigindo `pages_manage_ads`. Nenhum lead foi capturado nessa execução. A regularização do acesso da página permanece pendente.
 - Os 16 testes de regressão, TypeScript, Deno, ESLint dos arquivos alterados e build passaram. O fluxo autenticado da interface não foi testado em navegador nesta sessão.
+
+## Atualização de aprovação em 09/10/2026
+
+- A migração `20261009160000_meta_traffic_manual_approval` foi aplicada e registrada no histórico. Leads automáticos, importações manuais e métricas da API ficam pendentes até aprovação em **Tráfego → Aprovações** por Gestor de tráfego, Executive ou Super Admin ativos e aprovados.
+- Contatos completos aprovados seguem para **CRM → Novo**, sem SDR atribuído. Contatos incompletos aparecem em **Leads → Recebidos**, para o SDR completar o cadastro. **Tráfego → Auditoria** registra origem, responsável, decisão e resultado.
+- Os 17 testes de regressão passaram. Os dois testes SQL passaram no banco instalado, com rollback, incluindo permissões autenticadas, isolamento de SDR, preservação de respostas e vínculos com o CRM.
+- A interface está publicada no deploy `dpl_4bLtTrsGrgDqovARdVuumm55vNDS`, com status `Ready`, criado às 16h23 de Brasília. Às 16h26, `/trafego`, `/leads` e os três arquivos JavaScript conferidos responderam HTTP 200; seus hashes coincidiram com o build aprovado. A conferência HTTP não inclui navegação interativa autenticada.
+- A permissão `pages_manage_ads` continua pendente conforme o último teste real de reconciliação. A auditoria de dependências também mantém 17 alertas (13 altos e 4 moderados), sem alteração de dependências nesta entrega. Consulte [as evidências e o plano de recuperação](META_APROVACAO_IMPLANTACAO_2026-10-09.md).

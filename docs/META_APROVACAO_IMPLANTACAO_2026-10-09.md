@@ -41,6 +41,8 @@ O último teste da reconciliação de leads encontrou falta da permissão `pages
 - Após o bloqueio inicial da revisão automática, o usuário autorizou explicitamente esta nova publicação completa.
 - A migração `20261009160000` foi aplicada ao projeto `mbzwchnxtskysqplqiyy` e registrada no histórico na mesma transação.
 - Os dois testes SQL passaram também no banco instalado, na mesma transação com rollback. Foram verificados os três papéis de aprovação, conta suspensa, isolamento de SDR, rejeição, versões desatualizadas, vínculos genéricos com o CRM, preservação de respostas e origem das métricas.
-- A publicação da interface está em andamento.
+- A interface do commit `3a2bf9c` está publicada em produção em [www.wsltda.com](https://www.wsltda.com), no deploy `dpl_4bLtTrsGrgDqovARdVuumm55vNDS`, com status `Ready`. O deploy foi criado em 09/10/2026 às 16h23 de Brasília.
+- Às 16h26 de Brasília, `/trafego` e `/leads` responderam HTTP 200. Os arquivos `index-B1eiTMIF.js`, `Trafego-DNict9ZJ.js` e `Leads-CyEgls0t.js` também responderam HTTP 200 e seus hashes SHA-256 coincidiram com o build local aprovado. Evidência em `.verification.local/meta-approval-production-http.json`.
+- A tentativa adicional de deploy pelo CLI retornou `Not authorized`; a publicação de produção foi confirmada pelo comando `vercel inspect` e pela comparação dos arquivos efetivamente servidos. Não foi realizada navegação interativa autenticada nesta sessão.
 
 Operação: [importação e aprovação](META_IMPORTACAO_MANUAL_2026-10-09.md).
