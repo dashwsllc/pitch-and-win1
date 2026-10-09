@@ -1,4 +1,5 @@
 import { normalizeHeader } from './meta-traffic.ts'
+import { brasiliaDateKey, isValidDateKey } from './brasilia-time.ts'
 
 export type FieldAnswer = { name: string; values: string[] }
 
@@ -24,17 +25,24 @@ export type LeadImportRow = {
   field_data: FieldAnswer[]
   raw_notes: string
   complete: boolean
+  source_row?: number
+  warnings?: string[]
 }
 
-export type LeadCsvField = keyof Omit<LeadImportRow, 'complete' | 'field_data' | 'raw_notes'>
+export type LeadImportResult = {
+  crm: number; queued: number; duplicates: number; failed: number
+  issues: { row: number; kind: 'queued' | 'failed'; reason: string }[]
+}
+export type LeadImportResponse = { batch_id: string; rows: number; status: 'pendente' | 'aprovado'; result: LeadImportResult | null }
+export type LeadCsvField = keyof Omit<LeadImportRow, 'complete' | 'field_data' | 'raw_notes' | 'source_row' | 'warnings'>
 export type LeadCsvMapping = Record<LeadCsvField, string>
 
 export const athletePositions = ['Goleiro', 'Zagueiro', 'Lateral', 'Volante', 'Meia', 'Atacante']
 
 export const leadCsvFields: { key: LeadCsvField; label: string; required: boolean }[] = [
-  { key: 'created_time', label: 'Data/hora do lead', required: true },
-  { key: 'full_name', label: 'Nome do responsável', required: true },
-  { key: 'phone', label: 'WhatsApp', required: true },
+  { key: 'created_time', label: 'Data/hora do lead', required: false },
+  { key: 'full_name', label: 'Nome do responsável', required: false },
+  { key: 'phone', label: 'WhatsApp', required: false },
   { key: 'email', label: 'E-mail', required: false },
   { key: 'meta_lead_id', label: 'ID do lead (opcional)', required: false },
   { key: 'campaign_id', label: 'ID da campanha', required: false },
@@ -79,75 +87,91 @@ export function defaultLeadCsvMapping(headers: string[]): LeadCsvMapping {
   ])) as LeadCsvMapping
 }
 
-// Nunca lança: um valor de data/hora que não dá pra entender vira "agora" (só usado pra
-// ordenar a fila), sem bloquear a linha. O texto original, se houver, sobrevive como coluna
-// não mapeada (buildFieldData) quando a coluna de data também tiver outro uso — aqui não tem.
 function parseDateTime(value: string) {
   const trimmed = value.trim()
-  if (!trimmed) return new Date().toISOString()
   const br = /^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(trimmed)
-  const source = br ? `${br[3]}-${br[2]}-${br[1]}T${br[4] ?? '12'}:${br[5] ?? '00'}:${br[6] ?? '00'}`
-    : /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T12:00:00` : trimmed.replace(' ', 'T')
+  const dateKey = br ? `${br[3]}-${br[2]}-${br[1]}` : trimmed.slice(0, 10)
+  const invalidCalendar = /^\d{4}-\d{2}-\d{2}$/.test(dateKey) && !isValidDateKey(dateKey)
+  const invalidClock = !!br && (Number(br[4] ?? 12) > 23 || Number(br[5] ?? 0) > 59 || Number(br[6] ?? 0) > 59)
+  let source = br ? `${dateKey}T${br[4] ?? '12'}:${br[5] ?? '00'}:${br[6] ?? '00'}-03:00`
+    : /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T12:00:00-03:00` : trimmed.replace(' ', 'T')
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(source)) source += '-03:00'
   const date = new Date(source)
-  return Number.isNaN(date.valueOf()) ? new Date().toISOString() : date.toISOString()
+  const fallback = !trimmed || invalidCalendar || invalidClock || Number.isNaN(date.valueOf())
+  return { value: fallback ? new Date().toISOString() : date.toISOString(), fallback }
 }
 
-// Nunca lança: nascimento que não dá pra entender fica vazio (não vira crm_leads sozinho,
-// completa na fila /leads), em vez de travar a linha inteira.
 function parseBirthDate(value: string) {
   const trimmed = value.trim()
-  if (!trimmed) return ''
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed)
-  return match ? `${match[3]}-${match[2]}-${match[1]}` : ''
+  const dateKey = match ? `${match[3]}-${match[2]}-${match[1]}` : trimmed
+  return isValidDateKey(dateKey) && dateKey >= '1900-01-01' && dateKey <= brasiliaDateKey() ? dateKey : ''
 }
 
-// Colunas da planilha que não foram mapeadas pra nenhum campo estruturado (ex.: motivação,
-// dificuldade, autoavaliação, histórico de clube) viram respostas de formulário — mesmo
-// formato que a fila /leads já sabe mostrar (aba "Ver respostas") pra leads do webhook.
-function buildFieldData(line: string[], headers: string[], usedHeaders: Set<string>): FieldAnswer[] {
+// Keep the original answers even when their normalized value cannot enter the CRM.
+function buildFieldData(line: string[], headers: string[]): FieldAnswer[] {
   const entries: FieldAnswer[] = []
   headers.forEach((header, index) => {
-    if (usedHeaders.has(header)) return
     const value = (line[index] || '').trim()
     if (value) entries.push({ name: header, values: [value] })
   })
   return entries
 }
 
-export function buildLeadImportRows(values: string[][], headers: string[], mapping: LeadCsvMapping, filename: string): LeadImportRow[] {
-  for (const field of leadCsvFields.filter(item => item.required))
-    if (!mapping[field.key]) throw new Error(`Selecione a coluna “${field.label}”.`)
+function readyForCRM(row: LeadImportRow) {
+  const numberInRange = (value: string, min: number, max: number, integer = false) => !value ||
+    (Number.isFinite(Number(value)) && Number(value) >= min && Number(value) <= max && (!integer || Number.isInteger(Number(value))))
+  return row.full_name.length >= 2 && row.full_name.length <= 160 && row.phone.length >= 8 && row.phone.length <= 32 &&
+    row.email.length <= 254 && /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(row.email) &&
+    row.athlete_name.length >= 2 && row.athlete_name.length <= 160 && !!row.athlete_birth_date &&
+    athletePositions.includes(row.athlete_position) && numberInRange(row.athlete_age, 1, 80, true) &&
+    numberInRange(row.athlete_height_cm, 30, 250) && numberInRange(row.athlete_weight_kg, 1, 300) &&
+    row.city_state.length <= 160 && (!row.performance_report_url ||
+      (row.performance_report_url.length <= 2048 && /^https:\/\/[^/\s]+/.test(row.performance_report_url)))
+}
+
+export async function buildLeadImportRows(values: string[][], headers: string[], mapping: LeadCsvMapping): Promise<LeadImportRow[]> {
   if (values.length > 2000) throw new Error('Importe até 2.000 linhas por arquivo.')
-  const usedHeaders = new Set(Object.values(mapping).filter(Boolean))
-  const seen = new Set<string>()
-  return values.map((line, index) => {
+  const numbered = values.map((line, index) => ({ line, index })).filter(({ line }) => line.some(value => value.trim()))
+  return Promise.all(numbered.map(async ({ line, index }) => {
     const get = (field: LeadCsvField) => (mapping[field] ? (line[headers.indexOf(mapping[field])] ?? '') : '')
     const full_name = get('full_name').trim()
     const phone = get('phone').trim()
-    const created_time = parseDateTime(get('created_time'))
-    let meta_lead_id = get('meta_lead_id').trim() || `csv:${filename}:${index}`
-    if (seen.has(meta_lead_id)) meta_lead_id = `${meta_lead_id}:dup${index}`
-    seen.add(meta_lead_id)
+    const created = parseDateTime(get('created_time'))
+    const field_data = buildFieldData(line, headers)
+    let meta_lead_id = get('meta_lead_id').trim().replace(/^l:(\d+)$/, '$1')
+    if (!meta_lead_id) {
+      const identity = JSON.stringify(field_data.map(answer => [answer.name, answer.values]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))))
+      const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity))
+      meta_lead_id = 'csv:' + Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')
+    }
     const athlete_position = get('athlete_position').trim()
     const email = get('email').trim()
     const athlete_name = get('athlete_name').trim()
     const athlete_birth_date = parseBirthDate(get('athlete_birth_date'))
-    const field_data = buildFieldData(line, headers, usedHeaders)
-    return {
+    const row: LeadImportRow = {
       meta_lead_id, campaign_id: get('campaign_id').trim(), campaign_name: get('campaign_name').trim(),
       ad_id: get('ad_id').trim(), form_id: get('form_id').trim(), form_name: get('form_name').trim(),
-      created_time, full_name, phone, email, athlete_name, athlete_birth_date, athlete_position,
+      created_time: created.value, full_name, phone, email, athlete_name, athlete_birth_date, athlete_position,
       athlete_age: get('athlete_age').trim(), athlete_height_cm: get('athlete_height_cm').trim(),
       athlete_weight_kg: get('athlete_weight_kg').trim(), city_state: get('city_state').trim(),
       performance_report_url: get('performance_report_url').trim(),
       field_data, raw_notes: field_data.map(item => `${item.name}: ${item.values[0]}`).join('\n'),
-      complete: !!email && athlete_name.length >= 2 && !!athlete_birth_date && athletePositions.includes(athlete_position),
+      complete: false, source_row: index + 2,
+      warnings: created.fallback ? ['Data do lead ausente ou inválida; o recebimento será usado para ordenar a fila.'] : [],
     }
-  })
+    row.complete = readyForCRM(row)
+    return row
+  }))
 }
 
 export function summarizeLeadImport(rows: LeadImportRow[]) {
-  const complete = rows.filter(row => row.complete).length
-  return { total: rows.length, complete, manual: rows.length - complete }
+  const seen = new Set<string>()
+  const unique = rows.filter(row => {
+    if (seen.has(row.meta_lead_id)) return false
+    seen.add(row.meta_lead_id)
+    return true
+  })
+  const complete = unique.filter(row => row.complete).length
+  return { total: rows.length, complete, manual: unique.length - complete, duplicates: rows.length - unique.length }
 }

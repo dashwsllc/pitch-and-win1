@@ -40,11 +40,13 @@ function buildRow(row: InsightRow, level: Level, accountId: string, objective: s
 
 async function fetchCampaignObjectives(campaignIds: string[], token: string): Promise<Record<string, string>> {
   const result: Record<string, string> = {}
-  for (let index = 0; index < campaignIds.length; index += 50) {
-    const batch = campaignIds.slice(index, index + 50)
-    if (!batch.length) continue
-    const data = await metaGraphGet<Record<string, { objective?: string }>>('/', { ids: batch.join(',') }, token)
-    for (const id of batch) result[id] = data[id]?.objective || ''
+  // v26 no longer accepts the root `ids` query. Read each campaign node,
+  // limiting parallel requests so larger accounts do not flood the Graph API.
+  for (let index = 0; index < campaignIds.length; index += 3) {
+    await Promise.all(campaignIds.slice(index, index + 3).map(async id => {
+      const data = await metaGraphGet<{ objective?: string }>(`/${id}`, { fields: 'objective' }, token)
+      result[id] = data.objective || ''
+    }))
   }
   return result
 }
@@ -80,11 +82,12 @@ async function syncAccountLevel(admin: SupabaseClient, token: string, accountId:
       if (error) throw error
       rowsSynced = data?.rows ?? payload.length
     }
-    await admin.rpc('meta_sync_run_finish', { p_id: runId, p_status: 'success', p_rows_synced: rowsSynced })
+    const { error: finishError } = await admin.rpc('meta_sync_run_finish', { p_id: runId, p_status: 'success', p_rows_synced: rowsSynced })
+    if (finishError) throw finishError
     return { accountId, level, rowsSynced }
   } catch (error) {
     const message = error instanceof MetaGraphError ? describeMetaGraphError(error)
-      : error instanceof Error ? error.message : 'Falha desconhecida na sincronização'
+      : error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Falha desconhecida na sincronização'
     await admin.rpc('meta_sync_run_finish', { p_id: runId, p_status: 'error', p_rows_synced: rowsSynced, p_error_message: message })
     return { accountId, level, error: message }
   }
@@ -125,7 +128,8 @@ Deno.serve(async (req) => {
         results.push(await syncAccountLevel(admin, token, account.account_id, level, since, until, actor, triggeredBy))
       }
     }
-    return jsonResponse(req, { since, until, results })
+    const ok = !results.some(result => 'error' in result)
+    return jsonResponse(req, { ok, since, until, results }, ok ? 200 : 502)
   } catch (error) {
     if (error instanceof RequestError) return jsonResponse(req, { error: error.message }, error.status)
     console.error('meta-insights-sync failed', error)

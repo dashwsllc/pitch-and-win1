@@ -5,7 +5,7 @@ import type { ArenaNotification, ArenaEvent } from "./arena";
 import type { ImportRow, MetaDailyRow } from "./meta-traffic";
 import type { MetaFormLead } from "./meta-leads";
 import type { MetaAdAccount, MetaSyncRun } from "./meta-connection";
-import type { LeadImportRow } from "./meta-lead-import";
+import type { LeadImportRow, LeadImportResult } from "./meta-lead-import";
 
 // Additive contract until the generated project schema is refreshed after the
 // migration. This is the SAME authenticated Supabase client and auth session.
@@ -168,7 +168,7 @@ type ArenaDatabase = Omit<Database, "public"> & {
         reviewed_by: string | null; reviewed_at: string | null; review_note: string | null }>;
       meta_lead_import_batches: ReadTable<{ id: string; imported_by: string; filename: string; row_count: number; created_at: string;
         status: 'pendente' | 'aprovado' | 'rejeitado'; rows: LeadImportRow[]; updated_at: string;
-        reviewed_by: string | null; reviewed_at: string | null; review_note: string | null }>;
+        reviewed_by: string | null; reviewed_at: string | null; review_note: string | null; result: LeadImportResult | null }>;
       meta_form_leads: ReadTable<MetaFormLead>;
       meta_ad_accounts: ReadTable<MetaAdAccount>;
       meta_sync_runs: ReadTable<MetaSyncRun>;

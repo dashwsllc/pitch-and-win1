@@ -8,6 +8,8 @@ interface LeadDetail {
   field_data?: FieldAnswer[]; custom_disclaimer_responses?: unknown
 }
 
+export type LeadIngestOutcome = { status: 'processed' } | { status: 'ignored' } | { status: 'error'; error: string }
+
 const TYPESAFE_API_URL = 'https://api.typesafe.ai/v1/systemone'
 
 // Pede pro Jev escolher, entre as respostas reais do formulario, qual
@@ -59,15 +61,18 @@ async function fetchFormName(formId: string, token: string): Promise<string> {
 // de contato para leads vindos de qualquer uma das duas origens.
 export async function ingestLeadgenId(
   admin: SupabaseClient, leadgenId: string, pageId: string, formIdHint: string, token: string,
-): Promise<void> {
+): Promise<LeadIngestOutcome> {
   const allowedPages = (Deno.env.get('META_PAGE_IDS') || '').split(',').map(id => id.trim()).filter(Boolean)
   const { data: eventId, error: receiveError } = await admin.rpc('meta_webhook_event_receive', {
     p_leadgen_id: leadgenId, p_page_id: pageId, p_form_id: formIdHint,
   })
-  if (receiveError) { console.error('meta_webhook_event_receive failed', receiveError); return }
+  if (receiveError) {
+    console.error('meta_webhook_event_receive failed', receiveError)
+    return { status: 'error', error: receiveError.message }
+  }
   if (allowedPages.length && !allowedPages.includes(pageId)) {
-    await admin.rpc('meta_webhook_event_complete', { p_id: eventId, p_status: 'ignored' })
-    return
+    const { error } = await admin.rpc('meta_webhook_event_complete', { p_id: eventId, p_status: 'ignored' })
+    return error ? { status: 'error', error: error.message } : { status: 'ignored' }
   }
   try {
     const url = new URL(`${GRAPH_BASE_URL}/${leadgenId}`)
@@ -91,10 +96,14 @@ export async function ingestLeadgenId(
       },
     })
     if (ingestError) throw ingestError
-    await admin.rpc('meta_webhook_event_complete', { p_id: eventId, p_status: 'processed', p_meta_form_lead_id: formLeadId })
+    const { error: completeError } = await admin.rpc('meta_webhook_event_complete', { p_id: eventId, p_status: 'processed', p_meta_form_lead_id: formLeadId })
+    if (completeError) throw completeError
+    return { status: 'processed' }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Falha desconhecida ao processar o lead'
+    const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Falha desconhecida ao processar o lead'
     console.error('ingestLeadgenId failed', { leadgenId, message })
-    await admin.rpc('meta_webhook_event_complete', { p_id: eventId, p_status: 'error', p_error: message })
+    const { error: logError } = await admin.rpc('meta_webhook_event_complete', { p_id: eventId, p_status: 'error', p_error: message })
+    if (logError) console.error('meta_webhook_event_complete failed', logError)
+    return { status: 'error', error: message }
   }
 }
