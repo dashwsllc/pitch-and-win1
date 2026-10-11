@@ -7,7 +7,8 @@ WITH required(version,signature) AS (VALUES
  ('20261011150000','public.meta_traffic_cohort(date,date,text,text,text)'),
  ('20261011160000','public.meta_traffic_review_list(text,text,integer,integer)'),
  ('20261011161000','public.meta_traffic_operation()'),
- ('20261011170000','public.meta_lead_run_start(text,boolean)')
+ ('20261011170000','public.meta_lead_run_start(text,boolean)'),
+ ('20261011190000','public.meta_sync_run_finish(uuid,text,integer,text)')
 ), history AS (SELECT CASE WHEN to_regclass('supabase_migrations.schema_migrations') IS NOT NULL
  THEN query_to_xml('SELECT version FROM supabase_migrations.schema_migrations',true,false,'')::text ELSE '' END AS versions),
 checks AS (
@@ -22,7 +23,7 @@ checks AS (
  SELECT 'service_rpc:'||signature,coalesce(has_function_privilege('service_role',to_regprocedure(signature),'EXECUTE'),false)
    AND NOT coalesce(has_function_privilege('authenticated',to_regprocedure(signature),'EXECUTE'),true)
    AND NOT coalesce(has_function_privilege('anon',to_regprocedure(signature),'EXECUTE'),true),'service only'
- FROM (VALUES('public.meta_lead_events_claim(integer,integer,text[])'),('public.meta_capture_prepare(uuid,uuid)'),('public.meta_lead_run_start(text,boolean)')) functions(signature)
+ FROM (VALUES('public.meta_lead_events_claim(integer,integer,text[])'),('public.meta_capture_prepare(uuid,uuid)'),('public.meta_lead_run_start(text,boolean)'),('public.meta_sync_run_finish(uuid,text,integer,text)')) functions(signature)
  UNION ALL
  SELECT 'review_rpc',coalesce(has_function_privilege('authenticated',to_regprocedure('public.meta_capture_review_decide(uuid,bigint,text,text)'),'EXECUTE'),false)
    AND NOT coalesce(has_function_privilege('anon',to_regprocedure('public.meta_capture_review_decide(uuid,bigint,text,text)'),'EXECUTE'),true),'authenticated only'

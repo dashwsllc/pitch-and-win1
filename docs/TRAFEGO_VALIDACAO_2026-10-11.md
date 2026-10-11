@@ -2,7 +2,18 @@
 
 ## Escopo e ambiente
 
-Implementação da branch `codex/traffic-reliability`, base `4d720775fc278522d18038a4f439f91a43acd305`, integrada localmente à `main` em 11/10/2026. Worktree de origem: `.worktrees/traffic-reliability`. Implementação das 12 tarefas do plano aprovado, com revisão independente do conjunto antes da entrega. Não houve implantação remota nem aprovação comercial.
+Implementação da branch `codex/traffic-reliability`, base `4d720775fc278522d18038a4f439f91a43acd305`, integrada à `main` em 11/10/2026. Worktree de origem: `.worktrees/traffic-reliability`. Implementação das 12 tarefas do plano aprovado, com revisão independente do conjunto antes da entrega. A validação inicial abaixo usou ambientes locais; a implantação e o reteste remoto posteriores estão registrados na próxima seção. Nenhuma aprovação comercial foi realizada.
+
+## Implantação e reteste real em 11/10
+
+- Revisão `8571e15` enviada à `main` e publicada na Vercel com estado `READY`; sete migrations e quatro funções Edge instaladas seletivamente no Supabase.
+- Após atualizar os tokens diretamente nos Secrets, a Meta aceitou o token de Página. Os cursores reais vinham em `v26.0`; a configuração foi alinhada a essa versão, preservando a validação de domínio, caminho e filtros. A captura de métricas retornou HTTP 200, `ok=true`, sem cobertura parcial.
+- A descoberta persistiu 148 recibos. O processamento expôs a RPC legada que rejeitava `partial`, embora a tabela e o worker já usassem esse estado. `scripts/verify-meta-sync-completion-db.sql` reproduziu `Status final inválido` antes da correção; passou na prévia transacional com rollback e após instalar `20261011190000_meta_lead_partial_completion`. Verifica descoberta/drenagem parcial, sucesso/erro legados, rejeição de estado inválido, finalização imutável e grants exclusivos do serviço.
+- Os 56 testes `verify-meta-*-regressions.mjs` passaram novamente com `node --experimental-vm-modules --experimental-strip-types --test`; revisão independente da migration/teste não encontrou defeitos materiais.
+- Às 17h32 UTC, os 148 recibos estavam processados e vinculados a 148 leads pendentes de aprovação. Os retestes da descoberta e do comando configurado no cron retornaram HTTP 200 e `ok=true`, sem falhas ou timeout. A descoberta completou a janela, e a fila não tinha pendências ou erros. Os cinco jobs estavam ativos; ciclos automáticos subsequentes do worker terminaram com `success`.
+- O navegador público chegou à autenticação de `/trafego`, sem erros de console. Navegação autenticada em produção, um novo webhook externo e comparação com Ads Manager continuam sem prova. A CI de vendas passou na revisão publicada; a CI de segurança acusou 18 vulnerabilidades preexistentes (13 altas e 5 moderadas), sem alterações de dependências.
+
+As seções restantes preservam as evidências da validação inicial local; seus limites não anulam os testes remotos explicitamente registrados acima.
 
 PostgreSQL 17.6 descartável em loopback, dois bancos com baseline real (schema sem dados comerciais), sete migrations novas e aplicação independente em um terceiro banco vazio. Funções de aplicação, constraints, RLS, grants, triggers e transações reais. Somente transportes Realtime/cron/pg_net/Vault e Graph são controlados. As fixtures usam `example.invalid`; cada verificação SQL desfaz seus dados. O teste integrado cria e remove apenas seu banco local temporário.
 

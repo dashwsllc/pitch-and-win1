@@ -2,7 +2,7 @@
 
 Criado em 27/09/2026; revisado em 11/10/2026. Guia de configuração da sincronização automática de métricas e leads de formulário. O resultado de cada execução deve ser conferido na aba Conexão: uma resposta HTTP 200 antiga não comprova que os dados foram sincronizados.
 
-O pacote de confiabilidade de 11/10 está implementado localmente e exige implantação seletiva. Siga [o roteiro atual](TRAFEGO_CONFIABILIDADE_OPERACAO_2026-10-11.md) para banco → Edge → front → ativação dos cinco jobs. As publicações de 09/10 descritas ao final são evidência histórica. A importação manual exige aprovação explícita.
+O pacote de confiabilidade de 11/10 foi publicado seletivamente no Supabase e na Vercel. Após regularizar o token de Página, métricas e descoberta responderam HTTP 200, 148 recibos foram processados e os cinco jobs foram ativados. Siga [o roteiro atual](TRAFEGO_CONFIABILIDADE_OPERACAO_2026-10-11.md) para novas implantações e recuperação. As publicações de 09/10 descritas ao final são evidência histórica. Os recebimentos exigem revisão e aprovação explícita.
 
 ## 1. Criar o Meta App
 
@@ -40,11 +40,11 @@ Project Settings → **Edge Functions** → **Secrets**. Adicione exatamente est
 | `META_WEBHOOK_VERIFY_TOKEN` | Qualquer valor forte que você inventar | Sim (webhook) |
 | `META_SYNC_CRON_SECRET` | Outro valor forte, diferente do anterior | Sim (cron) |
 | `META_PAGE_IDS` | IDs de Página separados por vírgula (ex.: `123456,789012`) | Sim (leads) |
-| `META_GRAPH_API_VERSION` | Versão atual da Graph API (ex.: `v23.0`) — **confirme a versão vigente na documentação da Meta antes de configurar** | Recomendado |
+| `META_GRAPH_API_VERSION` | `v26.0` neste projeto, validada com métricas e paginação de leads em 11/10/2026. Conferir compatibilidade antes de futuras mudanças. | Recomendado |
 | `META_SYNC_LOOKBACK_DAYS` | `3` (padrão se omitido) | Opcional |
 | `META_SYNC_DEEP_LOOKBACK_DAYS` | não usado diretamente — a varredura diária já manda `days:8` fixo | — |
 | `META_RECONCILIATION_LOOKBACK_HOURS` | Legado; descoberta inicial usa 48h e depois checkpoint persistido. Recibos antigos não expiram por essa janela. | Não usado no worker atual |
-| `META_PAGE_ACCESS_TOKEN` | Token da página com acesso aos formulários e leads; quando configurado, é usado na listagem de formulários, na listagem de leads e na leitura das respostas | Opcional |
+| `META_PAGE_ACCESS_TOKEN` | `access_token` retornado pela consulta da Página correta; cobre formulários, leads e respostas. A Meta exigiu esse tipo de token neste projeto. | Necessário para os leads desta Página |
 
 ## 6. Segredos do cron (rodar uma única vez, direto no SQL Editor do Supabase — nunca commitar isso)
 
@@ -57,7 +57,7 @@ A anon key fica em Project Settings → API. No pacote atual, secret ausente imp
 
 ## 7. Migrations e Edge Functions
 
-Aplicar seletivamente as sete migrations de 11/10 e publicar as quatro funções listadas no [roteiro de operação](TRAFEGO_CONFIABILIDADE_OPERACAO_2026-10-11.md). Não usar `db push` geral: objetos instalados e histórico remoto precisam ser comparados antes. Esta entrega não publicou o pacote no projeto comercial.
+Aplicar seletivamente as oito migrations de 11/10, incluindo a corretiva `20261011190000_meta_lead_partial_completion`, e publicar as quatro funções listadas no [roteiro de operação](TRAFEGO_CONFIABILIDADE_OPERACAO_2026-10-11.md). Não usar `db push` geral: objetos instalados e histórico remoto precisam ser comparados antes. O pacote já está instalado no projeto comercial.
 
 ## 8. Configurar o Webhook no painel da Meta
 

@@ -2,7 +2,7 @@
 
 ## Estado da entrega
 
-Implementação integrada localmente à `main` em 11/10/2026 por fast-forward de `4d72077` para `7fa5ca8`, a partir da branch `codex/traffic-reliability`. A validação no checkout principal também corrigiu o caminho local do Playwright no teste de navegador de Tráfego. Não foram aplicadas migrations, publicadas funções/interface, alterados segredos ou decididos lotes comerciais no projeto remoto nesta entrega. A auditoria inicial consultou somente metadados remotos em transações de leitura. As verificações usam dados sintéticos.
+Implementação integrada à `main` em 11/10/2026, com push e publicação da revisão `8571e15` na Vercel. As sete migrations do pacote e as quatro funções Edge foram instaladas seletivamente no Supabase. Após a regularização dos tokens pelo usuário, métricas e descoberta de leads responderam HTTP 200. Foram processados 148 recibos reais; os cinco jobs Meta estão ativos. A migration corretiva `20261011190000` alinha a finalização das execuções parciais ao worker durável. Nenhum lote comercial foi aprovado durante a implantação.
 
 A intenção preservada é conferir investimento Meta, revisar recebimentos, encaminhar contatos aprovados e medir vendas reais pela data de geração do lead. A aprovação do software não aprova os dados recebidos.
 
@@ -27,7 +27,7 @@ Confirmar no projeto de destino: `pg_cron`, `pg_net`, Vault, privilégios admini
 
 ## Ordem de implantação
 
-Pausar primeiro os jobs Meta existentes por nomes exatos, preservando os outros jobs. Aplicar somente estas sete migrations, em ordem, após conferir baseline e histórico:
+Pausar primeiro os jobs Meta existentes por nomes exatos, preservando os outros jobs. Aplicar somente estas oito migrations, em ordem, após conferir baseline e histórico:
 
 | Versão | Arquivo |
 | --- | --- |
@@ -38,12 +38,13 @@ Pausar primeiro os jobs Meta existentes por nomes exatos, preservando os outros 
 | 20261011160000 | `20261011160000_meta_traffic_review_queries.sql` |
 | 20261011161000 | `20261011161000_meta_traffic_signals.sql` |
 | 20261011170000 | `20261011170000_meta_worker_cron.sql` |
+| 20261011190000 | `20261011190000_meta_lead_partial_completion.sql` |
 
-Os nomes reais devem coincidir com os arquivos do pacote; não renomear versões. A última migration substitui os jobs Meta conhecidos e deixa **os cinco pausados**. Executar novamente o preflight; conferir schema antes de avançar.
+Os nomes reais devem coincidir com os arquivos do pacote; não renomear versões. A migration `20261011170000` substitui os jobs Meta conhecidos e deixa **os cinco pausados**. A corretiva `20261011190000` aceita `partial` na RPC de finalização, mantendo os demais estados e grants. Executar novamente o preflight e `scripts/verify-meta-sync-completion-db.sql`; este último usa execuções sintéticas e rollback. Conferir schema antes de avançar.
 
 Publicar em seguida `meta-insights-sync`, `meta-lead-webhook`, `meta-leads-reconciliation` e `meta-lead-worker`. O webhook mantém `verify_jwt=false` e exige HMAC; as outras três mantêm `verify_jwt=true` e autorização própria. Reconciliação/worker exigem `x-cron-secret`; não habilitar sua chamada pública. Publicar a interface depois das funções. Os tipos Supabase foram regenerados do baseline real com as sete migrations; a camada de aplicação descreve separadamente o campo CRM preenchido pelo trigger.
 
-Verificar presença dos secrets Edge: `META_SYSTEM_USER_TOKEN`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_SYNC_CRON_SECRET`, `META_PAGE_IDS`; `META_PAGE_ACCESS_TOKEN` tem prioridade para formulários/leads quando configurado. Manter a versão Graph configurada e verificar sua compatibilidade real antes de mudá-la. Vault exige os nomes `meta_cron_anon_key` e `meta_sync_cron_secret`, com valor correspondente ao segredo Edge. Não colocar valores em arquivos, logs ou conversa.
+Verificar presença dos secrets Edge: `META_SYSTEM_USER_TOKEN`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_SYNC_CRON_SECRET`, `META_PAGE_IDS`; `META_PAGE_ACCESS_TOKEN` tem prioridade para formulários/leads quando configurado. Neste projeto, a Meta exigiu um token de Página para listar formulários; o token de usuário usado no Explorer não atendia essa chamada. O usuário salvou o `access_token` retornado pela consulta da Página. `META_GRAPH_API_VERSION` está em `v26.0`, após confirmar que a Meta devolvia os cursores nessa versão e retestar métricas e leads. O validador de domínio, caminho e filtros foi preservado. Vault exige os nomes `meta_cron_anon_key` e `meta_sync_cron_secret`, com valor correspondente ao segredo Edge. Não colocar valores em arquivos, logs ou conversa.
 
 Após banco → Edge → front, preflight aprovado e conferência de permissões, ativar **somente** estes nomes com `cron.alter_job(jobid, active := true)` em transação administrativa:
 
@@ -86,6 +87,8 @@ Pausar os cinco jobs por nomes exatos; preservar recibos, staging, revisões, fa
 
 Ver [relatório de validação](TRAFEGO_VALIDACAO_2026-10-11.md). PostgreSQL local usa funções, constraints, RLS e triggers reais; Graph, transporte Realtime, cron, pg_net e Vault são controlados/sintéticos. Navegador usa aplicação React real com fronteira HTTP sintética e duas sessões isoladas. Isso não demonstra autorização atual da conta comercial nem entrega real do Realtime.
 
-Último diagnóstico real documentado em 09/10 exigia `pages_manage_ads`. Não foi regularizado nem retestado nesta entrega. Comparação com Ads Manager, tokens reais, webhook externo e execução dos jobs permanecem não verificados até implantação e autorização aplicável. A importação manual e a revisão continuam disponíveis.
+Após a regularização em 11/10, a descoberta real concluiu sua janela sem cursores pendentes ou erro; 148 recibos foram processados. O reteste da descoberta e a captura de métricas responderam HTTP 200 com `ok=true`. O job horário só foi ativado depois desse resultado. A captura permanece sujeita à revisão humana em Tráfego → Aprovações.
+
+Comparação com Ads Manager, recebimento de um novo webhook externo e navegação autenticada em produção continuam sem prova nesta implantação. O teste público de `/trafego` chegou à autenticação, sem erros de console. A CI de sincronização de vendas passou na revisão publicada; a CI de segurança apresentou 18 vulnerabilidades já existentes (13 altas e 5 moderadas), sem alterações de dependências nesta entrega.
 
 A regeneração dos tipos revelou `get_daily_call_ranking` ausente no snapshot real embora o front já o chamasse. Seu contrato legado foi preservado na camada aditiva; essa pendência de ranking, fora do Tráfego, precisa ser conferida separadamente. Nenhuma migração de ranking foi aplicada por esta entrega.
