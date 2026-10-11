@@ -4,7 +4,7 @@
 
 A arquitetura existente tem os elementos adequados para aquisição Meta com revisão humana e integração ao CRM. Entretanto, foram encontrados erros de cálculo, lacunas na captura e recuperação de leads, inconsistências de filtros, problemas de validação e divergências entre os sinais previstos no checkout e os instalados no banco. Corrigir somente a aparência da tela não resolve esses problemas.
 
-Esta entrega contém diagnóstico, reproduções e uma proposta para revisão. O código de produto, os dados comerciais, as aprovações e a configuração publicada não foram alterados. As consultas remotas usaram transações `BEGIN READ ONLY` e `ROLLBACK`. Os diagnósticos locais usam dados sintéticos e ficam em `.verification.local`, ignorado pelo Git.
+O diagnóstico abaixo registra o estado anterior às correções. Após aprovação do plano, o código de produto foi corrigido na branch local `codex/traffic-reliability`. Veja [a operação atual](TRAFEGO_CONFIABILIDADE_OPERACAO_2026-10-11.md) e [as verificações](TRAFEGO_VALIDACAO_2026-10-11.md). Dados comerciais, aprovações e configuração publicada não foram alterados. As consultas remotas usaram transações `BEGIN READ ONLY` e `ROLLBACK`. Os diagnósticos locais usam dados sintéticos e ficam em `.verification.local`, ignorado pelo Git.
 
 ## Intenção identificada nos arquivos
 

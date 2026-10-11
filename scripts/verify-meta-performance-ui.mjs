@@ -42,3 +42,15 @@ test('rendered table has fifty rows while its total retains all 101 entities', (
   assert.match(html, /10\.100,00/)
   assert.match(html, /Página 1 de 3/)
 })
+
+test('campaign, adset and ad scopes retain the same visible spend in cards, table and complete CSV', () => {
+ for(const [level,label,entity] of [['campaign','Campanhas','Campanha QA'],['adset','Conjuntos','Conjunto QA'],['ad','Anúncios','Anúncio QA']]){
+  const rows=[metricRow({level,campaign_name:'Campanha QA',adset_id:level==='campaign'?'':'set1',adset_name:'Conjunto QA',ad_id:level==='ad'?'ad1':'',ad_name:'Anúncio QA',spend:123.45}),metricRow({level:level==='campaign'?'ad':'campaign',spend:900})]
+  const view=buildTrafficView(rows,{...scope,level})
+  const html=render({view,queryState:{state:'ready',data:rows},cohortState:null})
+  assert.match(html,new RegExp(label));assert.match(html,new RegExp(entity));assert.match(html,/123,45/);assert.doesNotMatch(html,/900,00/)
+  const {buildTrafficCsv,trafficCsvText}=loadComponent('src/lib/meta-traffic-view.ts')
+  const csv=trafficCsvText(buildTrafficCsv(view))
+  assert.match(csv,/123[.,]45/);assert.doesNotMatch(csv,/900/);assert.equal(buildTrafficCsv(view).rows.length,1)
+ }
+})

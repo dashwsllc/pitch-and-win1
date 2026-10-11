@@ -17,11 +17,13 @@ export async function handleLeadCron(req: Request, discover: boolean): Promise<R
     global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(Math.max(1, Math.min(5000, deadlineMs - Date.now()))) }) },
   })
   const results = []
-  for (const pageId of pageIds.length ? pageIds : [null]) {
+  const turn = pageIds.length ? Math.floor(Date.now() / 60000) % pageIds.length : 0
+  const ordered = [...pageIds.slice(turn), ...pageIds.slice(0, turn)]
+  for (const pageId of ordered.length ? ordered : [null]) {
     let runId: string | null = null
     try {
       if (Date.now() + 5000 >= deadlineMs) { results.push({ pageId, partial: true }); break }
-      runId = await leadRpc<string>(admin, 'meta_sync_run_start', { p_kind: 'leads_reconciliation', p_account_id: pageId, p_triggered_by: 'cron' })
+      runId = await leadRpc<string>(admin, 'meta_lead_run_start', { p_page_id: pageId, p_discover: discover })
       const result = await runLeadWorker(admin, { pageIds: pageId ? [pageId] : [], token, deadlineMs, discover })
       const error = result.errors.length ? result.errors.join(' · ').slice(0, 1000) : null
       await leadRpc(admin, 'meta_sync_run_finish', { p_id: runId, p_status: error ? 'error' : result.partial ? 'partial' : 'success', p_rows_synced: result.processed, p_error_message: error })

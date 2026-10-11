@@ -10,15 +10,12 @@ import { arenaClient, arenaRpc } from '@/lib/arena-api'
 import { supabase } from '@/integrations/supabase/client'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { normalizeMetaAccountId } from '../../../shared/meta-identity'
-import { trafficRunSummary, trafficOperationError, type MetaAdAccount, type MetaSyncRun, type TrafficOperation } from '@/lib/meta-connection'
+import { trafficRunSummary, trafficOperationError, type MetaAdAccount, type MetaSyncRun } from '@/lib/meta-connection'
 import { refreshDashboardMutation } from '@/lib/sync'
+import { useTrafficOperation } from '@/hooks/useTrafficOperation'
 import { errorMessage } from '@/lib/sales'
 
 const runStatusLabel: Record<MetaSyncRun['status'], string> = { success: 'Concluída', error: 'Erro', running: 'Em andamento', partial: 'Captura parcial' }
-export function useTrafficOperation(active: boolean) {
-  const { user } = useAuth()
-  return useQuery({ queryKey: ['meta-traffic-operation', user?.id], enabled: active && !!user, queryFn: () => arenaRpc<TrafficOperation>('meta_traffic_operation', {}) })
-}
 export function TrafficOperationStatus({ runs, accountId, pending, published }: { runs: MetaSyncRun[]; accountId: string | null; pending: number; published?: { window_start: string; window_end: string } }) {
   const summary = trafficRunSummary(runs, accountId)
   return <div className="space-y-1 text-xs text-muted-foreground"><p>Última tentativa: {summary.lastAttempt ? runStatusLabel[summary.lastAttempt.status] : 'Sem captura registrada'}</p>
@@ -52,7 +49,7 @@ export function MetaTrafficConnection({ active, onProposeChange }: { active: boo
   const accounts = accountsQuery.data || []
   const runs = operation.data?.runs || []
   const runningInsights = runs.some(run => run.kind === 'insights' && run.status === 'running')
-  const reconciliation = runs.filter(run => run.kind === 'leads_reconciliation').sort((a, b) => b.started_at.localeCompare(a.started_at))[0]
+  const reconciliations = runs.filter(run => run.kind === 'leads_reconciliation').sort((a, b) => b.started_at.localeCompare(a.started_at))
   const refresh = () => refreshDashboardMutation(queryClient)
   const connect = async (event: React.FormEvent) => {
     event.preventDefault(); if (!accountId.trim() || !accountName.trim()) return
@@ -111,7 +108,7 @@ export function MetaTrafficConnection({ active, onProposeChange }: { active: boo
         {(['campaign', 'adset', 'ad'] as const).map(level => <div key={level} className="mt-3 border-t pt-3"><p className="font-medium text-sm">{level === 'campaign' ? 'Campanhas' : level === 'adset' ? 'Conjuntos' : 'Anúncios'}</p><TrafficOperationStatus runs={runs.filter(run => run.level === level)} accountId={item.account_id} pending={operation.data?.pending[item.account_id]?.[level] || 0} published={operation.data?.published.find(review => review.account_id === item.account_id && review.level === level)} /></div>)}
         {disconnectId === item.account_id && <div className="mt-3 flex gap-2"><Input aria-label="Motivo da desconexão" maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo obrigatório" /><Button size="sm" variant="destructive" disabled={busy || reason.trim().length < 3} onClick={() => void disconnect()}>Confirmar</Button><Button size="sm" variant="ghost" onClick={() => setDisconnectId(null)}>Cancelar</Button></div>}
       </div>)}
-      <div className="border-t border-border/60 pt-3"><p className="text-xs text-muted-foreground">Reconciliação de leads: {reconciliation ? runStatusLabel[reconciliation.status] : 'Nenhuma execução registrada'}</p>{reconciliation?.error_message && <p role="alert" className="text-sm text-destructive">{trafficOperationError(reconciliation.error_message)}</p>}<p className="text-xs text-muted-foreground">Reconciliação de leads de formulário roda a cada hora, recuperando entregas de webhook perdidas.</p></div>
+      <div className="space-y-2 border-t border-border/60 pt-3"><h3 className="text-sm font-medium">Leads automáticos</h3>{!reconciliations.length && <p className="text-xs text-muted-foreground">Nenhuma execução registrada.</p>}{reconciliations.map(run => <div key={run.id}><p className="text-xs text-muted-foreground">{run.account_id || 'Configuração de páginas'} · {run.discover === true ? 'Descoberta de formulários' : run.discover === false ? 'Processamento da fila' : 'Reconciliação legada'}: {runStatusLabel[run.status]}</p>{run.error_message && <p role="alert" className="text-sm text-destructive">{trafficOperationError(run.error_message)}</p>}</div>)}<p className="text-xs text-muted-foreground">A fila e as capturas parciais retomam a cada minuto. A descoberta de leads roda a cada hora.</p></div>
     </section>
     {isExecutive ? <form onSubmit={connect} className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
       <div><h2 className="text-lg font-medium">Conectar conta</h2><p className="text-sm text-muted-foreground">Requer o token de sistema já configurado no servidor (ver documentação de configuração). Aqui você só informa qual conta sincronizar.</p></div>

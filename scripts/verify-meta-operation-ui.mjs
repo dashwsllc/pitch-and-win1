@@ -27,3 +27,15 @@ test('operation UI separates capture, publication and pending review and preserv
   assert.match(html, /importação manual/i)
   assert.doesNotMatch(html, /secret|access_token/)
 })
+
+test('audit names capture decisions and removals and displays their immutable snapshots', () => {
+ const event={id:'audit1',created_at:'2026-10-11T12:00:00Z',entity_type:'capture_review',entity_id:'review1',action:'capture.aprovado',origin:'api',actor_id:'actor',actor_name:'QA',actor_roles:[],summary:{removed:1,before:{spend:100},after:{spend:90},reason:'Conferido'}}
+ const loadAudit=createComponentLoader({'@/lib/arena-api':{},'@/hooks/useAuth':{useAuth:()=>({user:{id:'actor'}})},'@/hooks/useRoles':{ROLE_LABELS:{}},'@tanstack/react-query':{useQuery:()=>({data:{events:[event],count:1},isFetching:false})}})
+ const {MetaAudit}=loadAudit('src/components/traffic/MetaAudit.tsx')
+ const html=renderToStaticMarkup(React.createElement(MetaAudit))
+ assert.match(html,/Captura aprovada/)
+ assert.match(html,/Revisão de captura/)
+ assert.match(html,/1 remoções/)
+ assert.match(html,/100/)
+ assert.match(html,/90/)
+})

@@ -9,6 +9,9 @@ import { errorMessage } from '@/lib/sales'
 import { metaEditLabels } from '@/lib/meta-edit'
 
 const actions: Record<string, string> = {
+  'capture.prepared': 'Captura pronta para revisão', 'capture.row_edited': 'Linha da captura editada',
+  'capture.conflict_resolved': 'Conflito da captura resolvido', 'capture.aprovado': 'Captura aprovada',
+  'capture.rejeitado': 'Captura rejeitada', 'metric.removed': 'Métrica removida',
   'lead.edited': 'Lead editado', 'batch.row_edited': 'Linha de importação editada',
   'metric.edited': 'Métrica editada', 'metric.updated': 'Métrica atualizada por aprovação', 'metric.published': 'Métrica publicada',
   'lead.received': 'Lead recebido', 'lead.approved': 'Lead aprovado', 'lead.rejected': 'Lead rejeitado',
@@ -17,7 +20,7 @@ const actions: Record<string, string> = {
   'batch.received': 'Importação recebida', 'batch.approved': 'Importação aprovada',
   'batch.rejected': 'Importação rejeitada', 'batch.updated': 'Importação atualizada',
 }
-const entities = { lead: 'Lead', lead_batch: 'Planilha de leads', metrics_batch: 'Importação de métricas', metrics_row: 'Métrica publicada' }
+const entities = { capture_review: 'Revisão de captura', lead: 'Lead', lead_batch: 'Planilha de leads', metrics_batch: 'Importação de métricas', metrics_row: 'Métrica publicada' }
 
 export function MetaAudit() {
   const { user } = useAuth()
@@ -42,6 +45,8 @@ export function MetaAudit() {
       <p className="break-words text-sm">{event.actor_name || event.actor_id || 'Integração automática'}{event.actor_roles.length > 0 && ' · ' + event.actor_roles.map(role => ROLE_LABELS[role as UserRole] || role).join(', ')}</p>
       {event.summary.rows !== undefined && <p className="text-xs text-muted-foreground">{event.summary.rows} linhas</p>}
       {(event.summary.note || event.summary.reason) && <p className="whitespace-pre-wrap break-words text-sm">Motivo: {event.summary.note || event.summary.reason}</p>}
+      {event.summary.removed !== undefined && <p className="text-xs text-muted-foreground">{event.summary.inserted ?? 0} inclusões · {event.summary.updated ?? 0} atualizações · {event.summary.removed} remoções</p>}
+      {(event.summary.before !== undefined || event.summary.after !== undefined) && <details><summary className="cursor-pointer text-sm">Conferir registro antes e depois</summary><div className="grid gap-3 sm:grid-cols-2"><pre className="overflow-auto whitespace-pre-wrap break-words text-xs">Antes: {JSON.stringify(event.summary.before ?? null, null, 2)}</pre><pre className="overflow-auto whitespace-pre-wrap break-words text-xs">Depois: {JSON.stringify(event.summary.after ?? null, null, 2)}</pre></div></details>}
       {event.summary.row !== undefined && <p className="text-xs text-muted-foreground">Linha {event.summary.row}</p>}
       {event.summary.changes?.length > 0 && <details><summary className="cursor-pointer text-sm">Conferir valores antes e depois</summary><div className="mt-2 overflow-x-auto"><table className="w-full table-fixed text-left text-xs"><thead><tr><th className="p-2">Campo</th><th className="p-2">Antes</th><th className="p-2">Depois</th></tr></thead><tbody>{event.summary.changes.map((change, index) => <tr key={index} className="border-t"><td className="p-2 align-top">{metaEditLabels[change.field] || change.field}</td><td className="whitespace-pre-wrap break-words p-2 align-top">{typeof change.before === 'object' && change.before !== null ? JSON.stringify(change.before, null, 2) : String(change.before ?? '—')}</td><td className="whitespace-pre-wrap break-words p-2 align-top">{typeof change.after === 'object' && change.after !== null ? JSON.stringify(change.after, null, 2) : String(change.after ?? '—')}</td></tr>)}</tbody></table></div></details>}
       {event.summary.warning && <p className="break-words text-sm">Para completar: {event.summary.warning}</p>}

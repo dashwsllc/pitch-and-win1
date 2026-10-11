@@ -6,7 +6,7 @@ export function leadDatabase({ failReceive = '', failLead = '' } = {}) {
       calls.push({ name, args })
       const ok = data => ({ data, error: null })
       const error = message => ({ data: null, error: { code: '22023', message } })
-      if (name === 'meta_sync_run_start') return ok('run1')
+      if (name === 'meta_sync_run_start' || name === 'meta_lead_run_start') return ok('run1')
       if (name === 'meta_sync_run_finish') { finishes.push(args); return ok(null) }
       if (name === 'meta_webhook_event_receive') {
         if (args.p_leadgen_id === failReceive) return error('receipt unavailable')

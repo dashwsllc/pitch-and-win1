@@ -48,3 +48,6 @@ verify_jwt = true
 
 [functions.meta-lead-webhook]
 verify_jwt = false
+
+[functions.meta-lead-worker]
+verify_jwt = true

@@ -28,6 +28,7 @@ export interface MetaSyncRun {
   finished_at: string | null
   level?: 'campaign' | 'adset' | 'ad' | null
   coverage_state?: 'legacy' | 'partial' | 'complete'
+  discover?: boolean | null
   page_count?: number
 }
 
