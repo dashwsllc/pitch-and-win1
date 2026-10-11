@@ -48,3 +48,13 @@ export interface CapturedTrafficRow extends ImportRow {
     request_params: Record<string, string>
   }
 }
+
+export interface CampaignCohort {
+  campaign_id: string; campaign_name: string
+  received: number; pending: number; approved: number; linked_crm: number
+  confirmed_sales: number; confirmed_revenue: number
+  coverage: 'complete' | 'partial' | 'unknown'
+}
+export interface TrafficCohortResult {
+  state: 'ready' | 'insufficient'; reasons: string[]; campaigns: CampaignCohort[]; unattributed_contacts: number
+}

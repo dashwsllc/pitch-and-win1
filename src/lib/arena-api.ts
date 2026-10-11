@@ -149,6 +149,7 @@ type ExtraFunctions = {
   meta_promote_form_lead: FunctionDef<{ p_id: string; p_contact: Json }>;
   meta_ignore_form_lead: FunctionDef<{ p_id: string; p_reason: string }>;
   meta_crm_attribution_daily: FunctionDef<{ p_start: string; p_end: string }>;
+  meta_traffic_cohort: FunctionDef<{ p_start: string; p_end: string; p_account_id?: string | null; p_campaign_id?: string | null; p_source?: 'api' | 'csv' | 'manual_legacy' | null }>;
   meta_traffic_lead_reconciliation: FunctionDef<{ p_start: string; p_end: string }>;
   meta_connect_ad_account: FunctionDef<{ p_account_id: string; p_account_name: string; p_currency?: string; p_timezone?: string }>;
   meta_disconnect_ad_account: FunctionDef<{ p_account_id: string; p_reason: string }>;
