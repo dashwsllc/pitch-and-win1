@@ -102,7 +102,7 @@ export async function fetchAllPages<T extends GraphPaging & { data: unknown[] }>
     const key = JSON.stringify(request)
     if (seen.has(key)) throw new Error('Cursor de paginação repetido; captura incompleta')
     seen.add(key)
-    const page = await fetchGraphPage(request, token, budget)
+    const page: { data: unknown[]; next: MetaGraphRequest | null } = await fetchGraphPage(request, token, budget)
     rows.push(...page.data)
     request = page.next
   }

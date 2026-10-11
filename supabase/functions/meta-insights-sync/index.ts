@@ -1,97 +1,10 @@
-import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0'
 import { isTrustedOrigin, jsonResponse, preflightResponse, readJsonBody, RequestError } from '../_shared/http.ts'
 import { requireCronSecret, requireTrafficUser } from '../_shared/meta-auth.ts'
-import {
-  describeMetaGraphError, fetchAllPages, LEAD_ACTION_TYPES, MESSAGING_ACTION_TYPES,
-  MetaGraphError, metaGraphGet, PURCHASE_ACTION_TYPES, sumActions, type MetaAction,
-} from '../_shared/meta-graph.ts'
-
-type Level = 'campaign' | 'adset' | 'ad'
-const LEVELS: Level[] = ['campaign', 'adset', 'ad']
-
-interface InsightRow {
-  date_start: string
-  campaign_id: string; campaign_name?: string
-  adset_id?: string; adset_name?: string
-  ad_id?: string; ad_name?: string
-  spend?: string; impressions?: string; reach?: string; inline_link_clicks?: string
-  actions?: MetaAction[]; action_values?: MetaAction[]
-}
-
-function buildRow(row: InsightRow, level: Level, accountId: string, objective: string) {
-  return {
-    date: row.date_start, account_id: accountId, account_name: '',
-    campaign_id: row.campaign_id, campaign_name: row.campaign_name || '',
-    adset_id: level === 'campaign' ? '' : (row.adset_id || ''),
-    adset_name: level === 'campaign' ? '' : (row.adset_name || ''),
-    ad_id: level === 'ad' ? (row.ad_id || '') : '',
-    ad_name: level === 'ad' ? (row.ad_name || '') : '',
-    level, currency: 'BRL', attribution_window: 'Conforme configuração da conta Meta',
-    objective, spend: Number(row.spend) || 0,
-    leads: Math.round(sumActions(row.actions, LEAD_ACTION_TYPES)),
-    purchases: Math.round(sumActions(row.actions, PURCHASE_ACTION_TYPES)),
-    purchase_value: sumActions(row.action_values, PURCHASE_ACTION_TYPES),
-    impressions: Math.round(Number(row.impressions) || 0),
-    reach: Math.round(Number(row.reach) || 0),
-    link_clicks: Math.round(Number(row.inline_link_clicks) || 0),
-    messaging_conversations_started: Math.round(sumActions(row.actions, MESSAGING_ACTION_TYPES)),
-  }
-}
-
-async function fetchCampaignObjectives(campaignIds: string[], token: string): Promise<Record<string, string>> {
-  const result: Record<string, string> = {}
-  // v26 no longer accepts the root `ids` query. Read each campaign node,
-  // limiting parallel requests so larger accounts do not flood the Graph API.
-  for (let index = 0; index < campaignIds.length; index += 3) {
-    await Promise.all(campaignIds.slice(index, index + 3).map(async id => {
-      const data = await metaGraphGet<{ objective?: string }>(`/${id}`, { fields: 'objective' }, token)
-      result[id] = data.objective || ''
-    }))
-  }
-  return result
-}
-
-async function syncAccountLevel(admin: SupabaseClient, token: string, accountId: string, level: Level,
-  since: string, until: string, actor: string | null, triggeredBy: 'cron' | 'manual') {
-  const { data: runId, error: startError } = await admin.rpc('meta_sync_run_start', {
-    p_kind: 'insights', p_account_id: accountId, p_triggered_by: triggeredBy,
-    p_triggered_by_user: actor, p_window_start: since, p_window_end: until,
-  })
-  if (startError) {
-    if (startError.code === '55006') return { accountId, level, skipped: true }
-    throw startError
-  }
-  let rowsSynced = 0
-  try {
-    const insights = await fetchAllPages<{ data: InsightRow[]; paging?: { next?: string } }>(
-      `/act_${accountId}/insights`,
-      {
-        level, time_increment: '1', time_range: JSON.stringify({ since, until }),
-        fields: 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,inline_link_clicks,actions,action_values',
-        limit: '500',
-      },
-      token,
-    )
-    const campaignIds = [...new Set(insights.map(row => row.campaign_id))]
-    const objectives = await fetchCampaignObjectives(campaignIds, token)
-    const payload = insights.map(row => buildRow(row, level, accountId, objectives[row.campaign_id] || ''))
-    if (payload.length) {
-      const { data, error } = await admin.rpc('meta_import_daily_system', {
-        p_rows: payload, p_sync_run_id: runId, p_actor: actor,
-      })
-      if (error) throw error
-      rowsSynced = data?.rows ?? payload.length
-    }
-    const { error: finishError } = await admin.rpc('meta_sync_run_finish', { p_id: runId, p_status: 'success', p_rows_synced: rowsSynced })
-    if (finishError) throw finishError
-    return { accountId, level, rowsSynced }
-  } catch (error) {
-    const message = error instanceof MetaGraphError ? describeMetaGraphError(error)
-      : error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Falha desconhecida na sincronização'
-    await admin.rpc('meta_sync_run_finish', { p_id: runId, p_status: 'error', p_rows_synced: rowsSynced, p_error_message: message })
-    return { accountId, level, error: message }
-  }
-}
+import { captureAccountLevel, readMetaAccount, accountWindow } from '../_shared/meta-insights-capture.ts'
+import type { MetaLevel } from '../../../shared/meta-contract.ts'
+import { normalizeMetaAccountId } from '../../../shared/meta-identity.ts'
+const LEVELS: MetaLevel[] = ['campaign', 'adset', 'ad']
 
 Deno.serve(async (req) => {
   const preflight = preflightResponse(req)
@@ -99,6 +12,7 @@ Deno.serve(async (req) => {
   if (!isTrustedOrigin(req)) return jsonResponse(req, { error: 'Origem não autorizada' }, 403)
   if (req.method !== 'POST') return jsonResponse(req, { error: 'Método inválido' }, 405)
   try {
+    const deadlineMs = Date.now() + 45000
     const isCron = requireCronSecret(req)
     let actor: string | null = null
     const triggeredBy: 'cron' | 'manual' = isCron ? 'cron' : 'manual'
@@ -109,27 +23,63 @@ Deno.serve(async (req) => {
     const token = Deno.env.get('META_SYSTEM_USER_TOKEN')
     if (!token) return jsonResponse(req, { error: 'META_SYSTEM_USER_TOKEN não configurado' }, 500)
 
-    const body = await readJsonBody<{ days?: number }>(req).catch(() => ({}) as { days?: number })
-    const days = Math.min(30, Math.max(1, body.days || Number(Deno.env.get('META_SYNC_LOOKBACK_DAYS')) || 3))
-    const until = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
-    const since = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' })
-      .format(new Date(Date.now() - days * 86_400_000))
+    const body = await readJsonBody<{ days?: number; resumeOnly?: boolean }>(req)
+    if (body.resumeOnly && !isCron) return jsonResponse(req, { error: 'Retomada exclusiva do cron' }, 403)
+    const days = body.days ?? Number(Deno.env.get('META_SYNC_LOOKBACK_DAYS') || 3)
+    if (!Number.isInteger(days) || days < 1 || days > 30) return jsonResponse(req, { error: 'Período deve ter 1 a 30 dias' }, 400)
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: async (input, init) => {
+        const remaining = deadlineMs - Date.now()
+        if (remaining <= 0) throw new Error('Orçamento de captura esgotado')
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), Math.min(5000, remaining))
+        try { return await fetch(input, { ...init, signal: controller.signal }) }
+        finally { clearTimeout(timer) }
+      } },
     })
-    const { data: accounts, error: accountsError } = await admin
-      .from('meta_ad_accounts').select('account_id').eq('status', 'active')
+    const { data: pending, error: pendingError } = await admin.from('meta_sync_runs')
+      .select('id,account_id,level,window_start,window_end,started_at').eq('kind', 'insights').in('status', ['running', 'partial'])
+      .not('level', 'is', null).order('started_at').limit(100)
+    if (pendingError) throw pendingError
+    const { data: accounts, error: accountsError } = await admin.from('meta_ad_accounts').select('account_id').eq('status', 'active')
     if (accountsError) throw accountsError
-
+    const active = new Set((accounts ?? []).map(account => normalizeMetaAccountId(account.account_id)))
+    const jobs: { accountId: string; level: MetaLevel; since?: string; until?: string }[] = (pending ?? [])
+      .filter(run => active.has(normalizeMetaAccountId(run.account_id)))
+      .map(run => ({ accountId: run.account_id, level: run.level as MetaLevel, since: run.window_start, until: run.window_end }))
+    const turn = jobs.length ? Math.floor(Date.now() / 60000) % jobs.length : 0
+    jobs.push(...jobs.splice(0, turn))
+    if (!body.resumeOnly) for (const account of accounts ?? []) for (const level of LEVELS) {
+      if (!jobs.some(job => normalizeMetaAccountId(job.accountId) === normalizeMetaAccountId(account.account_id) && job.level === level)) jobs.push({ accountId: account.account_id, level })
+    }
     const results = []
-    for (const account of accounts ?? []) {
-      for (const level of LEVELS) {
-        results.push(await syncAccountLevel(admin, token, account.account_id, level, since, until, actor, triggeredBy))
+    let partial = false
+    for (const job of jobs) {
+      if (Date.now() >= deadlineMs - 5000) { partial = true; break }
+      try {
+        const account = await readMetaAccount(admin, job.accountId, token, deadlineMs - 5000)
+        const window = job.since && job.until ? { since: job.since, until: job.until } : accountWindow(account.timezone, days)
+        const result = await captureAccountLevel(admin, { ...job, ...window, actor, triggeredBy, deadlineMs, pageLimit: 2 }, token)
+        results.push({ accountId: account.id, level: job.level, ...result })
+        partial ||= result.state === 'partial' || result.state === 'skipped'
+      } catch (error) {
+        let message = error && typeof error === 'object' && 'message' in error ? String(error.message).replaceAll(token, '[credencial]').replaceAll(encodeURIComponent(token), '[credencial]') : 'Falha da conta Meta'
+        // Metadata failures precede staging. Keep an operational error run with
+        // unknown coverage, rather than inventing account metadata or a window.
+        const { data: errorRun, error: startError } = await admin.rpc('meta_sync_run_start', {
+          p_kind: 'insights', p_account_id: normalizeMetaAccountId(job.accountId), p_triggered_by: triggeredBy, p_triggered_by_user: actor,
+        })
+        if (!startError && errorRun) {
+          const { error: finishError } = await admin.rpc('meta_sync_run_finish', { p_id: errorRun, p_status: 'error', p_rows_synced: 0, p_error_message: `${job.level}: ${message}` })
+          if (finishError) message += '; falha ao registrar o erro da conta'
+        } else if (startError?.code !== '55006') message += '; falha ao registrar o erro da conta'
+        results.push({ accountId: job.accountId, level: job.level, state: 'error', runId: errorRun, error: message })
       }
     }
-    const ok = !results.some(result => 'error' in result)
-    return jsonResponse(req, { ok, since, until, results }, ok ? 200 : 502)
+    const ok = !results.some(result => result.state === 'error')
+    return jsonResponse(req, { ok, partial, results }, !ok ? 502 : partial ? 202 : 200)
   } catch (error) {
     if (error instanceof RequestError) return jsonResponse(req, { error: error.message }, error.status)
     console.error('meta-insights-sync failed', error)

@@ -212,6 +212,7 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended('meta-capture:'||r.account_id||':'||r.level,0));
  SELECT * INTO r FROM public.meta_capture_reviews WHERE id=p_id FOR UPDATE;
  IF NOT FOUND OR r.version IS DISTINCT FROM p_version OR r.status<>'pendente' THEN RAISE EXCEPTION 'Revisão alterada ou já decidida; recarregue' USING ERRCODE='40001'; END IF;
+ PERFORM set_config('meta.capture_review',r.id::text,true);
  RETURN r;
 END $$;
 CREATE FUNCTION public.meta_capture_review_part(p_id uuid,p_version bigint,p_offset integer DEFAULT 0,p_limit integer DEFAULT 500) RETURNS jsonb
@@ -346,7 +347,7 @@ BEGIN
   v_level:=item->>'level'; v_account:=btrim(coalesce(item->>'account_id',''));
   v_campaign:=btrim(coalesce(item->>'campaign_id','')); v_adset:=btrim(coalesce(item->>'adset_id',''));
   v_ad:=btrim(coalesce(item->>'ad_id',''));
-  IF v_date IS NULL OR v_date>(now() AT TIME ZONE 'America/Sao_Paulo')::date
+  IF v_date IS NULL
     OR v_level NOT IN ('campaign','adset','ad') OR v_account='' OR v_campaign=''
     OR (v_level IN ('adset','ad') AND v_adset='') OR (v_level='ad' AND v_ad='')
     OR coalesce(item->>'currency','BRL')<>'BRL'
@@ -549,6 +550,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'Métrica não encontrada'; END IF;
   IF old.updated_at IS DISTINCT FROM p_expected_updated_at THEN RAISE EXCEPTION 'Métrica alterada, recarregue antes de editar' USING ERRCODE='40001'; END IF;
   IF public.meta_edit_diff(to_jsonb(old),to_jsonb(old)||p_patch)='[]' THEN RETURN to_jsonb(old); END IF;
+  PERFORM set_config('meta.capture_review',coalesce(old.capture_review_id::text,''),true);
   edited:=jsonb_populate_record(old,p_patch);
   PERFORM public.meta_validate_traffic_row(to_jsonb(edited));
   PERFORM pg_advisory_xact_lock(hashtextextended('meta-fact:'||public.meta_traffic_identity(to_jsonb(edited)),0));
@@ -587,4 +589,58 @@ END $function$
 ;
 
 
+CREATE OR REPLACE FUNCTION public.meta_validate_traffic_row(item jsonb) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+DECLARE day date; lvl text; acct text; campaign text; adset text; ad text; key text; amount numeric; max_value numeric; today date;
+BEGIN
+ IF jsonb_typeof(item) IS DISTINCT FROM 'object' OR coalesce(item->>'date','') !~ '^\d{4}-\d{2}-\d{2}$' THEN
+   RAISE EXCEPTION 'Data ou linha inválida' USING ERRCODE='22023'; END IF;
+ BEGIN day:=(item->>'date')::date; EXCEPTION WHEN OTHERS THEN RAISE EXCEPTION 'Data inválida' USING ERRCODE='22023'; END;
+ acct:=public.meta_normalize_account_id(item->>'account_id');
+ PERFORM public.meta_assert_account_identity(acct);
+ today:=(now() AT TIME ZONE 'America/Sao_Paulo')::date;
+ -- Only a service capture may use the registered account timezone.
+ IF auth.role()='service_role' THEN
+   SELECT (now() AT TIME ZONE a.timezone)::date INTO today FROM public.meta_ad_accounts a WHERE a.account_id=acct;
+   today:=coalesce(today,(now() AT TIME ZONE 'America/Sao_Paulo')::date);
+ ELSIF nullif(current_setting('meta.capture_review',true),'') IS NOT NULL THEN
+   SELECT (now() AT TIME ZONE (r.manifest->'account'->>'timezone'))::date INTO today FROM public.meta_capture_reviews r
+     WHERE r.id=nullif(current_setting('meta.capture_review',true),'')::uuid AND r.account_id=acct AND r.status IN ('pendente','aprovado');
+   today:=coalesce(today,(now() AT TIME ZONE 'America/Sao_Paulo')::date);
+ END IF;
+ lvl:=item->>'level'; campaign:=btrim(coalesce(item->>'campaign_id',''));
+ adset:=btrim(coalesce(item->>'adset_id','')); ad:=btrim(coalesce(item->>'ad_id',''));
+ IF day>today OR lvl IS NULL OR lvl NOT IN ('campaign','adset','ad')
+   OR length(campaign) NOT BETWEEN 1 AND 80 OR length(adset)>80 OR length(ad)>80
+   OR (lvl IN ('adset','ad') AND adset='') OR (lvl='ad' AND ad='')
+   OR (lvl='campaign' AND (adset<>'' OR ad<>'')) OR (lvl='adset' AND ad<>'')
+   OR coalesce(item->>'currency','BRL')<>'BRL'
+   OR length(btrim(coalesce(item->>'campaign_name',''))) NOT BETWEEN 1 AND 160
+   OR length(coalesce(item->>'adset_name',''))>160 OR length(coalesce(item->>'ad_name',''))>160
+   OR length(coalesce(item->>'objective',''))>80 THEN
+   RAISE EXCEPTION 'Linha Meta inválida: data, nível, identificadores, texto ou moeda' USING ERRCODE='22023'; END IF;
+ FOREACH key IN ARRAY ARRAY['spend','purchase_value','leads','purchases','impressions','reach','link_clicks','messaging_conversations_started'] LOOP
+   IF NOT item ? key THEN CONTINUE; END IF;
+   IF jsonb_typeof(item->key) IS DISTINCT FROM 'number' THEN RAISE EXCEPTION 'Métrica % deve ser numérica',key USING ERRCODE='22023'; END IF;
+   amount:=(item->>key)::numeric;
+   max_value:=CASE WHEN key='spend' THEN 100000000 WHEN key='purchase_value' THEN 99999999999999.99
+     WHEN key IN ('leads','purchases') THEN 2147483647 ELSE 9007199254740991 END;
+   IF amount<0 OR amount>max_value OR (key NOT IN ('spend','purchase_value') AND amount<>trunc(amount)) THEN
+     RAISE EXCEPTION 'Métrica % fora dos limites',key USING ERRCODE='22023'; END IF;
+ END LOOP;
+ IF item ? 'present_metrics' AND (jsonb_typeof(item->'present_metrics') IS DISTINCT FROM 'array'
+   OR EXISTS(SELECT 1 FROM jsonb_array_elements(item->'present_metrics') v WHERE jsonb_typeof(v)<>'string'
+     OR v#>>'{}' NOT IN ('objective','leads','purchases','purchase_value','impressions','reach','link_clicks','messaging_conversations_started'))) THEN
+   RAISE EXCEPTION 'Disponibilidade de métricas inválida' USING ERRCODE='22023'; END IF;
+END $$;
+
+CREATE FUNCTION public.meta_capture_abort(p_id uuid,p_claim uuid,p_error text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+BEGIN
+ PERFORM public.meta_capture_check_claim(p_id,p_claim);
+ UPDATE public.meta_sync_runs SET status='error',coverage_state='partial',claim_token=NULL,lease_until=NULL,
+   error_message=left(p_error,1000),finished_at=clock_timestamp() WHERE id=p_id;
+END $$;
+REVOKE ALL ON FUNCTION public.meta_capture_abort(uuid,uuid,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.meta_capture_abort(uuid,uuid,text) TO service_role;
 COMMIT;

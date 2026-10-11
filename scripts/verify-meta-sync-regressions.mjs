@@ -1,18 +1,15 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import vm from 'node:vm'
 import test from 'node:test'
-import ts from 'typescript'
 
 import { loadHandler } from './helpers/meta-edge-harness.mjs'
+import { captureDatabase } from './helpers/meta-capture-fixtures.mjs'
 
 function database({ failLead = '', failFinish = false } = {}) {
-  const imported = [], finishes = []
-  return { imported, finishes,
-    from: () => ({ select: () => ({ eq: async () => ({ data: [{ account_id: '123' }], error: null }) }) }),
+  const capture = captureDatabase({ failPrepare: failFinish })
+  const { imported, finishes } = capture
+  return { imported: capture.imported, finishes: capture.finishes, from: capture.from,
     async rpc(name, args) {
+      if (name.startsWith('meta_capture_')) return capture.rpc(name, args)
       if (name === 'meta_sync_run_start') return { data: 'run1', error: null }
       if (name === 'meta_import_daily_system') { imported.push(...args.p_rows); return { data: { rows: args.p_rows.length }, error: null } }
       if (name === 'meta_sync_run_finish') { finishes.push(args); return { data: null, error: failFinish ? { message: 'finish unavailable' } : null } }
@@ -35,8 +32,9 @@ function insightsGraph(failure = false) {
     const url = new URL(address)
     if (failure) return json({ error: { code: 200, message: 'Missing ads_read' } }, 403)
     if (url.searchParams.has('ids')) return json({ error: { code: 100, message: 'The ids query parameter is deprecated in v26.0+.' } }, 400)
+    if (url.pathname.endsWith('/act_123')) return json({ id: '123', name: 'Test account', currency: 'BRL', timezone_name: 'America/Sao_Paulo' })
     if (url.pathname.endsWith('/insights')) return json({ data: [{
-      date_start: '2026-10-09', campaign_id: 'campaign1', campaign_name: 'Test', spend: '12.50', actions: [{ action_type: 'lead', value: '2' }],
+      date_start: '2026-10-09', adset_id: 'set1', ad_id: 'ad1', campaign_id: 'campaign1', campaign_name: 'Test', spend: '12.50', actions: [{ action_type: 'lead', value: '2' }],
     }] })
     if (url.pathname.endsWith('/campaign1') && url.searchParams.get('fields') === 'objective') return json({ id: 'campaign1', objective: 'OUTCOME_LEADS' })
     throw new Error(`Unexpected Graph path ${url.pathname}`)

@@ -2,6 +2,7 @@ BEGIN;
 SET LOCAL statement_timeout='90s';
 DO $$ BEGIN
  PERFORM pg_temp.assert(to_regprocedure('public.meta_capture_open(text,text,date,date,jsonb,jsonb,text,uuid)') IS NOT NULL,'capture contracts missing');
+ PERFORM pg_temp.assert(to_regprocedure('public.meta_capture_abort(uuid,uuid,text)') IS NOT NULL,'terminal capture abort contract missing');
 END $$;
 CREATE FUNCTION pg_temp.capture(p_account text,p_start date,p_end date,p_rows jsonb) RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE id uuid; claim uuid; part jsonb; nxt jsonb; n int:=0; total int:=jsonb_array_length(p_rows); count_rows int;
@@ -20,7 +21,7 @@ BEGIN
  RETURN public.meta_capture_prepare(id,claim);
 END $$;
 DO $$
-DECLARE actor uuid; run uuid; claim uuid; review uuid; again uuid; version bigint; item jsonb; many jsonb; response jsonb; fact public.meta_traffic_daily; legacy public.meta_import_batches;
+DECLARE actor uuid; run uuid; claim uuid; old_claim uuid; review uuid; again uuid; version bigint; item jsonb; many jsonb; response jsonb; fact public.meta_traffic_daily; legacy public.meta_import_batches;
 BEGIN
  actor:=pg_temp.seed_meta_actor('approved',false,'executive');
  INSERT INTO public.meta_ad_accounts(account_id,account_name,currency,timezone,status,connected_by) VALUES('92001','Synthetic','BRL','America/Sao_Paulo','active',actor);
@@ -29,10 +30,16 @@ BEGIN
  run:=public.meta_capture_open('92001','campaign','2026-10-08','2026-10-09','{"level":"campaign","time_range":"{\"since\":\"2026-10-08\",\"until\":\"2026-10-09\"}"}','{"id":"92001","currency":"BRL","timezone":"America/Sao_Paulo"}','cron',NULL);
  claim:=(public.meta_capture_claim(run)->>'claim_token')::uuid;
  PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_prepare(%L,%L)',run,claim),'55000');
+ old_claim:=claim;
+ UPDATE public.meta_sync_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE id=run;
+ claim:=(public.meta_capture_claim(run)->>'claim_token')::uuid;
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_abort(%L,%L,%L)',run,old_claim,'Cursor expirado'),'40001');
+ PERFORM pg_temp.assert((SELECT status='running' FROM public.meta_sync_runs WHERE id=run),'old owner aborted new lease');
  PERFORM public.meta_capture_release(run,claim);
  item:='{"date":"2026-10-09","level":"campaign","account_id":"92001","campaign_id":"A","campaign_name":"A","spend":10,"leads":2,"purchases":0,"available_metrics":["spend","leads"],"metric_metadata":{"definition_version":"canonical-v1"}}';
  -- Open resumes the unfinished run instead of abandoning its persisted pages.
  review:=pg_temp.capture('92001','2026-10-08','2026-10-09',jsonb_build_array(item,item||'{"campaign_id":"B"}'));
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_abort(%L,%L,%L)',run,claim,'Conclusão antiga'),'40001');
  EXECUTE 'RESET ROLE';
  PERFORM set_config('request.jwt.claim.role','authenticated',true);
  PERFORM set_config('request.jwt.claim.sub',actor::text,true);
