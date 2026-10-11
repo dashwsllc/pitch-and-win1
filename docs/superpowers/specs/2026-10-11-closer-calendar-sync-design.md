@@ -2,7 +2,7 @@
 
 Data: 2026-10-11
 
-Estado: desenho conversacional aprovado; especificação escrita aguardando revisão do usuário.
+Estado: desenho conversacional e especificação escrita aprovados pelo usuário em 2026-10-11; plano escrito aguardando revisão e escolha do modo de execução.
 
 Projeto: `pitch-and-win1`.
 
@@ -250,4 +250,4 @@ As decisões de produto acima são propostas deste projeto. Os contratos da API 
 
 ## 12. Próxima etapa do workflow
 
-O usuário aprovou o fluxo apresentado em conversa. Esta especificação precisa ser revisada e aprovada antes do plano de implementação, conforme `brainstorming` e o AGENTS.md do workspace. A aprovação desta especificação autoriza elaborar o plano com `writing-plans`; implementação de produto começa após a revisão do plano escrito e seleção do modo de execução.
+O usuário aprovou o fluxo apresentado em conversa e esta especificação escrita em 2026-10-11, solicitando avançar o mais rápido possível. O [plano de implementação](../plans/2026-10-11-closer-calendar-sync.md) foi escrito e revisado com `writing-plans`. Conforme o AGENTS.md do workspace e essa skill, a implementação de produto começa após a revisão do plano escrito pelo usuário e seleção do modo de execução.
