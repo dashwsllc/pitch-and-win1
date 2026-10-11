@@ -17,7 +17,7 @@ export async function loadHandler(path, { fetch, admin, extraEnv = {}, clock = D
     Deno: { env: { get: key => env[key] }, serve: value => { handler = value } },
     __admin: admin })
   const cache = new Map()
-  async function moduleFor(filename) {
+  function moduleFor(filename) {
     if (cache.has(filename)) return cache.get(filename)
     const source = filename.startsWith('https:')
       ? 'export function createClient() { return globalThis.__admin }'
@@ -26,11 +26,11 @@ export async function loadHandler(path, { fetch, admin, extraEnv = {}, clock = D
       } }).outputText
     const module = new vm.SourceTextModule(source, { context, identifier: filename })
     cache.set(filename, module)
-    await module.link((specifier, parent) => moduleFor(specifier.startsWith('https:')
-      ? specifier : resolve(dirname(parent.identifier), specifier)))
     return module
   }
-  const module = await moduleFor(resolve(root, path))
+  const module = moduleFor(resolve(root, path))
+  await module.link((specifier, parent) => moduleFor(specifier.startsWith('https:')
+    ? specifier : resolve(dirname(parent.identifier), specifier)))
   await module.evaluate()
   return { handler, exports: module.namespace }
 }

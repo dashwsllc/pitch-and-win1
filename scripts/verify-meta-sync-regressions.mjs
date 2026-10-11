@@ -2,21 +2,20 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { loadHandler } from './helpers/meta-edge-harness.mjs'
+import { leadDatabase } from './helpers/meta-lead-fixtures.mjs'
 import { captureDatabase } from './helpers/meta-capture-fixtures.mjs'
 
 function database({ failLead = '', failFinish = false } = {}) {
+  const leadQueue = leadDatabase({ failLead })
   const capture = captureDatabase({ failPrepare: failFinish })
   const { imported, finishes } = capture
-  return { imported: capture.imported, finishes: capture.finishes, from: capture.from,
+  return { imported: capture.imported, finishes: capture.finishes, from: (...args) => args[0] === 'meta_webhook_events' ? leadQueue.from(...args) : capture.from(...args),
     async rpc(name, args) {
       if (name.startsWith('meta_capture_')) return capture.rpc(name, args)
+      if (name.startsWith('meta_lead_') || name === 'meta_webhook_event_receive') return leadQueue.rpc(name, args)
       if (name === 'meta_sync_run_start') return { data: 'run1', error: null }
       if (name === 'meta_import_daily_system') { imported.push(...args.p_rows); return { data: { rows: args.p_rows.length }, error: null } }
       if (name === 'meta_sync_run_finish') { finishes.push(args); return { data: null, error: failFinish ? { message: 'finish unavailable' } : null } }
-      if (name === 'meta_webhook_event_receive') return { data: `event-${args.p_leadgen_id}`, error: null }
-      if (name === 'meta_ingest_form_lead') return { data: args.p_data.meta_lead_id,
-        error: args.p_data.meta_lead_id === failLead ? { code: '22023', message: 'invalid lead data' } : null }
-      if (name === 'meta_webhook_event_complete') return { data: null, error: null }
       throw new Error(`Unexpected RPC ${name}`)
     },
   }
