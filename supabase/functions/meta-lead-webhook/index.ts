@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     return new Response('EVENT_RECEIVED', { status: 200 })
   } catch {
     // Meta must retry when a durable receipt cannot be confirmed. Earlier writes deduplicate.
-    console.error('meta-lead-webhook: gravação de recibo indisponível')
+    console.error('meta-lead-webhook: gravaÃ§Ã£o de recibo indisponÃ­vel')
     return new Response('Receipt unavailable', { status: 503 })
   }
 })

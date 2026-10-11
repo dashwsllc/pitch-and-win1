@@ -7,7 +7,7 @@ import { runLeadWorker } from './meta-lead-worker.ts'
 export async function handleLeadCron(req: Request, discover: boolean): Promise<Response> {
   const preflight = preflightResponse(req)
   if (preflight) return preflight
-  if (req.method !== 'POST') return jsonResponse(req, { error: 'Método inválido' }, 405)
+  if (req.method !== 'POST') return jsonResponse(req, { error: 'MÃ©todo invÃ¡lido' }, 405)
   if (!requireCronSecret(req)) return jsonResponse(req, { error: 'Acesso negado' }, 403)
   const deadlineMs = Date.now() + 45000
   const pageIds = allowedMetaPages()
@@ -23,7 +23,7 @@ export async function handleLeadCron(req: Request, discover: boolean): Promise<R
       if (Date.now() + 5000 >= deadlineMs) { results.push({ pageId, partial: true }); break }
       runId = await leadRpc<string>(admin, 'meta_sync_run_start', { p_kind: 'leads_reconciliation', p_account_id: pageId, p_triggered_by: 'cron' })
       const result = await runLeadWorker(admin, { pageIds: pageId ? [pageId] : [], token, deadlineMs, discover })
-      const error = result.errors.length ? result.errors.join(' · ').slice(0, 1000) : null
+      const error = result.errors.length ? result.errors.join(' Â· ').slice(0, 1000) : null
       await leadRpc(admin, 'meta_sync_run_finish', { p_id: runId, p_status: error ? 'error' : result.partial ? 'partial' : 'success', p_rows_synced: result.processed, p_error_message: error })
       results.push({ pageId, leadsFound: result.discovered, leadsProcessed: result.processed, leadsFailed: result.failed, leadsIgnored: result.ignored, partial: result.partial, ...(error ? { error } : {}) })
     } catch (error) {

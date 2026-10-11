@@ -46,7 +46,7 @@ export async function extractLeadFields(fieldData: FieldAnswer[] | undefined, as
   if (!missing.length) return known
   const instructions = Object.fromEntries(missing.map(key => [key, QUESTION_INSTRUCTIONS[key]]))
   const criteria: Record<string, string> = { [NONE_KEY]: 'Nenhuma resposta corresponde' }
-  fieldData.forEach((field, index) => { criteria[`f${index}`] = `Pergunta: "${field.name || '(sem rotulo)'}" — Resposta: "${field.values?.[0] || ''}"` })
+  fieldData.forEach((field, index) => { criteria[`f${index}`] = `Pergunta: "${field.name || '(sem rotulo)'}" â€” Resposta: "${field.values?.[0] || ''}"` })
   try {
     const answers = await askJev(criteria, instructions)
     for (const key of missing) {

@@ -30,12 +30,12 @@ export async function leadRpc<T>(admin: SupabaseClient, name: string, args: Reco
   return data as T
 }
 export async function receiveLeadgenEvent(admin: SupabaseClient, event: { leadgenId: string; pageId: string; formId: string }, allowedPages: string[]): Promise<{ eventId: string; status: 'pending' | 'ignored' }> {
-  if (![event.leadgenId, event.pageId, event.formId].every(value => /^[A-Za-z0-9_-]{1,100}$/.test(value))) throw new Error('Identidade de lead inv·lida')
+  if (![event.leadgenId, event.pageId, event.formId].every(value => /^[A-Za-z0-9_-]{1,100}$/.test(value))) throw new Error('Identidade de lead inv√°lida')
   const eventId = await leadRpc<string>(admin, 'meta_webhook_event_receive', {
     p_leadgen_id: event.leadgenId, p_page_id: event.pageId, p_form_id: event.formId,
   })
   if (!allowedPages.includes(event.pageId)) {
-    await leadRpc(admin, 'meta_lead_event_ignore', { p_id: eventId, p_reason: 'P·gina fora da lista META_PAGE_IDS autorizada' })
+    await leadRpc(admin, 'meta_lead_event_ignore', { p_id: eventId, p_reason: 'P√°gina fora da lista META_PAGE_IDS autorizada' })
     return { eventId, status: 'ignored' }
   }
   return { eventId, status: 'pending' }
@@ -52,7 +52,7 @@ export async function processClaimedLead(admin: SupabaseClient, event: ClaimedLe
         { deadlineMs: Math.min(budget.deadlineMs, Date.now() + 4000) })).name || '' } catch { /* Informational metadata only. */ }
     }
     const extracted = await extractLeadFields(detail.field_data, (criteria, instructions) => callJev(criteria, instructions, { ...budget, deadlineMs: budget.deadlineMs - 1000 }))
-    if (Date.now() >= budget.deadlineMs) throw new Error('OrÁamento de processamento esgotado')
+    if (Date.now() >= budget.deadlineMs) throw new Error('Or√ßamento de processamento esgotado')
     await leadRpc(admin, 'meta_lead_event_ingest', { p_id: event.id, p_claim: event.claim_token, p_data: {
       meta_lead_id: detail.id, page_id: event.page_id, form_id: detail.form_id,
       campaign_id: detail.campaign_id || '', campaign_name: detail.campaign_name || '', ad_id: detail.ad_id || '',
@@ -63,9 +63,9 @@ export async function processClaimedLead(admin: SupabaseClient, event: ClaimedLe
   } catch (error) {
     const message = leadErrorMessage(error, token)
     const errorClass = error instanceof MetaGraphError ? isPermissionError(error) ? 'permission' : isAuthError(error) ? 'configuration' : 'transient'
-      : error && typeof error === 'object' && 'code' in error && String(error.code).startsWith('22') || /divergente|inv·lida/.test(message) ? 'invalid_data' : 'transient'
+      : error && typeof error === 'object' && 'code' in error && String(error.code).startsWith('22') || /divergente|inv√°lida/.test(message) ? 'invalid_data' : 'transient'
     try { await leadRpc(admin, 'meta_lead_event_fail', { p_id: event.id, p_claim: event.claim_token, p_error: message, p_class: errorClass }) }
-    catch { return { status: 'error', error: message + ' ∑ Falha ao registrar tentativa; o lease ser· retomado.' } }
+    catch { return { status: 'error', error: message + ' ¬∑ Falha ao registrar tentativa; o lease ser√° retomado.' } }
     return { status: 'error', error: message }
   }
 }
