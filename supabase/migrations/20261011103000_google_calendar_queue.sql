@@ -70,18 +70,18 @@ CREATE TRIGGER google_calendar_closer_changed AFTER UPDATE OF display_name ON pu
 
 CREATE FUNCTION public.google_calendar_claim(p_limit integer,p_lease_seconds integer) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE b calendar_private.bindings; o calendar_private.outbox; result jsonb:='[]'; c calendar_private.connection;
+DECLARE b calendar_private.bindings; claimed calendar_private.outbox; result jsonb:='[]'; c calendar_private.connection;
 BEGIN
   SELECT * INTO c FROM calendar_private.connection FOR SHARE;
   IF c.connection_status<>'connected' OR c.activated_at IS NULL THEN RETURN result; END IF;
-  FOR b IN SELECT b.* FROM calendar_private.bindings b JOIN calendar_private.outbox o ON o.binding_id=b.id
-    WHERE b.calendar_id=c.calendar_id AND o.available_at<=clock_timestamp() AND (o.lease_until IS NULL OR o.lease_until<=clock_timestamp())
-    ORDER BY o.available_at,b.id LIMIT greatest(0,least(20,p_limit)) FOR UPDATE OF b SKIP LOCKED
+  FOR b IN SELECT queued.* FROM calendar_private.bindings queued JOIN calendar_private.outbox o ON o.binding_id=queued.id
+    WHERE queued.calendar_id=c.calendar_id AND o.available_at<=clock_timestamp() AND (o.lease_until IS NULL OR o.lease_until<=clock_timestamp())
+    ORDER BY o.available_at,queued.id LIMIT greatest(0,least(20,p_limit)) FOR UPDATE OF queued SKIP LOCKED
   LOOP
     UPDATE calendar_private.outbox SET lease_token=gen_random_uuid(),lease_until=clock_timestamp()+make_interval(secs=>greatest(10,least(60,p_lease_seconds))),attempt=attempt+1
-      WHERE binding_id=b.id AND (lease_until IS NULL OR lease_until<=clock_timestamp()) RETURNING * INTO o;
+      WHERE binding_id=b.id AND (lease_until IS NULL OR lease_until<=clock_timestamp()) RETURNING * INTO claimed;
     IF FOUND THEN
-      result:=result||jsonb_build_array(jsonb_build_object('binding',calendar_private.binding_json(b),'leaseToken',o.lease_token,'leaseExpiresAt',o.lease_until,'attempt',o.attempt));
+      result:=result||jsonb_build_array(jsonb_build_object('binding',calendar_private.binding_json(b),'leaseToken',claimed.lease_token,'leaseExpiresAt',claimed.lease_until,'attempt',claimed.attempt));
       UPDATE public.crm_google_calendar_status SET status=CASE WHEN status='removal_pending' THEN status ELSE 'syncing' END,updated_at=clock_timestamp() WHERE call_id=b.call_id;
     END IF;
   END LOOP;

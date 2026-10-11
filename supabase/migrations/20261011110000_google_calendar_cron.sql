@@ -16,7 +16,7 @@ SELECT cron.schedule('google-calendar-deliver', '* * * * *', $job$
     (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='google_calendar_cron_anon_key') AS anon_key,
     (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='google_calendar_cron_secret') AS cron_secret) keys
   WHERE keys.anon_key IS NOT NULL AND keys.cron_secret IS NOT NULL
-    AND EXISTS (SELECT 1 FROM calendar_private.connection WHERE status='connected' AND activated_at IS NOT NULL);
+    AND EXISTS (SELECT 1 FROM calendar_private.connection WHERE connection_status='connected' AND activated_at IS NOT NULL);
 $job$);
 SELECT cron.schedule('google-calendar-reconcile', '*/15 * * * *', $job$
   SELECT net.http_post(
@@ -28,6 +28,6 @@ SELECT cron.schedule('google-calendar-reconcile', '*/15 * * * *', $job$
     (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='google_calendar_cron_anon_key') AS anon_key,
     (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='google_calendar_cron_secret') AS cron_secret) keys
   WHERE keys.anon_key IS NOT NULL AND keys.cron_secret IS NOT NULL
-    AND EXISTS (SELECT 1 FROM calendar_private.connection WHERE status='connected' AND activated_at IS NOT NULL);
+    AND EXISTS (SELECT 1 FROM calendar_private.connection WHERE connection_status='connected' AND activated_at IS NOT NULL);
 $job$);
 COMMIT;

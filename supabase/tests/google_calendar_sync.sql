@@ -41,6 +41,7 @@ DO $$ DECLARE l public.crm_leads; c public.crm_activities; BEGIN
   UPDATE calendar_qa SET call_id=c.id;
 END $$;
 RESET ROLE;
+SELECT set_config('request.jwt.claims','{}',true);
 UPDATE public.profiles SET suspended=true WHERE user_id='ca000000-0000-4000-8000-000000000004';
 SELECT set_config('request.jwt.claims','{"sub":"ca000000-0000-4000-8000-000000000004","role":"authenticated"}',true);
 SET LOCAL ROLE authenticated;
@@ -90,4 +91,74 @@ SET LOCAL ROLE authenticated;
 DO $$ BEGIN
   IF EXISTS(SELECT 1 FROM public.crm_google_calendar_status) THEN RAISE EXCEPTION 'status leaked'; END IF;
 END $$;
+RESET ROLE;
+-- Queue CAS, lease expiry, safe identity rotation, and positive client RLS.
+SELECT set_config('request.jwt.claims','{}',true);
+DO $$ DECLARE jobs jsonb; q calendar_qa; snap jsonb; rotated jsonb; BEGIN
+  jobs:=public.google_calendar_claim(1,60);
+  UPDATE calendar_qa SET token=(jobs->0->>'leaseToken')::uuid,revision=(jobs->0->'binding'->>'revision')::bigint;
+  SELECT * INTO q FROM calendar_qa;
+  snap:=public.google_calendar_snapshot(q.binding_id,q.token);
+  IF snap->'call' IS DISTINCT FROM 'null'::jsonb THEN RAISE EXCEPTION 'deleted call snapshot not null'; END IF;
+  IF NOT public.google_calendar_renew(q.binding_id,q.token,60) THEN RAISE EXCEPTION 'valid lease cannot renew'; END IF;
+  IF public.google_calendar_rotate_event_id(q.binding_id,q.token,q.revision-1,q.event_id) IS NOT NULL THEN RAISE EXCEPTION 'stale rotation accepted'; END IF;
+  rotated:=public.google_calendar_rotate_event_id(q.binding_id,q.token,q.revision,q.event_id);
+  IF rotated IS NULL OR rotated->>'eventId'=q.event_id THEN RAISE EXCEPTION 'CAS rotation failed'; END IF;
+  IF public.google_calendar_rotate_event_id(q.binding_id,q.token,q.revision,q.event_id) IS NOT NULL THEN RAISE EXCEPTION 'rotation repeated'; END IF;
+  IF NOT public.google_calendar_ack(q.binding_id,q.token,(rotated->>'revision')::bigint,'removed',NULL,true) THEN RAISE EXCEPTION 'valid ACK rejected'; END IF;
+  IF EXISTS(SELECT 1 FROM calendar_private.outbox) THEN RAISE EXCEPTION 'ACK retained outbox'; END IF;
+END $$;
+-- OAuth one-use, expiry, credential CAS and disconnect racing an old refresh.
+DO $$ DECLARE actor uuid:='ca000000-0000-4000-8000-000000000001'; s jsonb; lease jsonb; scopes text[]:=ARRAY['https://www.googleapis.com/auth/calendar.events','https://www.googleapis.com/auth/calendar.calendarlist.readonly']; BEGIN
+  s:=public.google_calendar_oauth_start(actor,repeat('a',64),'https://www.wsltda.com');
+  PERFORM public.google_calendar_oauth_consume(repeat('a',64));
+  BEGIN PERFORM public.google_calendar_oauth_consume(repeat('a',64)); RAISE EXCEPTION 'OAuth replay accepted'; EXCEPTION WHEN SQLSTATE '22023' THEN NULL; END;
+  lease:=public.google_calendar_credential_claim(45);
+  IF public.google_calendar_credential_claim(45) IS NOT NULL THEN RAISE EXCEPTION 'double refresh lease'; END IF;
+  IF public.google_calendar_credential_save((lease->>'token')::uuid,0,actor,(s->>'stateId')::uuid,'qa-account','test-access','test-refresh',now()+interval '1 hour',scopes) THEN RAISE EXCEPTION 'stale credential save accepted'; END IF;
+  IF NOT public.google_calendar_credential_save((lease->>'token')::uuid,1,actor,(s->>'stateId')::uuid,'qa-account','test-access','test-refresh',now()+interval '1 hour',scopes) THEN RAISE EXCEPTION 'OAuth save failed'; END IF;
+  IF (public.google_calendar_credential_read((lease->>'token')::uuid)->>'revision')<>'2' THEN RAISE EXCEPTION 'credential revision wrong'; END IF;
+  PERFORM public.google_calendar_disconnect(actor,(lease->>'token')::uuid);
+  IF public.google_calendar_credential_save((lease->>'token')::uuid,2,NULL,NULL,'qa-account','late-access','late-refresh',now()+interval '1 hour',scopes) THEN RAISE EXCEPTION 'late refresh undid disconnect'; END IF;
+  IF EXISTS(SELECT 1 FROM vault.secrets) THEN RAISE EXCEPTION 'disconnect retained secrets'; END IF;
+  IF jsonb_array_length(public.google_calendar_claim(1,60))<>0 THEN RAISE EXCEPTION 'disconnected delivery enabled'; END IF;
+  PERFORM public.google_calendar_credential_release((lease->>'token')::uuid);
+  PERFORM public.google_calendar_oauth_start(actor,repeat('b',64),'https://www.wsltda.com');
+  UPDATE calendar_private.oauth_states SET expires_at=now()-interval '1 minute' WHERE state_hash=repeat('b',64);
+  BEGIN PERFORM public.google_calendar_oauth_consume(repeat('b',64)); RAISE EXCEPTION 'expired state accepted'; EXCEPTION WHEN SQLSTATE '22023' THEN NULL; END;
+  BEGIN PERFORM public.google_calendar_admin_status('ca000000-0000-4000-8000-000000000003'); RAISE EXCEPTION 'closer admin accepted'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+-- Initial activation cohort survives completion/deletion before the first page.
+UPDATE calendar_private.connection SET connection_status='connected',activated_at=NULL;
+CREATE TEMP TABLE calendar_seed_qa(call_id uuid,kind integer);
+SELECT set_config('request.jwt.claims','{"sub":"ca000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+DO $$ DECLARE q calendar_qa; a uuid; lid uuid; BEGIN
+  SELECT * INTO q FROM calendar_qa;
+  FOR n IN 1..3 LOOP
+    INSERT INTO public.crm_leads(name,email,phone,athlete_name,athlete_birth_date,athlete_position,pipeline_stage)
+    VALUES('QA seed '||n,'seed'||n||'@example.invalid','11999999999','Atleta QA','2012-01-01','Meia','repassado_closer') RETURNING id INTO lid;
+    INSERT INTO public.crm_activities(lead_id,user_id,activity_type,title,call_type,assigned_to,scheduled_at)
+    VALUES(lid,'ca000000-0000-4000-8000-000000000002','reuniao','QA seed '||n,'fechamento_closer','ca000000-0000-4000-8000-000000000003',now()+interval '5 days') RETURNING id INTO a;
+    INSERT INTO calendar_seed_qa VALUES(a,n);
+  END LOOP;
+END $$;
+SELECT public.google_calendar_activate('ca000000-0000-4000-8000-000000000001','test@group.calendar.google.com','QA','America/Sao_Paulo',3);
+DO $$ BEGIN IF (SELECT count(*) FROM calendar_private.activation_seeds)<>3 THEN RAISE EXCEPTION 'initial cohort not durable'; END IF; END $$;
+UPDATE public.crm_activities SET is_completed=true,completed_at=now(),outcome='venda_perdida' WHERE id=(SELECT call_id FROM calendar_seed_qa WHERE kind=1);
+DELETE FROM public.crm_activities WHERE id=(SELECT call_id FROM calendar_seed_qa WHERE kind=2);
+DO $$ DECLARE page jsonb; BEGIN
+  page:=public.google_calendar_scan_page('backfill',1);
+  IF (page->>'processed')::int<>1 OR (page->>'done')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'backfill did not resume'; END IF;
+  IF (SELECT count(*) FROM calendar_private.bindings WHERE call_id IN(SELECT call_id FROM calendar_seed_qa))<>3 THEN RAISE EXCEPTION 'cohort final states lost'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM calendar_private.bindings WHERE call_id=(SELECT call_id FROM calendar_seed_qa WHERE kind=1) AND completed) THEN RAISE EXCEPTION 'completion lost'; END IF;
+END $$;
+-- Revisions above JS's safe integer range remain decimal strings in public DTOs.
+UPDATE calendar_private.bindings SET revision=9007199254740993 WHERE call_id=(SELECT call_id FROM calendar_seed_qa WHERE kind=3);
+UPDATE public.crm_activities SET scheduled_at=scheduled_at+interval '1 minute' WHERE id=(SELECT call_id FROM calendar_seed_qa WHERE kind=3);
+DO $$ BEGIN
+  IF (SELECT desired_revision FROM public.crm_google_calendar_status WHERE call_id=(SELECT call_id FROM calendar_seed_qa WHERE kind=3))<>'9007199254740994' THEN RAISE EXCEPTION 'revision precision lost'; END IF;
+END $$;
+SELECT set_config('request.jwt.claims','{"sub":"ca000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN IF (SELECT count(*) FROM public.crm_google_calendar_status)<>2 THEN RAISE EXCEPTION 'approved closer cannot see call status'; END IF; END $$;
 RESET ROLE;
