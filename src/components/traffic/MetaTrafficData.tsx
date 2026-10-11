@@ -9,6 +9,7 @@ import type { MetaDailyRow } from '@/lib/meta-traffic'
 import { errorMessage } from '@/lib/sales'
 import { FormAnswers } from './MetaLeadApprovals'
 import { MetaEditButton } from './MetaEditDialog'
+import { MetaPendingImports } from './MetaPendingImports'
 
 function Pagination({ page, count, busy, change }: { page: number; count: number; busy: boolean; change: (page: number) => void }) {
   return <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Página {page + 1} · {count} registros</p><div className="flex gap-2"><Button size="sm" variant="outline" disabled={!page || busy} onClick={() => change(page - 1)}>Anterior</Button><Button size="sm" variant="outline" disabled={busy || (page + 1) * 50 >= count} onClick={() => change(page + 1)}>Próxima</Button></div></div>
@@ -57,17 +58,6 @@ export function MetaTrafficData({ canEdit, onSaved }: { canEdit: boolean; onSave
   </div>
 }
 
-type EditableBatch = { id: string; filename: string; status: string; updated_at: string; rows: object[] }
-function EditableImport({ batch, kind, canEdit, onSaved }: { batch: EditableBatch; kind: 'leads' | 'metrics'; canEdit: boolean; onSaved: () => Promise<unknown> }) {
-  const [expanded, setExpanded] = useState(false)
-  const [page, setPage] = useState(0)
-  return <details className="rounded-lg border p-3" onToggle={event => setExpanded(event.currentTarget.open)}><summary className="cursor-pointer break-words text-sm">{kind === 'leads' ? 'Leads' : 'Métricas'} · {batch.filename} · {batch.status} · {batch.rows.length} linhas</summary>{expanded && <div className="mt-3 space-y-3"><div className="max-h-96 space-y-2 overflow-y-auto">{batch.rows.slice(page * 50, page * 50 + 50).map((row, at) => { const index = page * 50 + at; const values = { ...row } as Record<string, unknown>; return <div key={index} className="flex items-center justify-between gap-3 rounded-md bg-muted/30 p-3"><p className="break-words text-sm">Linha {index + 1} · {String(values.full_name || values.campaign_name || 'Sem nome')}</p>{canEdit && <MetaEditButton target={{ kind, id: batch.id, batchId: batch.id, rowIndex: index, updatedAt: batch.updated_at, values, historical: batch.status === 'aprovado', title: 'Linha ' + (index + 1) + ' · ' + batch.filename }} onSaved={onSaved} />}</div> })}</div><Pagination page={page} count={batch.rows.length} busy={false} change={setPage} /></div>}</details>
-}
-export function MetaImportEdits({ leadBatches, metricsBatches, canEdit, onSaved }: { leadBatches: EditableBatch[]; metricsBatches: EditableBatch[]; canEdit: boolean; onSaved: () => Promise<unknown> }) {
-  const [page, setPage] = useState(0)
-  const batches = [...leadBatches.map(batch => ({ batch, kind: 'leads' as const })), ...metricsBatches.map(batch => ({ batch, kind: 'metrics' as const }))].sort((a, b) => b.batch.updated_at.localeCompare(a.batch.updated_at))
-  return <section className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6"><h2 className="text-lg font-medium">Linhas de importação · todas as situações</h2><p className="text-sm text-muted-foreground">Corrija as linhas pendentes antes da aprovação. Em lotes já aprovados, esta edição corrige somente o histórico; os registros publicados são editados acima.</p>
-    {batches.slice(page * 50, page * 50 + 50).map(({ batch, kind }) => <EditableImport key={batch.id} batch={batch} kind={kind} canEdit={canEdit} onSaved={onSaved} />)}
-    <Pagination page={page} count={batches.length} busy={false} change={setPage} />
-  </section>
+export function MetaImportEdits({ active, canEdit, onSaved }: { active: boolean; canEdit: boolean; onSaved: () => Promise<unknown> }) {
+  return <MetaPendingImports active={active} canReview={canEdit} onReviewed={onSaved} history />
 }

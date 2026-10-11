@@ -11,6 +11,11 @@ import type { LeadImportRow, LeadImportResult } from "./meta-lead-import";
 // migration. This is the SAME authenticated Supabase client and auth session.
 type FunctionDef<Args> = { Args: Args; Returns: Json };
 type ExtraFunctions = {
+  meta_traffic_review_list: FunctionDef<{ p_kind: 'metrics' | 'leads' | null; p_status: string | null; p_offset: number; p_limit: number }>;
+  meta_capture_review_part: FunctionDef<{ p_id: string; p_version: number; p_offset: number; p_limit: number }>;
+  meta_capture_review_decide: FunctionDef<{ p_id: string; p_version: number; p_action: 'aprovar' | 'rejeitar'; p_note: string }>;
+  meta_capture_review_edit: FunctionDef<{ p_id: string; p_version: number; p_row_no: number; p_patch: Json; p_reason: string }>;
+  meta_capture_review_resolve: FunctionDef<{ p_id: string; p_version: number; p_row_no: number; p_action: 'keep_published' | 'use_incoming' | 'use_edited' | 'remove'; p_payload: Json; p_reason: string }>;
   arena_classify_legacy: FunctionDef<{
     p_audit_id: string;
     p_approved: boolean;
