@@ -48,3 +48,12 @@ verify_jwt = true
 
 [functions.meta-lead-webhook]
 verify_jwt = false
+
+[functions.google-calendar-manage]
+verify_jwt = true
+
+[functions.google-calendar-oauth-callback]
+verify_jwt = false
+
+[functions.google-calendar-sync]
+verify_jwt = true

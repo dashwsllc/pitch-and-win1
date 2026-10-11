@@ -151,3 +151,85 @@ test('credentials: OAuth rejects missing refresh and incomplete scope grants wit
   const {exports:{exchangeOAuthCode}}=await loadModule(clientPath,{env,fetch:async()=>response({access_token:'TOKEN_SENTINELA',expires_in:3600,scope:'https://www.googleapis.com/auth/calendar.events'})})
   await assert.rejects(exchangeOAuthCode('code'),e=>e.code==='reconnect_required'&&!String(e).includes('TOKEN_SENTINELA'))
 })
+
+const runtimeEnv={SUPABASE_URL:'https://test-project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'SERVICE_SENTINELA',GOOGLE_CALENDAR_DASHBOARD_ORIGIN:'https://www.wsltda.com',GOOGLE_CALENDAR_CLIENT_ID:'client',GOOGLE_CALENDAR_CLIENT_SECRET:'SECRET_SENTINELA',GOOGLE_CALENDAR_REDIRECT_URI:'https://edge.example/callback',GOOGLE_CALENDAR_CRON_SECRET:'cron-secret-test'}
+const manageRequest=(body,token='user',origin='https://www.wsltda.com')=>new Request('https://edge.example/manage',{method:'POST',headers:{authorization:'Bearer '+token,origin,'content-type':'application/json'},body:JSON.stringify(body)})
+function fakeAdmin() {
+  const states=new Map(); let allowed=true;let paused=false;let writes=0
+  const status={configured:true,connection:'connected',calendar:{id:'shared',name:'agenda - closers',accessRole:'writer',timeZone:'America/Sao_Paulo'},destinationLocked:true,activatedAt:null,lastRunAt:null,pendingCount:0,errorCount:0,backfillPending:false,errorCode:null}
+  return {states,get paused(){return paused},get writes(){return writes},set allowed(v){allowed=v},
+    auth:{getUser:async token=>token==='user'?{data:{user:{id:'actor'}},error:null}:{data:{user:null},error:{}}},
+    rpc:async(name,args)=>{
+      if(name==='google_calendar_admin_status')return allowed?{data:status,error:null}:{data:null,error:{code:'42501'}}
+      if(name==='google_calendar_oauth_start'){states.set(args.p_state_hash,{stateId:'state-id',actorId:'actor',origin:'https://www.wsltda.com'});return{data:{stateId:'state-id'},error:null}}
+      if(name==='google_calendar_oauth_consume'){const s=states.get(args.p_state_hash);states.delete(args.p_state_hash);return s?{data:s,error:null}:{data:null,error:{code:'22023'}}}
+      if(name==='google_calendar_credential_claim')return{data:{token:'lease',revision:'1'},error:null}
+      if(name==='google_calendar_credential_read')return{data:credential(),error:null}
+      if(name==='google_calendar_credential_release')return{data:null,error:null}
+      if(name==='google_calendar_credential_save'){writes++;return{data:true,error:null}}
+      if(name==='google_calendar_disconnect'){paused=true;return{data:{...status,connection:'disconnected'},error:null}}
+      if(name==='google_calendar_activate')return{data:null,error:{code:'PT409'}}
+      throw Error('Unexpected RPC '+name)
+    }
+  }
+}
+test('auth/manage: valid JWT plus active approved executive gate, strict request and trusted origin',async()=>{
+  const admin=fakeAdmin()
+  const {handler}=await loadModule('supabase/functions/google-calendar-manage/index.ts',{admin,env:runtimeEnv})
+  assert.equal((await handler(manageRequest({action:'status'},'fake'))).status,401)
+  admin.allowed=false;assert.equal((await handler(manageRequest({action:'status'}))).status,403);admin.allowed=true
+  assert.equal((await handler(manageRequest({action:'status'},'user','https://evil.example'))).status,403)
+  assert.equal((await handler(manageRequest({action:'status',token:'TOKEN_SENTINELA'}))).status,400)
+  const r=await handler(manageRequest({action:'start_oauth'}));assert.equal(r.status,200)
+  const u=new URL((await r.json()).authorizationUrl)
+  assert.equal(u.searchParams.get('access_type'),'offline');assert.equal(u.searchParams.get('prompt'),'consent')
+  assert.ok(!admin.states.has(u.searchParams.get('state')));assert.equal(admin.states.size,1)
+})
+test('callback: one-use state including denied consent; permission revoked is consumed; redirects cannot leak tokens',async()=>{
+  const admin=fakeAdmin()
+  const {exports:a}=await loadModule('supabase/functions/_shared/google-calendar-auth.ts',{admin,env:runtimeEnv})
+  const state=await a.createOAuthState();admin.states.set(state.hash,{stateId:'state',actorId:'actor',origin:'https://www.wsltda.com'})
+  const {handler}=await loadModule('supabase/functions/google-calendar-oauth-callback/index.ts',{admin,env:runtimeEnv})
+  const denied=new Request('https://edge.example/callback?state='+state.raw+'&error=access_denied')
+  const r=await handler(denied);assert.equal(r.status,303);assert.equal(new URL(r.headers.get('Location')).origin,'https://www.wsltda.com')
+  assert.equal((await handler(denied)).status,400)
+  const s=await a.createOAuthState();admin.states.set(s.hash,{stateId:'state',actorId:'actor',origin:'https://www.wsltda.com'})
+  admin.allowed=false;assert.equal((await handler(new Request('https://edge.example/callback?state='+s.raw+'&code=CODE_SENTINELA'))).status,403)
+  assert.equal(admin.states.size,0);assert.equal(admin.writes,0)
+  assert.equal((await handler(new Request('https://edge.example/callback?code=x'))).status,400)
+})
+test('manage: activate propagates destination lock; disconnect pauses before best-effort revocation',async()=>{
+  const admin=fakeAdmin();let revokedAfterPause=false
+  const {handler}=await loadModule('supabase/functions/google-calendar-manage/index.ts',{admin,env:runtimeEnv,fetch:async u=>{
+    if(String(u).includes('revoke')){revokedAfterPause=admin.paused;return response({},500)}
+    return response({id:'shared',summary:'agenda - closers',accessRole:'owner',timeZone:'America/Sao_Paulo'})
+  }})
+  assert.equal((await handler(manageRequest({action:'activate',calendarId:'shared'}))).status,409)
+  const r=await handler(manageRequest({action:'disconnect'}));assert.equal(r.status,200);assert.ok(revokedAfterPause)
+  assert.ok(!JSON.stringify(await r.json()).includes('SENTINELA'))
+})
+test('callback: fresh OAuth without refresh leaves previous credential unchanged',async()=>{
+  const admin=fakeAdmin()
+  const {exports:a}=await loadModule('supabase/functions/_shared/google-calendar-auth.ts',{admin,env:runtimeEnv})
+  const s=await a.createOAuthState();admin.states.set(s.hash,{stateId:'state',actorId:'actor',origin:'https://www.wsltda.com'})
+  const {handler}=await loadModule('supabase/functions/google-calendar-oauth-callback/index.ts',{admin,env:runtimeEnv,fetch:async()=>response({access_token:'TOKEN_SENTINELA',expires_in:3600,scope:credential().scopes.join(' ')})})
+  const r=await handler(new Request('https://edge.example/callback?state='+s.raw+'&code=CODE_SENTINELA'))
+  assert.equal(r.status,303);assert.match(r.headers.get('Location'),/google_calendar=error/);assert.equal(admin.writes,0)
+})
+
+test('callback: reconnect validates the locked destination before accepting another Google account', async()=>{
+  for (const access of [true,false]) {
+    const admin=fakeAdmin(); const {exports:a}=await loadModule('supabase/functions/_shared/google-calendar-auth.ts',{admin,env:runtimeEnv})
+    const s=await a.createOAuthState();admin.states.set(s.hash,{stateId:'state',actorId:'actor',origin:'https://www.wsltda.com'})
+    let destinationChecked=false
+    const {handler}=await loadModule('supabase/functions/google-calendar-oauth-callback/index.ts',{admin,env:runtimeEnv,fetch:async u=>{
+      if(String(u).includes('/token'))return response({access_token:'TOKEN_SENTINELA',refresh_token:'FRESH_SENTINELA',expires_in:3600,scope:credential().scopes.join(' ')})
+      if(String(u).endsWith('/primary'))return response({id:'another-account@example.invalid',accessRole:'owner'})
+      destinationChecked=true; return access?response({id:'shared',accessRole:'writer'}):response({},404)
+    }})
+    const r=await handler(new Request('https://edge.example/callback?state='+s.raw+'&code=CODE_SENTINELA'))
+    assert.ok(destinationChecked);assert.equal(admin.writes,access?1:0)
+    assert.match(r.headers.get('Location'),access?/google_calendar=connected/:/google_calendar=error/)
+    assert.ok(!r.headers.get('Location').includes('SENTINELA'))
+  }
+})
