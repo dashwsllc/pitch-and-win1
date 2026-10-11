@@ -2,7 +2,7 @@
 
 Data: 2026-10-11
 
-Estado: desenho conversacional e especificação escrita aprovados pelo usuário em 2026-10-11; plano escrito aguardando revisão e escolha do modo de execução.
+Estado: desenho, especificação e plano aprovados; execução nesta sessão autorizada pelo pedido “continue de onde parou” em 2026-10-11.
 
 Projeto: `pitch-and-win1`.
 
@@ -11,6 +11,8 @@ Projeto: `pitch-and-win1`.
 Sincronizar as calls encaminhadas à fila Closer do CRM com **uma única agenda Google compartilhada por todos os closers**. O usuário já possui essa agenda, criada pela conta administradora da empresa; ela será selecionada como destino da integração. O CRM controla o horário, o responsável e o ciclo de vida da call. O usuário aprovou a sincronização CRM → Google, atualização das remarcações, remoção dos cancelamentos e devoluções ao SDR, preservação das calls concluídas e inclusão das calls futuras existentes.
 
 A duração padrão aprovada é 30 minutos, com fuso `America/Sao_Paulo`. A configuração conecta a conta Google administradora da empresa e permite escolher a agenda de closers existente. O usuário confirmou que essa agenda ainda não contém calls; os compromissos passarão a ser publicados pela integração quando ela for ativada. Não é necessário importar ou vincular calls cadastradas manualmente no Google nesta entrega. O usuário pediu atenção especial à ausência de duplicidades e à correção permanente da sincronização.
+
+Destino informado pelo usuário: agenda **“agenda - closers”**, da conta Google **`admvoxenai@gmail.com`**. Na ativação, conectar essa conta e selecionar a agenda existente pelo ID canônico retornado pelo Google, validando permissão de edição no servidor. O nome da agenda e o email identificam o destino pretendido; não substituem o ID da agenda nem a autorização OAuth. Se houver agendas com nomes iguais, exibir os IDs para permitir a seleção correta.
 
 O desenho usa entrega em segundo plano, identidade persistente por call, controle de concorrência, novas tentativas e reconciliação. Supabase e Google não participam de uma mesma transação: durante uma indisponibilidade pode existir atraso, que deve aparecer como pendência ou erro. O sistema só apresenta uma call como sincronizada quando a revisão vigente do CRM tiver sido confirmada no Google. Não promete atualização instantânea durante falhas externas.
 
@@ -232,7 +234,7 @@ A entrega inclui migration reversível na estrutura, Edge Functions, UI, testes 
 
 O guia deve explicar acesso de edição da conta conectada, compartilhamento com os closers, criação do cliente OAuth, callback, segredos, seleção da agenda, estado das calls, retry, reconexão e limites de sincronização CRM → Google. Segredos reais não entram no repositório.
 
-Usar a agenda comercial já criada pela conta administradora na ativação final. Os eventos anteriores sem vínculo comprovado com a integração não serão alterados ou removidos. Não associar uma call a um evento anterior apenas pela semelhança de nome ou horário.
+Usar a agenda comercial **“agenda - closers”**, criada pela conta **`admvoxenai@gmail.com`**, na ativação final, após confirmar seu ID canônico e acesso de edição. Os eventos anteriores sem vínculo comprovado com a integração não serão alterados ou removidos. Não associar uma call a um evento anterior apenas pela semelhança de nome ou horário.
 
 Rollback desativa cron e conexão para interromper escritas, mantendo vínculos para recuperação; não remove dados da agenda automaticamente. Remoção física de tabelas/segredos exige confirmar que não há trabalhos ou eventos pendentes de limpeza.
 
@@ -250,4 +252,4 @@ As decisões de produto acima são propostas deste projeto. Os contratos da API 
 
 ## 12. Próxima etapa do workflow
 
-O usuário aprovou o fluxo apresentado em conversa e esta especificação escrita em 2026-10-11, solicitando avançar o mais rápido possível. O [plano de implementação](../plans/2026-10-11-closer-calendar-sync.md) foi escrito e revisado com `writing-plans`. Conforme o AGENTS.md do workspace e essa skill, a implementação de produto começa após a revisão do plano escrito pelo usuário e seleção do modo de execução.
+O usuário aprovou o fluxo, a especificação e o [plano de implementação](../plans/2026-10-11-closer-calendar-sync.md), informando o destino e pedindo “continue de onde parou” após a proposta de execução nesta sessão. Executar com `executing-plans`, testes e revisão independente final, sem novas confirmações entre tarefas. A autorização Google e a ativação externa serão verificadas com os artefatos prontos.
