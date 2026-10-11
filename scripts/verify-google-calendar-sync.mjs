@@ -14,7 +14,7 @@ export async function loadModule(path, { fetch = () => { throw Error('Unexpected
     console: { error() {}, log() {} }, __admin: admin, __imports: imports,
     Deno: { env: { get: key => env[key] }, serve: value => { handler = value } } })
   const cache = new Map()
-  async function moduleFor(filename) {
+  function moduleFor(filename) {
     if (cache.has(filename)) return cache.get(filename)
     const source = filename.startsWith('https:')
       ? 'export function createClient() { return globalThis.__admin }'
@@ -23,12 +23,13 @@ export async function loadModule(path, { fetch = () => { throw Error('Unexpected
       } }).outputText
     const module = new vm.SourceTextModule(source, { context, identifier: filename })
     cache.set(filename, module)
-    await module.link((specifier, parent) => moduleFor(specifier.startsWith('https:') ? specifier : resolve(dirname(parent.identifier), specifier)))
     return module
   }
-  const module = await moduleFor(resolve(root, path))
+  const module = moduleFor(resolve(root, path))
+  const linker = (specifier, parent) => moduleFor(specifier.startsWith('https:') ? specifier : resolve(dirname(parent.identifier), specifier))
+  await module.link(linker)
   await module.evaluate()
-  return { exports: module.namespace, handler }
+  return { exports: module.namespace, handler, dependency: async path => { const dep = moduleFor(resolve(root,path)); if(dep.status === 'unlinked') await dep.link(linker); if(dep.status !== 'evaluated') await dep.evaluate(); return dep.namespace } }
 }
 
 const projectionPath = 'supabase/functions/_shared/google-calendar-projection.ts'
@@ -231,5 +232,129 @@ test('callback: reconnect validates the locked destination before accepting anot
     assert.ok(destinationChecked);assert.equal(admin.writes,access?1:0)
     assert.match(r.headers.get('Location'),access?/google_calendar=connected/:/google_calendar=error/)
     assert.ok(!r.headers.get('Location').includes('SENTINELA'))
+  }
+})
+const workerPath='supabase/functions/_shared/google-calendar-worker.ts'
+async function workerFixture() {
+  const loaded=await loadModule(workerPath), worker=loaded.exports
+  const {GoogleCalendarClient}=await loaded.dependency(clientPath)
+  const x=input(), events=new Map(), tombstones=new Set(), writes=[]
+  let leased=false,paused=false,lost=false,attempt=0,confirmed=false,removed=false,ackFailure=false,insertTimeout=false,access=true,onInsert=null,onRead=null,onPatch=null,onDelete=null
+  const errors=[];const log=[]
+  const store={
+    claim:async()=>{if(leased||confirmed||paused)return[];leased=true;attempt++;return[{binding:structuredClone(x.binding),leaseToken:'lease',leaseExpiresAt:'2030-01-01',attempt}]},
+    snapshot:async()=>leased&&!paused&&!lost?{...structuredClone(x),connectionRevision:'1'}:null,
+    renew:async()=>leased&&!paused&&!lost,
+    ack:async(_id,_token,revision,hash,etag,isRemoved)=>{if(ackFailure){ackFailure=false;throw Error('database outage')};if(!leased||paused||lost)return false;leased=false;if(revision!==x.binding.revision)return false;confirmed=true;removed=isRemoved;x.binding.confirmedRevision=revision;x.binding.confirmedHash=hash;x.binding.etag=etag;return true},
+    fail:async(_id,_token,revision,code,retryAt)=>{errors.push({revision,code,retryAt});leased=false},
+    setConnectionError:async()=>{paused=true},
+    rotateEventId:async(_id,_token,revision,oldId)=>{assert.ok(leased);assert.equal(revision,x.binding.revision);assert.equal(oldId,x.binding.eventId);log.push('rotate');x.binding.eventId='40000000000040008000000000000001';x.binding.generation++;x.binding.revision=String(BigInt(x.binding.revision)+1n);return structuredClone(x.binding)},
+    scanPage:async mode=>({processed:0,done:true}),recordRun:async()=>{},
+  }
+  const client=new GoogleCalendarClient({tokenProvider:async()=>credential(),fetchImpl:async(u,o)=>{
+    const url=new URL(u),method=o.method??'GET',id=decodeURIComponent(url.pathname.split('/').at(-1))
+    if(url.pathname.includes('calendarList/'))return access?response({id:'shared@example',accessRole:'writer'}):response({},404)
+    if(!access)return response({},404)
+    if(method==='GET') {if(onRead){const fn=onRead;onRead=null;fn()};return tombstones.has(id)?response({},410):events.has(id)?response(events.get(id)):response({},404)}
+    writes.push({method,id});log.push(method)
+    if(method==='POST') {
+      const body=JSON.parse(o.body)
+      if(events.has(body.id)||tombstones.has(body.id))return response({},409)
+      const event={...body,etag:'v1',status:'confirmed'};events.set(body.id,event)
+      if(onInsert){const fn=onInsert;onInsert=null;fn()}
+      if(insertTimeout){insertTimeout=false;throw Error('response lost')}
+      return response(event)
+    }
+    const event=events.get(id)
+    if(method==='PATCH') {
+      if(onPatch){const fn=onPatch;onPatch=null;fn();return response({},412)}
+      if(!event||tombstones.has(id))return response({},410)
+      assert.equal(new Headers(o.headers).get('If-Match'),event.etag)
+      const next={...event,...JSON.parse(o.body),etag:'v'+writes.length};events.set(id,next);return response(next)
+    }
+    if(onDelete){const fn=onDelete;onDelete=null;fn();return response({},412)}
+    if(!event||tombstones.has(id))return response({},410)
+    assert.equal(new Headers(o.headers).get('If-Match'),event.etag);events.delete(id);tombstones.add(id);return new Response(null,{status:204})
+  }})
+  const deps={store,client,now:()=>Date.parse('2026-10-13T12:00:00Z'),random:()=>0.5}
+  return {worker,x,events,tombstones,writes,errors,log,deps,async deliver(){const jobs=await store.claim();if(jobs[0])await worker.deliverJob(jobs[0],deps)},edit(fn){fn(x);x.binding.revision=String(BigInt(x.binding.revision)+1n);confirmed=false},get synced(){return confirmed},get removed(){return removed},get paused(){return paused},set lost(v){lost=v},set access(v){access=v},set ackFailure(v){ackFailure=v},set insertTimeout(v){insertTimeout=v},set onInsert(fn){onInsert=fn},set onRead(fn){onRead=fn},set onPatch(fn){onPatch=fn},set onDelete(fn){onDelete=fn}}
+}
+test('worker: lost insert response and failed local ACK retry the persisted identity without duplication',async()=>{
+  for(const failure of ['insertTimeout','ackFailure']){
+    const f=await workerFixture(),id=f.x.binding.eventId;f[failure]=true
+    await f.deliver();assert.equal(f.synced,false);assert.equal(f.events.size,1);assert.equal(f.x.binding.eventId,id)
+    await f.deliver();assert.equal(f.synced,true);assert.equal(f.events.size,1);assert.equal(f.writes.filter(w=>w.method==='POST').length,1)
+    assert.equal(f.events.get(id).start.dateTime,'2026-10-12T02:50:00.000Z') // Passing the call time does not remove it.
+  }
+})
+test('worker: concurrent claims, cancellation during insert and old revisions cannot falsely confirm',async()=>{
+  const f=await workerFixture();f.onInsert=()=>f.edit(x=>{x.call.cancelledAt='2026-10-13T12:00:00Z'})
+  await Promise.all([f.deliver(),f.deliver()]);assert.equal(f.events.size,1);assert.equal(f.synced,false)
+  await f.deliver();assert.equal(f.events.size,0);assert.ok(f.removed);assert.ok(f.synced)
+  const c=await workerFixture();c.edit(x=>{x.call.isCompleted=true;x.call.outcome='venda_concluida';x.lead.pipelineStage='fechado_ganho'})
+  await c.deliver();assert.match([...c.events.values()][0].description,/Conclu/);assert.ok(c.synced)
+})
+test('worker: lease loss and foreign ownership cause no writes; inaccessible calendar cannot confirm removal',async()=>{
+  const lost=await workerFixture();lost.onRead=()=>{lost.lost=true};await lost.deliver();assert.equal(lost.writes.length,0);assert.equal(lost.synced,false)
+  const foreign=await workerFixture();foreign.events.set(foreign.x.binding.eventId,{id:foreign.x.binding.eventId,etag:'foreign',summary:'Evento de outra integração',extendedProperties:{private:{project_id:'other'}}})
+  await foreign.deliver();assert.equal(foreign.writes.length,0);assert.equal(foreign.errors.at(-1).code,'ownership_mismatch')
+  foreign.edit(x=>{x.call=null});await foreign.deliver();assert.equal(foreign.writes.length,0);assert.equal(foreign.synced,false)
+  const denied=await workerFixture();denied.edit(x=>{x.call=null});denied.access=false;await denied.deliver();assert.equal(denied.synced,false);assert.ok(denied.paused)
+})
+test('worker: 412 re-reads CRM and Google, preserves manual fields and skips matching events',async()=>{
+  const f=await workerFixture();await f.deliver();const id=f.x.binding.eventId
+  f.events.get(id).attendees=[{email:'manual@example'}];f.events.get(id).reminders={useDefault:false}
+  f.edit(x=>{x.closerName='Ana'});f.onPatch=()=>{f.edit(x=>{x.closerName='Joana'})}
+  await f.deliver();assert.equal(f.events.get(id).summary,'Call de fechamento — Lead Teste | Joana');assert.equal(f.events.get(id).attendees[0].email,'manual@example');assert.equal(f.events.get(id).reminders.useDefault,false);assert.ok(f.synced)
+  const count=f.writes.length;f.edit(()=>{});await f.deliver();assert.equal(f.writes.length,count);assert.ok(f.synced)
+  f.edit(x=>{x.call.cancelledAt='2026-10-13T12:00:00Z'});f.onDelete=()=>{f.edit(x=>{x.call.cancelledAt=null})};await f.deliver();assert.equal(f.events.size,1);assert.equal(f.removed,false);assert.ok(f.synced)
+})
+test('worker: proven tombstone rotates persistently before insert, removal 410 succeeds',async()=>{
+  const f=await workerFixture();await f.deliver();const old=f.x.binding.eventId;f.events.delete(old);f.tombstones.add(old);f.edit(()=>{})
+  await f.deliver();assert.equal(f.events.size,1);assert.notEqual(f.x.binding.eventId,old);assert.ok(f.log.indexOf('rotate')<f.log.lastIndexOf('POST'));assert.ok(f.synced)
+  f.edit(x=>{x.call=null});f.events.clear();f.tombstones.add(f.x.binding.eventId);await f.deliver();assert.ok(f.removed);assert.ok(f.synced)
+})
+test('worker: retries use bounded exponential jitter respecting Retry-After; scans and jobs are bounded',async()=>{
+  const {exports:w}=await loadModule(workerPath),now=Date.now()
+  assert.ok(Date.parse(w.nextRetryAt(1,now,0,null))>=now+30000)
+  assert.ok(Date.parse(w.nextRetryAt(100,now,1,null))<=now+21600000)
+  assert.ok(Date.parse(w.nextRetryAt(1,now,0,120000))>=now+120000)
+  let claims=0,scans=[];const f=await workerFixture()
+  f.deps.store.scanPage=async(mode,limit)=>{scans.push({mode,limit});return{processed:500,done:false}}
+  f.deps.store.claim=async()=>{claims++;return[]}
+  const result=await f.worker.runCalendarSync('reconcile',f.deps);assert.equal(claims,1);assert.equal(scans.length,2);assert.equal(scans[0].limit,500);assert.equal(result.pending,true)
+})
+test('sync: JWT without cron secret and arbitrary actions do not reach the database or Google',async()=>{
+  let touched=0;const admin={rpc:async()=>{touched++;throw Error('Must not execute')}}
+  const {handler}=await loadModule('supabase/functions/google-calendar-sync/index.ts',{admin,env:runtimeEnv,fetch:async()=>{touched++;throw Error('Must not execute')}})
+  const request=(secret,body)=>new Request('https://edge.example/sync',{method:'POST',headers:{authorization:'Bearer jwt','content-type':'application/json',...(secret?{'x-cron-secret':secret}:{})},body:JSON.stringify(body)})
+  assert.equal((await handler(request(null,{mode:'deliver'}))).status,401);assert.equal((await handler(request('wrong',{mode:'deliver'}))).status,401)
+  assert.equal((await handler(request('cron-secret-test',{mode:'arbitrary'}))).status,400);assert.equal(touched,0)
+})
+test('client: run deadline refuses HTTP after credential refresh consumes the budget',async()=>{
+  let time=0,requests=0
+  const {exports:{GoogleCalendarClient}}=await loadModule(clientPath)
+  const client=new GoogleCalendarClient({now:()=>time,deadlineAt:45000,tokenProvider:async()=>{time=45001;return credential()},fetchImpl:async()=>{requests++;return response({id:'shared',accessRole:'writer'})}})
+  await assert.rejects(client.getCalendar('shared'),e=>e.code==='run_budget')
+  assert.equal(requests,0)
+})
+
+test('client: every 401 retry revalidates the write lease after refreshing its credential',async()=>{
+  let requests=0,guards=0,valid=true
+  const {exports:{GoogleCalendarClient}}=await loadModule(clientPath)
+  const client=new GoogleCalendarClient({tokenProvider:async force=>{if(force)valid=false;return credential()},fetchImpl:async()=>{requests++;return response({},401)}})
+  await assert.rejects(client.insertEvent('shared','id',{},async()=>{guards++;if(!valid)throw Error('lease lost')}),/lease lost/)
+  assert.equal(requests,1);assert.equal(guards,2)
+})
+
+test('worker: cancelled ID-only tombstone rotates, owned restorable tombstone keeps its ID',async()=>{
+  for(const restorable of [true,false]){
+    const f=await workerFixture();await f.deliver();const old=f.x.binding.eventId
+    const event=f.events.get(old)
+    f.events.set(old,restorable?{...event,status:'cancelled'}:{id:old,status:'cancelled'})
+    f.edit(()=>{});await f.deliver()
+    const live=[...f.events.values()].filter(e=>e.status!=='cancelled')
+    assert.equal(live.length,1);assert.ok(f.synced)
+    assert.equal(f.x.binding.eventId===old,restorable)
   }
 })

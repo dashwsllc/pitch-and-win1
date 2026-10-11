@@ -16,9 +16,9 @@ function retryAfter(value: string | null, now: number): number | null {
   const date = Date.parse(value)
   return Number.isFinite(date) ? Math.max(0, date - now) : null
 }
-async function http(fetchImpl: typeof fetch, url: string, options: RequestInit): Promise<{ response: Response; body: Json }> {
+async function http(fetchImpl: typeof fetch, url: string, options: RequestInit, timeoutMs = 8000): Promise<{ response: Response; body: Json }> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 8000)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetchImpl(url, { ...options, signal: controller.signal })
     // Read inside the timeout as a provider can stall the body after sending headers.
@@ -47,23 +47,27 @@ function choice(body: Json): CalendarChoice {
   return { id: body.id, name: typeof body.summary === 'string' ? body.summary : body.id, accessRole: body.accessRole as 'writer' | 'owner', timeZone: typeof body.timeZone === 'string' ? body.timeZone : null }
 }
 function eventResult(body: Json): GoogleEvent {
-  if (typeof body.id !== 'string' || typeof body.etag !== 'string') throw new GoogleError(502,'google_unavailable',null,true)
+  if (typeof body.id !== 'string' || (body.status !== 'cancelled' && typeof body.etag !== 'string')) throw new GoogleError(502,'google_unavailable',null,true)
   return body as GoogleEvent
 }
 export class GoogleCalendarClient {
   private tokenProvider: TokenProvider
   private fetchImpl: typeof fetch
   private now: () => number
-  constructor(options: { tokenProvider: TokenProvider; fetchImpl?: typeof fetch; now?: () => number }) {
-    this.tokenProvider = options.tokenProvider; this.fetchImpl = options.fetchImpl ?? fetch; this.now = options.now ?? Date.now
+  private deadlineAt: number
+  constructor(options: { tokenProvider: TokenProvider; fetchImpl?: typeof fetch; now?: () => number; deadlineAt?: number }) {
+    this.tokenProvider = options.tokenProvider; this.fetchImpl = options.fetchImpl ?? fetch; this.now = options.now ?? Date.now; this.deadlineAt = options.deadlineAt ?? Infinity
   }
-  private async request(path: string, options: RequestInit = {}): Promise<Json> {
+  private async request(path: string, options: RequestInit = {}, beforeWrite?: () => Promise<void>): Promise<Json> {
     for (let attempt = 0; attempt < 2; attempt++) {
+      if (this.now() >= this.deadlineAt - 2000) throw new GoogleError(0, 'run_budget', null, true)
       const token = await this.tokenProvider(attempt === 1)
+      if (this.now() >= this.deadlineAt - 2000) throw new GoogleError(0, 'run_budget', null, true)
       if (!token.accessToken) throw new GoogleError(401,'reconnect_required')
       const headers = new Headers(options.headers); headers.set('Authorization', 'Bearer ' + token.accessToken)
       if (options.body) headers.set('Content-Type','application/json')
-      const { response, body } = await http(this.fetchImpl, API + path, { ...options, headers })
+      if (beforeWrite) await beforeWrite()
+      const { response, body } = await http(this.fetchImpl, API + path, { ...options, headers }, Math.min(8000, this.deadlineAt - this.now() - 2000))
       if (response.ok) return body
       if (response.status === 401 && attempt === 0) continue
       throw providerError(response, body, this.now())
@@ -98,22 +102,22 @@ export class GoogleCalendarClient {
       throw error
     }
   }
-  async insertEvent(calendarId: string, eventId: string, event: ManagedEvent): Promise<GoogleEvent> {
+  async insertEvent(calendarId: string, eventId: string, event: ManagedEvent, beforeWrite?: () => Promise<void>): Promise<GoogleEvent> {
     return eventResult(await this.request('/calendars/' + segment(calendarId) + '/events?sendUpdates=none', {
       method:'POST', body:JSON.stringify({ ...event, id:eventId, reminders:{useDefault:true} }),
-    }))
+    }, beforeWrite))
   }
-  async patchEvent(calendarId: string, eventId: string, event: ManagedEvent, etag: string, current?: GoogleEvent): Promise<GoogleEvent> {
+  async patchEvent(calendarId: string, eventId: string, event: ManagedEvent, etag: string, current?: GoogleEvent, beforeWrite?: () => Promise<void>): Promise<GoogleEvent> {
     if (!etag) throw new GoogleError(412,'precondition_failed')
-    const body = { ...event, extendedProperties:{private:{ ...current?.extendedProperties?.private, ...event.extendedProperties.private }} }
+    const body = { ...event, ...(current?.status === 'cancelled' ? {status:'confirmed'} : {}), extendedProperties:{private:{ ...current?.extendedProperties?.private, ...event.extendedProperties.private }} }
     return eventResult(await this.request('/calendars/' + segment(calendarId) + '/events/' + segment(eventId) + '?sendUpdates=none', {
       method:'PATCH', headers:{'If-Match':etag}, body:JSON.stringify(body),
-    }))
+    }, beforeWrite))
   }
-  async deleteEvent(calendarId: string, eventId: string, etag: string): Promise<void> {
+  async deleteEvent(calendarId: string, eventId: string, etag: string, beforeWrite?: () => Promise<void>): Promise<void> {
     if (!etag) throw new GoogleError(412,'precondition_failed')
     try {
-      await this.request('/calendars/' + segment(calendarId) + '/events/' + segment(eventId) + '?sendUpdates=none', {method:'DELETE',headers:{'If-Match':etag}})
+      await this.request('/calendars/' + segment(calendarId) + '/events/' + segment(eventId) + '?sendUpdates=none', {method:'DELETE',headers:{'If-Match':etag}}, beforeWrite)
     } catch (error) {
       if (error instanceof GoogleError && [404,410].includes(error.status)) { await this.getCalendar(calendarId); return }
       throw error
