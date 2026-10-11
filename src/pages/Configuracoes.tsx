@@ -171,6 +171,9 @@ export default function Configuracoes() {
                 <p className="text-sm text-muted-foreground">
                   Seus dados são criptografados e protegidos. Apenas você tem acesso às suas informações de vendas e abordagens.
                 </p>
+                <a href="/politica-de-privacidade" target="_blank" rel="noopener" className="text-sm text-primary underline underline-offset-4">
+                  Ler a Política de Privacidade
+                </a>
               </div>
 
               <div className="space-y-2">
