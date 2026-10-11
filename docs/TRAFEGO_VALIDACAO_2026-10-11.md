@@ -125,6 +125,8 @@ Task 12: complete (commits d8c1460..c1e0a5c, tests: node .superpowers/sdd/2026-1
 
 - Ruling: CSV/legacy pending batches without a server-owned target version must be reimported or incorporated into a new capture review — a historical expected version cannot be reconstructed safely, so approval fails closed rather than overwriting an unseen correction — cost if wrong: legacy pending CSV requires another upload/review; history and published facts remain intact.
 
+- Ruling: temporary plan workspace retained after automatic approval review rejected recursive deletion with "blocked by policy" — no deletion fallback attempted; local PostgreSQL/Vite stopped, source and evidence committed — cost if wrong: disposable test files continue occupying disk until cleanup is authorized/available.
+
 ## Revisão independente e correções finais
 
 Revisor independente `gpt-6.1-sol` (contexto novo, somente leitura): nenhum Critical, oito Important e nenhum Minor. O modelo inicialmente escolhido `gpt-6-astra` falhou por limite de uso antes de revisar; houve uma única revisão concluída. A classificação foi confirmada pelo efeito sobre o usuário antes de iniciar a única passagem de correção.
@@ -155,3 +157,5 @@ Final: fixed stale CSV overwrote published edits — review-fixes csv-stale-targ
 Final: fixed manual metrics remained unavailable — review-fixes manual-availability/manual-zero RED→GREEN, suite 75/75 Node, 8/8 Deno, 24/24 SQL, browser, types, ESLint and build green.
 Final: complete single fix pass; no Critical/Important outstanding, no Minor deferred, no re-review. Full verification command: node .superpowers/sdd/2026-10-11-traffic-reliability/verify-task-12.mjs; exit 0. All final changes verified before commit.
 ```
+
+A limpeza recursiva de `.superpowers/sdd/2026-10-11-traffic-reliability` foi rejeitada pela revisão automática de aprovação com o motivo `blocked by policy`. A pasta temporária foi preservada; PostgreSQL local (55432) e Vite (5199) foram encerrados. Não houve tentativa alternativa de exclusão. A branch e o worktree permanecem disponíveis para a decisão de integração.
