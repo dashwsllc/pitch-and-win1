@@ -20,9 +20,9 @@ O administrador conecta o Google em **Configurações → Google Agenda dos clos
 
 Código e guia preparados em `codex/closer-calendar-sync`. Validação: **33 testes Node/VM**, fixtures e concorrência real entre sessões PostgreSQL, TypeScript e build aprovados. No projeto Supabase de destino, um ensaio transacional com rollback validou as migrations, criptografia nativa do Vault, permissões, RLS, os dois agendamentos cron e a assinatura pg_net, sem enviar HTTP ou criar fixtures comerciais.
 
-As quatro migrations e as três Edge Functions foram instaladas no projeto **dash**. O callback, a origem do dashboard, o segredo do cron e os dois segredos do Vault estão configurados. O teste HTTP real confirmou bloqueio de acesso sem autenticação e execução de entrega/reconciliação com `processed=0`, sem eventos Google. Histórico SQL, permissões e RLS foram conferidos após a instalação. Uma correção adicional tornou as atualizações compatíveis com o `safeupdate` do PostgREST; os testes SQL e de concorrência passaram novamente.
+As quatro migrations e as três Edge Functions foram instaladas no projeto **dash**, ref **mbzwchnxtskysqplqiyy**, confirmado novamente pelo usuário. O callback e a origem do dashboard estão presentes nos Secrets das Edge Functions, e os dois nomes de segredos do cron estão presentes no Vault. A conferência de 11/10/2026 encontrou ausentes `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` e `GOOGLE_CALENDAR_CRON_SECRET` nos Secrets das Edge Functions; ainda é necessário instalar esses três valores privados. O teste HTTP anterior confirmou bloqueio de acesso sem autenticação e execução de entrega/reconciliação com `processed=0`, sem eventos Google. Histórico SQL, permissões e RLS foram conferidos após a instalação. Uma correção adicional tornou as atualizações compatíveis com o `safeupdate` do PostgREST; os testes SQL e de concorrência passaram novamente.
 
-**A integração permanece não conectada e não ativada.** Faltam publicar/validar o frontend, instalar as duas credenciais OAuth e realizar o ensaio Google em projeto e agenda exclusivos de teste antes da ativação comercial. Os testes locais usam uma implementação de teste do Vault; a criptografia real foi validada separadamente no Supabase, com um valor fictício descartado por rollback.
+**A integração permanece não conectada e não ativada.** Faltam publicar/validar o frontend, instalar as duas credenciais OAuth e o segredo do cron nas Edge Functions, e realizar o ensaio Google em projeto e agenda exclusivos de teste antes da ativação comercial. Os testes locais usam uma implementação de teste do Vault; a criptografia real foi validada separadamente no Supabase, com um valor fictício descartado por rollback.
 
 ## 1. Google Cloud / OAuth
 
@@ -44,7 +44,7 @@ Referências: [OAuth do Google](https://developers.google.com/identity/protocols
 
 Instale estas variáveis em **Supabase → Edge Functions → Secrets**, sem colocá-las no frontend, no Git ou na conversa:
 
-Na instalação atual, o administrador precisa adicionar somente `GOOGLE_CALENDAR_CLIENT_ID` e `GOOGLE_CALENDAR_CLIENT_SECRET`; as outras três variáveis e os dois segredos do Vault abaixo já foram instalados.
+Na conferência de 11/10/2026, o administrador precisa adicionar `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` e `GOOGLE_CALENDAR_CRON_SECRET` em [Secrets do projeto dash](https://supabase.com/dashboard/project/mbzwchnxtskysqplqiyy/functions/secrets). As duas URLs estão presentes. Os nomes dos dois segredos do Vault foram conferidos; o valor de `GOOGLE_CALENDAR_CRON_SECRET` deve coincidir com `google_calendar_cron_secret` do Vault desse mesmo projeto. A conferência não exibiu valores privados.
 
 | Variável | Valor |
 | --- | --- |
