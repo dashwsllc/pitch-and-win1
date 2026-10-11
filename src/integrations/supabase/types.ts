@@ -5,6 +5,12 @@ export type Database = {
 
   "public": {
           Tables: {
+            crm_google_calendar_status: {
+              Row: { call_id: string; desired_revision: string; confirmed_revision: string | null; status: string; error_code: string | null; last_synced_at: string | null; updated_at: string }
+              Insert: never
+              Update: never
+              Relationships: []
+            }
             "abordagens": {
                   Row: {
                     "created_at": string,"crm_lead_id": string | null,"dados_abordados": string,"id": string,"mostrou_ia": boolean,"nomes_abordados": string,"tempo_medio_abordagem": number,"updated_at": string,"user_id": string,"visao_geral": string

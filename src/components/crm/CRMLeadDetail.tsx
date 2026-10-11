@@ -1,3 +1,4 @@
+import { CRMCalendarStatus } from './CRMCalendarStatus';
 import {
   Sheet,
   SheetContent,
@@ -248,6 +249,7 @@ export function CRMLeadDetail({
                       {names[a.assigned_to || ""] || "Sem responsável"}
                     </p>
                   )}
+                  {a.call_type === "fechamento_closer" && <CRMCalendarStatus callId={a.id} />}
                   {a.outcome && (
                     <Badge className="h-5 px-2 text-[10px]" variant="outline">
                       {outcomeLabel(a.outcome)}

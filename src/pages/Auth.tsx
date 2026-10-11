@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,12 +16,14 @@ import {
   publicAuthError,
   strongPasswordSchema,
 } from '@/lib/auth-security'
+import { safeCrmReturnPath } from '@/lib/crm-deeplink'
 import './Auth.css'
 
 export default function Auth() {
   const { user, session, signIn, signUp, signOut, loading, registrationStatus, registrationError, refreshRegistration } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const submitting = useRef(false)
@@ -79,7 +81,7 @@ export default function Auth() {
     }
   }
 
-  if (user && !loading) return <Navigate to="/" replace />
+  if (user && !loading) return <Navigate to={safeCrmReturnPath(location.state?.from) ?? "/"} replace />
 
   const pending = registrationStatus === 'pending'
   const rejected = registrationStatus === 'rejected'
