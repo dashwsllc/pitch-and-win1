@@ -1,3 +1,4 @@
+import { arenaRpc } from '@/lib/arena-api'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
@@ -78,9 +79,7 @@ export function useRankingDataWithMock() {
     queryKey: ['daily-call-ranking', user?.id, today],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_daily_call_ranking')
-      if (error) throw error
-      const result = data as unknown as DailyCallRanking
+      const result = await arenaRpc<DailyCallRanking>('get_daily_call_ranking', {})
       return {
         ...result,
         ranking: result.ranking.map(item => ({ ...item, isCurrentUser: item.user_id === user?.id })),

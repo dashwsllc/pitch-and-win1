@@ -3,14 +3,14 @@ import type { LeadImportResult } from './meta-lead-import'
 export interface MetaAuditEvent {
   id: string
   created_at: string
-  entity_type: 'lead' | 'lead_batch' | 'metrics_batch' | 'metrics_row'
+  entity_type: 'lead' | 'lead_batch' | 'metrics_batch' | 'metrics_row' | 'capture_review'
   entity_id: string
   action: string
   origin: 'api' | 'csv'
   actor_id: string | null
   actor_name: string | null
   actor_roles: string[]
-  summary: { filename?: string; rows?: number; row?: number; status?: string; note?: string; warning?: string; reason?: string; crm_lead_id?: string; result?: LeadImportResult; changes?: { field: string; before: unknown; after: unknown }[] }
+  summary: { inserted?: number; updated?: number; removed?: number; before?: unknown; after?: unknown; filename?: string; rows?: number; row?: number; status?: string; note?: string; warning?: string; reason?: string; crm_lead_id?: string; result?: LeadImportResult; changes?: { field: string; before: unknown; after: unknown }[] }
 }
 
 export interface MetaFormLead {

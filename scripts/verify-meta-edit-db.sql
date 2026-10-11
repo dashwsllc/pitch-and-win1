@@ -5,7 +5,7 @@ DO $$
 DECLARE
   manager uuid; other_user uuid; b public.meta_lead_import_batches; mb public.meta_import_batches;
   f public.meta_form_leads; d public.meta_traffic_daily; snapshot jsonb; response jsonb;
-  item jsonb; metric jsonb; crm_before jsonb; run_id uuid; auto_id uuid; audit_count integer; current_version bigint; prefix text:='qa-edit-'||gen_random_uuid();
+  item jsonb; metric jsonb; crm_before jsonb; run_id uuid; auto_id uuid; audit_count integer; current_version bigint; account text:='91002'; api_account text:='91003'; prefix text:='qa-edit-'||gen_random_uuid();
 BEGIN
   IF to_regprocedure('public.meta_edit_form_lead(uuid,timestamp with time zone,bigint,jsonb,text)') IS NULL THEN
     RAISE EXCEPTION 'FAIL: audited editing is not implemented';
@@ -94,16 +94,16 @@ BEGIN
   IF (SELECT status FROM public.meta_lead_import_batches WHERE id=b.id)<>'aprovado'
     OR (SELECT name FROM public.crm_leads WHERE id=f.crm_lead_id)<>'Responsável atualizado' THEN
     RAISE EXCEPTION 'FAIL: history edit changed approval or republished CRM'; END IF;
-  metric:=jsonb_build_object('date','2026-09-20','level','campaign','account_id',prefix,'campaign_id','campaign',
-    'campaign_name','Campanha QA','currency','BRL','spend',10,'leads',2,'purchases',0);
+  metric:=jsonb_build_object('date','2026-09-20','level','campaign','account_id',account,'campaign_id','campaign',
+    'campaign_name','Campanha QA','currency','BRL','spend',10,'leads',2,'purchases',0,'present_metrics',jsonb_build_array('leads','purchases'));
   response:=public.meta_import_daily('qa-metrics.csv',jsonb_build_array(metric));
   SELECT * INTO mb FROM public.meta_import_batches WHERE id=(response->>'batch_id')::uuid;
-  PERFORM public.meta_edit_import_row('metrics',mb.id,0,mb.updated_at,'{"spend":12.5}','Corrigir gasto exportado');
+  PERFORM public.meta_edit_import_row('metrics',mb.id,0,mb.updated_at,'{"spend":12.5,"campaign_name":"Campanha corrigida"}','Corrigir gasto exportado');
   SELECT * INTO mb FROM public.meta_import_batches WHERE id=mb.id;
   mb:=public.meta_review_traffic_import(mb.id,'aprovar',mb.updated_at);
-  SELECT * INTO STRICT d FROM public.meta_traffic_daily WHERE account_id=prefix;
+  SELECT * INTO STRICT d FROM public.meta_traffic_daily WHERE account_id=account;
   IF NOT EXISTS(SELECT 1 FROM public.meta_audit_events WHERE entity_id=d.id AND action='metric.published' AND summary->'changes' @> '[{"field":"spend","after":12.5}]') THEN RAISE EXCEPTION 'FAIL: published values not audited'; END IF;
-  IF d.spend<>12.5 THEN RAISE EXCEPTION 'FAIL: approval ignored metric correction'; END IF;
+  IF d.spend<>12.5 OR d.campaign_name<>'Campanha corrigida' THEN RAISE EXCEPTION 'FAIL: approval ignored metric correction'; END IF;
   PERFORM public.meta_edit_traffic_row(d.id,d.updated_at,'{"spend":15,"leads":3,"date":"2026-09-21"}','Atualização aprovada');
   IF NOT EXISTS(SELECT 1 FROM public.meta_traffic_daily WHERE id=d.id AND spend=15 AND leads=3 AND date='2026-09-21')
     OR NOT EXISTS(SELECT 1 FROM public.meta_audit_events WHERE entity_id=d.id AND action='metric.edited' AND actor_id=other_user
@@ -119,8 +119,8 @@ BEGIN
     RAISE EXCEPTION 'FAIL: NULL version accepted';
   EXCEPTION WHEN serialization_failure THEN NULL; END;
   -- Corrected API identity must not cause a duplicate in the next pending capture.
-  INSERT INTO public.meta_sync_runs(kind,account_id,triggered_by) VALUES('insights',prefix||'-api','cron') RETURNING id INTO run_id;
-  metric:=metric||jsonb_build_object('account_id',prefix||'-api');
+  INSERT INTO public.meta_sync_runs(kind,account_id,triggered_by) VALUES('insights',api_account,'cron') RETURNING id INTO run_id;
+  metric:=metric||jsonb_build_object('account_id',api_account);
   response:=public.meta_import_daily_system(jsonb_build_array(metric),run_id);
   SELECT * INTO mb FROM public.meta_import_batches WHERE id=(response->>'batch_id')::uuid;
   PERFORM public.meta_edit_import_row('metrics',mb.id,0,mb.updated_at,'{"spend":35,"date":"2026-09-22"}','Corrigir captura');

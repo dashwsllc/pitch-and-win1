@@ -1,8 +1,8 @@
 # Conexão oficial com a API da Meta — guia de configuração
 
-Criado em 27/09/2026; revisado em 09/10/2026. Guia de configuração da sincronização automática de métricas e leads de formulário. O resultado de cada execução deve ser conferido na aba Conexão: uma resposta HTTP 200 antiga não comprova que os dados foram sincronizados.
+Criado em 27/09/2026; revisado em 11/10/2026. Guia de configuração da sincronização automática de métricas e leads de formulário. O resultado de cada execução deve ser conferido na aba Conexão: uma resposta HTTP 200 antiga não comprova que os dados foram sincronizados.
 
-Sem os passos 1–9 abaixo, o sistema continua funcionando exatamente como antes (CSV manual + fila de leads manual). Nada quebra por essas funções existirem sem estar configuradas.
+O pacote de confiabilidade de 11/10 foi publicado seletivamente no Supabase e na Vercel. Após regularizar o token de Página, métricas e descoberta responderam HTTP 200, 148 recibos foram processados e os cinco jobs foram ativados. Siga [o roteiro atual](TRAFEGO_CONFIABILIDADE_OPERACAO_2026-10-11.md) para novas implantações e recuperação. As publicações de 09/10 descritas ao final são evidência histórica. Os recebimentos exigem revisão e aprovação explícita.
 
 ## 1. Criar o Meta App
 
@@ -40,11 +40,11 @@ Project Settings → **Edge Functions** → **Secrets**. Adicione exatamente est
 | `META_WEBHOOK_VERIFY_TOKEN` | Qualquer valor forte que você inventar | Sim (webhook) |
 | `META_SYNC_CRON_SECRET` | Outro valor forte, diferente do anterior | Sim (cron) |
 | `META_PAGE_IDS` | IDs de Página separados por vírgula (ex.: `123456,789012`) | Sim (leads) |
-| `META_GRAPH_API_VERSION` | Versão atual da Graph API (ex.: `v23.0`) — **confirme a versão vigente na documentação da Meta antes de configurar** | Recomendado |
+| `META_GRAPH_API_VERSION` | `v26.0` neste projeto, validada com métricas e paginação de leads em 11/10/2026. Conferir compatibilidade antes de futuras mudanças. | Recomendado |
 | `META_SYNC_LOOKBACK_DAYS` | `3` (padrão se omitido) | Opcional |
 | `META_SYNC_DEEP_LOOKBACK_DAYS` | não usado diretamente — a varredura diária já manda `days:8` fixo | — |
-| `META_RECONCILIATION_LOOKBACK_HOURS` | `48` (padrão se omitido) | Opcional |
-| `META_PAGE_ACCESS_TOKEN` | Token da página com acesso aos formulários e leads; quando configurado, é usado na listagem de formulários, na listagem de leads e na leitura das respostas | Opcional |
+| `META_RECONCILIATION_LOOKBACK_HOURS` | Legado; descoberta inicial usa 48h e depois checkpoint persistido. Recibos antigos não expiram por essa janela. | Não usado no worker atual |
+| `META_PAGE_ACCESS_TOKEN` | `access_token` retornado pela consulta da Página correta; cobre formulários, leads e respostas. A Meta exigiu esse tipo de token neste projeto. | Necessário para os leads desta Página |
 
 ## 6. Segredos do cron (rodar uma única vez, direto no SQL Editor do Supabase — nunca commitar isso)
 
@@ -53,13 +53,11 @@ select vault.create_secret('<sua anon key do projeto>', 'meta_cron_anon_key');
 select vault.create_secret('<mesmo valor que você colocou em META_SYNC_CRON_SECRET>', 'meta_sync_cron_secret');
 ```
 
-A anon key fica em Project Settings → API. Até esses dois segredos existirem no Vault, os jobs agendados (`meta-insights-sync-frequent`, `meta-insights-sync-deep`, `meta-leads-reconciliation-hourly`) disparam a cada ciclo e falham de forma inofensiva (POST com header nulo) — nenhum dado é corrompido, só não sincroniza nada até aqui ser resolvido.
+A anon key fica em Project Settings → API. No pacote atual, secret ausente impede o envio. Os cinco jobs ficam pausados até concluir a implantação e conferência do roteiro atual.
 
 ## 7. Migrations e Edge Functions
 
-Já aplicadas/publicadas nesta sessão — nenhuma ação necessária:
-- `meta_ad_accounts_and_sync_runs`, `meta_traffic_source_and_system_import`, `meta_webhook_events`, `meta_sync_cron_jobs` (Supabase, projeto `mbzwchnxtskysqplqiyy`).
-- Edge Functions `meta-insights-sync` (`verify_jwt=true`), `meta-lead-webhook` (`verify_jwt=false`), `meta-leads-reconciliation` (`verify_jwt=true`) — todas `ACTIVE`.
+Aplicar seletivamente as oito migrations de 11/10, incluindo a corretiva `20261011190000_meta_lead_partial_completion`, e publicar as quatro funções listadas no [roteiro de operação](TRAFEGO_CONFIABILIDADE_OPERACAO_2026-10-11.md). Não usar `db push` geral: objetos instalados e histórico remoto precisam ser comparados antes. O pacote já está instalado no projeto comercial.
 
 ## 8. Configurar o Webhook no painel da Meta
 
@@ -71,7 +69,7 @@ App Dashboard → **Webhooks** → **Page** → **Assinar este objeto**:
 
 ## 9. Conectar a conta pela UI
 
-Como Executive ou Super Admin: `/trafego` → aba **Conexão** → preencher ID da conta (`act_...`, sem o prefixo `act_` no campo — o sistema adiciona automaticamente ao chamar a API) e nome → **Conectar**.
+Como Executive ou Super Admin: `/trafego` → aba **Conexão** → preencher ID da conta (numérico ou com um único prefixo `act_`; o sistema normaliza) e nome → **Conectar**.
 
 ## 10. Checklist de validação manual
 
@@ -79,7 +77,7 @@ Rode nesta ordem, sempre conferindo o resultado antes de seguir para o próximo 
 
 1. **Webhook GET**: `curl "https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/meta-lead-webhook?hub.mode=subscribe&hub.verify_token=SEU_TOKEN&hub.challenge=123"` → deve devolver `123` (200). Com token errado, deve devolver 403.
 2. **Lead Ads Testing Tool** (dentro do App Dashboard → Marketing API → Lead Ads Testing Tool): envie um lead de teste → confira que aparece em **Tráfego → Aprovações → Leads automáticos**. Revise e aprove com Gestor de tráfego, Executive ou Super Admin. Cadastro completo segue para a fila compartilhada do CRM; cadastro incompleto aparece em `/leads` para o SDR completar.
-3. **Sincronizar agora** (aba Conexão): clique e confira que uma nova linha aparece em `meta_sync_runs` (visível na própria UI) com status Sucesso e a contagem de linhas capturadas. As métricas ficam pendentes em **Aprovações**; revise o lote antes de publicar no desempenho.
+3. **Sincronizar agora** (aba Conexão): clique e confira que uma nova linha aparece em `meta_sync_runs` (visível na própria UI) com tentativa e cobertura por nível; parcial responde 202 e retoma nos próximos ciclos. As métricas ficam pendentes em **Aprovações**; revise o lote antes de publicar no desempenho.
 4. **Comparação com o Ads Manager**: filtre a aba Desempenho por Origem=API e compare investimento/leads/CPL com o Gerenciador de Anúncios no mesmo período — **faça isso antes de tomar qualquer decisão de investimento com base nesses números**. Se os valores não baterem, o mapeamento de `action_type` em `supabase/functions/_shared/meta-graph.ts` provavelmente precisa de ajuste para esta conta.
 5. **Erro tratado**: se ocorrer uma falha de permissão ou de persistência, confira o motivo em `meta_sync_runs.error_message`. As funções corrigidas respondem HTTP 502 e `ok=false` quando alguma execução falha. Não altere permissões de produção apenas para provocar um erro.
 6. **Desconexão**: desconecte a conta pela UI e confirme que o próximo ciclo de sync a ignora (nenhuma linha nova de `source='api'` aparece).

@@ -11,6 +11,14 @@ import type { LeadImportRow, LeadImportResult } from "./meta-lead-import";
 // migration. This is the SAME authenticated Supabase client and auth session.
 type FunctionDef<Args> = { Args: Args; Returns: Json };
 type ExtraFunctions = {
+  // Legacy ranking contract may be deployed separately from the traffic schema.
+  get_daily_call_ranking: FunctionDef<Record<string, never>>;
+  meta_traffic_operation: FunctionDef<Record<string, never>>;
+  meta_traffic_review_list: FunctionDef<{ p_kind: 'metrics' | 'leads' | null; p_status: string | null; p_offset: number; p_limit: number }>;
+  meta_capture_review_part: FunctionDef<{ p_id: string; p_version: number; p_offset: number; p_limit: number }>;
+  meta_capture_review_decide: FunctionDef<{ p_id: string; p_version: number; p_action: 'aprovar' | 'rejeitar'; p_note: string }>;
+  meta_capture_review_edit: FunctionDef<{ p_id: string; p_version: number; p_row_no: number; p_patch: Json; p_reason: string }>;
+  meta_capture_review_resolve: FunctionDef<{ p_id: string; p_version: number; p_row_no: number; p_action: 'keep_published' | 'use_incoming' | 'use_edited' | 'remove'; p_payload: Json; p_reason: string }>;
   arena_classify_legacy: FunctionDef<{
     p_audit_id: string;
     p_approved: boolean;
@@ -149,6 +157,7 @@ type ExtraFunctions = {
   meta_promote_form_lead: FunctionDef<{ p_id: string; p_contact: Json }>;
   meta_ignore_form_lead: FunctionDef<{ p_id: string; p_reason: string }>;
   meta_crm_attribution_daily: FunctionDef<{ p_start: string; p_end: string }>;
+  meta_traffic_cohort: FunctionDef<{ p_start: string; p_end: string; p_account_id?: string | null; p_campaign_id?: string | null; p_source?: 'api' | 'csv' | 'manual_legacy' | null }>;
   meta_traffic_lead_reconciliation: FunctionDef<{ p_start: string; p_end: string }>;
   meta_connect_ad_account: FunctionDef<{ p_account_id: string; p_account_name: string; p_currency?: string; p_timezone?: string }>;
   meta_disconnect_ad_account: FunctionDef<{ p_account_id: string; p_reason: string }>;

@@ -11,7 +11,8 @@ import type { Json } from '@/integrations/supabase/types'
 import { buildMetaEditPatch, metaEditDraft, metaEditFields, type MetaEditKind, type MetaEditValues } from '@/lib/meta-edit'
 import { errorMessage } from '@/lib/sales'
 
-export type MetaEditTarget = { kind: MetaEditKind; id: string; title: string; updatedAt?: string; values?: MetaEditValues; batchId?: string; rowIndex?: number; historical?: boolean }
+export type MetaEditTarget = { kind: MetaEditKind; id: string; title: string; updatedAt?: string; values?: MetaEditValues; batchId?: string; rowIndex?: number; historical?: boolean;
+  captureVersion?: number; captureRowNo?: number; resolveConflict?: boolean }
 type Snapshot = { values: MetaEditValues; updated_at: string; crm_version: number | null; crm_id?: string }
 type Answer = { name: string; values: string[] }
 
@@ -40,10 +41,13 @@ export function MetaEditButton({ target, onSaved, disabled }: { target: MetaEdit
     setError('')
     try {
       const patch = buildMetaEditPatch(current.kind, snapshot.values, draft)
-      if (!Object.keys(patch).length) throw new Error('Altere pelo menos uma informação antes de salvar.')
+      if (!Object.keys(patch).length && !current.resolveConflict) throw new Error('Altere pelo menos uma informação antes de salvar.')
       if (reason.trim().length < 3) throw new Error('Informe o motivo da alteração (3 a 500 caracteres).')
       setBusy(true)
-      if (current.batchId) await arenaRpc('meta_edit_import_row', { p_kind: current.kind, p_batch_id: current.batchId,
+      if (current.captureVersion !== undefined) {
+        if (current.resolveConflict) await arenaRpc('meta_capture_review_resolve', { p_id: current.id, p_version: current.captureVersion, p_row_no: current.captureRowNo!, p_action: 'use_edited', p_payload: patch as Json, p_reason: reason.trim() })
+        else await arenaRpc('meta_capture_review_edit', { p_id: current.id, p_version: current.captureVersion, p_row_no: current.captureRowNo!, p_patch: patch as Json, p_reason: reason.trim() })
+      } else if (current.batchId) await arenaRpc('meta_edit_import_row', { p_kind: current.kind, p_batch_id: current.batchId,
         p_row_index: current.rowIndex!, p_expected_updated_at: snapshot.updated_at, p_patch: patch as Json, p_reason: reason.trim() })
       else if (current.kind === 'leads') await arenaRpc('meta_edit_form_lead', { p_id: current.id,
         p_expected_updated_at: snapshot.updated_at, p_expected_crm_version: snapshot.crm_version, p_patch: patch as Json, p_reason: reason.trim() })
@@ -63,9 +67,9 @@ export function MetaEditButton({ target, onSaved, disabled }: { target: MetaEdit
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!snapshot ? <p role="status" className="text-sm text-muted-foreground">{busy ? 'Carregando informações atuais…' : 'Feche e abra novamente para tentar carregar.'}</p> :
         <form onSubmit={event => void save(event)} className="space-y-5">
-          <p className="text-sm text-muted-foreground">{current.historical ? 'Esta correção modifica o histórico da importação. Para atualizar o CRM ou o desempenho, edite o registro publicado na aba Dados e edições.' : current.batchId ? 'A edição mantém a decisão da importação. Dados pendentes precisam de aprovação para serem publicados.' : current.kind === 'leads' ? 'Os campos de cadastro são sincronizados com o CRM quando houver vínculo. A decisão de aprovação é mantida.' : 'A correção será refletida nos indicadores de Desempenho.'}</p>
+          <p className="text-sm text-muted-foreground">{current.captureVersion !== undefined ? 'A correção modifica esta revisão e exige nova conferência antes da aprovação. Conta e nível pertencem à captura.' : current.historical ? 'Esta correção modifica o histórico da importação. Para atualizar o CRM ou o desempenho, edite o registro publicado na aba Dados e edições.' : current.batchId ? 'A edição mantém a decisão da importação. Dados pendentes precisam de aprovação para serem publicados.' : current.kind === 'leads' ? 'Os campos de cadastro são sincronizados com o CRM quando houver vínculo. A decisão de aprovação é mantida.' : 'A correção será refletida nos indicadores de Desempenho.'}</p>
           <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
-            {metaEditFields[current.kind].filter(field => !(current.batchId && current.kind === 'leads' && field.key === 'page_id')).map(field => <div key={field.key} className={field.type === 'textarea' || field.type === 'answers' ? 'sm:col-span-2' : ''}>
+            {metaEditFields[current.kind].filter(field => !(current.batchId && current.kind === 'leads' && field.key === 'page_id') && !(current.captureVersion !== undefined && ['account_id', 'level'].includes(field.key))).map(field => <div key={field.key} className={field.type === 'textarea' || field.type === 'answers' ? 'sm:col-span-2' : ''}>
               <Label htmlFor={`${id}-${field.key}`}>{field.label}</Label>
               {field.type === 'answers' ? <div id={`${id}-${field.key}`} className="mt-2 space-y-3">
                 <p className="text-xs text-muted-foreground">Para corrigir o cadastro do CRM, atualize também os campos de contato acima. Nas respostas, use uma resposta por linha.</p>

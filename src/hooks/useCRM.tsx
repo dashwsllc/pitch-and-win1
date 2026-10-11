@@ -1,3 +1,4 @@
+import type { CRMLeadInsert } from '@/integrations/supabase/application-types'
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -157,7 +158,7 @@ export function useCRMLeads() {
     },
   });
   const refresh = () => refreshDashboardData(client);
-  const createLead = async (lead: TablesInsert<"crm_leads">) => {
+  const createLead = async (lead: CRMLeadInsert) => {
     const { data, error } = await supabase
       .from("crm_leads")
       .insert(lead)

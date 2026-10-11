@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0'
-import { ingestLeadgenId } from '../_shared/meta-lead-ingest.ts'
+import { allowedMetaPages, receiveLeadgenEvent } from '../_shared/meta-lead-ingest.ts'
 
 interface LeadgenChange {
   field: string
@@ -27,8 +27,9 @@ Deno.serve(async (req) => {
   if (req.method === 'GET') {
     const url = new URL(req.url)
     const challenge = url.searchParams.get('hub.challenge')
-    const verified = url.searchParams.get('hub.mode') === 'subscribe'
-      && url.searchParams.get('hub.verify_token') === Deno.env.get('META_WEBHOOK_VERIFY_TOKEN') && challenge
+    const verifyToken = Deno.env.get('META_WEBHOOK_VERIFY_TOKEN')
+    const verified = !!verifyToken && url.searchParams.get('hub.mode') === 'subscribe'
+      && url.searchParams.get('hub.verify_token') === verifyToken && challenge
     return verified ? new Response(challenge, { status: 200 }) : new Response('Forbidden', { status: 403 })
   }
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
@@ -44,22 +45,27 @@ Deno.serve(async (req) => {
   let payload: WebhookPayload
   try { payload = JSON.parse(raw) } catch { return new Response('Bad Request', { status: 400 }) }
 
-  const token = Deno.env.get('META_SYSTEM_USER_TOKEN')
-  if (!token) {
-    console.error('META_SYSTEM_USER_TOKEN não configurado - evento recebido mas não processado')
-    return new Response('EVENT_RECEIVED', { status: 200 })
+  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.entry)) return new Response('Bad Request', { status: 400 })
+  const events: { leadgenId: string; pageId: string; formId: string }[] = []
+  for (const entry of payload.entry) {
+    if (!entry || !Array.isArray(entry.changes)) return new Response('Bad Request', { status: 400 })
+    for (const change of entry.changes) {
+      if (change?.field !== 'leadgen') continue
+      const event = { leadgenId: change.value?.leadgen_id, pageId: change.value?.page_id || entry.id, formId: change.value?.form_id }
+      if (event.pageId !== entry.id || !Object.values(event).every(value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value))) return new Response('Bad Request', { status: 400 })
+      events.push(event as { leadgenId: string; pageId: string; formId: string })
+    }
   }
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(5000) }) },
   })
-  for (const entry of payload.entry ?? []) {
-    for (const change of entry.changes ?? []) {
-      if (change.field !== 'leadgen') continue
-      await ingestLeadgenId(admin, change.value.leadgen_id, entry.id, change.value.form_id || '', token)
-    }
+  try {
+    for (const event of events) await receiveLeadgenEvent(admin, event, allowedMetaPages())
+    return new Response('EVENT_RECEIVED', { status: 200 })
+  } catch {
+    // Meta must retry when a durable receipt cannot be confirmed. Earlier writes deduplicate.
+    console.error('meta-lead-webhook: gravação de recibo indisponível')
+    return new Response('Receipt unavailable', { status: 503 })
   }
-  // Sempre 200 depois de logar: retry storm ou erro repetido pode fazer a Meta
-  // desativar a assinatura do webhook. Falhas ficam em meta_webhook_events e
-  // sao recuperadas pela reconciliacao horaria (meta-leads-reconciliation).
-  return new Response('EVENT_RECEIVED', { status: 200 })
 })

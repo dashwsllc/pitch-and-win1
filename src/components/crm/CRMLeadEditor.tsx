@@ -1,6 +1,6 @@
+import type { CRMLeadInsert } from '@/integrations/supabase/application-types'
 import { useState } from "react";
 import { PIPELINE_STAGES, type CRMLead } from "@/hooks/useCRM";
-import type { TablesInsert } from "@/integrations/supabase/types";
 import { CRMContactFields } from "./CRMContactFields";
 import {
   contactFromLead,
@@ -34,7 +34,7 @@ export function CRMLeadEditor({
   existingLeads?: CRMLead[];
   busy: boolean;
   onClose: () => void;
-  onSave: (data: TablesInsert<"crm_leads">) => Promise<boolean>;
+  onSave: (data: CRMLeadInsert) => Promise<boolean>;
 }) {
   const [contact, setContact] = useState(
     lead ? contactFromLead(lead) : { ...emptyContact },

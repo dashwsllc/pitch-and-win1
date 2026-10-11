@@ -57,3 +57,6 @@ verify_jwt = false
 
 [functions.google-calendar-sync]
 verify_jwt = true
+
+[functions.meta-lead-worker]
+verify_jwt = true

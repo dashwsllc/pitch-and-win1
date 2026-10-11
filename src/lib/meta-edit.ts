@@ -1,5 +1,6 @@
 import { leadCsvFields } from './meta-lead-import.ts'
 import { csvFields } from './meta-traffic.ts'
+import { normalizeMetaAccountId } from '../../shared/meta-identity.ts'
 
 export type MetaEditKind = 'leads' | 'metrics'
 export type MetaEditValues = Record<string, unknown>
@@ -26,6 +27,7 @@ export function buildMetaEditPatch(kind: MetaEditKind, before: MetaEditValues, d
   for (const field of metaEditFields[kind]) {
     if (!(field.key in draft)) continue
     let value: unknown = draft[field.key]
+    if (kind === 'metrics' && field.key === 'account_id') value = normalizeMetaAccountId(draft[field.key])
     if (field.type === 'number') {
       const number = Number(draft[field.key])
       if (!draft[field.key].trim() || !Number.isFinite(number) || number < 0 || number > 100_000_000 ||

@@ -1,5 +1,5 @@
 import { createClient, type Session } from '@supabase/supabase-js';
-import type { Database } from './types';
+import type { ApplicationDatabase } from './application-types';
 import { adoptTabSession, pickAuthStorage } from '@/lib/auth-storage';
 import { withTokenRefreshRetry } from '@/lib/auth-resilient-fetch';
 
@@ -41,7 +41,7 @@ const authStorage = pickAuthStorage(window);
 // Logins made before this change sit in the tab's sessionStorage: carry them over once instead of asking for the password.
 adoptTabSession(authStorageKey, authStorage, window.sessionStorage);
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<ApplicationDatabase>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: authStorage,
     storageKey: authStorageKey,

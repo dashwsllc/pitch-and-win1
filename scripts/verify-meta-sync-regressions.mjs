@@ -1,54 +1,21 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import vm from 'node:vm'
 import test from 'node:test'
-import ts from 'typescript'
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'supabase/functions')
-
-// Run the deployed handlers and shared modules. Only network/database boundaries
-// are substituted; no API credentials, server sockets or persistent fixtures.
-async function loadHandler(path, { fetch, admin, extraEnv = {} }) {
-  let handler
-  const env = { META_SYNC_CRON_SECRET: 'test-cron', META_SYSTEM_USER_TOKEN: 'test-token',
-    META_PAGE_IDS: 'page1', SUPABASE_URL: 'https://example.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-key', ...extraEnv }
-  const context = vm.createContext({ URL, Request, Response, TextEncoder, crypto, fetch,
-    console: { error() {}, log() {} },
-    Deno: { env: { get: key => env[key] }, serve: value => { handler = value } },
-    __admin: admin })
-  const cache = new Map()
-  async function moduleFor(filename) {
-    if (cache.has(filename)) return cache.get(filename)
-    const source = filename.startsWith('https:')
-      ? 'export function createClient() { return globalThis.__admin }'
-      : ts.transpileModule(readFileSync(filename, 'utf8'), { compilerOptions: {
-        target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
-      } }).outputText
-    const module = new vm.SourceTextModule(source, { context, identifier: filename })
-    cache.set(filename, module)
-    await module.link((specifier, parent) => moduleFor(specifier.startsWith('https:')
-      ? specifier : resolve(dirname(parent.identifier), specifier)))
-    return module
-  }
-  const module = await moduleFor(resolve(root, path))
-  await module.evaluate()
-  return { handler, exports: module.namespace }
-}
+import { loadHandler } from './helpers/meta-edge-harness.mjs'
+import { leadDatabase } from './helpers/meta-lead-fixtures.mjs'
+import { captureDatabase } from './helpers/meta-capture-fixtures.mjs'
 
 function database({ failLead = '', failFinish = false } = {}) {
-  const imported = [], finishes = []
-  return { imported, finishes,
-    from: () => ({ select: () => ({ eq: async () => ({ data: [{ account_id: '123' }], error: null }) }) }),
+  const leadQueue = leadDatabase({ failLead })
+  const capture = captureDatabase({ failPrepare: failFinish })
+  const { imported, finishes } = capture
+  return { imported: capture.imported, finishes: capture.finishes, from: (...args) => args[0] === 'meta_webhook_events' ? leadQueue.from(...args) : capture.from(...args),
     async rpc(name, args) {
+      if (name.startsWith('meta_capture_')) return capture.rpc(name, args)
+      if (name.startsWith('meta_lead_') || name === 'meta_webhook_event_receive') return leadQueue.rpc(name, args)
       if (name === 'meta_sync_run_start') return { data: 'run1', error: null }
       if (name === 'meta_import_daily_system') { imported.push(...args.p_rows); return { data: { rows: args.p_rows.length }, error: null } }
       if (name === 'meta_sync_run_finish') { finishes.push(args); return { data: null, error: failFinish ? { message: 'finish unavailable' } : null } }
-      if (name === 'meta_webhook_event_receive') return { data: `event-${args.p_leadgen_id}`, error: null }
-      if (name === 'meta_ingest_form_lead') return { data: args.p_data.meta_lead_id,
-        error: args.p_data.meta_lead_id === failLead ? { code: '22023', message: 'invalid lead data' } : null }
-      if (name === 'meta_webhook_event_complete') return { data: null, error: null }
       throw new Error(`Unexpected RPC ${name}`)
     },
   }
@@ -64,8 +31,9 @@ function insightsGraph(failure = false) {
     const url = new URL(address)
     if (failure) return json({ error: { code: 200, message: 'Missing ads_read' } }, 403)
     if (url.searchParams.has('ids')) return json({ error: { code: 100, message: 'The ids query parameter is deprecated in v26.0+.' } }, 400)
+    if (url.pathname.endsWith('/act_123')) return json({ id: '123', name: 'Test account', currency: 'BRL', timezone_name: 'America/Sao_Paulo' })
     if (url.pathname.endsWith('/insights')) return json({ data: [{
-      date_start: '2026-10-09', campaign_id: 'campaign1', campaign_name: 'Test', spend: '12.50', actions: [{ action_type: 'lead', value: '2' }],
+      date_start: '2026-10-09', adset_id: 'set1', ad_id: 'ad1', campaign_id: 'campaign1', campaign_name: 'Test', spend: '12.50', actions: [{ action_type: 'lead', value: '2' }],
     }] })
     if (url.pathname.endsWith('/campaign1') && url.searchParams.get('fields') === 'objective') return json({ id: 'campaign1', objective: 'OUTCOME_LEADS' })
     throw new Error(`Unexpected Graph path ${url.pathname}`)

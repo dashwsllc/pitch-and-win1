@@ -1,33 +1,7 @@
-export type MetaLevel = 'campaign' | 'adset' | 'ad'
+import { metaTrafficKey, normalizeMetaAccountId } from '../../shared/meta-identity.ts'
+import type { MetaLevel, MetaDailyRow, ImportRow } from '../../shared/meta-contract.ts'
+export type { MetaLevel, MetaDailyRow, ImportRow } from '../../shared/meta-contract.ts'
 
-export interface MetaDailyRow {
-  id: string
-  date: string
-  account_id: string
-  account_name: string
-  campaign_id: string
-  campaign_name: string
-  adset_id: string
-  adset_name: string
-  ad_id: string
-  ad_name: string
-  level: MetaLevel
-  currency: string
-  attribution_window: string
-  spend: number
-  leads: number
-  purchases: number
-  purchase_value: number
-  impressions: number
-  reach: number
-  link_clicks: number
-  messaging_conversations_started: number
-  objective: string
-  source: 'csv' | 'api' | 'manual_legacy'
-  updated_at: string
-}
-
-export type ImportRow = Omit<MetaDailyRow, 'id' | 'updated_at' | 'source'> & { present_metrics?: string[] }
 export type CsvField = keyof Pick<ImportRow,
   'date' | 'account_id' | 'account_name' | 'campaign_id' | 'campaign_name' |
   'adset_id' | 'adset_name' | 'ad_id' | 'ad_name' | 'spend' | 'leads' |
@@ -166,7 +140,7 @@ export function buildImportRows(values: string[][], headers: string[], mapping: 
     try {
       const date = csvDate(get('date'))
       if (date > today) throw new Error('data futura')
-      const account_id = get('account_id')
+      const account_id = normalizeMetaAccountId(get('account_id'))
       const campaign_id = get('campaign_id')
       const campaign_name = get('campaign_name')
       const adset_id = level === 'campaign' ? '' : get('adset_id')
@@ -175,7 +149,7 @@ export function buildImportRows(values: string[][], headers: string[], mapping: 
       if (currency !== 'BRL') throw new Error('moeda diferente de BRL')
       if (!account_id || !campaign_id || !campaign_name || (level !== 'campaign' && !adset_id) || (level === 'ad' && !ad_id))
         throw new Error('IDs ou nome da campanha ausentes')
-      const key = [date, account_id, campaign_id, adset_id, ad_id].join(':')
+      const key = metaTrafficKey({ date, account_id, campaign_id, adset_id, ad_id })
       if (seen.has(key)) throw new Error('linha duplicada no arquivo')
       seen.add(key)
       return {
@@ -227,7 +201,7 @@ const objectiveKeywords: [PromotableObjective, string[]][] = [
 
 export function classifyObjective(rawObjective: string): ObjectiveCategory {
   const value = normalizeHeader(rawObjective || '')
-  if (!value) return 'nao_informado'
+  if (!value || value === 'nao informado') return 'nao_informado'
   for (const [category, keywords] of objectiveKeywords)
     if (keywords.some(keyword => value.includes(keyword))) return category
   return 'outro'

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
 import { FileSpreadsheet, Upload } from 'lucide-react'
-import { MetaLeadApprovals, FormAnswers } from '@/components/traffic/MetaLeadApprovals'
+import { MetaLeadApprovals } from '@/components/traffic/MetaLeadApprovals'
 import { MetaAudit } from '@/components/traffic/MetaAudit'
 import { MetaTrafficData, MetaImportEdits } from '@/components/traffic/MetaTrafficData'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -12,64 +11,29 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { arenaClient, arenaRpc } from '@/lib/arena-api'
 import { fetchAllPages } from '@/lib/supabase-pages'
-import { supabase } from '@/integrations/supabase/client'
 import { useBrasiliaToday } from '@/hooks/useGoals'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
-import { aggregateMeta, buildImportRows, cost, csvFields, defaultCsvMapping, summarizeObjectives, type CsvMapping, type ImportRow, type MetaDailyRow, type MetaLevel, type PromotableObjective } from '@/lib/meta-traffic'
+import { aggregateMeta, buildImportRows, csvFields, defaultCsvMapping, type CsvMapping, type MetaDailyRow, type MetaLevel } from '@/lib/meta-traffic'
 import { buildLeadImportRows, defaultLeadCsvMapping, leadCsvFields, summarizeLeadImport, type LeadCsvMapping, type LeadImportRow, type LeadImportResult, type LeadImportResponse } from '@/lib/meta-lead-import'
 import { parseSpreadsheetFile } from '@/lib/spreadsheet'
-import { lastRunFor, type MetaAdAccount, type MetaSyncRun } from '@/lib/meta-connection'
+import { MetaTrafficConnection, TrafficOperationIndicator } from '@/components/traffic/MetaTrafficConnection'
 import { errorMessage, money } from '@/lib/sales'
+import { MetaTrafficPerformance } from '@/components/traffic/MetaTrafficPerformance'
+import { buildTrafficView, validTrafficDate, type QueryState, type TrafficScope } from '@/lib/meta-traffic-view'
+import type { TrafficCohortResult } from '../../shared/meta-contract'
 import { refreshDashboardMutation } from '@/lib/sync'
+import { MetaPendingImports } from '@/components/traffic/MetaPendingImports'
+import { createLatestFileLoader, fetchTrafficReviewList } from '@/lib/meta-traffic-queries'
 
 type Suggestion = { id: string; author_name: string; subject: string; body: string; campaign_id: string | null; status: string; created_at: string; updated_at: string }
 type Reply = { id: string; suggestion_id: string; author_name: string; body: string; created_at: string }
-type ReviewStatus = 'pendente' | 'aprovado' | 'rejeitado'
-type Batch = { id: string; filename: string; row_count: number; created_at: string; status: ReviewStatus; updated_at: string; review_note: string | null; result?: LeadImportResult | null }
-type MetricsBatch = Batch & { rows: ImportRow[]; source?: 'csv' | 'api' }
-type LeadBatch = Batch & { rows: LeadImportRow[]; result: LeadImportResult | null }
-const reviewStatusLabel: Record<ReviewStatus, string> = { pendente: 'Pendente', aprovado: 'Aprovado', rejeitado: 'Rejeitado' }
 const emptyRows: MetaDailyRow[] = []
 const statuses: Record<string, string> = { nova: 'Nova', em_analise: 'Em análise', planejada: 'Planejada', aplicada: 'Aplicada', descartada: 'Descartada' }
 const selectClass = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm'
 function shiftDate(date: string, days: number) { const value = new Date(date + 'T12:00:00Z'); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10) }
-function formatDate(value: string) { return value.slice(0, 10).split('-').reverse().join('/') }
-const countFormatter = new Intl.NumberFormat('pt-BR')
-function format(value: number | null, kind: 'money' | 'count' | 'percent' | 'ratio') {
-  if (value === null) return '—'
-  if (kind === 'money') return money(value)
-  if (kind === 'percent') return value.toFixed(2) + '%'
-  if (kind === 'ratio') return value.toFixed(2) + 'x'
-  return countFormatter.format(value)
-}
-function median(values: number[]) {
-  if (!values.length) return null
-  const sorted = [...values].sort((a, b) => a - b)
-  const middle = Math.floor(sorted.length / 2)
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
-}
-const essentialMetricsByCategory: Record<PromotableObjective, string[]> = {
-  leads: ['spend', 'leads', 'cpl', 'ctr'],
-  vendas: ['spend', 'purchases', 'cpa', 'roas'],
-  mensagens: ['spend', 'messagesStarted', 'costPerMessage', 'ctr'],
-  reconhecimento: ['spend', 'impressions', 'cpm', 'ctr'],
-}
-function toCsvValue(value: string | number) {
-  const text = String(value)
-  return /[";\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text
-}
-function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
-  const content = '﻿' + [headers, ...rows].map(row => row.map(toCsvValue).join(';')).join('\r\n')
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }))
-  const anchor = document.createElement('a')
-  anchor.href = url; anchor.download = filename; anchor.click()
-  URL.revokeObjectURL(url)
-}
-
 function ImportPanel({ today, onSubmitted }: { today: string; onSubmitted: () => Promise<unknown> }) {
   const [fileName, setFileName] = useState('')
   const [headers, setHeaders] = useState<string[]>([])
@@ -87,21 +51,24 @@ function ImportPanel({ today, onSubmitted }: { today: string; onSubmitted: () =>
     catch (cause) { return errorMessage(cause) }
   }, [values, headers, mapping, level, today, attribution])
   const previewTotals = Array.isArray(preview) ? aggregateMeta(preview) : null
+  const fileLoader = useRef(createLatestFileLoader(async (file: File) => {
+    if (file.size > 2_000_000) throw new Error('Arquivo acima de 2 MB. Divida a exportação em partes menores.')
+    return parseSpreadsheetFile(file)
+  }, (file, parsed) => {
+    setFileName(file.name); setHeaders(parsed.headers); setValues(parsed.values)
+    setMapping(defaultCsvMapping(parsed.headers)); setFileError('')
+  }, cause => { setFileError(errorMessage(cause)); setValues([]); setMapping(null); setFileName('') }))
   const load = async (file?: File) => {
-    if (!file) return
-    try {
-      if (file.size > 2_000_000) throw new Error('Arquivo acima de 2 MB. Divida a exportação em partes menores.')
-      const parsed = await parseSpreadsheetFile(file)
-      setFileName(file.name); setHeaders(parsed.headers); setValues(parsed.values)
-      setMapping(defaultCsvMapping(parsed.headers)); setFileError('')
-    } catch (cause) { setFileError(errorMessage(cause)); setValues([]); setMapping(null) }
+    if (!file || busy) return
+    setMapping(null); setValues([]); setBrlConfirmed(false); setFileError('')
+    await fileLoader.current(file)
   }
   const submit = async () => {
     if (!Array.isArray(preview) || !preview.length) return
     setBusy(true)
     try {
       await arenaRpc('meta_import_daily', { p_filename: fileName, p_rows: preview })
-      await onSubmitted()
+      try { await onSubmitted() } catch { toast.warning('Importação registrada. Atualize a página para conferir.') }
       toast.success(preview.length + ' linhas enviadas para aprovação do gestor.')
       setValues([]); setMapping(null); setFileName(''); setBrlConfirmed(false)
     } catch (cause) { toast.error(errorMessage(cause)) }
@@ -129,7 +96,7 @@ function ImportPanel({ today, onSubmitted }: { today: string; onSubmitted: () =>
       <div className="sm:col-span-2"><Label htmlFor="meta-attribution">Janela de atribuição da exportação</Label><Input id="meta-attribution" maxLength={120} value={attribution} onChange={event => setAttribution(event.target.value)} /></div>
     </div>
     {fileError && <p role="alert" className="text-sm text-destructive">{fileError}</p>}
-    {mapping && <><div><h3 className="font-medium">Conferir colunas · {fileName}</h3><p className="text-xs text-muted-foreground">Campos opcionais sem coluna serão tratados como zero.</p></div>
+    {mapping && <><div><h3 className="font-medium">Conferir colunas · {fileName}</h3><p className="text-xs text-muted-foreground">Métricas sem coluna ficam indisponíveis para comparação e taxas.</p></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{csvFields.map(field => <div key={field.key}><Label htmlFor={'map-' + field.key}>{field.label}{field.required ? ' *' : ''}</Label><select id={'map-' + field.key} className={selectClass} value={mapping[field.key]} onChange={event => setMapping({ ...mapping, [field.key]: event.target.value })}><option value="">Sem coluna</option>{headers.map((header, index) => <option key={index} value={header}>{header}</option>)}</select></div>)}</div>
       {typeof preview === 'string' ? <p role="alert" className="text-sm text-destructive">{preview}</p> : preview && previewTotals && <div className="rounded-lg border border-border/60 p-4 text-sm"><strong>{preview.length} linhas prontas.</strong> A importação atualiza dados com os mesmos IDs e datas.<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground"><span>Gasto: {money(previewTotals.spend)}</span><span>Leads: {previewTotals.leads}</span><span>Compras: {previewTotals.purchases}</span><span>Cliques no link: {previewTotals.linkClicks}</span><span>Conversas iniciadas: {previewTotals.messagesStarted}</span></div><p className="mt-2 text-xs text-muted-foreground">Revise o mapeamento e a janela de atribuição antes de confirmar. Em registros novos, colunas não exportadas ficam em zero; na reimportação, métricas omitidas são preservadas.</p></div>}
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={brlConfirmed} onChange={event => setBrlConfirmed(event.target.checked)} /> Confirmo que o valor gasto e o valor de compras estão em BRL.</label>
@@ -227,184 +194,6 @@ function LeadImportPanel({ onSubmitted }: { onSubmitted: () => Promise<unknown> 
   </section>
 }
 
-function PendingImports({ metricsBatches, leadBatches, canReview, onReviewed }: {
-  metricsBatches: MetricsBatch[]; leadBatches: LeadBatch[]; canReview: boolean; onReviewed: () => Promise<unknown>
-}) {
-  const [busy, setBusy] = useState<string | null>(null)
-  const [bulkBusy, setBulkBusy] = useState(false)
-  const [rejecting, setRejecting] = useState<string | null>(null)
-  const [reason, setReason] = useState('')
-  const pendingMetrics = metricsBatches.filter(batch => batch.status === 'pendente')
-  const pendingLeads = leadBatches.filter(batch => batch.status === 'pendente')
-  const pendingTotal = pendingMetrics.length + pendingLeads.length
-  const reviewOne = (kind: 'metrics' | 'leads', batch: Batch, action: 'aprovar' | 'rejeitar', note: string) => {
-    const args = { p_batch_id: batch.id, p_action: action, p_expected_updated_at: batch.updated_at, p_note: action === 'rejeitar' ? note : '' }
-    return kind === 'metrics' ? arenaRpc<Batch>('meta_review_traffic_import', args) : arenaRpc<LeadBatch>('meta_review_lead_import', args)
-  }
-  const review = async (kind: 'metrics' | 'leads', batch: Batch, action: 'aprovar' | 'rejeitar') => {
-    if (action === 'rejeitar' && reason.trim().length < 3) return
-    setBusy(batch.id)
-    try {
-      const reviewedBatch = await reviewOne(kind, batch, action, reason.trim())
-      setRejecting(null); setReason('')
-      if (action === 'aprovar' && 'result' in reviewedBatch && reviewedBatch.result) notifyLeadResult(reviewedBatch.result)
-      else toast.success(action === 'aprovar' ? 'Importação aprovada' : 'Importação rejeitada')
-      try { await onReviewed() } catch { toast.warning('Revisão registrada. Atualize a página para conferir os dados.') }
-    } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(null) }
-  }
-  const approveAll = async () => {
-    const targets = [
-      ...pendingMetrics.map(batch => ({ kind: 'metrics' as const, batch })),
-      ...pendingLeads.map(batch => ({ kind: 'leads' as const, batch })),
-    ]
-    if (!targets.length) return
-    setBulkBusy(true)
-    let approved = 0
-    const failures: string[] = []
-    for (const { kind, batch } of targets) {
-      try {
-        const reviewedBatch = await reviewOne(kind, batch, 'aprovar', '')
-        if ('result' in reviewedBatch && reviewedBatch.result?.failed) failures.push(`${batch.filename}: ${reviewedBatch.result.failed} linha(s) não importada(s); confira o histórico`)
-        approved++
-      }
-      catch (cause) { failures.push(`${batch.filename}: ${errorMessage(cause)}`) }
-    }
-    try { await onReviewed() } catch { toast.warning('Revisões registradas. Atualize a página para conferir os dados.') }
-    finally { setBulkBusy(false) }
-    if (failures.length) toast.error(`${approved} aprovada(s), ${failures.length} falhou/falharam: ${failures.join(' · ')}`)
-    else toast.success(`${approved} ${approved === 1 ? 'importação aprovada' : 'importações aprovadas'}`)
-  }
-  const actions = (kind: 'metrics' | 'leads', batch: Batch) => canReview && <div className="flex flex-wrap gap-2">
-    <Button size="sm" disabled={busy !== null || bulkBusy} onClick={() => void review(kind, batch, 'aprovar')}>Aprovar</Button>
-    <Button size="sm" variant="outline" disabled={busy !== null || bulkBusy} onClick={() => { setRejecting(batch.id); setReason('') }}>Rejeitar</Button>
-  </div>
-  const rejectForm = (kind: 'metrics' | 'leads', batch: Batch) => rejecting === batch.id && <div className="mt-3 flex flex-wrap gap-2">
-    <Input aria-label="Motivo da rejeição" maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo obrigatório" />
-    <Button size="sm" variant="destructive" disabled={busy === batch.id || reason.trim().length < 3} onClick={() => void review(kind, batch, 'rejeitar')}>Confirmar rejeição</Button>
-    <Button size="sm" variant="ghost" onClick={() => setRejecting(null)}>Cancelar</Button>
-  </div>
-  return <section className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="text-lg font-medium">Pendentes de aprovação</h2><p className="mt-1 text-sm text-muted-foreground">{canReview ? 'Aprovar métricas publica os números em Desempenho; aprovar leads sincroniza com o CRM.' : 'Aguardando revisão por Gestor de Tráfego, Executive ou Super Admin.'}</p></div>
-      {canReview && pendingTotal > 0 && <Button size="sm" variant="outline" disabled={busy !== null || bulkBusy} onClick={() => void approveAll()}>{bulkBusy ? 'Aprovando…' : `Aprovar todas (${pendingTotal})`}</Button>}
-    </div>
-    {!pendingMetrics.length && !pendingLeads.length && <p className="text-sm text-muted-foreground">Nenhuma importação aguardando aprovação.</p>}
-    {pendingMetrics.map(batch => {
-      const preview = aggregateMeta(batch.rows)
-      const objective = summarizeObjectives(batch.rows)
-      return <article key={batch.id} className="rounded-lg border border-border/60 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><p className="font-medium">Métricas · {batch.source === 'api' ? 'Meta API' : 'Planilha'} · {batch.filename}</p><p className="text-xs text-muted-foreground">{batch.row_count} linhas · enviado em {new Date(batch.created_at).toLocaleString('pt-BR')}</p></div>
-          {actions('metrics', batch)}
-        </div>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"><span>Gasto: {money(preview.spend)}</span><span>Leads: {preview.leads}</span><span>Compras: {preview.purchases}</span>{objective.dominant && <span>Objetivo dominante: {objective.dominant}</span>}{objective.mixed && <span>Objetivos mistos</span>}</div>
-        <details className="mt-3"><summary className="cursor-pointer text-sm">Conferir todas as linhas de métricas</summary><div className="mt-3 max-h-96 overflow-auto"><table className="w-full text-left text-xs"><thead><tr>{['Data', 'Campanha / conjunto / anúncio', 'Gasto', 'Leads', 'Compras'].map(label => <th key={label} className="px-2 py-2">{label}</th>)}</tr></thead><tbody>{batch.rows.map((row, index) => <tr key={index} className="border-t border-border/40"><td className="px-2 py-2">{formatDate(row.date)}</td><td className="px-2 py-2">{[row.campaign_name || row.campaign_id, row.adset_id, row.ad_id].filter(Boolean).join(' · ')}</td><td className="px-2 py-2">{money(row.spend)}</td><td className="px-2 py-2">{row.leads}</td><td className="px-2 py-2">{row.purchases}</td></tr>)}</tbody></table></div></details>
-        {rejectForm('metrics', batch)}
-      </article>
-    })}
-    {pendingLeads.map(batch => {
-      const summary = summarizeLeadImport(batch.rows)
-      return <article key={batch.id} className="rounded-lg border border-border/60 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><p className="font-medium">Leads · {batch.filename}</p><p className="text-xs text-muted-foreground">{batch.row_count} linhas · enviado em {new Date(batch.created_at).toLocaleString('pt-BR')}</p></div>
-          {actions('leads', batch)}
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">{summary.total} linhas · {summary.complete} prontos para o CRM · {summary.manual} para completar · {summary.duplicates} duplicados no arquivo</p>
-        <details className="mt-3"><summary className="cursor-pointer text-sm">Conferir todos os leads e respostas</summary><div className="mt-3 max-h-96 space-y-3 overflow-auto">{batch.rows.map((row, index) => <details key={index} className="rounded-lg bg-muted/30 p-3"><summary className="cursor-pointer text-sm">Linha {row.source_row || index + 2} · {row.full_name || 'Nome não informado'} · {row.phone || 'Sem telefone'}</summary><p className="mt-2 text-xs">{row.email || 'Sem e-mail'} · Atleta: {row.athlete_name || 'Não informado'} · {row.athlete_birth_date || 'Sem nascimento'} · {row.athlete_position || 'Sem posição'}</p><FormAnswers fields={row.field_data} />{row.warnings?.map((warning, i) => <p key={i} className="mt-2 text-xs text-muted-foreground">{warning}</p>)}</details>)}</div></details>
-        {rejectForm('leads', batch)}
-      </article>
-    })}
-  </section>
-}
-
-const runStatusLabel: Record<MetaSyncRun['status'], string> = { success: 'Sucesso', error: 'Erro', running: 'Em andamento' }
-function RunStatus({ run, emptyLabel }: { run: MetaSyncRun | null; emptyLabel: string }) {
-  if (!run) return <p className="text-xs text-muted-foreground">{emptyLabel}</p>
-  return <p className="text-xs text-muted-foreground">{runStatusLabel[run.status]} · {new Date(run.started_at).toLocaleString('pt-BR')}
-    {run.status === 'success' && ` · ${run.rows_synced} ${run.kind === 'insights' ? 'linhas capturadas para aprovação' : 'leads conferidos'}`}{run.status === 'error' && run.error_message && ` · ${run.error_message}`}</p>
-}
-
-function ConnectionPanel({ onProposeChange }: { onProposeChange: () => void }) {
-  const { isExecutive } = useRoles()
-  const [accountId, setAccountId] = useState('')
-  const [accountName, setAccountName] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [disconnectId, setDisconnectId] = useState<string | null>(null)
-  const [reason, setReason] = useState('')
-  const accountsQuery = useQuery({ queryKey: ['meta-ad-accounts'], queryFn: () =>
-    fetchAllPages<MetaAdAccount>((from, to) => arenaClient.from('meta_ad_accounts').select('*').order('connected_at', { ascending: false }).range(from, to)) })
-  const runsQuery = useQuery({ queryKey: ['meta-sync-runs'], refetchInterval: 30_000, queryFn: () =>
-    fetchAllPages<MetaSyncRun>((from, to) => arenaClient.from('meta_sync_runs').select('*').order('started_at', { ascending: false }).limit(60).range(from, to)) })
-  const accounts = accountsQuery.data || []
-  const runs = runsQuery.data || []
-  const runningInsights = runs.some(run => run.kind === 'insights' && run.status === 'running')
-  const reconciliation = lastRunFor(runs, 'leads_reconciliation')
-  const connect = async (event: React.FormEvent) => {
-    event.preventDefault(); if (!accountId.trim() || !accountName.trim()) return
-    setBusy(true)
-    try {
-      await arenaRpc('meta_connect_ad_account', { p_account_id: accountId.trim(), p_account_name: accountName.trim() })
-      setAccountId(''); setAccountName(''); await accountsQuery.refetch()
-      toast.success('Conta Meta conectada')
-    } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(false) }
-  }
-  const disconnect = async () => {
-    if (!disconnectId || reason.trim().length < 3) return
-    setBusy(true)
-    try {
-      await arenaRpc('meta_disconnect_ad_account', { p_account_id: disconnectId, p_reason: reason.trim() })
-      setDisconnectId(null); setReason(''); await accountsQuery.refetch()
-      toast.success('Conta Meta desconectada')
-    } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(false) }
-  }
-  const syncNow = async () => {
-    setBusy(true)
-    try {
-      const { data, error } = await supabase.functions.invoke('meta-insights-sync', { body: {} })
-      if (error) {
-        const context = (error as { context?: unknown }).context
-        if (context instanceof Response) {
-          const failure = await context.json().catch(() => null)
-          const reason = failure?.error || failure?.results?.find((item: { error?: string }) => item.error)?.error
-          if (reason) throw new Error(reason)
-        }
-        throw error
-      }
-      if (data?.ok === false) throw new Error('A sincronização falhou. Consulte o diagnóstico abaixo.')
-      if (data?.results?.every((item: { skipped?: boolean }) => item.skipped)) {
-        toast.info(data.results.length ? 'Uma sincronização já está em andamento.' : 'Nenhuma conta ativa para sincronizar.')
-      } else {
-        toast.success('Métricas recebidas para aprovação em Tráfego')
-      }
-    } catch (cause) { toast.error(errorMessage(cause)) } finally {
-      await runsQuery.refetch()
-      setBusy(false)
-    }
-  }
-  return <div className="space-y-5">
-    <section className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-medium">Contas conectadas</h2><p className="mt-1 text-sm text-muted-foreground">Sincronização automática de métricas via API oficial da Meta, a cada 30 minutos, mais uma varredura diária mais profunda.</p></div>
-        <Button size="sm" disabled={busy || runningInsights} onClick={() => void syncNow()}>{runningInsights ? 'Sincronizando…' : 'Sincronizar agora'}</Button></div>
-      {accountsQuery.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(accountsQuery.error)}</p>}
-      {!accountsQuery.isLoading && !accounts.length && <p className="text-sm text-muted-foreground">Nenhuma conta Meta conectada ainda.</p>}
-      {accounts.map(item => <div key={item.id} className="rounded-lg border border-border/60 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">{item.account_name || item.account_id} <span className="text-xs text-muted-foreground">({item.account_id})</span></p>
-          <p className="text-xs text-muted-foreground">{item.status === 'active' ? 'Ativa' : 'Pausada'} · conectada em {new Date(item.connected_at).toLocaleDateString('pt-BR')}</p></div>
-          {isExecutive && item.status === 'active' && <Button size="sm" variant="outline" onClick={() => { setDisconnectId(item.account_id); setReason('') }}>Desconectar</Button>}</div>
-        <RunStatus run={lastRunFor(runs, 'insights', item.account_id)} emptyLabel="Nenhuma sincronização de métricas registrada ainda." />
-        {disconnectId === item.account_id && <div className="mt-3 flex gap-2"><Input aria-label="Motivo da desconexão" maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo obrigatório" /><Button size="sm" variant="destructive" disabled={busy || reason.trim().length < 3} onClick={() => void disconnect()}>Confirmar</Button><Button size="sm" variant="ghost" onClick={() => setDisconnectId(null)}>Cancelar</Button></div>}
-      </div>)}
-      <div className="border-t border-border/60 pt-3"><RunStatus run={reconciliation} emptyLabel="Nenhuma reconciliação de leads registrada ainda." /><p className="text-xs text-muted-foreground">Reconciliação de leads de formulário roda a cada hora, recuperando entregas de webhook perdidas.</p></div>
-    </section>
-    {isExecutive ? <form onSubmit={connect} className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
-      <div><h2 className="text-lg font-medium">Conectar conta</h2><p className="text-sm text-muted-foreground">Requer o token de sistema já configurado no servidor (ver documentação de configuração). Aqui você só informa qual conta sincronizar.</p></div>
-      <div className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor="meta-account-id">ID da conta (act_...)</Label><Input id="meta-account-id" required value={accountId} onChange={event => setAccountId(event.target.value)} /></div>
-        <div><Label htmlFor="meta-account-name">Nome da conta</Label><Input id="meta-account-name" required value={accountName} onChange={event => setAccountName(event.target.value)} /></div></div>
-      <Button disabled={busy}>Conectar</Button>
-    </form> : <section className="surface-panel space-y-3 rounded-2xl p-5 sm:p-6"><h2 className="font-medium">Conectar/desconectar contas</h2><p className="text-sm text-muted-foreground">Somente Executive e Super Admin podem conectar ou desconectar contas Meta. Encontrou algo que precisa mudar?</p><Button size="sm" variant="outline" onClick={onProposeChange}>Propor alteração</Button></section>}
-  </div>
-}
-
 function Suggestions({ campaigns }: { campaigns: { id: string; name: string }[] }) {
   const { user } = useAuth()
   const [subject, setSubject] = useState('')
@@ -452,99 +241,52 @@ export default function Trafego() {
   const [level, setLevel] = useState<MetaLevel>('campaign')
   const [account, setAccount] = useState('')
   const [campaign, setCampaign] = useState('')
-  const [origin, setOrigin] = useState('')
+  const [origin, setOrigin] = useState<MetaDailyRow['source'] | ''>('')
   const start = period === 'custom' ? customStart
     : period === 'today' ? today
     : period === 'yesterday' ? shiftDate(today, -1)
     : period === 'month' ? today.slice(0, 7) + '-01'
     : shiftDate(today, 1 - Number(period))
   const end = period === 'custom' ? customEnd : period === 'yesterday' ? shiftDate(today, -1) : today
-  const validRange = start <= end && end <= today && start.length === 10 && end.length === 10
-  const query = useQuery({ queryKey: ['meta-traffic', user?.id, start, end, level], enabled: !!user && validRange, queryFn: () => fetchAllPages<MetaDailyRow>((from, to) => arenaClient.from('meta_traffic_daily').select('*').gte('date', start).lte('date', end).eq('level', level).order('date').order('id').range(from, to)) })
-  const batchQuery = useQuery({ queryKey: ['meta-imports', user?.id], enabled: !!user, refetchInterval: 30_000, queryFn: () => fetchAllPages<MetricsBatch>((from, to) => arenaClient.from('meta_import_batches').select('*').order('created_at', { ascending: false }).range(from, to)) })
-  const leadBatchQuery = useQuery({ queryKey: ['meta-lead-imports', user?.id], enabled: !!user, refetchInterval: 30_000, queryFn: () => fetchAllPages<LeadBatch>((from, to) => arenaClient.from('meta_lead_import_batches').select('*').order('created_at', { ascending: false }).range(from, to)) })
+  const validRange = validTrafficDate(start) && validTrafficDate(end) && start <= end && end <= today
+  const query = useQuery({ queryKey: ['meta-traffic', user?.id, start, end, level], enabled: !!user && validRange && tab === 'performance', queryFn: () => fetchAllPages<MetaDailyRow>((from, to) => arenaClient.from('meta_traffic_daily').select('*').gte('date', start).lte('date', end).eq('level', level).order('date').order('id').range(from, to)) })
+  const pendingCount = useQuery({ queryKey: ['meta-review-count', user?.id], enabled: !!user, refetchInterval: tab === 'approvals' ? 30_000 : false, queryFn: () => fetchTrafficReviewList({ status: 'pendente', limit: 1 }) })
   const allRows = query.data || emptyRows
   const accounts = useMemo(() => [...new Map(allRows.map(row => [row.account_id, { id: row.account_id, name: row.account_name || row.account_id }])).values()], [allRows])
   const accountRows = account ? allRows.filter(row => row.account_id === account) : allRows
   const campaigns = useMemo(() => [...new Map(accountRows.map(row => [row.campaign_id, { id: row.campaign_id, name: row.campaign_name }])).values()], [accountRows])
-  const originRows = origin ? accountRows.filter(row => row.source === origin) : accountRows
-  const rows = originRows.filter(row => !campaign || row.campaign_id === campaign)
-  const total = aggregateMeta(rows)
-  const objectiveSummary = useMemo(() => summarizeObjectives(rows), [rows])
-  const [showAllMetrics, setShowAllMetrics] = useState(false)
-  const daily = useMemo(() => [...new Set(rows.map(row => row.date))].sort().map(date => ({ date: formatDate(date), ...aggregateMeta(rows.filter(row => row.date === date)) })), [rows])
-  const byCampaign = useMemo(() => campaigns.map(item => ({ ...item, ...aggregateMeta(originRows.filter(row => row.campaign_id === item.id)) })).sort((a, b) => b.spend - a.spend), [campaigns, originRows])
-  const cplMedian = median(byCampaign.flatMap(item => item.cpl === null ? [] : [item.cpl]))
-  const cpaMedian = median(byCampaign.flatMap(item => item.cpa === null ? [] : [item.cpa]))
-  const attributionWindows = [...new Set(rows.map(row => row.attribution_window))]
-  const reconciliationQuery = useQuery({ queryKey: ['meta-lead-reconciliation', user?.id, start, end], enabled: !!user && validRange && level === 'campaign',
-    queryFn: () => arenaRpc<{ campaign_id: string; campaign_name: string; form_leads_count: number }[]>('meta_traffic_lead_reconciliation', { p_start: start, p_end: end }) })
-  const attributionQuery = useQuery({ queryKey: ['meta-crm-attribution', user?.id, start, end], enabled: !!user && validRange && level === 'campaign',
-    queryFn: () => arenaRpc<{ campaign_id: string; campaign_name: string; confirmed_sales: number; confirmed_revenue: number }[]>('meta_crm_attribution_daily', { p_start: start, p_end: end }) })
-  const attributionRows = (attributionQuery.data || []).filter(row => campaigns.some(item => item.id === row.campaign_id) && (!campaign || row.campaign_id === campaign))
-  const confirmedSales = attributionRows.reduce((sum, row) => sum + row.confirmed_sales, 0)
-  const confirmedRevenue = attributionRows.reduce((sum, row) => sum + row.confirmed_revenue, 0)
-  const cpaReal = cost(total.spend, confirmedSales)
-  const roasReal = cost(confirmedRevenue, total.spend)
-  const reconciliationRows = (reconciliationQuery.data || []).filter(row => campaigns.some(item => item.id === row.campaign_id))
+  const scope = useMemo<TrafficScope>(() => ({ start, end, level, accountId: account || null, campaignId: campaign || null, source: origin || null }), [start, end, level, account, campaign, origin])
+  const viewResult = useMemo(() => {
+    if (!validRange || !query.data || query.isError) return { view: null, error: null }
+    try { return { view: buildTrafficView(query.data, scope), error: null } }
+    catch (cause) { return { view: null, error: errorMessage(cause) } }
+  }, [query.data, query.isError, scope, validRange])
+  const queryState: QueryState<MetaDailyRow[]> = !validRange ? { state: 'error', message: 'Escolha um período válido até hoje.' }
+    : query.isError || viewResult.error ? { state: 'error', message: viewResult.error || errorMessage(query.error) }
+    : query.isPending ? { state: 'loading' } : { state: 'ready', data: allRows }
+  const cohortQuery = useQuery({ queryKey: ['meta-traffic-cohort', user?.id, start, end, account, campaign, origin], enabled: !!user && validRange && level === 'campaign' && tab === 'performance',
+    queryFn: () => arenaRpc<TrafficCohortResult>('meta_traffic_cohort', { p_start: start, p_end: end, p_account_id: account || null, p_campaign_id: campaign || null, p_source: origin || null }) })
+  const cohortState: QueryState<TrafficCohortResult> | null = level !== 'campaign' ? null : cohortQuery.isError ? { state: 'error', message: errorMessage(cohortQuery.error) }
+    : cohortQuery.data ? { state: 'ready', data: cohortQuery.data } : { state: 'loading' }
   const reviewed = async () => {
     await refreshDashboardMutation(queryClient)
   }
   return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6"><header><h1 className="text-3xl font-light">Tráfego</h1><p className="mt-2 text-sm text-muted-foreground">Desempenho da Meta Ads para decisões de investimento, aquisição e otimização.</p></header>
-    <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import" className="gap-1.5"><Upload className="h-3.5 w-3.5" /> Importar</TabsTrigger><TabsTrigger value="approvals">Aprovações</TabsTrigger><TabsTrigger value="data">Dados e edições</TabsTrigger><TabsTrigger value="audit">Auditoria</TabsTrigger><TabsTrigger value="connection">Conexão</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
-      <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-origin">Origem</Label><select id="traffic-origin" className={selectClass} value={origin} onChange={event => setOrigin(event.target.value)}><option value="">Todas</option><option value="csv">CSV</option><option value="api">API</option></select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
-        {!validRange && <p role="alert" className="text-sm text-destructive">Escolha um período válido até hoje.</p>}{query.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(query.error)}</p>}
-        {(() => {
-          const metricCards: [string, string, string][] = [
-            ['cpl', 'CPL · custo por lead', format(total.cpl, 'money')],
-            ['cpa', 'CPA · custo por aquisição', format(total.cpa, 'money')],
-            ['ctr', 'CTR · cliques no link', format(total.ctr, 'percent')],
-            ['costPerMessage', 'Custo por mensagem iniciada', format(total.costPerMessage, 'money')],
-            ['spend', 'Valor gasto', format(total.spend, 'money')],
-            ['leads', 'Leads Meta', format(total.leads, 'count')],
-            ['purchases', 'Aquisições Meta (compras)', format(total.purchases, 'count')],
-            ['messagesStarted', 'Conversas iniciadas', format(total.messagesStarted, 'count')],
-            ['linkClicks', 'Cliques no link', format(total.linkClicks, 'count')],
-            ['cpc', 'CPC · custo por clique no link', format(total.cpc, 'money')],
-            ['impressions', 'Impressões', format(total.impressions, 'count')],
-            ['roas', 'ROAS', format(total.roas, 'ratio')],
-            ['cpm', 'CPM · custo por mil impressões', format(total.cpm, 'money')],
-          ]
-          const essentialKeys = objectiveSummary.dominant ? essentialMetricsByCategory[objectiveSummary.dominant] : null
-          const essentialCards = essentialKeys ? essentialKeys.map(key => metricCards.find(([cardKey]) => cardKey === key)!) : metricCards
-          const card = ([key, label, value]: [string, string, string]) => <article className="surface-panel rounded-xl p-4" key={key}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold">{query.isLoading ? '…' : value}</p></article>
-          return <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{essentialCards.map(card)}</div>
-            {essentialKeys && <Collapsible open={showAllMetrics} onOpenChange={setShowAllMetrics}>
-              <CollapsibleTrigger asChild><Button variant="outline" size="sm">{showAllMetrics ? 'Ocultar todas as métricas' : 'Ver todas as métricas'}</Button></CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{metricCards.map(card)}</CollapsibleContent>
-            </Collapsible>}
-            {objectiveSummary.mixed && <p className="text-sm text-amber-400">Este recorte mistura campanhas com objetivos diferentes (ex.: leads e vendas). Mostrando todas as métricas para evitar leitura enviesada.</p>}
-          </>
-        })()}
-        <p className="text-xs text-muted-foreground">CPL = gasto ÷ leads. CPA = gasto ÷ compras reportadas pela Meta. CTR = cliques no link ÷ impressões × 100; custo por clique é o CPC, exibido separadamente. Custo por mensagem iniciada = gasto ÷ conversas iniciadas. CPM = gasto ÷ impressões × 1000. Os resultados seguem a atribuição da exportação e não equivalem a vendas confirmadas no CRM. “—” indica denominador zero. Cada nível é analisado separadamente para evitar contagem dupla.</p>
-        {level === 'campaign' && <section className="surface-panel grid gap-3 rounded-2xl p-5 sm:grid-cols-2"><article><p className="text-xs text-muted-foreground">CPA real (CRM) · vendas aprovadas</p><p className="mt-2 text-xl font-semibold">{attributionQuery.isLoading ? '…' : format(cpaReal, 'money')}</p></article><article><p className="text-xs text-muted-foreground">ROAS real (CRM) · vendas aprovadas</p><p className="mt-2 text-xl font-semibold">{attributionQuery.isLoading ? '…' : format(roasReal, 'ratio')}</p></article><p className="text-xs text-muted-foreground sm:col-span-2">Baseado em vendas aprovadas no CRM vinculadas a leads de formulário Meta gerados no período (coorte pela data de geração do lead, não pela data do relatório). Cancelamentos e estornos saem do cálculo automaticamente. Diferente do CPA/ROAS acima, que seguem a atribuição declarada pela própria Meta.</p></section>}
-        {!!rows.length && <section className="surface-panel space-y-3 rounded-2xl p-5"><h2 className="font-medium">Referência das próprias campanhas</h2><p className="text-sm text-muted-foreground">Medianas no período e conta selecionados: CPL {format(cplMedian, 'money')} · CPA {format(cpaMedian, 'money')}. Use como comparação interna; campanha, público e objetivo influenciam o resultado.</p><p className="text-xs text-muted-foreground">Atribuição: {attributionWindows.join(' · ')}</p>{attributionWindows.length > 1 && <p className="text-sm text-amber-400">Há janelas de atribuição diferentes neste recorte. Compare campanhas com cautela.</p>}</section>}
-        <section className="surface-panel rounded-2xl p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="font-medium">Investimento e resultados por dia</h2>{!!daily.length && <Button variant="outline" size="sm" onClick={() => downloadCsv('trafego_diario_' + start + '_a_' + end + '.csv', ['Data', 'Investimento', 'Leads', 'Compras', 'Conversas iniciadas'], daily.map(item => [item.date, item.spend.toFixed(2), item.leads, item.purchases, item.messagesStarted]))}>Exportar CSV</Button>}</div>{daily.length ? <div className="h-72" role="img" aria-label="Gráfico diário de investimento, leads e compras"><ResponsiveContainer width="100%" height="100%"><AreaChart data={daily}><CartesianGrid strokeDasharray="3 3" opacity={0.2} /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis yAxisId="brl" tick={{ fontSize: 11 }} tickFormatter={value => `R$ ${value}`} /><YAxis yAxisId="count" orientation="right" tick={{ fontSize: 11 }} /><Tooltip formatter={(value: number, name: string) => name === 'Investimento' ? money(value) : value} /><Legend /><Area yAxisId="brl" type="monotone" dataKey="spend" name="Investimento" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.18} /><Area yAxisId="count" type="monotone" dataKey="leads" name="Leads" stroke="#22c55e" fill="#22c55e" fillOpacity={0.08} /><Area yAxisId="count" type="monotone" dataKey="purchases" name="Compras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.08} /></AreaChart></ResponsiveContainer></div> : <p className="py-10 text-center text-sm text-muted-foreground">Nenhum dado da Meta neste filtro. Importe um CSV para começar.</p>}</section>
-        <section className="surface-panel overflow-hidden rounded-2xl"><div className="flex flex-wrap items-center justify-between gap-2 p-5"><div><h2 className="font-medium">Campanhas</h2><p className="text-xs text-muted-foreground">Ordenadas por investimento no período.</p></div>{!!byCampaign.length && <Button variant="outline" size="sm" onClick={() => downloadCsv('campanhas_trafego_' + start + '_a_' + end + '.csv', ['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisicoes', 'CPA', 'CTR link (%)', 'CPC link', 'Conversas', 'Custo por mensagem'], byCampaign.map(item => [item.name, item.spend.toFixed(2), item.leads, item.cpl ?? '', item.purchases, item.cpa ?? '', item.ctr ?? '', item.cpc ?? '', item.messagesStarted, item.costPerMessage ?? '']))}>Exportar CSV</Button>}</div><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="border-y border-border/60 text-xs text-muted-foreground"><tr>{['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisições', 'CPA', 'CTR link', 'CPC link', 'Conversas', 'Custo por mensagem'].map(label => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{byCampaign.map(item => <tr className="border-b border-border/40" key={item.id}><td className="px-4 py-3">{item.name}</td><td className="px-4 py-3">{format(item.spend, 'money')}</td><td className="px-4 py-3">{item.leads}</td><td className="px-4 py-3">{format(item.cpl, 'money')}</td><td className="px-4 py-3">{item.purchases}</td><td className="px-4 py-3">{format(item.cpa, 'money')}</td><td className="px-4 py-3">{format(item.ctr, 'percent')}</td><td className="px-4 py-3">{format(item.cpc, 'money')}</td><td className="px-4 py-3">{item.messagesStarted}</td><td className="px-4 py-3">{format(item.costPerMessage, 'money')}</td></tr>)}</tbody></table></div>{!byCampaign.length && <p className="p-5 text-sm text-muted-foreground">Sem campanhas para exibir.</p>}</section>
-        {level === 'campaign' && !!byCampaign.length && <section className="surface-panel space-y-3 rounded-2xl p-5"><h2 className="font-medium">Leads: CSV agregado vs. fila de formulários</h2><p className="text-xs text-muted-foreground">Divergência é esperada: o CSV é o relatório agregado da Meta (pode incluir tipos de ação que contam como "lead" além do formulário); a fila individual só recebe formulários (Lead Ads) e pode ter atraso de sincronização.</p><table className="w-full text-left text-sm"><thead className="text-xs text-muted-foreground"><tr><th className="py-1">Campanha</th><th className="py-1">Leads (CSV)</th><th className="py-1">Leads (fila)</th></tr></thead><tbody>{byCampaign.map(item => <tr key={item.id} className="border-t border-border/40"><td className="py-1">{item.name}</td><td className="py-1">{item.leads}</td><td className="py-1">{reconciliationRows.find(row => row.campaign_id === item.id)?.form_leads_count ?? 0}</td></tr>)}</tbody></table></section>}
+    <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import" className="gap-1.5"><Upload className="h-3.5 w-3.5" /> Importar</TabsTrigger><TabsTrigger value="approvals">Aprovações{pendingCount.data?.count ? ` (${pendingCount.data.count})` : ''}</TabsTrigger><TabsTrigger value="data">Dados e edições</TabsTrigger><TabsTrigger value="audit">Auditoria</TabsTrigger><TabsTrigger value="connection">Conexão</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
+      <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-origin">Origem</Label><select id="traffic-origin" className={selectClass} value={origin} onChange={event => setOrigin(event.target.value as MetaDailyRow['source'] | '')}><option value="">Todas</option><option value="csv">CSV</option><option value="api">API</option></select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
+        <TrafficOperationIndicator active={tab === 'performance'} />
+        <MetaTrafficPerformance view={viewResult.view} queryState={queryState} cohortState={cohortState} onRetry={() => { void query.refetch(); if (level === 'campaign') void cohortQuery.refetch() }} />
       </TabsContent>
       <TabsContent value="import" className="space-y-5">
-        <ImportPanel today={today} onSubmitted={() => batchQuery.refetch()} />
+        <ImportPanel today={today} onSubmitted={reviewed} />
         <LeadImportPanel onSubmitted={reviewed} />
 
-        <section className="surface-panel rounded-2xl p-5"><h2 className="font-medium">Importações recentes</h2>
-          {(batchQuery.isError || leadBatchQuery.isError) && <p role="alert" className="text-sm text-destructive">{errorMessage(batchQuery.error || leadBatchQuery.error)}</p>}
-          {[...(batchQuery.data || []).map(item => ({ ...item, kind: 'Métricas', result: null })), ...(leadBatchQuery.data || []).map(item => ({ ...item, kind: 'Leads' }))]
-            .sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 15)
-            .map(item => <article key={item.kind + item.id} className="space-y-3 border-b border-border/40 py-3 text-sm"><p>{item.kind} · {item.filename} · {item.row_count} linhas · {new Date(item.created_at).toLocaleString('pt-BR')} · <span className={item.status === 'rejeitado' ? 'text-destructive' : item.status === 'aprovado' ? 'text-emerald-500' : 'text-amber-500'}>{reviewStatusLabel[item.status]}</span>{item.status === 'rejeitado' && item.review_note && <span className="text-muted-foreground"> · {item.review_note}</span>}</p>{item.result && <LeadResult result={item.result} />}</article>)}
-          {!batchQuery.isLoading && !leadBatchQuery.isLoading && !batchQuery.data?.length && !leadBatchQuery.data?.length && <p className="mt-3 text-sm text-muted-foreground">Nenhuma importação registrada.</p>}
-        </section>
+        <MetaPendingImports active={tab === 'import'} canReview={false} history onReviewed={reviewed} />
       </TabsContent>
-      <TabsContent value="approvals" className="space-y-5"><p className="text-sm text-muted-foreground">A aprovação manual libera dados para Desempenho e leads para a equipe SDR. Gestor de Tráfego, Executive e Super Admin podem revisar.</p>{(batchQuery.isError || leadBatchQuery.isError) && <p role="alert" className="text-sm text-destructive">{errorMessage(batchQuery.error || leadBatchQuery.error)}</p>}<MetaLeadApprovals canReview={canReview} onReviewed={reviewed} /><PendingImports metricsBatches={batchQuery.data || []} leadBatches={leadBatchQuery.data || []} canReview={canReview} onReviewed={reviewed} /></TabsContent>
-      <TabsContent value="data" className="space-y-5"><MetaTrafficData canEdit={canReview} onSaved={reviewed} /><MetaImportEdits leadBatches={leadBatchQuery.data || []} metricsBatches={batchQuery.data || []} canEdit={canReview} onSaved={reviewed} /></TabsContent>
+      <TabsContent value="approvals" className="space-y-5"><p className="text-sm text-muted-foreground">A aprovação manual libera dados para Desempenho e leads para a equipe SDR. Gestor de Tráfego, Executive e Super Admin podem revisar.</p><MetaLeadApprovals canReview={canReview} onReviewed={reviewed} /><MetaPendingImports active={tab === 'approvals'} canReview={canReview} onReviewed={reviewed} /></TabsContent>
+      <TabsContent value="data" className="space-y-5"><MetaTrafficData canEdit={canReview} onSaved={reviewed} /><MetaImportEdits active={tab === 'data'} canEdit={canReview} onSaved={reviewed} /></TabsContent>
       <TabsContent value="audit"><MetaAudit /></TabsContent>
-      <TabsContent value="connection"><ConnectionPanel onProposeChange={() => setTab('suggestions')} /></TabsContent>
+      <TabsContent value="connection"><MetaTrafficConnection active={tab === 'connection'} onProposeChange={() => setTab('suggestions')} /></TabsContent>
       <TabsContent value="suggestions"><Suggestions campaigns={campaigns} /></TabsContent>
     </Tabs></div></DashboardLayout>
 }
