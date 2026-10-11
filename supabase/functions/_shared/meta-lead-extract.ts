@@ -3,7 +3,7 @@ export interface ExtractedLeadFields { full_name: string; phone: string; email: 
 export interface ChoiceAnswer { choice: string; confidence: number }
 export type SystemOneCaller = (
   criteria: Record<string, string>,
-  instructions: Record<'full_name' | 'phone' | 'email', string>,
+  instructions: Partial<Record<keyof ExtractedLeadFields, string>>,
 ) => Promise<Record<string, ChoiceAnswer>>
 
 // Mesmos rotulos de campo que src/lib/meta-leads.ts (firstAnswer) reconhece no
@@ -37,36 +37,28 @@ function exactMatchFallback(fieldData: FieldAnswer[]): ExtractedLeadFields {
   }
 }
 
-// Formularios do Meta Lead Ads usam o texto real da pergunta como rotulo do
-// campo, que varia por formulario/campanha. Em vez de comparar rotulo exato
-// (fragil - quebra silenciosamente quando o marketing muda o texto), pedimos
-// pro Jev escolher, entre as respostas reais recebidas, qual corresponde a
-// cada campo alvo. Se a chamada falhar (API fora do ar, sem credencial), caimos
-// pro casamento exato de sempre - nunca perdemos um lead por causa disso.
-export async function extractLeadFields(
-  fieldData: FieldAnswer[] | undefined,
-  askJev: SystemOneCaller,
-): Promise<ExtractedLeadFields> {
-  if (!Array.isArray(fieldData) || fieldData.length === 0) {
-    return { full_name: '', phone: '', email: '' }
-  }
-
+// Deterministic answers are authoritative. AI selects only among original answers
+// for fields whose labels are unknown; it never generates contact values.
+export async function extractLeadFields(fieldData: FieldAnswer[] | undefined, askJev: SystemOneCaller): Promise<ExtractedLeadFields> {
+  if (!Array.isArray(fieldData) || !fieldData.length) return { full_name: '', phone: '', email: '' }
+  const known = exactMatchFallback(fieldData)
+  const missing = (Object.keys(QUESTION_INSTRUCTIONS) as (keyof ExtractedLeadFields)[]).filter(key => !known[key])
+  if (!missing.length) return known
+  const instructions = Object.fromEntries(missing.map(key => [key, QUESTION_INSTRUCTIONS[key]]))
   const criteria: Record<string, string> = { [NONE_KEY]: 'Nenhuma resposta corresponde' }
-  fieldData.forEach((field, index) => {
-    criteria[`f${index}`] = `Pergunta: "${field.name || '(sem rotulo)'}" â€” Resposta: "${field.values?.[0] || ''}"`
-  })
-
+  fieldData.forEach((field, index) => { criteria[`f${index}`] = `Pergunta: "${field.name || '(sem rotulo)'}" — Resposta: "${field.values?.[0] || ''}"` })
   try {
-    const answers = await askJev(criteria, QUESTION_INSTRUCTIONS)
-    const pick = (key: keyof ExtractedLeadFields): string => {
-      const answer = answers[key]
-      if (!answer || answer.confidence < CONFIDENCE_THRESHOLD || answer.choice === NONE_KEY) return ''
+    const answers = await askJev(criteria, instructions)
+    for (const key of missing) {
+      const answer = answers?.[key]
+      if (!answer || typeof answer.choice !== 'string' || !/^f(0|[1-9][0-9]*)$/.test(answer.choice)
+        || typeof answer.confidence !== 'number' || !Number.isFinite(answer.confidence)
+        || answer.confidence < CONFIDENCE_THRESHOLD || answer.confidence > 1) continue
       const index = Number(answer.choice.slice(1))
-      return fieldData[index]?.values?.[0] || ''
+      if (!Number.isSafeInteger(index) || index >= fieldData.length) continue
+      const value = fieldData[index]?.values?.[0]
+      if (typeof value === 'string') known[key] = value
     }
-    return { full_name: pick('full_name'), phone: pick('phone'), email: pick('email') }
-  } catch (error) {
-    console.error('extractLeadFields: Jev indisponivel, usando casamento exato como fallback', error)
-    return exactMatchFallback(fieldData)
-  }
+  } catch { /* Keep original deterministic fields; missing contacts remain for human review. */ }
+  return known
 }

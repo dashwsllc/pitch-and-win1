@@ -1,6 +1,8 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0'
 import { metaGraphGet, MetaGraphError, describeMetaGraphError, isAuthError, isPermissionError, type GraphBudget } from './meta-graph.ts'
-import { extractLeadFields, type ChoiceAnswer, type FieldAnswer } from './meta-lead-extract.ts'
+import { extractLeadFields, type FieldAnswer } from './meta-lead-extract.ts'
+
+import { callJev } from './meta-typesafe.ts'
 
 interface LeadDetail {
   id: string; created_time: string; form_id: string; ad_id?: string
@@ -9,41 +11,6 @@ interface LeadDetail {
 }
 
 export type LeadIngestOutcome = { status: 'processed' } | { status: 'ignored' } | { status: 'pending' } | { status: 'error'; error: string }
-
-const TYPESAFE_API_URL = 'https://api.typesafe.ai/v1/systemone'
-
-// Pede pro Jev escolher, entre as respostas reais do formulario, qual
-// corresponde a nome/telefone/email - ver meta-lead-extract.ts. Se
-// TYPESAFE_API_KEY nao estiver configurado ou a API falhar, extractLeadFields
-// cai sozinho pro casamento exato de rotulo (comportamento de sempre).
-async function callJev(
-  criteria: Record<string, string>,
-  instructions: Record<'full_name' | 'phone' | 'email', string>,
-): Promise<Record<string, ChoiceAnswer>> {
-  const apiKey = Deno.env.get('TYPESAFE_API_KEY')
-  if (!apiKey) throw new Error('TYPESAFE_API_KEY não configurado')
-  const questions: Record<string, unknown> = {}
-  for (const [key, instructionText] of Object.entries(instructions)) {
-    questions[key] = { type: 'choice', instructions: instructionText, criteria }
-  }
-  const response = await fetch(TYPESAFE_API_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      state: 'Formulário de captação de leads (agência esportiva) via Meta Lead Ads.',
-      model: 'jev-latest',
-      questions,
-    }),
-  })
-  if (!response.ok) throw new Error(`TypeSafe API respondeu ${response.status}`)
-  const data = await response.json()
-  const result: Record<string, ChoiceAnswer> = {}
-  for (const key of Object.keys(instructions)) {
-    const answer = data.answers?.[key]
-    result[key] = { choice: answer?.choice ?? '', confidence: answer?.confidence ?? 0 }
-  }
-  return result
-}
 
 export interface ClaimedLeadEvent {
   id: string; leadgen_id: string; page_id: string; form_id: string; claim_token: string; processing_attempts: number
@@ -84,7 +51,7 @@ export async function processClaimedLead(admin: SupabaseClient, event: ClaimedLe
       try { formName = (await metaGraphGet<{ name?: string }>(`/${event.form_id}`, { fields: 'name' }, token,
         { deadlineMs: Math.min(budget.deadlineMs, Date.now() + 4000) })).name || '' } catch { /* Informational metadata only. */ }
     }
-    const extracted = await extractLeadFields(detail.field_data, callJev)
+    const extracted = await extractLeadFields(detail.field_data, (criteria, instructions) => callJev(criteria, instructions, { ...budget, deadlineMs: budget.deadlineMs - 1000 }))
     if (Date.now() >= budget.deadlineMs) throw new Error('Or�amento de processamento esgotado')
     await leadRpc(admin, 'meta_lead_event_ingest', { p_id: event.id, p_claim: event.claim_token, p_data: {
       meta_lead_id: detail.id, page_id: event.page_id, form_id: detail.form_id,

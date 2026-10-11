@@ -63,3 +63,27 @@ test('failed receipt never advances discovery and missing configuration keeps pe
   assert.equal(noToken.failed, 0)
   assert.match(noToken.errors[0], /Token/)
 })
+
+test('AI timeout is capped at three seconds and preserves known contact and original answers', async () => {
+  const admin = leadDatabase(); let aiSignal, questions
+  const raw = [{ name: 'full_name', values: ['Maria'] }, { name: 'Seu contato?', values: ['11999990000'] }]
+  const { exports } = await loadHandler('_shared/meta-lead-ingest.ts', { admin, extraEnv: { TYPESAFE_API_KEY: 'test-ai-key' },
+    fetch: (address, options) => {
+      if (String(address).startsWith('https://api.typesafe.ai')) {
+        aiSignal = options.signal; questions = Object.keys(JSON.parse(options.body).questions)
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => resolve(json({ answers: {} })), 4000)
+          aiSignal?.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('timeout')) }, { once: true })
+        })
+      }
+      if (new URL(address).pathname.endsWith('/lead1')) return json({ id: 'lead1', form_id: 'form1', created_time: '2026-10-09T12:00:00Z', field_data: raw })
+      return leadsGraph(address)
+    } })
+  const started = Date.now()
+  assert.equal((await exports.ingestLeadgenId(admin, 'lead1', 'page1', 'form1', 'test-token')).status, 'processed')
+  assert.equal(aiSignal?.aborted, true)
+  assert(Date.now() - started < 3700)
+  assert.deepEqual(questions, ['phone', 'email'])
+  assert.equal(admin.events.get('lead1').data.full_name, 'Maria')
+  assert.deepEqual(JSON.parse(JSON.stringify(admin.events.get('lead1').data.field_data)), raw)
+})
