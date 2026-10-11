@@ -1,34 +1,7 @@
 import { metaTrafficKey, normalizeMetaAccountId } from '../../shared/meta-identity.ts'
-export type MetaLevel = 'campaign' | 'adset' | 'ad'
+import type { MetaLevel, MetaDailyRow, ImportRow } from '../../shared/meta-contract.ts'
+export type { MetaLevel, MetaDailyRow, ImportRow } from '../../shared/meta-contract.ts'
 
-export interface MetaDailyRow {
-  id: string
-  date: string
-  account_id: string
-  account_name: string
-  campaign_id: string
-  campaign_name: string
-  adset_id: string
-  adset_name: string
-  ad_id: string
-  ad_name: string
-  level: MetaLevel
-  currency: string
-  attribution_window: string
-  spend: number
-  leads: number
-  purchases: number
-  purchase_value: number
-  impressions: number
-  reach: number
-  link_clicks: number
-  messaging_conversations_started: number
-  objective: string
-  source: 'csv' | 'api' | 'manual_legacy'
-  updated_at: string
-}
-
-export type ImportRow = Omit<MetaDailyRow, 'id' | 'updated_at' | 'source'> & { present_metrics?: string[] }
 export type CsvField = keyof Pick<ImportRow,
   'date' | 'account_id' | 'account_name' | 'campaign_id' | 'campaign_name' |
   'adset_id' | 'adset_name' | 'ad_id' | 'ad_name' | 'spend' | 'leads' |

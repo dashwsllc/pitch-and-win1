@@ -6,36 +6,7 @@ import vm from 'node:vm'
 import test from 'node:test'
 import ts from 'typescript'
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'supabase/functions')
-
-// Run the deployed handlers and shared modules. Only network/database boundaries
-// are substituted; no API credentials, server sockets or persistent fixtures.
-async function loadHandler(path, { fetch, admin, extraEnv = {} }) {
-  let handler
-  const env = { META_SYNC_CRON_SECRET: 'test-cron', META_SYSTEM_USER_TOKEN: 'test-token',
-    META_PAGE_IDS: 'page1', SUPABASE_URL: 'https://example.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-key', ...extraEnv }
-  const context = vm.createContext({ URL, Request, Response, TextEncoder, crypto, fetch,
-    console: { error() {}, log() {} },
-    Deno: { env: { get: key => env[key] }, serve: value => { handler = value } },
-    __admin: admin })
-  const cache = new Map()
-  async function moduleFor(filename) {
-    if (cache.has(filename)) return cache.get(filename)
-    const source = filename.startsWith('https:')
-      ? 'export function createClient() { return globalThis.__admin }'
-      : ts.transpileModule(readFileSync(filename, 'utf8'), { compilerOptions: {
-        target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
-      } }).outputText
-    const module = new vm.SourceTextModule(source, { context, identifier: filename })
-    cache.set(filename, module)
-    await module.link((specifier, parent) => moduleFor(specifier.startsWith('https:')
-      ? specifier : resolve(dirname(parent.identifier), specifier)))
-    return module
-  }
-  const module = await moduleFor(resolve(root, path))
-  await module.evaluate()
-  return { handler, exports: module.namespace }
-}
+import { loadHandler } from './helpers/meta-edge-harness.mjs'
 
 function database({ failLead = '', failFinish = false } = {}) {
   const imported = [], finishes = []
