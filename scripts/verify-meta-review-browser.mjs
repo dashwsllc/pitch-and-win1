@@ -18,6 +18,7 @@ await context.route('https://**/*',async route=>{
  else if(name==='profiles')data={id:actor,user_id:actor,display_name:'QA Tráfego',suspended:false}
  else if(name==='user_roles')data=[{id:actor,user_id:actor,role:'super_admin'}]
  else if(name==='meta_traffic_review_list')data={rows:reviews.slice(args.p_offset,args.p_offset+args.p_limit),count:reviews.length}
+ else if(name==='meta_traffic_operation')data={runs:[],published:[],pending:{}}
  else if(name==='meta_traffic_cohort')data={state:'insufficient',campaigns:[],reasons:[],unattributed_contacts:0}
  else if(name==='meta_capture_review_part'){
   const s=reviews.find(s=>s.id===args.p_id)

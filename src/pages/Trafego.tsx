@@ -13,14 +13,13 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { arenaClient, arenaRpc } from '@/lib/arena-api'
 import { fetchAllPages } from '@/lib/supabase-pages'
-import { supabase } from '@/integrations/supabase/client'
 import { useBrasiliaToday } from '@/hooks/useGoals'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
 import { aggregateMeta, buildImportRows, csvFields, defaultCsvMapping, type CsvMapping, type MetaDailyRow, type MetaLevel } from '@/lib/meta-traffic'
 import { buildLeadImportRows, defaultLeadCsvMapping, leadCsvFields, summarizeLeadImport, type LeadCsvMapping, type LeadImportRow, type LeadImportResult, type LeadImportResponse } from '@/lib/meta-lead-import'
 import { parseSpreadsheetFile } from '@/lib/spreadsheet'
-import { lastRunFor, type MetaAdAccount, type MetaSyncRun } from '@/lib/meta-connection'
+import { MetaTrafficConnection, TrafficOperationIndicator } from '@/components/traffic/MetaTrafficConnection'
 import { errorMessage, money } from '@/lib/sales'
 import { MetaTrafficPerformance } from '@/components/traffic/MetaTrafficPerformance'
 import { buildTrafficView, validTrafficDate, type QueryState, type TrafficScope } from '@/lib/meta-traffic-view'
@@ -195,94 +194,6 @@ function LeadImportPanel({ onSubmitted }: { onSubmitted: () => Promise<unknown> 
   </section>
 }
 
-const runStatusLabel: Record<MetaSyncRun['status'], string> = { success: 'Sucesso', error: 'Erro', running: 'Em andamento' }
-function RunStatus({ run, emptyLabel }: { run: MetaSyncRun | null; emptyLabel: string }) {
-  if (!run) return <p className="text-xs text-muted-foreground">{emptyLabel}</p>
-  return <p className="text-xs text-muted-foreground">{runStatusLabel[run.status]} · {new Date(run.started_at).toLocaleString('pt-BR')}
-    {run.status === 'success' && ` · ${run.rows_synced} ${run.kind === 'insights' ? 'linhas capturadas para aprovação' : 'leads conferidos'}`}{run.status === 'error' && run.error_message && ` · ${run.error_message}`}</p>
-}
-
-function ConnectionPanel({ onProposeChange }: { onProposeChange: () => void }) {
-  const { isExecutive } = useRoles()
-  const [accountId, setAccountId] = useState('')
-  const [accountName, setAccountName] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [disconnectId, setDisconnectId] = useState<string | null>(null)
-  const [reason, setReason] = useState('')
-  const accountsQuery = useQuery({ queryKey: ['meta-ad-accounts'], queryFn: () =>
-    fetchAllPages<MetaAdAccount>((from, to) => arenaClient.from('meta_ad_accounts').select('*').order('connected_at', { ascending: false }).range(from, to)) })
-  const runsQuery = useQuery({ queryKey: ['meta-sync-runs'], refetchInterval: 30_000, queryFn: () =>
-    fetchAllPages<MetaSyncRun>((from, to) => arenaClient.from('meta_sync_runs').select('*').order('started_at', { ascending: false }).limit(60).range(from, to)) })
-  const accounts = accountsQuery.data || []
-  const runs = runsQuery.data || []
-  const runningInsights = runs.some(run => run.kind === 'insights' && run.status === 'running')
-  const reconciliation = lastRunFor(runs, 'leads_reconciliation')
-  const connect = async (event: React.FormEvent) => {
-    event.preventDefault(); if (!accountId.trim() || !accountName.trim()) return
-    setBusy(true)
-    try {
-      await arenaRpc('meta_connect_ad_account', { p_account_id: accountId.trim(), p_account_name: accountName.trim() })
-      setAccountId(''); setAccountName(''); await accountsQuery.refetch()
-      toast.success('Conta Meta conectada')
-    } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(false) }
-  }
-  const disconnect = async () => {
-    if (!disconnectId || reason.trim().length < 3) return
-    setBusy(true)
-    try {
-      await arenaRpc('meta_disconnect_ad_account', { p_account_id: disconnectId, p_reason: reason.trim() })
-      setDisconnectId(null); setReason(''); await accountsQuery.refetch()
-      toast.success('Conta Meta desconectada')
-    } catch (cause) { toast.error(errorMessage(cause)) } finally { setBusy(false) }
-  }
-  const syncNow = async () => {
-    setBusy(true)
-    try {
-      const { data, error } = await supabase.functions.invoke('meta-insights-sync', { body: {} })
-      if (error) {
-        const context = (error as { context?: unknown }).context
-        if (context instanceof Response) {
-          const failure = await context.json().catch(() => null)
-          const reason = failure?.error || failure?.results?.find((item: { error?: string }) => item.error)?.error
-          if (reason) throw new Error(reason)
-        }
-        throw error
-      }
-      if (data?.ok === false) throw new Error('A sincronização falhou. Consulte o diagnóstico abaixo.')
-      if (data?.results?.every((item: { skipped?: boolean }) => item.skipped)) {
-        toast.info(data.results.length ? 'Uma sincronização já está em andamento.' : 'Nenhuma conta ativa para sincronizar.')
-      } else {
-        toast.success('Métricas recebidas para aprovação em Tráfego')
-      }
-    } catch (cause) { toast.error(errorMessage(cause)) } finally {
-      await runsQuery.refetch()
-      setBusy(false)
-    }
-  }
-  return <div className="space-y-5">
-    <section className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-medium">Contas conectadas</h2><p className="mt-1 text-sm text-muted-foreground">Sincronização automática de métricas via API oficial da Meta, a cada 30 minutos, mais uma varredura diária mais profunda.</p></div>
-        <Button size="sm" disabled={busy || runningInsights} onClick={() => void syncNow()}>{runningInsights ? 'Sincronizando…' : 'Sincronizar agora'}</Button></div>
-      {accountsQuery.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(accountsQuery.error)}</p>}
-      {!accountsQuery.isLoading && !accounts.length && <p className="text-sm text-muted-foreground">Nenhuma conta Meta conectada ainda.</p>}
-      {accounts.map(item => <div key={item.id} className="rounded-lg border border-border/60 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">{item.account_name || item.account_id} <span className="text-xs text-muted-foreground">({item.account_id})</span></p>
-          <p className="text-xs text-muted-foreground">{item.status === 'active' ? 'Ativa' : 'Pausada'} · conectada em {new Date(item.connected_at).toLocaleDateString('pt-BR')}</p></div>
-          {isExecutive && item.status === 'active' && <Button size="sm" variant="outline" onClick={() => { setDisconnectId(item.account_id); setReason('') }}>Desconectar</Button>}</div>
-        <RunStatus run={lastRunFor(runs, 'insights', item.account_id)} emptyLabel="Nenhuma sincronização de métricas registrada ainda." />
-        {disconnectId === item.account_id && <div className="mt-3 flex gap-2"><Input aria-label="Motivo da desconexão" maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo obrigatório" /><Button size="sm" variant="destructive" disabled={busy || reason.trim().length < 3} onClick={() => void disconnect()}>Confirmar</Button><Button size="sm" variant="ghost" onClick={() => setDisconnectId(null)}>Cancelar</Button></div>}
-      </div>)}
-      <div className="border-t border-border/60 pt-3"><RunStatus run={reconciliation} emptyLabel="Nenhuma reconciliação de leads registrada ainda." /><p className="text-xs text-muted-foreground">Reconciliação de leads de formulário roda a cada hora, recuperando entregas de webhook perdidas.</p></div>
-    </section>
-    {isExecutive ? <form onSubmit={connect} className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
-      <div><h2 className="text-lg font-medium">Conectar conta</h2><p className="text-sm text-muted-foreground">Requer o token de sistema já configurado no servidor (ver documentação de configuração). Aqui você só informa qual conta sincronizar.</p></div>
-      <div className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor="meta-account-id">ID da conta (act_...)</Label><Input id="meta-account-id" required value={accountId} onChange={event => setAccountId(event.target.value)} /></div>
-        <div><Label htmlFor="meta-account-name">Nome da conta</Label><Input id="meta-account-name" required value={accountName} onChange={event => setAccountName(event.target.value)} /></div></div>
-      <Button disabled={busy}>Conectar</Button>
-    </form> : <section className="surface-panel space-y-3 rounded-2xl p-5 sm:p-6"><h2 className="font-medium">Conectar/desconectar contas</h2><p className="text-sm text-muted-foreground">Somente Executive e Super Admin podem conectar ou desconectar contas Meta. Encontrou algo que precisa mudar?</p><Button size="sm" variant="outline" onClick={onProposeChange}>Propor alteração</Button></section>}
-  </div>
-}
-
 function Suggestions({ campaigns }: { campaigns: { id: string; name: string }[] }) {
   const { user } = useAuth()
   const [subject, setSubject] = useState('')
@@ -338,7 +249,7 @@ export default function Trafego() {
     : shiftDate(today, 1 - Number(period))
   const end = period === 'custom' ? customEnd : period === 'yesterday' ? shiftDate(today, -1) : today
   const validRange = validTrafficDate(start) && validTrafficDate(end) && start <= end && end <= today
-  const query = useQuery({ queryKey: ['meta-traffic', user?.id, start, end, level], enabled: !!user && validRange, queryFn: () => fetchAllPages<MetaDailyRow>((from, to) => arenaClient.from('meta_traffic_daily').select('*').gte('date', start).lte('date', end).eq('level', level).order('date').order('id').range(from, to)) })
+  const query = useQuery({ queryKey: ['meta-traffic', user?.id, start, end, level], enabled: !!user && validRange && tab === 'performance', queryFn: () => fetchAllPages<MetaDailyRow>((from, to) => arenaClient.from('meta_traffic_daily').select('*').gte('date', start).lte('date', end).eq('level', level).order('date').order('id').range(from, to)) })
   const pendingCount = useQuery({ queryKey: ['meta-review-count', user?.id], enabled: !!user, refetchInterval: tab === 'approvals' ? 30_000 : false, queryFn: () => fetchTrafficReviewList({ status: 'pendente', limit: 1 }) })
   const allRows = query.data || emptyRows
   const accounts = useMemo(() => [...new Map(allRows.map(row => [row.account_id, { id: row.account_id, name: row.account_name || row.account_id }])).values()], [allRows])
@@ -363,6 +274,7 @@ export default function Trafego() {
   return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6"><header><h1 className="text-3xl font-light">Tráfego</h1><p className="mt-2 text-sm text-muted-foreground">Desempenho da Meta Ads para decisões de investimento, aquisição e otimização.</p></header>
     <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import" className="gap-1.5"><Upload className="h-3.5 w-3.5" /> Importar</TabsTrigger><TabsTrigger value="approvals">Aprovações{pendingCount.data?.count ? ` (${pendingCount.data.count})` : ''}</TabsTrigger><TabsTrigger value="data">Dados e edições</TabsTrigger><TabsTrigger value="audit">Auditoria</TabsTrigger><TabsTrigger value="connection">Conexão</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
       <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-origin">Origem</Label><select id="traffic-origin" className={selectClass} value={origin} onChange={event => setOrigin(event.target.value as MetaDailyRow['source'] | '')}><option value="">Todas</option><option value="csv">CSV</option><option value="api">API</option></select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
+        <TrafficOperationIndicator active={tab === 'performance'} />
         <MetaTrafficPerformance view={viewResult.view} queryState={queryState} cohortState={cohortState} onRetry={() => { void query.refetch(); if (level === 'campaign') void cohortQuery.refetch() }} />
       </TabsContent>
       <TabsContent value="import" className="space-y-5">
@@ -374,7 +286,7 @@ export default function Trafego() {
       <TabsContent value="approvals" className="space-y-5"><p className="text-sm text-muted-foreground">A aprovação manual libera dados para Desempenho e leads para a equipe SDR. Gestor de Tráfego, Executive e Super Admin podem revisar.</p><MetaLeadApprovals canReview={canReview} onReviewed={reviewed} /><MetaPendingImports active={tab === 'approvals'} canReview={canReview} onReviewed={reviewed} /></TabsContent>
       <TabsContent value="data" className="space-y-5"><MetaTrafficData canEdit={canReview} onSaved={reviewed} /><MetaImportEdits active={tab === 'data'} canEdit={canReview} onSaved={reviewed} /></TabsContent>
       <TabsContent value="audit"><MetaAudit /></TabsContent>
-      <TabsContent value="connection"><ConnectionPanel onProposeChange={() => setTab('suggestions')} /></TabsContent>
+      <TabsContent value="connection"><MetaTrafficConnection active={tab === 'connection'} onProposeChange={() => setTab('suggestions')} /></TabsContent>
       <TabsContent value="suggestions"><Suggestions campaigns={campaigns} /></TabsContent>
     </Tabs></div></DashboardLayout>
 }

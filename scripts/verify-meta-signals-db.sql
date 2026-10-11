@@ -1,0 +1,52 @@
+BEGIN;
+DO $$
+DECLARE actor uuid; suspended uuid; fact uuid; batch uuid; revision_before bigint; review uuid; run uuid; claim uuid; saved bigint;
+BEGIN
+ actor:=pg_temp.seed_meta_actor('approved',false,'traffic_manager');suspended:=pg_temp.seed_meta_actor('approved',true,'traffic_manager');
+ PERFORM set_config('request.jwt.claim.sub',actor::text,true);PERFORM set_config('request.jwt.claim.role','authenticated',true);
+ INSERT INTO public.dashboard_events(topic) VALUES('arena'),('crm') ON CONFLICT DO NOTHING;
+ SELECT revision INTO revision_before FROM public.dashboard_events WHERE topic='arena';
+ INSERT INTO public.meta_traffic_daily(date,account_id,campaign_id,campaign_name,level,spend,leads,purchases,source)
+ VALUES('2026-10-09','94001','signal-A','Synthetic','campaign',10,2,0,'manual_legacy') RETURNING id INTO fact;
+ PERFORM pg_temp.assert((SELECT revision>revision_before FROM public.dashboard_events WHERE topic='arena'),'metric INSERT has no signal');
+ SELECT revision INTO revision_before FROM public.dashboard_events WHERE topic='arena';
+ UPDATE public.meta_traffic_daily SET spend=11 WHERE id=fact;
+ PERFORM pg_temp.assert((SELECT revision>revision_before FROM public.dashboard_events WHERE topic='arena'),'metric UPDATE has no signal');
+ SELECT revision INTO revision_before FROM public.dashboard_events WHERE topic='arena';
+ UPDATE public.meta_traffic_daily SET spend=spend WHERE id=fact;
+ PERFORM pg_temp.assert((SELECT revision=revision_before FROM public.dashboard_events WHERE topic='arena'),'no-op metric update emitted signal');
+ BEGIN
+  saved:=revision_before;UPDATE public.meta_traffic_daily SET spend=12 WHERE id=fact;
+  RAISE EXCEPTION 'forced rollback' USING ERRCODE='P0002';
+ EXCEPTION WHEN no_data_found THEN NULL;
+ END;
+ PERFORM pg_temp.assert((SELECT revision=saved FROM public.dashboard_events WHERE topic='arena'),'rollback leaked revision');
+ PERFORM set_config('meta.capture_review',gen_random_uuid()::text,true);
+ DELETE FROM public.meta_traffic_daily WHERE id=fact;
+ PERFORM set_config('meta.capture_review','',true);
+ PERFORM pg_temp.assert((SELECT revision>revision_before FROM public.dashboard_events WHERE topic='arena'),'metric DELETE has no signal');
+ PERFORM pg_temp.assert((SELECT count(*)=1 FROM public.meta_audit_events WHERE entity_id=fact AND action='metric.removed'),'metric DELETE not audited once');
+ INSERT INTO public.meta_import_batches(imported_by,filename,row_count,rows) VALUES(actor,'Synthetic signals.csv',1,'[{}]') RETURNING id INTO batch;
+ SELECT revision INTO revision_before FROM public.dashboard_events WHERE topic='arena';
+ UPDATE public.meta_import_batches SET review_note='Synthetic correction' WHERE id=batch;
+ PERFORM pg_temp.assert((SELECT revision>revision_before FROM public.dashboard_events WHERE topic='arena'),'batch UPDATE has no signal');
+ INSERT INTO public.meta_ad_accounts(account_id,account_name,currency,timezone,status,connected_by) VALUES('94001','Synthetic','BRL','America/Sao_Paulo','active',actor);
+ PERFORM set_config('request.jwt.claim.role','service_role',true);
+ run:=public.meta_capture_open('94001','campaign','2026-10-09','2026-10-09','{"level":"campaign","time_range":"{\"since\":\"2026-10-09\",\"until\":\"2026-10-09\"}"}', '{"id":"94001","currency":"BRL","timezone":"America/Sao_Paulo"}','cron',NULL);
+ claim:=(public.meta_capture_claim(run)->>'claim_token')::uuid;
+ PERFORM public.meta_capture_append(run,claim,0,'synthetic','[]',NULL);
+ review:=public.meta_capture_prepare(run,claim);
+ SELECT revision INTO revision_before FROM public.dashboard_events WHERE topic='arena';
+ UPDATE public.meta_capture_reviews SET version=version+1 WHERE id=review;
+ PERFORM pg_temp.assert((SELECT revision>revision_before FROM public.dashboard_events WHERE topic='arena'),'review UPDATE has no signal');
+ PERFORM pg_temp.assert(NOT (public.meta_traffic_operation()::text ~ 'claim_token|next_request|field_data|access_token'),'operational RPC leaked private state');
+ PERFORM set_config('request.jwt.claim.role','authenticated',true);EXECUTE 'SET LOCAL ROLE authenticated';
+ PERFORM pg_temp.assert((SELECT count(*)=2 FROM public.dashboard_events WHERE topic IN ('arena','crm')),'traffic manager cannot receive revision signals');
+ PERFORM pg_temp.expect_error('DELETE FROM public.meta_traffic_daily','42501');
+ EXECUTE 'RESET ROLE';
+ PERFORM set_config('request.jwt.claim.sub',suspended::text,true);EXECUTE 'SET LOCAL ROLE authenticated';
+ PERFORM pg_temp.assert((SELECT count(*)=0 FROM public.dashboard_events),'suspended account reads revisions');
+ EXECUTE 'RESET ROLE';
+END $$;
+SELECT 'PASS: transactional INSERT/UPDATE/DELETE and review signals, no-op suppression, deletion audit and role boundaries' AS verification;
+ROLLBACK;
