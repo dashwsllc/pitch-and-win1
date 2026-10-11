@@ -1,3 +1,5 @@
+import { CalendarStatusesProvider } from '@/components/crm/CRMCalendarStatus';
+import { parseCrmLeadLink, resolveCrmLeadLink } from '@/lib/crm-deeplink';
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import {
@@ -169,7 +171,7 @@ function MultiSelectFilter({
 }
 
 export default function CRM() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const {
     capabilities,
     loading: rolesLoading,
@@ -189,7 +191,7 @@ export default function CRM() {
   // Favoritos e links antigos da aba Remarketing (?tab=remarketing) abrem o Follow-up.
   const tab = requestedTab === "remarketing" ? "followup" : requestedTab;
   useEffect(() => {
-    if (requestedTab === "remarketing") setParams({ tab: "followup" }, { replace: true });
+    if (requestedTab === "remarketing") setParams(previous => { const next = new URLSearchParams(previous); next.set("tab", "followup"); return next; }, { replace: true });
   }, [requestedTab, setParams]);
   const [search, setSearch] = useState("");
   const [temperature, setTemperature] = useState<string[]>([]);
@@ -206,6 +208,24 @@ export default function CRM() {
   const [queue, setQueue] = useState("queue");
   const [sdrQueue, setSdrQueue] = useState("active");
   const [readId, setReadId] = useState<string | null>(null);
+  const openedLink = useRef<string | null>(null);
+  const link = parseCrmLeadLink(params.toString());
+  const linkedLeadId = link?.leadId;
+  const linkedUserId = user?.id;
+  const hasLeadLink = params.has("lead");
+  const linkState = link ? resolveCrmLeadLink(link.leadId, crm.leads.map(lead => lead.id), authLoading || rolesLoading || crm.loading || !user, !!crm.error || !!rolesError) : hasLeadLink ? "unavailable" : null;
+  useEffect(() => { setReadId(null); openedLink.current = null; }, [user?.id]);
+  useEffect(() => {
+    if (linkState === "open" && linkedLeadId && linkedUserId && capabilities.leads) {
+      const key = linkedUserId + ":" + linkedLeadId;
+      if (openedLink.current !== key) { openedLink.current = key; setReadId(linkedLeadId); }
+    }
+  }, [linkState, linkedLeadId, linkedUserId, capabilities.leads]);
+  const clearLeadLink = () => {
+    setReadId(null);
+    setParams(previous => { const next = new URLSearchParams(previous); next.delete("lead"); return next; }, { replace: true });
+  };
+  const switchTab = (value: string) => setParams(previous => { const next = new URLSearchParams(previous); next.set("tab", value); return next; });
   const [editor, setEditor] = useState<CRMLead | "new" | null>(null);
   const [deleting, setDeleting] = useState<CRMLead | null>(null);
   const [action, setAction] = useState<{ lead: CRMLead; name: string } | null>(
@@ -466,7 +486,7 @@ export default function CRM() {
     );
   };
   const requestDelete = (lead: CRMLead) => {
-    setReadId(null);
+    clearLeadLink();
     setEditor(null);
     setAction(null);
     setSchedule(null);
@@ -552,7 +572,10 @@ export default function CRM() {
   if (!rolesLoading && !rolesError && !capabilities.leads)
     return <Navigate to="/" replace />;
   return (
+    <CalendarStatusesProvider callIds={callsQuery.activities.filter(call => call.call_type === "fechamento_closer").map(call => call.id)}>
     <DashboardLayout>
+      {linkState === "unavailable" && <p role="alert" className="mb-4 rounded border p-3 text-sm">Este lead não está disponível para sua conta.</p>}
+      {linkState === "load_error" && <p role="alert" className="mb-4 rounded border p-3 text-sm">Não foi possível carregar o lead. Use Atualizar CRM para tentar novamente.</p>}
       {realtimeUnavailable && <p role="status" className="mb-4 rounded-lg border p-3 text-sm text-muted-foreground">Conexão em tempo real indisponível. Use Atualizar CRM para consultar as alterações mais recentes.</p>}
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -612,7 +635,7 @@ export default function CRM() {
         <Tabs
           value={tab}
           onValueChange={(value) => {
-            setParams({ tab: value });
+            switchTab(value);
             setView(defaultView(value));
             setOrder("newest");
             setSdrQueue("active");
@@ -645,7 +668,7 @@ export default function CRM() {
             Sua função não permite acessar esta área.{" "}
             <Button
               variant="outline"
-              onClick={() => setParams({ tab: "leads" })}
+              onClick={() => switchTab("leads")}
             >
               Voltar para Leads
             </Button>
@@ -682,7 +705,7 @@ export default function CRM() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        setParams({ tab: "closer" });
+                        switchTab("closer");
                         setQueue("closed");
                         setSearch("");
                         setTemperature([]);
@@ -956,9 +979,9 @@ export default function CRM() {
             lead={selected}
             names={names}
             busy={busy}
-            onClose={() => setReadId(null)}
+            onClose={clearLeadLink}
             onEdit={() => {
-              setReadId(null);
+              clearLeadLink();
               setEditor(selected);
             }}
             onDelete={() => requestDelete(selected)}
@@ -1041,5 +1064,6 @@ export default function CRM() {
         </AlertDialog>
       </div>
     </DashboardLayout>
+    </CalendarStatusesProvider>
   );
 }

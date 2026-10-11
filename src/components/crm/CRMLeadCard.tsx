@@ -1,3 +1,4 @@
+import { CRMCalendarStatus } from './CRMCalendarStatus';
 import {
   BookOpen,
   Pencil,
@@ -313,6 +314,7 @@ export function CRMLeadCard({
             </Badge>
           )
         )}
+        {closerCall && call && <CRMCalendarStatus callId={call.id} />}
         {lead.qualification_income_range && (
           <Badge variant="outline" className="h-5 px-2 text-[10px] text-sky-300">
             Renda: {optionLabel(INCOME_RANGES, lead.qualification_income_range)}

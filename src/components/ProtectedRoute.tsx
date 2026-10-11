@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useRoles } from "@/hooks/useRoles";
 import { canAccessArena, canAccessTraffic } from '@/lib/arena';
+
+import { safeCrmReturnPath } from '@/lib/crm-deeplink';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -24,6 +26,7 @@ export function ProtectedRoute({
   trafficOnly = false,
   leadInboxOnly = false,
 }: ProtectedRouteProps) {
+  const location = useLocation();
   const { user, loading: authLoading, signOut } = useAuth();
   const { profile, loading: profileLoading, error, refetch } = useProfile();
   const {
@@ -59,7 +62,8 @@ export function ProtectedRoute({
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    const from = safeCrmReturnPath(location.pathname + location.search);
+    return <Navigate to="/auth" replace state={from ? { from } : undefined} />;
   }
 
   if (error || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly || leadInboxOnly) && rolesError)) {

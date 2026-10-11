@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      crm_google_calendar_status: {
+        Row: { call_id: string; desired_revision: string; confirmed_revision: string | null; status: string; error_code: string | null; last_synced_at: string | null; updated_at: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       registration_requests: {
         Row: { user_id: string; display_name: string; email: string; requested_role: 'seller'; status: 'pending' | 'approved' | 'rejected'; created_at: string; reviewed_at: string | null; reviewed_by: string | null }
         Insert: { user_id: string; display_name: string; email: string; requested_role?: 'seller'; status?: 'pending' | 'approved' | 'rejected'; created_at?: string; reviewed_at?: string | null; reviewed_by?: string | null }
