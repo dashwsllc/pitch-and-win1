@@ -186,6 +186,21 @@ test('auth/manage: valid JWT plus active approved executive gate, strict request
   assert.equal(u.searchParams.get('access_type'),'offline');assert.equal(u.searchParams.get('prompt'),'consent')
   assert.ok(!admin.states.has(u.searchParams.get('state')));assert.equal(admin.states.size,1)
 })
+test('manage: first connection readiness comes from server configuration before a destination exists',async()=>{
+  const firstStatus={configured:false,connection:'not_connected',calendar:null,destinationLocked:false,activatedAt:null,lastRunAt:null,pendingCount:0,errorCount:0,backfillPending:false,errorCode:null}
+  const admin=fakeAdmin(),rpc=admin.rpc
+  admin.rpc=(name,args)=>name==='google_calendar_admin_status'?Promise.resolve({data:firstStatus,error:null}):rpc(name,args)
+  const {handler}=await loadModule('supabase/functions/google-calendar-manage/index.ts',{admin,env:runtimeEnv})
+  const ready=await handler(manageRequest({action:'status'})),body=await ready.json()
+  assert.equal(ready.status,200);assert.equal(body.configured,true);assert.equal(body.connection,'not_connected');assert.equal(body.calendar,null)
+  assert.ok(!JSON.stringify(body).includes('SENTINELA'))
+  for(const name of ['GOOGLE_CALENDAR_CLIENT_ID','GOOGLE_CALENDAR_CLIENT_SECRET','GOOGLE_CALENDAR_REDIRECT_URI','GOOGLE_CALENDAR_DASHBOARD_ORIGIN','GOOGLE_CALENDAR_CRON_SECRET']){
+    const env={...runtimeEnv},current=fakeAdmin();delete env[name]
+    const {handler:incomplete}=await loadModule('supabase/functions/google-calendar-manage/index.ts',{admin:current,env})
+    const result=await incomplete(manageRequest({action:'status'}))
+    assert.equal(result.status,200);assert.equal((await result.json()).configured,false)
+  }
+})
 test('callback: one-use state including denied consent; permission revoked is consumed; redirects cannot leak tokens',async()=>{
   const admin=fakeAdmin()
   const {exports:a}=await loadModule('supabase/functions/_shared/google-calendar-auth.ts',{admin,env:runtimeEnv})

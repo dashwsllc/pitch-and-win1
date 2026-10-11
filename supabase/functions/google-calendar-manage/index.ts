@@ -1,8 +1,13 @@
-import type { ManageRequest } from '../_shared/google-calendar-contract.ts'
+import type { AdminStatus, ManageRequest } from '../_shared/google-calendar-contract.ts'
 import { calendarRuntime, requireCalendarAdmin, createOAuthState, buildAuthorizationUrl, dashboardOrigin } from '../_shared/google-calendar-auth.ts'
 import { GoogleCalendarClient, GoogleError, revokeOAuthToken } from '../_shared/google-calendar-client.ts'
 import { CalendarStoreError, getCredential } from '../_shared/google-calendar-store.ts'
 import { jsonResponse, preflightResponse, isTrustedOrigin, readJsonBody, RequestError } from '../_shared/http.ts'
+function adminResponse(req: Request, status: AdminStatus): Response {
+  const configured = ['GOOGLE_CALENDAR_CLIENT_ID','GOOGLE_CALENDAR_CLIENT_SECRET','GOOGLE_CALENDAR_REDIRECT_URI','GOOGLE_CALENDAR_DASHBOARD_ORIGIN','GOOGLE_CALENDAR_CRON_SECRET']
+    .every(name => Boolean(Deno.env.get(name)?.trim()))
+  return jsonResponse(req,{...status,configured})
+}
 function parseRequest(value: unknown): ManageRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new RequestError(400,'invalid_request')
   const v = value as Record<string,unknown>, action = v.action
@@ -21,8 +26,8 @@ export async function handleManage(req: Request): Promise<Response> {
     const {userId} = await requireCalendarAdmin(req), request = parseRequest(await readJsonBody(req))
     const {store} = calendarRuntime()
     switch(request.action) {
-      case 'status': return jsonResponse(req,await store.adminStatus(userId))
-      case 'retry': return jsonResponse(req,await store.retry(userId,request.callId))
+      case 'status': return adminResponse(req,await store.adminStatus(userId))
+      case 'retry': return adminResponse(req,await store.retry(userId,request.callId))
       case 'start_oauth': {
         const state = await createOAuthState(), authorizationUrl = buildAuthorizationUrl(state.raw)
         await store.startOAuth(userId,state.hash,dashboardOrigin())
@@ -35,7 +40,7 @@ export async function handleManage(req: Request): Promise<Response> {
           const credential = await store.readCredential(lease.token)
           const result = await store.disconnect(userId,lease.token)
           try { if (credential.refreshToken || credential.accessToken) await revokeOAuthToken(credential.refreshToken ?? credential.accessToken!) } catch { /* DB pause is already durable; revoked/expired tokens can fail here. */ }
-          return jsonResponse(req,result)
+          return adminResponse(req,result)
         } finally { await store.releaseCredential(lease.token) }
       }
       case 'list_calendars': {
@@ -46,7 +51,7 @@ export async function handleManage(req: Request): Promise<Response> {
         const credential = await getCredential(store)
         const client = new GoogleCalendarClient({tokenProvider:force=>getCredential(store,force)})
         const calendar = await client.getCalendar(request.calendarId)
-        return jsonResponse(req,await store.activate(userId,calendar,credential.revision))
+        return adminResponse(req,await store.activate(userId,calendar,credential.revision))
       }
     }
   } catch (error) {
