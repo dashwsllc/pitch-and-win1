@@ -1,3 +1,4 @@
+import { metaTrafficKey, normalizeMetaAccountId } from '../../shared/meta-identity.ts'
 export type MetaLevel = 'campaign' | 'adset' | 'ad'
 
 export interface MetaDailyRow {
@@ -166,7 +167,7 @@ export function buildImportRows(values: string[][], headers: string[], mapping: 
     try {
       const date = csvDate(get('date'))
       if (date > today) throw new Error('data futura')
-      const account_id = get('account_id')
+      const account_id = normalizeMetaAccountId(get('account_id'))
       const campaign_id = get('campaign_id')
       const campaign_name = get('campaign_name')
       const adset_id = level === 'campaign' ? '' : get('adset_id')
@@ -175,7 +176,7 @@ export function buildImportRows(values: string[][], headers: string[], mapping: 
       if (currency !== 'BRL') throw new Error('moeda diferente de BRL')
       if (!account_id || !campaign_id || !campaign_name || (level !== 'campaign' && !adset_id) || (level === 'ad' && !ad_id))
         throw new Error('IDs ou nome da campanha ausentes')
-      const key = [date, account_id, campaign_id, adset_id, ad_id].join(':')
+      const key = metaTrafficKey({ date, account_id, campaign_id, adset_id, ad_id })
       if (seen.has(key)) throw new Error('linha duplicada no arquivo')
       seen.add(key)
       return {

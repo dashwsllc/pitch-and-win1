@@ -6,7 +6,7 @@ DECLARE
   executive_id uuid; operator_id uuid; response jsonb; contact jsonb; item jsonb;
   batch public.meta_lead_import_batches; metrics public.meta_import_batches;
   lead public.meta_form_leads; crm_id uuid; run_id uuid; later_run_id uuid; r text; count_visible integer;
-  prefix text := 'qa-approval-' || gen_random_uuid()::text;
+  account text:='91001'; prefix text := 'qa-approval-' || gen_random_uuid()::text;
 BEGIN
   SELECT p.user_id INTO STRICT executive_id FROM public.profiles p
     WHERE NOT p.suspended AND public.is_executive(p.user_id) LIMIT 1;
@@ -164,16 +164,16 @@ BEGIN
 
   -- API metrics must stage, merge newer captures, invalidate stale review, then publish once.
   PERFORM set_config('request.jwt.claim.sub','',true);
-  INSERT INTO public.meta_sync_runs(kind,account_id,triggered_by) VALUES('insights',prefix,'cron') RETURNING id INTO run_id;
-  item := jsonb_build_object('date','2026-09-20','account_id',prefix,'campaign_id',prefix,
+  INSERT INTO public.meta_sync_runs(kind,account_id,triggered_by) VALUES('insights',account,'cron') RETURNING id INTO run_id;
+  item := jsonb_build_object('date','2026-09-20','account_id',account,'campaign_id',prefix,
     'campaign_name','QA','level','campaign','spend',10,'leads',1,'purchases',0,'currency','BRL');
   response := public.meta_import_daily_system(jsonb_build_array(item,item||jsonb_build_object('date','2026-09-19')),run_id);
   IF response->>'status' IS DISTINCT FROM 'pendente'
-    OR EXISTS(SELECT 1 FROM public.meta_traffic_daily WHERE account_id=prefix) THEN
+    OR EXISTS(SELECT 1 FROM public.meta_traffic_daily WHERE account_id=account) THEN
     RAISE EXCEPTION 'FAIL: API metrics published without approval'; END IF;
   SELECT * INTO STRICT metrics FROM public.meta_import_batches WHERE id=(response->>'batch_id')::uuid;
   UPDATE public.meta_sync_runs SET status='success', finished_at=clock_timestamp() WHERE id=run_id;
-  INSERT INTO public.meta_sync_runs(kind,account_id,triggered_by) VALUES('insights',prefix,'cron') RETURNING id INTO later_run_id;
+  INSERT INTO public.meta_sync_runs(kind,account_id,triggered_by) VALUES('insights',account,'cron') RETURNING id INTO later_run_id;
   response := public.meta_import_daily_system(jsonb_build_array(item||'{"spend":20}'::jsonb),later_run_id);
   IF (response->>'batch_id')::uuid<>metrics.id THEN RAISE EXCEPTION 'FAIL: cron filled queue with duplicate pending batches'; END IF;
   PERFORM set_config('request.jwt.claim.sub',executive_id::text,true);
@@ -187,10 +187,10 @@ BEGIN
     RAISE EXCEPTION 'FAIL: NULL action reviewed metrics';
   EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'FAIL:%' THEN RAISE; END IF; END;
   metrics := public.meta_review_traffic_import(metrics.id,'aprovar',metrics.updated_at);
-  IF NOT EXISTS(SELECT 1 FROM public.meta_traffic_daily WHERE account_id=prefix AND spend=20
+  IF NOT EXISTS(SELECT 1 FROM public.meta_traffic_daily WHERE account_id=account AND spend=20
     AND date='2026-09-20' AND import_batch_id=metrics.id AND sync_run_id=later_run_id AND source='api') THEN
     RAISE EXCEPTION 'FAIL: approved API metrics missing or lost approval lineage'; END IF;
-  IF NOT EXISTS(SELECT 1 FROM public.meta_traffic_daily WHERE account_id=prefix AND date='2026-09-19'
+  IF NOT EXISTS(SELECT 1 FROM public.meta_traffic_daily WHERE account_id=account AND date='2026-09-19'
     AND spend=10 AND sync_run_id=run_id AND import_batch_id=metrics.id) THEN RAISE EXCEPTION 'FAIL: pending merge lost an older row or its sync-run lineage'; END IF;
   IF has_table_privilege('authenticated','public.meta_audit_events','INSERT')
     OR has_table_privilege('authenticated','public.meta_audit_events','UPDATE')
