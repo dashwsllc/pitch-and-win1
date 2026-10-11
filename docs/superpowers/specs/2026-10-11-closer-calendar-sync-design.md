@@ -8,9 +8,9 @@ Projeto: `pitch-and-win1`.
 
 ## 1. Objetivo e decisões aprovadas
 
-Sincronizar as calls encaminhadas à fila Closer do CRM com **uma única agenda Google compartilhada por todos os closers**. O CRM controla o horário, o responsável e o ciclo de vida da call. O usuário aprovou a sincronização CRM → Google, atualização das remarcações, remoção dos cancelamentos e devoluções ao SDR, preservação das calls concluídas e inclusão das calls futuras existentes.
+Sincronizar as calls encaminhadas à fila Closer do CRM com **uma única agenda Google compartilhada por todos os closers**. O usuário já possui essa agenda, criada pela conta administradora da empresa; ela será selecionada como destino da integração. O CRM controla o horário, o responsável e o ciclo de vida da call. O usuário aprovou a sincronização CRM → Google, atualização das remarcações, remoção dos cancelamentos e devoluções ao SDR, preservação das calls concluídas e inclusão das calls futuras existentes.
 
-A duração padrão aprovada é 30 minutos, com fuso `America/Sao_Paulo`. A configuração conecta uma conta Google e permite escolher a agenda compartilhada. O usuário pediu atenção especial à ausência de duplicidades e à correção permanente da sincronização.
+A duração padrão aprovada é 30 minutos, com fuso `America/Sao_Paulo`. A configuração conecta a conta Google administradora da empresa e permite escolher a agenda de closers existente. O usuário pediu atenção especial à ausência de duplicidades e à correção permanente da sincronização.
 
 O desenho usa entrega em segundo plano, identidade persistente por call, controle de concorrência, novas tentativas e reconciliação. Supabase e Google não participam de uma mesma transação: durante uma indisponibilidade pode existir atraso, que deve aparecer como pendência ou erro. O sistema só apresenta uma call como sincronizada quando a revisão vigente do CRM tiver sido confirmada no Google. Não promete atualização instantânea durante falhas externas.
 
@@ -85,9 +85,9 @@ Atualizações enviam apenas os campos que a integração controla. Não apagar 
 
 Adicionar um cartão “Google Agenda dos closers”, acessível para configurar somente por usuários com capacidade administrativa do CRM:
 
-1. “Conectar Google Agenda” inicia OAuth com a conta que possui acesso de edição à agenda compartilhada.
+1. “Conectar Google Agenda” inicia OAuth com a conta administradora da empresa, que criou a agenda compartilhada existente.
 2. Após o retorno, listar todas as páginas de agendas com permissão `writer` ou `owner`; permitir selecionar uma agenda existente.
-3. Validar a agenda e o acesso no servidor antes de ativar a configuração.
+3. Validar a agenda de closers existente e o acesso no servidor antes de ativar a configuração. Não criar outra agenda nem selecionar automaticamente a agenda principal da conta.
 4. Mostrar agenda selecionada, conexão, última execução, quantidade de pendências e erros.
 5. Permitir reconectar a mesma agenda, solicitar nova tentativa e desconectar.
 
@@ -231,6 +231,8 @@ Não usar a agenda comercial para ensaios destrutivos. Migração e implantaçã
 A entrega inclui migration reversível na estrutura, Edge Functions, UI, testes e guia operacional. Instalar schema/funções primeiro, depois worker/cron e UI; ativar a conexão após configurar OAuth e validar em agenda de teste. O cartão deve apresentar “Não conectado” até concluir as etapas externas, sem simular integração ativa.
 
 O guia deve explicar acesso de edição da conta conectada, compartilhamento com os closers, criação do cliente OAuth, callback, segredos, seleção da agenda, estado das calls, retry, reconexão e limites de sincronização CRM → Google. Segredos reais não entram no repositório.
+
+Usar a agenda comercial já criada pela conta administradora na ativação final. Os eventos anteriores sem vínculo comprovado com a integração não serão alterados ou removidos. Não associar uma call a um evento anterior apenas pela semelhança de nome ou horário.
 
 Rollback desativa cron e conexão para interromper escritas, mantendo vínculos para recuperação; não remove dados da agenda automaticamente. Remoção física de tabelas/segredos exige confirmar que não há trabalhos ou eventos pendentes de limpeza.
 
