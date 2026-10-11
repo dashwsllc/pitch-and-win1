@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
 import { FileSpreadsheet, Upload } from 'lucide-react'
 import { MetaLeadApprovals, FormAnswers } from '@/components/traffic/MetaLeadApprovals'
@@ -12,18 +11,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { arenaClient, arenaRpc } from '@/lib/arena-api'
 import { fetchAllPages } from '@/lib/supabase-pages'
 import { supabase } from '@/integrations/supabase/client'
 import { useBrasiliaToday } from '@/hooks/useGoals'
 import { useAuth } from '@/hooks/useAuth'
 import { useRoles } from '@/hooks/useRoles'
-import { aggregateMeta, buildImportRows, cost, csvFields, defaultCsvMapping, summarizeObjectives, type CsvMapping, type ImportRow, type MetaDailyRow, type MetaLevel, type PromotableObjective } from '@/lib/meta-traffic'
+import { aggregateMeta, buildImportRows, csvFields, defaultCsvMapping, summarizeObjectives, type CsvMapping, type ImportRow, type MetaDailyRow, type MetaLevel } from '@/lib/meta-traffic'
 import { buildLeadImportRows, defaultLeadCsvMapping, leadCsvFields, summarizeLeadImport, type LeadCsvMapping, type LeadImportRow, type LeadImportResult, type LeadImportResponse } from '@/lib/meta-lead-import'
 import { parseSpreadsheetFile } from '@/lib/spreadsheet'
 import { lastRunFor, type MetaAdAccount, type MetaSyncRun } from '@/lib/meta-connection'
 import { errorMessage, money } from '@/lib/sales'
+import { MetaTrafficPerformance } from '@/components/traffic/MetaTrafficPerformance'
+import { buildTrafficView, validTrafficDate, type QueryState, type TrafficScope } from '@/lib/meta-traffic-view'
+import type { TrafficCohortResult } from '../../shared/meta-contract'
 import { refreshDashboardMutation } from '@/lib/sync'
 
 type Suggestion = { id: string; author_name: string; subject: string; body: string; campaign_id: string | null; status: string; created_at: string; updated_at: string }
@@ -38,38 +39,6 @@ const statuses: Record<string, string> = { nova: 'Nova', em_analise: 'Em anális
 const selectClass = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm'
 function shiftDate(date: string, days: number) { const value = new Date(date + 'T12:00:00Z'); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10) }
 function formatDate(value: string) { return value.slice(0, 10).split('-').reverse().join('/') }
-const countFormatter = new Intl.NumberFormat('pt-BR')
-function format(value: number | null, kind: 'money' | 'count' | 'percent' | 'ratio') {
-  if (value === null) return '—'
-  if (kind === 'money') return money(value)
-  if (kind === 'percent') return value.toFixed(2) + '%'
-  if (kind === 'ratio') return value.toFixed(2) + 'x'
-  return countFormatter.format(value)
-}
-function median(values: number[]) {
-  if (!values.length) return null
-  const sorted = [...values].sort((a, b) => a - b)
-  const middle = Math.floor(sorted.length / 2)
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
-}
-const essentialMetricsByCategory: Record<PromotableObjective, string[]> = {
-  leads: ['spend', 'leads', 'cpl', 'ctr'],
-  vendas: ['spend', 'purchases', 'cpa', 'roas'],
-  mensagens: ['spend', 'messagesStarted', 'costPerMessage', 'ctr'],
-  reconhecimento: ['spend', 'impressions', 'cpm', 'ctr'],
-}
-function toCsvValue(value: string | number) {
-  const text = String(value)
-  return /[";\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text
-}
-function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
-  const content = '﻿' + [headers, ...rows].map(row => row.map(toCsvValue).join(';')).join('\r\n')
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }))
-  const anchor = document.createElement('a')
-  anchor.href = url; anchor.download = filename; anchor.click()
-  URL.revokeObjectURL(url)
-}
-
 function ImportPanel({ today, onSubmitted }: { today: string; onSubmitted: () => Promise<unknown> }) {
   const [fileName, setFileName] = useState('')
   const [headers, setHeaders] = useState<string[]>([])
@@ -452,14 +421,14 @@ export default function Trafego() {
   const [level, setLevel] = useState<MetaLevel>('campaign')
   const [account, setAccount] = useState('')
   const [campaign, setCampaign] = useState('')
-  const [origin, setOrigin] = useState('')
+  const [origin, setOrigin] = useState<MetaDailyRow['source'] | ''>('')
   const start = period === 'custom' ? customStart
     : period === 'today' ? today
     : period === 'yesterday' ? shiftDate(today, -1)
     : period === 'month' ? today.slice(0, 7) + '-01'
     : shiftDate(today, 1 - Number(period))
   const end = period === 'custom' ? customEnd : period === 'yesterday' ? shiftDate(today, -1) : today
-  const validRange = start <= end && end <= today && start.length === 10 && end.length === 10
+  const validRange = validTrafficDate(start) && validTrafficDate(end) && start <= end && end <= today
   const query = useQuery({ queryKey: ['meta-traffic', user?.id, start, end, level], enabled: !!user && validRange, queryFn: () => fetchAllPages<MetaDailyRow>((from, to) => arenaClient.from('meta_traffic_daily').select('*').gte('date', start).lte('date', end).eq('level', level).order('date').order('id').range(from, to)) })
   const batchQuery = useQuery({ queryKey: ['meta-imports', user?.id], enabled: !!user, refetchInterval: 30_000, queryFn: () => fetchAllPages<MetricsBatch>((from, to) => arenaClient.from('meta_import_batches').select('*').order('created_at', { ascending: false }).range(from, to)) })
   const leadBatchQuery = useQuery({ queryKey: ['meta-lead-imports', user?.id], enabled: !!user, refetchInterval: 30_000, queryFn: () => fetchAllPages<LeadBatch>((from, to) => arenaClient.from('meta_lead_import_batches').select('*').order('created_at', { ascending: false }).range(from, to)) })
@@ -467,67 +436,26 @@ export default function Trafego() {
   const accounts = useMemo(() => [...new Map(allRows.map(row => [row.account_id, { id: row.account_id, name: row.account_name || row.account_id }])).values()], [allRows])
   const accountRows = account ? allRows.filter(row => row.account_id === account) : allRows
   const campaigns = useMemo(() => [...new Map(accountRows.map(row => [row.campaign_id, { id: row.campaign_id, name: row.campaign_name }])).values()], [accountRows])
-  const originRows = origin ? accountRows.filter(row => row.source === origin) : accountRows
-  const rows = originRows.filter(row => !campaign || row.campaign_id === campaign)
-  const total = aggregateMeta(rows)
-  const objectiveSummary = useMemo(() => summarizeObjectives(rows), [rows])
-  const [showAllMetrics, setShowAllMetrics] = useState(false)
-  const daily = useMemo(() => [...new Set(rows.map(row => row.date))].sort().map(date => ({ date: formatDate(date), ...aggregateMeta(rows.filter(row => row.date === date)) })), [rows])
-  const byCampaign = useMemo(() => campaigns.map(item => ({ ...item, ...aggregateMeta(originRows.filter(row => row.campaign_id === item.id)) })).sort((a, b) => b.spend - a.spend), [campaigns, originRows])
-  const cplMedian = median(byCampaign.flatMap(item => item.cpl === null ? [] : [item.cpl]))
-  const cpaMedian = median(byCampaign.flatMap(item => item.cpa === null ? [] : [item.cpa]))
-  const attributionWindows = [...new Set(rows.map(row => row.attribution_window))]
-  const reconciliationQuery = useQuery({ queryKey: ['meta-lead-reconciliation', user?.id, start, end], enabled: !!user && validRange && level === 'campaign',
-    queryFn: () => arenaRpc<{ campaign_id: string; campaign_name: string; form_leads_count: number }[]>('meta_traffic_lead_reconciliation', { p_start: start, p_end: end }) })
-  const attributionQuery = useQuery({ queryKey: ['meta-crm-attribution', user?.id, start, end], enabled: !!user && validRange && level === 'campaign',
-    queryFn: () => arenaRpc<{ campaign_id: string; campaign_name: string; confirmed_sales: number; confirmed_revenue: number }[]>('meta_crm_attribution_daily', { p_start: start, p_end: end }) })
-  const attributionRows = (attributionQuery.data || []).filter(row => campaigns.some(item => item.id === row.campaign_id) && (!campaign || row.campaign_id === campaign))
-  const confirmedSales = attributionRows.reduce((sum, row) => sum + row.confirmed_sales, 0)
-  const confirmedRevenue = attributionRows.reduce((sum, row) => sum + row.confirmed_revenue, 0)
-  const cpaReal = cost(total.spend, confirmedSales)
-  const roasReal = cost(confirmedRevenue, total.spend)
-  const reconciliationRows = (reconciliationQuery.data || []).filter(row => campaigns.some(item => item.id === row.campaign_id))
+  const scope = useMemo<TrafficScope>(() => ({ start, end, level, accountId: account || null, campaignId: campaign || null, source: origin || null }), [start, end, level, account, campaign, origin])
+  const viewResult = useMemo(() => {
+    if (!validRange || !query.data || query.isError) return { view: null, error: null }
+    try { return { view: buildTrafficView(query.data, scope), error: null } }
+    catch (cause) { return { view: null, error: errorMessage(cause) } }
+  }, [query.data, query.isError, scope, validRange])
+  const queryState: QueryState<MetaDailyRow[]> = !validRange ? { state: 'error', message: 'Escolha um período válido até hoje.' }
+    : query.isError || viewResult.error ? { state: 'error', message: viewResult.error || errorMessage(query.error) }
+    : query.isPending ? { state: 'loading' } : { state: 'ready', data: allRows }
+  const cohortQuery = useQuery({ queryKey: ['meta-traffic-cohort', user?.id, start, end, account, campaign, origin], enabled: !!user && validRange && level === 'campaign' && tab === 'performance',
+    queryFn: () => arenaRpc<TrafficCohortResult>('meta_traffic_cohort', { p_start: start, p_end: end, p_account_id: account || null, p_campaign_id: campaign || null, p_source: origin || null }) })
+  const cohortState: QueryState<TrafficCohortResult> | null = level !== 'campaign' ? null : cohortQuery.isError ? { state: 'error', message: errorMessage(cohortQuery.error) }
+    : cohortQuery.data ? { state: 'ready', data: cohortQuery.data } : { state: 'loading' }
   const reviewed = async () => {
     await refreshDashboardMutation(queryClient)
   }
   return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6"><header><h1 className="text-3xl font-light">Tráfego</h1><p className="mt-2 text-sm text-muted-foreground">Desempenho da Meta Ads para decisões de investimento, aquisição e otimização.</p></header>
     <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import" className="gap-1.5"><Upload className="h-3.5 w-3.5" /> Importar</TabsTrigger><TabsTrigger value="approvals">Aprovações</TabsTrigger><TabsTrigger value="data">Dados e edições</TabsTrigger><TabsTrigger value="audit">Auditoria</TabsTrigger><TabsTrigger value="connection">Conexão</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
-      <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-origin">Origem</Label><select id="traffic-origin" className={selectClass} value={origin} onChange={event => setOrigin(event.target.value)}><option value="">Todas</option><option value="csv">CSV</option><option value="api">API</option></select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
-        {!validRange && <p role="alert" className="text-sm text-destructive">Escolha um período válido até hoje.</p>}{query.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(query.error)}</p>}
-        {(() => {
-          const metricCards: [string, string, string][] = [
-            ['cpl', 'CPL · custo por lead', format(total.cpl, 'money')],
-            ['cpa', 'CPA · custo por aquisição', format(total.cpa, 'money')],
-            ['ctr', 'CTR · cliques no link', format(total.ctr, 'percent')],
-            ['costPerMessage', 'Custo por mensagem iniciada', format(total.costPerMessage, 'money')],
-            ['spend', 'Valor gasto', format(total.spend, 'money')],
-            ['leads', 'Leads Meta', format(total.leads, 'count')],
-            ['purchases', 'Aquisições Meta (compras)', format(total.purchases, 'count')],
-            ['messagesStarted', 'Conversas iniciadas', format(total.messagesStarted, 'count')],
-            ['linkClicks', 'Cliques no link', format(total.linkClicks, 'count')],
-            ['cpc', 'CPC · custo por clique no link', format(total.cpc, 'money')],
-            ['impressions', 'Impressões', format(total.impressions, 'count')],
-            ['roas', 'ROAS', format(total.roas, 'ratio')],
-            ['cpm', 'CPM · custo por mil impressões', format(total.cpm, 'money')],
-          ]
-          const essentialKeys = objectiveSummary.dominant ? essentialMetricsByCategory[objectiveSummary.dominant] : null
-          const essentialCards = essentialKeys ? essentialKeys.map(key => metricCards.find(([cardKey]) => cardKey === key)!) : metricCards
-          const card = ([key, label, value]: [string, string, string]) => <article className="surface-panel rounded-xl p-4" key={key}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold">{query.isLoading ? '…' : value}</p></article>
-          return <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{essentialCards.map(card)}</div>
-            {essentialKeys && <Collapsible open={showAllMetrics} onOpenChange={setShowAllMetrics}>
-              <CollapsibleTrigger asChild><Button variant="outline" size="sm">{showAllMetrics ? 'Ocultar todas as métricas' : 'Ver todas as métricas'}</Button></CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{metricCards.map(card)}</CollapsibleContent>
-            </Collapsible>}
-            {objectiveSummary.mixed && <p className="text-sm text-amber-400">Este recorte mistura campanhas com objetivos diferentes (ex.: leads e vendas). Mostrando todas as métricas para evitar leitura enviesada.</p>}
-          </>
-        })()}
-        <p className="text-xs text-muted-foreground">CPL = gasto ÷ leads. CPA = gasto ÷ compras reportadas pela Meta. CTR = cliques no link ÷ impressões × 100; custo por clique é o CPC, exibido separadamente. Custo por mensagem iniciada = gasto ÷ conversas iniciadas. CPM = gasto ÷ impressões × 1000. Os resultados seguem a atribuição da exportação e não equivalem a vendas confirmadas no CRM. “—” indica denominador zero. Cada nível é analisado separadamente para evitar contagem dupla.</p>
-        {level === 'campaign' && <section className="surface-panel grid gap-3 rounded-2xl p-5 sm:grid-cols-2"><article><p className="text-xs text-muted-foreground">CPA real (CRM) · vendas aprovadas</p><p className="mt-2 text-xl font-semibold">{attributionQuery.isLoading ? '…' : format(cpaReal, 'money')}</p></article><article><p className="text-xs text-muted-foreground">ROAS real (CRM) · vendas aprovadas</p><p className="mt-2 text-xl font-semibold">{attributionQuery.isLoading ? '…' : format(roasReal, 'ratio')}</p></article><p className="text-xs text-muted-foreground sm:col-span-2">Baseado em vendas aprovadas no CRM vinculadas a leads de formulário Meta gerados no período (coorte pela data de geração do lead, não pela data do relatório). Cancelamentos e estornos saem do cálculo automaticamente. Diferente do CPA/ROAS acima, que seguem a atribuição declarada pela própria Meta.</p></section>}
-        {!!rows.length && <section className="surface-panel space-y-3 rounded-2xl p-5"><h2 className="font-medium">Referência das próprias campanhas</h2><p className="text-sm text-muted-foreground">Medianas no período e conta selecionados: CPL {format(cplMedian, 'money')} · CPA {format(cpaMedian, 'money')}. Use como comparação interna; campanha, público e objetivo influenciam o resultado.</p><p className="text-xs text-muted-foreground">Atribuição: {attributionWindows.join(' · ')}</p>{attributionWindows.length > 1 && <p className="text-sm text-amber-400">Há janelas de atribuição diferentes neste recorte. Compare campanhas com cautela.</p>}</section>}
-        <section className="surface-panel rounded-2xl p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="font-medium">Investimento e resultados por dia</h2>{!!daily.length && <Button variant="outline" size="sm" onClick={() => downloadCsv('trafego_diario_' + start + '_a_' + end + '.csv', ['Data', 'Investimento', 'Leads', 'Compras', 'Conversas iniciadas'], daily.map(item => [item.date, item.spend.toFixed(2), item.leads, item.purchases, item.messagesStarted]))}>Exportar CSV</Button>}</div>{daily.length ? <div className="h-72" role="img" aria-label="Gráfico diário de investimento, leads e compras"><ResponsiveContainer width="100%" height="100%"><AreaChart data={daily}><CartesianGrid strokeDasharray="3 3" opacity={0.2} /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis yAxisId="brl" tick={{ fontSize: 11 }} tickFormatter={value => `R$ ${value}`} /><YAxis yAxisId="count" orientation="right" tick={{ fontSize: 11 }} /><Tooltip formatter={(value: number, name: string) => name === 'Investimento' ? money(value) : value} /><Legend /><Area yAxisId="brl" type="monotone" dataKey="spend" name="Investimento" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.18} /><Area yAxisId="count" type="monotone" dataKey="leads" name="Leads" stroke="#22c55e" fill="#22c55e" fillOpacity={0.08} /><Area yAxisId="count" type="monotone" dataKey="purchases" name="Compras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.08} /></AreaChart></ResponsiveContainer></div> : <p className="py-10 text-center text-sm text-muted-foreground">Nenhum dado da Meta neste filtro. Importe um CSV para começar.</p>}</section>
-        <section className="surface-panel overflow-hidden rounded-2xl"><div className="flex flex-wrap items-center justify-between gap-2 p-5"><div><h2 className="font-medium">Campanhas</h2><p className="text-xs text-muted-foreground">Ordenadas por investimento no período.</p></div>{!!byCampaign.length && <Button variant="outline" size="sm" onClick={() => downloadCsv('campanhas_trafego_' + start + '_a_' + end + '.csv', ['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisicoes', 'CPA', 'CTR link (%)', 'CPC link', 'Conversas', 'Custo por mensagem'], byCampaign.map(item => [item.name, item.spend.toFixed(2), item.leads, item.cpl ?? '', item.purchases, item.cpa ?? '', item.ctr ?? '', item.cpc ?? '', item.messagesStarted, item.costPerMessage ?? '']))}>Exportar CSV</Button>}</div><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="border-y border-border/60 text-xs text-muted-foreground"><tr>{['Campanha', 'Gasto', 'Leads', 'CPL', 'Aquisições', 'CPA', 'CTR link', 'CPC link', 'Conversas', 'Custo por mensagem'].map(label => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{byCampaign.map(item => <tr className="border-b border-border/40" key={item.id}><td className="px-4 py-3">{item.name}</td><td className="px-4 py-3">{format(item.spend, 'money')}</td><td className="px-4 py-3">{item.leads}</td><td className="px-4 py-3">{format(item.cpl, 'money')}</td><td className="px-4 py-3">{item.purchases}</td><td className="px-4 py-3">{format(item.cpa, 'money')}</td><td className="px-4 py-3">{format(item.ctr, 'percent')}</td><td className="px-4 py-3">{format(item.cpc, 'money')}</td><td className="px-4 py-3">{item.messagesStarted}</td><td className="px-4 py-3">{format(item.costPerMessage, 'money')}</td></tr>)}</tbody></table></div>{!byCampaign.length && <p className="p-5 text-sm text-muted-foreground">Sem campanhas para exibir.</p>}</section>
-        {level === 'campaign' && !!byCampaign.length && <section className="surface-panel space-y-3 rounded-2xl p-5"><h2 className="font-medium">Leads: CSV agregado vs. fila de formulários</h2><p className="text-xs text-muted-foreground">Divergência é esperada: o CSV é o relatório agregado da Meta (pode incluir tipos de ação que contam como "lead" além do formulário); a fila individual só recebe formulários (Lead Ads) e pode ter atraso de sincronização.</p><table className="w-full text-left text-sm"><thead className="text-xs text-muted-foreground"><tr><th className="py-1">Campanha</th><th className="py-1">Leads (CSV)</th><th className="py-1">Leads (fila)</th></tr></thead><tbody>{byCampaign.map(item => <tr key={item.id} className="border-t border-border/40"><td className="py-1">{item.name}</td><td className="py-1">{item.leads}</td><td className="py-1">{reconciliationRows.find(row => row.campaign_id === item.id)?.form_leads_count ?? 0}</td></tr>)}</tbody></table></section>}
+      <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-origin">Origem</Label><select id="traffic-origin" className={selectClass} value={origin} onChange={event => setOrigin(event.target.value as MetaDailyRow['source'] | '')}><option value="">Todas</option><option value="csv">CSV</option><option value="api">API</option></select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
+        <MetaTrafficPerformance view={viewResult.view} queryState={queryState} cohortState={cohortState} onRetry={() => { void query.refetch(); if (level === 'campaign') void cohortQuery.refetch() }} />
       </TabsContent>
       <TabsContent value="import" className="space-y-5">
         <ImportPanel today={today} onSubmitted={() => batchQuery.refetch()} />

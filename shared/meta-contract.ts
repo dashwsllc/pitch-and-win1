@@ -25,6 +25,8 @@ export interface MetaDailyRow {
   objective: string
   source: 'csv' | 'api' | 'manual_legacy'
   updated_at: string
+  available_metrics?: string[] | null
+  metric_metadata?: { version?: number; definition_version?: string; account_timezone?: string; graph_version?: string } | null
 }
 
 export type ImportRow = Omit<MetaDailyRow, 'id' | 'updated_at' | 'source'> & { present_metrics?: string[] }

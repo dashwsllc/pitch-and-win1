@@ -201,7 +201,7 @@ const objectiveKeywords: [PromotableObjective, string[]][] = [
 
 export function classifyObjective(rawObjective: string): ObjectiveCategory {
   const value = normalizeHeader(rawObjective || '')
-  if (!value) return 'nao_informado'
+  if (!value || value === 'nao informado') return 'nao_informado'
   for (const [category, keywords] of objectiveKeywords)
     if (keywords.some(keyword => value.includes(keyword))) return category
   return 'outro'
