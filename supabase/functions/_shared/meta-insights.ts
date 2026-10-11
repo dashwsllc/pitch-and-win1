@@ -34,7 +34,7 @@ export function buildInsightRow(input: MetaInsight, context: InsightContext): Ca
     reach: numeric('reach', 'reach', true), link_clicks: numeric('inline_link_clicks', 'link_clicks', true),
     leads: count(lead, 'leads'), purchases: count(purchase, 'purchases'), messaging_conversations_started: count(message, 'messaging_conversations_started'),
     purchase_value: fields.has('action_values') ? revenue.value ?? 0 : 0, available_metrics: available,
-    metric_metadata: { version: 1, definition_version: 'canonical-v1', lead_action: lead.actionType, purchase_action: purchase.actionType,
+    metric_metadata: { version: 1, definition_version: 'canonical-v1', lead_action: lead.actionType, purchase_action: purchase.actionType, messaging_action: message.actionType,
       raw_actions: input.actions ?? [], raw_action_values: input.action_values ?? [], account_timezone: context.account.timezone,
       graph_version: context.graphVersion, request_params: Object.fromEntries(Object.entries(context.params).filter(([key]) => !['access_token', 'appsecret_proof'].includes(key.toLowerCase()))) },
   }

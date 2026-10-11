@@ -17,7 +17,7 @@ export async function handleLeadCron(req: Request, discover: boolean): Promise<R
     global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(Math.max(1, Math.min(5000, deadlineMs - Date.now()))) }) },
   })
   const results = []
-  const turn = pageIds.length ? Math.floor(Date.now() / 60000) % pageIds.length : 0
+  const turn = pageIds.length ? Math.floor(Date.now() / (discover ? 3600000 : 60000)) % pageIds.length : 0
   const ordered = [...pageIds.slice(turn), ...pageIds.slice(0, turn)]
   for (const pageId of ordered.length ? ordered : [null]) {
     let runId: string | null = null

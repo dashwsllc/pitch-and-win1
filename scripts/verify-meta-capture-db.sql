@@ -120,7 +120,9 @@ BEGIN
  PERFORM pg_temp.assert(EXISTS(SELECT 1 FROM public.meta_capture_review_rows WHERE review_id=review AND original_key->>2='original' AND payload->>'campaign_id'='edited' AND (payload->>'spend')::numeric=15),'original-key edit not retained');
  PERFORM set_config('request.jwt.claim.role','authenticated',true); EXECUTE 'SET LOCAL ROLE authenticated';
  PERFORM pg_temp.expect_error(format('SELECT public.meta_review_traffic_import(%L,%L,%L)',prior.id,'aprovar',prior.updated_at),'40001');
- PERFORM public.meta_capture_review_decide(review,1,'aprovar');
+ SELECT (value->>'row_no')::int INTO row_no FROM jsonb_array_elements(public.meta_capture_review_part(review,1)->'rows') WHERE value->'conflict_details'<>'null'::jsonb;
+ PERFORM public.meta_capture_review_resolve(review,1,row_no,'use_edited','{}','Conservar edição do lote legado');
+ PERFORM public.meta_capture_review_decide(review,2,'aprovar');
  EXECUTE 'RESET ROLE';
  first_review:=review;
  SELECT * INTO fact FROM public.meta_traffic_daily WHERE account_id='92002' AND campaign_id='edited';
@@ -146,6 +148,8 @@ BEGIN
  PERFORM public.meta_capture_review_resolve(review,1,row_no,'use_incoming',NULL,'Usar identificação recebida');
  PERFORM public.meta_capture_review_decide(review,2,'aprovar');
  EXECUTE 'RESET ROLE';
+ PERFORM pg_temp.assert((SELECT count(*)=1 AND sum(spend)=10 FROM public.meta_traffic_daily WHERE account_id='92002' AND date='2026-10-08'),'incoming identity duplicated corrected fact');
+ PERFORM pg_temp.assert(EXISTS(SELECT 1 FROM public.meta_traffic_daily d WHERE d.id=fact.id AND campaign_id='original' AND d.first_origin=fact.first_origin),'incoming identity lost stable fact/origin');
  PERFORM pg_temp.assert(EXISTS(SELECT 1 FROM public.meta_audit_events WHERE entity_id=review AND action='capture.conflict_resolved' AND summary->'candidates' IS NOT NULL),'resolution candidates not audited');
  -- Rollback must include data if the final audit write fails.
  PERFORM set_config('request.jwt.claim.role','service_role',true); EXECUTE 'SET LOCAL ROLE service_role';

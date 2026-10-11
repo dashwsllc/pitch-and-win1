@@ -139,7 +139,15 @@ DECLARE effective jsonb:=public.meta_traffic_identity(p_payload)::jsonb; existin
 BEGIN
  SELECT * INTO existing FROM public.meta_capture_review_rows WHERE review_id=p_review AND (original_key=p_original OR effective_key=effective) FOR UPDATE;
  IF FOUND THEN
-   IF existing.original_key=p_original THEN RETURN; END IF;
+   IF existing.original_key=p_original THEN
+     IF existing.edited AND p_operation='upsert' AND NOT p_edited
+       AND (existing.payload-ARRAY['sync_run_id','traffic_original','traffic_edited','traffic_expected_target']) IS DISTINCT FROM (p_payload-ARRAY['sync_run_id','traffic_original','traffic_edited','traffic_expected_target']) THEN
+       UPDATE public.meta_capture_review_rows SET conflict_details=jsonb_build_object('reason','edited_recaptured_requires_review',
+         'edited',existing.payload,'incoming',p_payload,'previous',existing.conflict_details)
+       WHERE review_id=p_review AND row_no=existing.row_no;
+     END IF;
+     RETURN;
+   END IF;
    UPDATE public.meta_capture_review_rows SET conflict_details=jsonb_build_object('reason','identity_collision','edited',existing.payload,'incoming',p_payload,
      'previous',existing.conflict_details,'incoming_original_key',p_original) WHERE review_id=p_review AND row_no=existing.row_no;
    RETURN;
@@ -189,6 +197,13 @@ BEGIN
  FOR item IN SELECT value FROM public.meta_insights_pages p CROSS JOIN LATERAL jsonb_array_elements(p.rows) WHERE run_id=p_id ORDER BY page_no,value->>'date',value->>'campaign_id' LOOP
    PERFORM public.meta_capture_candidate(review,public.meta_traffic_identity(item)::jsonb,item||jsonb_build_object('sync_run_id',p_id),'upsert',false,NULL);
  END LOOP;
+ -- Complete coverage also makes absence of a preserved edited proposal explicit.
+ UPDATE public.meta_capture_review_rows proposal SET conflict_details=jsonb_build_object('reason','edited_absent_requires_review',
+   'edited',proposal.payload,'incoming',NULL,'previous',proposal.conflict_details)
+ WHERE proposal.review_id=review AND proposal.edited AND proposal.operation='upsert'
+   AND (proposal.original_key->>0)::date BETWEEN r.window_start AND r.window_end
+   AND NOT EXISTS(SELECT 1 FROM public.meta_insights_pages page CROSS JOIN LATERAL jsonb_array_elements(page.rows) observed(value)
+     WHERE page.run_id=p_id AND public.meta_traffic_identity(observed.value)::jsonb=proposal.original_key);
  FOR fact IN SELECT * FROM public.meta_traffic_daily WHERE account_id=r.account_id AND level=r.level AND date BETWEEN r.window_start AND r.window_end ORDER BY date,campaign_id,adset_id,ad_id LOOP
    IF NOT EXISTS(SELECT 1 FROM public.meta_capture_review_rows WHERE review_id=review AND
      (effective_key=public.meta_traffic_identity(to_jsonb(fact))::jsonb OR original_key=coalesce(fact.original_key,public.meta_traffic_identity(to_jsonb(fact))::jsonb))) THEN
@@ -226,6 +241,33 @@ BEGIN
    (SELECT * FROM public.meta_capture_review_rows WHERE review_id=p_id ORDER BY row_no OFFSET p_offset LIMIT p_limit) page;
  RETURN jsonb_build_object('id',r.id,'version',r.version,'total',total,'rows',part,'manifest',r.manifest,'next_offset',CASE WHEN p_offset+p_limit<total THEN p_offset+p_limit END);
 END $$;
+-- Explicit audited inputs establish availability without claiming Graph provenance.
+CREATE FUNCTION public.meta_apply_manual_metrics(item jsonb,p_patch jsonb) RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public AS $$
+DECLARE supplied text[]; optional text[]; metadata jsonb;
+BEGIN
+ SELECT coalesce(array_agg(key),'{}') INTO supplied FROM jsonb_object_keys(p_patch) key
+ WHERE key=ANY(ARRAY['spend','leads','purchases','purchase_value','impressions','reach','link_clicks','messaging_conversations_started','objective'])
+   AND (item->key IS DISTINCT FROM p_patch->key
+     OR (jsonb_typeof(item->'available_metrics')='array' AND NOT (item->'available_metrics' ? key))
+     OR (key<>'spend' AND jsonb_typeof(item->'present_metrics')='array' AND NOT (item->'present_metrics' ? key)));
+ item:=item||p_patch;
+ IF cardinality(supplied)=0 THEN RETURN item; END IF;
+ SELECT coalesce(array_agg(key),'{}') INTO optional FROM unnest(supplied) key WHERE key<>'spend';
+ IF jsonb_typeof(item->'present_metrics')='array' THEN
+   item:=item||jsonb_build_object('present_metrics',(SELECT coalesce(jsonb_agg(DISTINCT key),'[]') FROM
+     (SELECT jsonb_array_elements_text(item->'present_metrics') key UNION ALL SELECT unnest(optional)) k));
+ END IF;
+ IF jsonb_typeof(item->'available_metrics')='array' THEN
+   item:=item||jsonb_build_object('available_metrics',(SELECT jsonb_agg(DISTINCT key) FROM
+     (SELECT jsonb_array_elements_text(item->'available_metrics') key UNION ALL SELECT unnest(supplied)) k));
+ END IF;
+ metadata:=coalesce(nullif(item->'metric_metadata','null'),'{}');
+ metadata:=metadata||jsonb_build_object('manual_metrics',(SELECT jsonb_agg(DISTINCT key) FROM
+   (SELECT jsonb_array_elements_text(coalesce(metadata->'manual_metrics','[]')) key UNION ALL SELECT unnest(supplied)) k));
+ RETURN item||jsonb_build_object('metric_metadata',metadata);
+END $$;
+REVOKE ALL ON FUNCTION public.meta_apply_manual_metrics(jsonb,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 CREATE FUNCTION public.meta_capture_review_edit(p_id uuid,p_version bigint,p_row_no integer,p_patch jsonb,p_reason text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
 DECLARE r public.meta_capture_reviews; row public.meta_capture_review_rows; candidate jsonb; key jsonb;
@@ -233,7 +275,7 @@ BEGIN
  r:=public.meta_capture_check_review(p_id,p_version);PERFORM public.meta_validate_edit('metrics',p_patch,p_reason);
  SELECT * INTO STRICT row FROM public.meta_capture_review_rows WHERE review_id=p_id AND row_no=p_row_no;
  IF row.operation<>'upsert' OR row.conflict_details IS NOT NULL THEN RAISE EXCEPTION 'Resolva o conflito antes de editar' USING ERRCODE='55000'; END IF;
- candidate:=row.payload||p_patch;
+ candidate:=public.meta_apply_manual_metrics(row.payload,p_patch);
  candidate:=candidate||jsonb_build_object('account_id',public.meta_normalize_account_id(candidate->>'account_id'));
  PERFORM public.meta_validate_traffic_row(candidate);key:=public.meta_traffic_identity(candidate)::jsonb;
  IF candidate->>'account_id'<>r.account_id OR candidate->>'level'<>r.level THEN RAISE EXCEPTION 'Conta e nível pertencem à revisão' USING ERRCODE='22023'; END IF;
@@ -247,29 +289,38 @@ BEGIN
 END $$;
 CREATE FUNCTION public.meta_capture_review_resolve(p_id uuid,p_version bigint,p_row_no integer,p_action text,p_payload jsonb,p_reason text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
-DECLARE r public.meta_capture_reviews; row public.meta_capture_review_rows; candidate jsonb; key jsonb; published public.meta_traffic_daily;
+DECLARE r public.meta_capture_reviews; row public.meta_capture_review_rows; candidate jsonb; key jsonb; published public.meta_traffic_daily; target public.meta_traffic_daily;
 BEGIN
  r:=public.meta_capture_check_review(p_id,p_version);
  IF length(btrim(coalesce(p_reason,''))) NOT BETWEEN 3 AND 500 OR p_action IS NULL OR p_action NOT IN ('keep_published','use_incoming','use_edited','remove') THEN RAISE EXCEPTION 'Escolha e motivo necessários' USING ERRCODE='22023'; END IF;
  SELECT * INTO STRICT row FROM public.meta_capture_review_rows WHERE review_id=p_id AND row_no=p_row_no;
  IF row.conflict_details IS NULL THEN RAISE EXCEPTION 'Linha sem conflito' USING ERRCODE='55000'; END IF;
  SELECT * INTO published FROM public.meta_traffic_daily WHERE id=(row.before_snapshot->>'id')::uuid FOR UPDATE;
+ IF published.updated_at IS DISTINCT FROM row.before_version OR published.id IS DISTINCT FROM (row.before_snapshot->>'id')::uuid THEN
+   RAISE EXCEPTION 'Fato publicado mudou; recapture e revise' USING ERRCODE='40001'; END IF;
  IF p_action='keep_published' THEN
    IF published.id IS NULL THEN RAISE EXCEPTION 'Fato publicado não existe' USING ERRCODE='40001'; END IF;
    DELETE FROM public.meta_capture_review_rows WHERE review_id=p_id AND row_no=p_row_no;
  ELSIF p_action='remove' THEN
-   IF published.id IS NULL THEN RAISE EXCEPTION 'Fato publicado não existe' USING ERRCODE='40001'; END IF;
+   IF published.id IS NULL THEN
+     DELETE FROM public.meta_capture_review_rows WHERE review_id=p_id AND row_no=p_row_no;
+   ELSE
    UPDATE public.meta_capture_review_rows SET operation='remove',payload=to_jsonb(published),effective_key=public.meta_traffic_identity(to_jsonb(published))::jsonb,
      before_snapshot=to_jsonb(published),before_version=published.updated_at,conflict_details=NULL,edited=true,edit_reason=p_reason WHERE review_id=p_id AND row_no=p_row_no;
+   END IF;
  ELSE
-   IF p_action='use_edited' THEN PERFORM public.meta_validate_edit('metrics',coalesce(p_payload,'{}'),p_reason); END IF;
+   IF p_action='use_edited' AND coalesce(p_payload,'{}')<>'{}' THEN PERFORM public.meta_validate_edit('metrics',p_payload,p_reason); END IF;
    candidate:=CASE WHEN p_action='use_incoming' THEN row.conflict_details->'incoming' ELSE row.payload||coalesce(p_payload,'{}') END;
-   IF candidate IS NULL THEN RAISE EXCEPTION 'Candidato ausente' USING ERRCODE='22023'; END IF;
+   IF candidate IS NULL OR candidate='null'::jsonb THEN RAISE EXCEPTION 'Candidato ausente' USING ERRCODE='22023'; END IF;
+   IF p_action='use_edited' THEN candidate:=public.meta_apply_manual_metrics(row.payload,coalesce(p_payload,'{}')); END IF;
    candidate:=candidate||jsonb_build_object('account_id',public.meta_normalize_account_id(candidate->>'account_id'));
    PERFORM public.meta_validate_traffic_row(candidate);key:=public.meta_traffic_identity(candidate)::jsonb;
    IF candidate->>'account_id'<>r.account_id OR candidate->>'level'<>r.level OR EXISTS(SELECT 1 FROM public.meta_capture_review_rows WHERE review_id=p_id AND row_no<>p_row_no AND effective_key=key) THEN
      RAISE EXCEPTION 'Identidade ocupada ou fora da revisão' USING ERRCODE='23505'; END IF;
-   SELECT * INTO published FROM public.meta_traffic_daily WHERE date=(key->>0)::date AND account_id=key->>1 AND campaign_id=key->>2 AND adset_id=key->>3 AND ad_id=key->>4 FOR UPDATE;
+   SELECT * INTO target FROM public.meta_traffic_daily WHERE date=(key->>0)::date AND account_id=key->>1 AND campaign_id=key->>2 AND adset_id=key->>3 AND ad_id=key->>4 FOR UPDATE;
+   IF target.id IS NOT NULL AND target.id IS DISTINCT FROM published.id THEN
+     RAISE EXCEPTION 'Identidade ocupada por outro fato publicado' USING ERRCODE='23505'; END IF;
+   -- Retain the originally reviewed fact even if its effective identity is moving.
    UPDATE public.meta_capture_review_rows SET operation='upsert',payload=candidate,effective_key=key,before_snapshot=CASE WHEN published.id IS NOT NULL THEN to_jsonb(published) END,
      before_version=published.updated_at,conflict_details=NULL,edited=true,edit_reason=p_reason WHERE review_id=p_id AND row_no=p_row_no;
  END IF;
@@ -395,13 +446,23 @@ BEGIN
 END $function$
 ;
 
+-- Freeze server-owned target versions at upload; absence is an explicit expectation.
+CREATE FUNCTION public.meta_traffic_target(item jsonb) RETURNS jsonb
+LANGUAGE sql STABLE SET search_path=pg_catalog,public AS $$
+ SELECT jsonb_build_object('key',public.meta_traffic_identity(item)::jsonb,
+   'id',(SELECT id FROM public.meta_traffic_daily WHERE date=(item->>'date')::date AND account_id=public.meta_normalize_account_id(item->>'account_id')
+     AND campaign_id=item->>'campaign_id' AND adset_id=coalesce(item->>'adset_id','') AND ad_id=coalesce(item->>'ad_id','')),
+   'updated_at',(SELECT updated_at FROM public.meta_traffic_daily WHERE date=(item->>'date')::date AND account_id=public.meta_normalize_account_id(item->>'account_id')
+     AND campaign_id=item->>'campaign_id' AND adset_id=coalesce(item->>'adset_id','') AND ad_id=coalesce(item->>'ad_id','')));
+$$;
+REVOKE ALL ON FUNCTION public.meta_traffic_target(jsonb) FROM PUBLIC,anon,authenticated,service_role;
 CREATE OR REPLACE FUNCTION public.meta_review_traffic_import(p_batch_id uuid, p_action text, p_expected_updated_at timestamp with time zone, p_note text DEFAULT ''::text)
  RETURNS meta_import_batches
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog', 'public'
 AS $function$
-DECLARE b public.meta_import_batches; item jsonb;
+DECLARE b public.meta_import_batches; item jsonb; expected jsonb; actual jsonb;
 BEGIN
   IF NOT public.traffic_has_access() THEN RAISE EXCEPTION 'Acesso de Tráfego necessário' USING ERRCODE='42501'; END IF;
   IF p_action IS NULL OR p_action NOT IN ('aprovar','rejeitar') THEN RAISE EXCEPTION 'Ação inválida'; END IF;
@@ -414,6 +475,15 @@ BEGIN
     RAISE EXCEPTION 'Informe o motivo da rejeição (3 a 500 caracteres)';
   END IF;
   IF p_action = 'aprovar' THEN
+    -- Check every target before writing any row, under the same locks as API/edit writes.
+    FOR item IN SELECT value FROM jsonb_array_elements(b.rows) ORDER BY public.meta_traffic_identity(value) LOOP
+      PERFORM pg_advisory_xact_lock(hashtextextended('meta-fact:'||public.meta_traffic_identity(item),0));
+      expected:=item->'traffic_expected_target'; actual:=public.meta_traffic_target(item);
+      IF expected IS NULL OR expected->'key' IS DISTINCT FROM actual->'key'
+        OR (expected->>'id')::uuid IS DISTINCT FROM (actual->>'id')::uuid
+        OR (expected->>'updated_at')::timestamptz IS DISTINCT FROM (actual->>'updated_at')::timestamptz THEN
+        RAISE EXCEPTION 'Fato publicado mudou ou lote legado sem versão; reimporte e revise' USING ERRCODE='40001'; END IF;
+    END LOOP;
     FOR item IN SELECT value FROM jsonb_array_elements(b.rows) LOOP
       PERFORM public.meta_upsert_traffic_row(item,b.source,b.imported_by,b.id,
         CASE WHEN b.source='api' THEN coalesce((item->>'sync_run_id')::uuid,b.sync_run_id) END);
@@ -447,7 +517,7 @@ BEGIN
   END LOOP;
   PERFORM pg_advisory_xact_lock(hashtextextended('meta-pending:'||account||':'||row_level,0));
   SELECT * INTO batch FROM public.meta_import_batches WHERE source='api' AND account_id=account AND level=row_level AND status='pendente' AND replaced_by_review_id IS NULL FOR UPDATE;
-  SELECT jsonb_agg(value||jsonb_build_object('sync_run_id',p_sync_run_id)) INTO incoming FROM jsonb_array_elements(p_rows) incoming_row(value)
+  SELECT jsonb_agg(value||jsonb_build_object('sync_run_id',p_sync_run_id,'traffic_expected_target',public.meta_traffic_target(value))) INTO incoming FROM jsonb_array_elements(p_rows) incoming_row(value)
     WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(coalesce(batch.rows,'[]')) edited
       WHERE edited->>'traffic_edited'='true' AND
         ROW(incoming_row.value->>'date',incoming_row.value->>'account_id',incoming_row.value->>'campaign_id',coalesce(incoming_row.value->>'adset_id',''),coalesce(incoming_row.value->>'ad_id',''))=
@@ -491,7 +561,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'Importação não encontrada'; END IF;
   IF version IS DISTINCT FROM p_expected_updated_at THEN RAISE EXCEPTION 'Importação alterada, recarregue antes de editar' USING ERRCODE='40001'; END IF;
   IF p_row_index IS NULL OR p_row_index<0 OR p_row_index>=jsonb_array_length(rows_json) THEN RAISE EXCEPTION 'Linha inválida'; END IF;
-  before_row:=rows_json->p_row_index; after_row:=before_row||p_patch;
+  before_row:=rows_json->p_row_index; after_row:=CASE WHEN p_kind='metrics' THEN public.meta_apply_manual_metrics(before_row,p_patch) ELSE before_row||p_patch END;
   delta:=public.meta_edit_diff(before_row,after_row);
   IF delta='[]' THEN RETURN jsonb_build_object('updated_at',version); END IF;
   IF p_kind='metrics' THEN
@@ -503,6 +573,10 @@ BEGIN
     IF public.meta_traffic_identity(before_row) IS DISTINCT FROM public.meta_traffic_identity(after_row)
       AND EXISTS(SELECT 1 FROM public.meta_traffic_daily d WHERE d.date=(after_row->>'date')::date AND d.account_id=after_row->>'account_id' AND d.campaign_id=after_row->>'campaign_id' AND d.adset_id=coalesce(after_row->>'adset_id','') AND d.ad_id=coalesce(after_row->>'ad_id','')) THEN
       RAISE EXCEPTION 'A edição ocupa a identidade de uma linha publicada' USING ERRCODE='23505'; END IF;
+    IF public.meta_traffic_identity(before_row) IS DISTINCT FROM public.meta_traffic_identity(after_row) THEN
+      after_row:=after_row||jsonb_build_object('traffic_expected_target',public.meta_traffic_target(after_row));
+      IF after_row->'traffic_expected_target'->>'id' IS NOT NULL THEN RAISE EXCEPTION 'Identidade publicada ocupada' USING ERRCODE='23505'; END IF;
+    END IF;
     IF origin='api' AND (after_row->>'account_id' IS DISTINCT FROM public.meta_normalize_account_id(before_row->>'account_id')
       OR after_row->>'level' IS DISTINCT FROM before_row->>'level') THEN
       RAISE EXCEPTION 'Conta e nível pertencem à captura' USING ERRCODE='22023'; END IF;
@@ -513,10 +587,7 @@ BEGIN
       OR (after_row->>'level'='adset' AND coalesce(after_row->>'ad_id','')<>'')
       OR length(btrim(coalesce(after_row->>'campaign_name',''))) NOT BETWEEN 1 AND 160 THEN RAISE EXCEPTION 'Identificadores ou campanha inválidos'; END IF;
     after_row:=after_row||jsonb_build_object('traffic_edited',true,'traffic_original',coalesce(before_row->'traffic_original',before_row));
-    IF after_row ? 'present_metrics' THEN
-      after_row:=after_row||jsonb_build_object('present_metrics',(SELECT jsonb_agg(DISTINCT key) FROM
-        (SELECT jsonb_array_elements_text(after_row->'present_metrics') key UNION ALL SELECT jsonb_object_keys(p_patch)) k));
-    END IF;
+    PERFORM public.meta_validate_traffic_row(after_row);
   ELSE
     after_row:=after_row||jsonb_build_object('complete',length(btrim(coalesce(after_row->>'full_name','')))>=2
       AND length(btrim(coalesce(after_row->>'phone',''))) BETWEEN 8 AND 32
@@ -549,9 +620,9 @@ BEGIN
   SELECT * INTO old FROM public.meta_traffic_daily WHERE id=p_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Métrica não encontrada'; END IF;
   IF old.updated_at IS DISTINCT FROM p_expected_updated_at THEN RAISE EXCEPTION 'Métrica alterada, recarregue antes de editar' USING ERRCODE='40001'; END IF;
-  IF public.meta_edit_diff(to_jsonb(old),to_jsonb(old)||p_patch)='[]' THEN RETURN to_jsonb(old); END IF;
   PERFORM set_config('meta.capture_review',coalesce(old.capture_review_id::text,''),true);
-  edited:=jsonb_populate_record(old,p_patch);
+  edited:=jsonb_populate_record(old,public.meta_apply_manual_metrics(to_jsonb(old),p_patch));
+  IF public.meta_edit_diff(to_jsonb(old),to_jsonb(edited))='[]' THEN RETURN to_jsonb(old); END IF;
   PERFORM public.meta_validate_traffic_row(to_jsonb(edited));
   PERFORM pg_advisory_xact_lock(hashtextextended('meta-fact:'||public.meta_traffic_identity(to_jsonb(edited)),0));
   UPDATE public.meta_traffic_daily SET original_key=coalesce(old.original_key,public.meta_traffic_identity(to_jsonb(old))::jsonb), date=edited.date,account_id=edited.account_id,account_name=edited.account_name,
@@ -559,6 +630,7 @@ BEGIN
     ad_id=edited.ad_id,ad_name=edited.ad_name,level=edited.level,currency=edited.currency,attribution_window=edited.attribution_window,
     objective=edited.objective,spend=edited.spend,leads=edited.leads,purchases=edited.purchases,purchase_value=edited.purchase_value,
     impressions=edited.impressions,reach=edited.reach,link_clicks=edited.link_clicks,messaging_conversations_started=edited.messaging_conversations_started,
+    available_metrics=edited.available_metrics,metric_metadata=edited.metric_metadata,
     traffic_edited_at=clock_timestamp(),traffic_edit_reason=btrim(p_reason),updated_at=clock_timestamp() WHERE id=p_id RETURNING * INTO edited;
   RETURN to_jsonb(edited);
 EXCEPTION WHEN unique_violation THEN RAISE EXCEPTION 'Já existe uma métrica para esta data e identificação. Edite a linha existente.';
@@ -579,7 +651,7 @@ BEGIN
   FOR item IN SELECT value FROM jsonb_array_elements(p_rows) LOOP
     PERFORM public.meta_validate_traffic_row(item);
   END LOOP;
-  SELECT jsonb_agg((value-ARRAY['capture_review_id','metric_metadata','first_origin','original_key','available_metrics','sync_run_id'])||jsonb_build_object('account_id',public.meta_normalize_account_id(value->>'account_id'))) INTO p_rows FROM jsonb_array_elements(p_rows);
+  SELECT jsonb_agg((value-ARRAY['capture_review_id','metric_metadata','first_origin','original_key','available_metrics','sync_run_id','traffic_expected_target'])||jsonb_build_object('account_id',public.meta_normalize_account_id(value->>'account_id'),'traffic_expected_target',public.meta_traffic_target(value))) INTO p_rows FROM jsonb_array_elements(p_rows);
   IF EXISTS(SELECT 1 FROM jsonb_array_elements(p_rows) r GROUP BY public.meta_traffic_identity(r) HAVING count(*)>1) THEN
     RAISE EXCEPTION 'Identidade repetida no arquivo' USING ERRCODE='22023'; END IF;
   INSERT INTO public.meta_import_batches(imported_by,filename,row_count,status,rows)

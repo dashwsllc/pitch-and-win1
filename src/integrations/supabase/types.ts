@@ -2084,6 +2084,9 @@ isOneToOne: false
 "meta_answer_text":
 { Args: { "p_fields": Json,"p_names": (string)[] }; Returns: string
                            },
+"meta_apply_manual_metrics":
+{ Args: { "item": Json,"p_patch": Json }; Returns: Json
+                           },
 "meta_assert_account_identity":
 { Args: { "p_id": string }; Returns: undefined
                            },
@@ -2383,6 +2386,9 @@ isOneToOne: false
                            },
 "meta_traffic_review_list":
 { Args: { "p_kind"?: string,"p_limit"?: number,"p_offset"?: number,"p_status"?: string }; Returns: Json
+                           },
+"meta_traffic_target":
+{ Args: { "item": Json }; Returns: Json
                            },
 "meta_upsert_traffic_row":
 { Args: { "item": Json,"p_import_batch_id": string,"p_imported_by": string,"p_source": string,"p_sync_run_id": string }; Returns: undefined

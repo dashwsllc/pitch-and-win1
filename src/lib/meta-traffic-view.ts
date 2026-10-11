@@ -51,16 +51,28 @@ function definition(row: MetaDailyRow): string | null {
     return JSON.stringify(['canonical-v1', row.attribution_window, row.metric_metadata.account_timezone, row.metric_metadata.graph_version || 'unknown'])
   return null
 }
+function metricDefinition(row: MetaDailyRow, field: string): string | null {
+  const base = definition(row)
+  if (!base) return null
+  if (row.metric_metadata?.manual_metrics?.includes(field)) return JSON.stringify([base, 'manual', field])
+  if (row.source === 'csv') return base
+  const action = field === 'leads' ? row.metric_metadata?.lead_action
+    : ['purchases', 'purchase_value'].includes(field) ? row.metric_metadata?.purchase_action
+    : field === 'messaging_conversations_started' ? row.metric_metadata?.messaging_action : 'direct-field'
+  return action ? JSON.stringify([base, action]) : null
+}
+function compatibleDefinitions(rows: MetaDailyRow[], field?: string): boolean {
+  const definitions = new Set(rows.map(row => field ? metricDefinition(row, field) : definition(row)))
+  return rows.length > 0 && !definitions.has(null) && definitions.size === 1 && rows.every(row => row.currency === 'BRL')
+}
 function aggregate(rows: MetaDailyRow[]): TrafficMetricTotals {
   const values = Object.fromEntries(Object.entries(metricFields).map(([key, field]) => {
     const numbers = rows.map(row => knownValue(row, field))
     return [key, numbers.some(value => value === null) ? null : numbers.reduce<number>((sum, value) => sum + value!, 0)]
   })) as Pick<TrafficMetricTotals, keyof typeof metricFields>
-  const definitions = new Set(rows.map(definition))
-  const compatible = rows.length > 0 && !definitions.has(null) && definitions.size === 1 && rows.every(row => row.currency === 'BRL')
-  const divide = (numerator: number | null, denominator: number | null, scale = 1) => compatible && numerator !== null && denominator !== null && denominator > 0 ? numerator * scale / denominator : null
-  return { ...values, cpl: divide(values.spend, values.leads), cpa: divide(values.spend, values.purchases), roas: divide(values.purchaseValue, values.spend),
-    cpm: divide(values.spend, values.impressions, 1000), cpc: divide(values.spend, values.linkClicks), costPerMessage: divide(values.spend, values.messagesStarted), ctr: divide(values.linkClicks, values.impressions, 100) }
+  const divide = (numerator: number | null, denominator: number | null, scale = 1, field?: string) => compatibleDefinitions(rows, field) && numerator !== null && denominator !== null && denominator > 0 ? numerator * scale / denominator : null
+  return { ...values, cpl: divide(values.spend, values.leads, 1, 'leads'), cpa: divide(values.spend, values.purchases, 1, 'purchases'), roas: divide(values.purchaseValue, values.spend, 1, 'purchase_value'),
+    cpm: divide(values.spend, values.impressions, 1000), cpc: divide(values.spend, values.linkClicks), costPerMessage: divide(values.spend, values.messagesStarted, 1, 'messaging_conversations_started'), ctr: divide(values.linkClicks, values.impressions, 100) }
 }
 export function buildTrafficView(input: MetaDailyRow[], scope: TrafficScope): TrafficView {
   const rows = selectTrafficRows(input, scope), days = new Map<string, MetaDailyRow[]>(), entities = new Map<string, MetaDailyRow[]>()
@@ -73,6 +85,10 @@ export function buildTrafficView(input: MetaDailyRow[], scope: TrafficScope): Tr
   if (rows.some(row => !row.available_metrics)) warnings.push('Histórico legado: valores registrados preservados; disponibilidade e taxas não comprovadas.')
   if (rows.some(row => row.available_metrics && !definition(row))) warnings.push('Definição ou calendário das métricas não comprovado; taxas indisponíveis.')
   if (new Set(rows.map(definition)).size > 1) warnings.push('O recorte mistura definições, atribuições ou fusos; taxas consolidadas indisponíveis.')
+  for (const [field, label] of [['leads', 'leads/CPL'], ['purchases', 'compras/CPA'], ['purchase_value', 'receita/ROAS'], ['messaging_conversations_started', 'conversas/custo por conversa']]) {
+    if (rows.length && rows.every(row => knownValue(row, field) !== null) && !compatibleDefinitions(rows, field))
+      warnings.push(`Definição de ${label} divergente ou não comprovada; taxa correspondente indisponível.`)
+  }
   if (rows.some(row => row.currency !== 'BRL')) warnings.push('Moeda incompatível com BRL; valores monetários indisponíveis.')
   const groups = [...entities].map(([key, items]) => {
     const row = items.at(-1)!
@@ -93,10 +109,11 @@ export function crmTrafficRates(cohort: TrafficCohortResult, view: TrafficView):
   return { cpa: sales > 0 ? view.total.spend / sales : null, roas: view.total.spend > 0 ? revenue / view.total.spend : null, reason: null }
 }
 export function buildTrafficCsv(view: TrafficView): { headers: string[]; rows: (string | number)[][] } {
-  return { headers: ['Período inicial', 'Período final', 'Data', 'Conta ID', 'Campanha ID', 'Campanha', 'Conjunto ID', 'Conjunto', 'Anúncio ID', 'Anúncio', 'Nível', 'Origem', 'Definição', 'Atribuição', 'Gasto BRL', 'Leads', 'Compras', 'Receita Meta BRL', 'Impressões', 'Cliques', 'Conversas'],
+  return { headers: ['Período inicial', 'Período final', 'Data', 'Conta ID', 'Campanha ID', 'Campanha', 'Conjunto ID', 'Conjunto', 'Anúncio ID', 'Anúncio', 'Nível', 'Origem', 'Definição', 'Atribuição', 'Gasto BRL', 'Leads', 'Compras', 'Receita Meta BRL', 'Impressões', 'Cliques', 'Conversas', 'Ação de leads', 'Ação de compras', 'Ação de conversas', 'Métricas manuais', 'Fuso da conta', 'Versão Graph'],
     rows: view.rows.map(row => [view.scope.start, view.scope.end, row.date, row.account_id, row.campaign_id, row.campaign_name, row.adset_id, row.adset_name,
       row.ad_id, row.ad_name, row.level, row.source, row.metric_metadata?.definition_version || (row.available_metrics ? 'csv-declared' : 'legado'), row.attribution_window,
-      ...Object.values(metricFields).map(field => knownValue(row, field) ?? '')]) }
+      ...Object.values(metricFields).map(field => knownValue(row, field) ?? ''), row.metric_metadata?.lead_action || '', row.metric_metadata?.purchase_action || '',
+      row.metric_metadata?.messaging_action || '', (row.metric_metadata?.manual_metrics || []).join(','), row.metric_metadata?.account_timezone || '', row.metric_metadata?.graph_version || '']) }
 }
 export function trafficCsvText(csv: { headers: string[]; rows: (string | number)[][] }) {
   const cell = (value: string | number) => { const text = String(value); return /[";\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text }

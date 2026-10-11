@@ -11,9 +11,9 @@ A intenção preservada é conferir investimento Meta, revisar recebimentos, enc
 1. Insights captura páginas duráveis por conta/nível/janela, com lease, cursor sem token e prazo limitado. Retomada não abre capturas novas. Resposta parcial é HTTP 202; falha é 502. Nenhuma página publica métricas diretamente.
 2. A captura completa prepara uma revisão lógica versionada. As partes de 500 linhas servem para conferência; a decisão abrange a revisão inteira. Remoções propostas aparecem explicitamente. Recapturas preservam edições e evidências, expondo conflitos para resolução com motivo. Decisão concorrente ou versão antiga falha inteira.
 3. Webhook verifica HMAC sobre o corpo original, grava o recibo antes do ACK e deixa Graph/extração para o worker. Falha de persistência responde 503. Recibos repetidos não reabrem processados nem apagam decisões.
-4. Worker consome recibos antigos, recupera leases vencidos e aplica backoff. Descoberta tem janela congelada e checkpoint de formulários/páginas; 48 horas só delimitam a varredura inicial, não a validade dos recibos. Páginas alternam prioridade entre minutos. Descoberta e drenagem têm registros separados, mantendo erros de autorização visíveis.
+4. Worker consome recibos antigos, recupera leases vencidos e aplica backoff. Descoberta tem janela congelada e checkpoint de formulários/páginas; 48 horas só delimitam a varredura inicial, não a validade dos recibos. Páginas alternam prioridade entre minutos na drenagem e entre horas na descoberta. Descoberta e drenagem têm registros separados, mantendo erros de autorização visíveis.
 5. Extração determinística preserva respostas originais. IA só ajuda em contatos ausentes, com limite de três segundos e validação estrita. Contato completo aprovado segue ao CRM sem SDR atribuído; incompleto aprovado segue à fila de complemento.
-6. Desempenho usa um recorte para cards, tabela, gráfico e CSV completo. Campanha, conjunto e anúncio mantêm identidades distintas. Ausência de métrica difere de zero. Ações sobrepostas são alternativas, não parcelas somadas. Definição, moeda e calendário acompanham cada captura.
+6. Desempenho usa um recorte para cards, tabela, gráfico e CSV completo. Campanha, conjunto e anúncio mantêm identidades distintas. Ausência de métrica difere de zero. Ações sobrepostas são alternativas, não parcelas somadas. Definição, moeda e calendário acompanham cada captura. CPL, CPA, ROAS e custo por conversa verificam a ação efetivamente selecionada; diferenças bloqueiam somente a taxa afetada. O CSV inclui ações, métricas manuais, fuso e versão Graph.
 7. Coorte combina leads aprovados realmente vinculados ao CRM e vendas confirmadas ainda válidas, pela geração do lead em Brasília. Origem desconhecida, cobertura parcial ou mistura incompatível impedem CPA/ROAS confirmados. Vendas não são rateadas entre API/CSV.
 8. Sinais de revisão são transacionais por statement; rollback/no-op não anunciam mudanças. A segunda sessão atualiza por Realtime ou reconciliação dos contadores. Listas de revisão são leves; detalhes só carregam ao abrir.
 
@@ -47,7 +47,7 @@ Verificar presença dos secrets Edge: `META_SYSTEM_USER_TOKEN`, `META_APP_SECRET
 
 Após banco → Edge → front, preflight aprovado e conferência de permissões, ativar **somente** estes nomes com `cron.alter_job(jobid, active := true)` em transação administrativa:
 
-| Job | Agenda UTC | Corpo |
+| Job | Agenda (conferir fuso do pg_cron) | Corpo |
 | --- | --- | --- |
 | meta-insights-sync-frequent | */30 * * * * | `{}` |
 | meta-insights-sync-deep | 0 3 * * * | `{"days":8}` |
@@ -55,7 +55,7 @@ Após banco → Edge → front, preflight aprovado e conferência de permissões
 | meta-leads-reconciliation-hourly | 15 * * * * | `{"discover":true}` |
 | meta-lead-worker | * * * * * | `{"discover":false}` |
 
-Conferir exatamente cinco nomes únicos e agendas. O transporte tem timeout de 60 segundos, acima do orçamento Edge escolhido de 45 segundos/reserva de 5. É uma escolha operacional dentro dos [limites oficiais](https://supabase.com/docs/guides/functions/limits); contas grandes retomam em vários ciclos. Secret Vault ausente impede enviar requisição. Agendas reais, execução pg_net, latência e limites do plano precisam de smoke test após publicação.
+Conferir exatamente cinco nomes únicos, agendas e o fuso configurado do pg_cron no destino. O transporte tem timeout de 60 segundos, acima do orçamento Edge escolhido de 45 segundos/reserva de 5. É uma escolha operacional dentro dos [limites oficiais](https://supabase.com/docs/guides/functions/limits); contas grandes retomam em vários ciclos. Secret Vault ausente impede enviar requisição. Agendas reais, execução pg_net, latência e limites do plano precisam de smoke test após publicação.
 
 ## Conferência depois de publicar
 
@@ -71,6 +71,12 @@ Conferir exatamente cinco nomes únicos e agendas. O transporte tem timeout de 6
 Recibo `pending/error` antigo continua elegível conforme `next_attempt_at`; não apagar nem reenfileirar manualmente um processado. Identificar classe da falha e regularizar autorização/configuração. Falhas transitórias têm retentativas limitadas com backoff. Lease vencido pode ser recuperado com novo token; finalização do dono antigo é rejeitada.
 
 Captura parcial retoma o cursor salvo. Cursor expirado/permissão terminal aborta a tentativa sem preparar remoções; depois da correção, abrir captura nova da janela. Falha de persistência não avança cursor. Revisão alterada exige recarregar e conferir a versão atual; conflitos exigem escolher publicado/recebido/editado/remoção com motivo. Nova captura pode substituir uma revisão pendente, preservando edições e identificando colisões.
+
+Na descoberta de leads, Graph código 100 em cursor paginado reinicia apenas o percurso afetado, com o mesmo claim/versionamento e a mesma janela congelada. Recibos existentes são deduplicados; a falha não marca cobertura completa. Erros de permissão mantêm o cursor até regularizar o acesso. A próxima execução retoma o percurso reiniciado.
+
+CSV mantém semântica de patch/upsert. O servidor congela a identidade/versão de cada alvo no upload e verifica todos antes de publicar. Edição publicada ou aprovação concorrente posterior retorna `40001`; reimportar e conferir novamente. Lotes pendentes anteriores à mudança, sem versão de alvo, também exigem reimportação ou incorporação em nova captura. Não preencher versões manualmente para contornar a proteção.
+
+Recaptura divergente ou ausência de proposta editada exige escolha explícita; ambas as observações ficam congeladas na revisão. Descartar uma proposta ainda não publicada não remove outro fato. Resolver uma identidade corrigida mantém o ID e a primeira origem, rejeita ocupação por outro fato e preserva a verificação de versão. Métricas informadas manualmente, inclusive zero antes ausente, ganham disponibilidade e marca de origem manual, com auditoria.
 
 ## Rollback conservador
 

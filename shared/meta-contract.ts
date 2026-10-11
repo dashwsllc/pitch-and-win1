@@ -26,7 +26,7 @@ export interface MetaDailyRow {
   source: 'csv' | 'api' | 'manual_legacy'
   updated_at: string
   available_metrics?: string[] | null
-  metric_metadata?: { version?: number; definition_version?: string; account_timezone?: string; graph_version?: string } | null
+  metric_metadata?: { version?: number; definition_version?: string; account_timezone?: string; graph_version?: string; lead_action?: string | null; purchase_action?: string | null; messaging_action?: string | null; manual_metrics?: string[] } | null
 }
 
 export type ImportRow = Omit<MetaDailyRow, 'id' | 'updated_at' | 'source'> & { present_metrics?: string[] }
@@ -45,7 +45,7 @@ export interface InsightContext {
 export interface CapturedTrafficRow extends ImportRow {
   available_metrics: string[]
   metric_metadata: {
-    version: 1; definition_version: 'canonical-v1'; lead_action: string | null; purchase_action: string | null
+    version: 1; definition_version: 'canonical-v1'; lead_action: string | null; purchase_action: string | null; messaging_action?: string | null; manual_metrics?: string[]
     raw_actions: MetaAction[]; raw_action_values: MetaAction[]; account_timezone: string; graph_version: string
     request_params: Record<string, string>
   }

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0'
-import { fetchGraphPage, type MetaGraphRequest } from './meta-graph.ts'
+import { fetchGraphPage, MetaGraphError, type MetaGraphRequest } from './meta-graph.ts'
 import { leadRpc, leadErrorMessage, processClaimedLead, receiveLeadgenEvent, type ClaimedLeadEvent } from './meta-lead-ingest.ts'
 
 interface Form { id: string; name?: string }
@@ -18,6 +18,7 @@ async function discoverPage(admin: SupabaseClient, pageId: string, token: string
   const state = await leadRpc<DiscoveryState | null>(admin, 'meta_lead_discovery_claim', { p_page_id: pageId, p_lease_seconds: 60 })
   if (!state) { result.partial = true; return }
   let failure: string | null = null
+  let activeRequest: MetaGraphRequest | null = null
   const checkpoint = async (update: Record<string, unknown>, received: string[] = []) => {
     state.version = await leadRpc<number>(admin, 'meta_lead_discovery_checkpoint', {
       p_page_id: pageId, p_claim: state.claim_token, p_expected_version: state.version, p_state: { ...update, received_ids: received },
@@ -34,6 +35,7 @@ async function discoverPage(admin: SupabaseClient, pageId: string, token: string
       }
       if (state.form_id && state.leads_next) {
         const request = state.leads_next
+        activeRequest = request
         const page = await fetchGraphPage<{ id: string }>(request, token, { deadlineMs })
         requireIds(page.data)
         if (page.next && JSON.stringify(page.next) === JSON.stringify(request)) throw new Error('Cursor de descoberta repetido')
@@ -50,6 +52,7 @@ async function discoverPage(admin: SupabaseClient, pageId: string, token: string
       }
       if (state.forms_next) {
         const request = state.forms_next
+        activeRequest = request
         const page = await fetchGraphPage<Form>(request, token, { deadlineMs })
         requireIds(page.data)
         if (page.next && JSON.stringify(page.next) === JSON.stringify(request)) throw new Error('Cursor de descoberta repetido')
@@ -62,6 +65,18 @@ async function discoverPage(admin: SupabaseClient, pageId: string, token: string
     result.partial = true
   } catch (error) {
     failure = leadErrorMessage(error, token); result.errors.push(failure); result.partial = true
+    if (error instanceof MetaGraphError && error.code === 100 && activeRequest
+      && (activeRequest.params.after || activeRequest.params.before)) {
+      // Restart only this traversal. The frozen coverage window and durable receipts
+      // survive; replay deduplicates them and completion still requires every page.
+      const restart: MetaGraphRequest = state.form_id
+        ? { path: `/${state.form_id}/leads`, params: { fields: 'id', limit: '50', filtering: JSON.stringify([
+          { field: 'time_created', operator: 'GREATER_THAN', value: Math.floor(Date.parse(state.window_since) / 1000) },
+        ]) } }
+        : { path: `/${pageId}/leadgen_forms`, params: { fields: 'id,name', limit: '50' } }
+      try { await checkpoint(state.form_id ? { leads_next: restart } : { forms_next: restart }) }
+      catch (restartError) { result.errors.push(leadErrorMessage(restartError, token)) }
+    }
   } finally {
     try { await leadRpc(admin, 'meta_lead_discovery_release', { p_page_id: pageId, p_claim: state.claim_token, p_error: failure }) }
     catch (error) { result.errors.push(leadErrorMessage(error, token)); result.partial = true }

@@ -34,6 +34,23 @@ test('busy pages rotate across minute workers so another authorized page is not 
   assert.equal(admin.events.get('lead-page2').status,'processed')
 })
 
+test('hourly discovery rotates busy first pages on consecutive scheduled hours', async () => {
+  let now = Date.parse('2026-10-11T12:15:00Z'), sequence = 0
+  class Clock extends Date { static now() { return now } }
+  const admin = leadDatabase()
+  const { handler } = await loadHandler('meta-leads-reconciliation/index.ts', { admin, clock: Clock, extraEnv: { META_PAGE_IDS: 'page1,page2' }, fetch: address => {
+    const url = new URL(address), next = new URL(url)
+    assert(url.pathname.endsWith('/leadgen_forms'))
+    next.searchParams.set('after', String(++sequence)); now += 39000
+    return new Response(JSON.stringify({ data: [], paging: { next: next.href } }))
+  } })
+  assert.equal((await handler(request({ discover: true }))).status, 202)
+  assert.equal(admin.discoveries.size, 1)
+  now = Date.parse('2026-10-11T13:15:00Z')
+  assert.equal((await handler(request({ discover: true }))).status, 202)
+  assert.equal(admin.discoveries.size, 2)
+})
+
 test('real PostgreSQL: paginated capture and signed webhook require approval, survive recovery and reject concurrent decisions atomically', { timeout: 180000 }, async () => {
   const address = new URL(process.env.TRAFFIC_TEST_DATABASE_URL || 'missing://local')
   assert(address.hostname === '127.0.0.1' && address.port === '55432' && address.pathname === '/traffic_migration_check', 'Use the disposable local template database')

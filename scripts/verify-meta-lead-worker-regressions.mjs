@@ -87,3 +87,43 @@ test('AI timeout is capped at three seconds and preserves known contact and orig
   assert.equal(admin.events.get('lead1').data.full_name, 'Maria')
   assert.deepEqual(JSON.parse(JSON.stringify(admin.events.get('lead1').data.field_data)), raw)
 })
+
+for (const traversal of ['forms', 'leads']) test(`expired ${traversal} cursor restarts the same frozen window without losing receipts`, async () => {
+  const admin = leadDatabase()
+  await admin.rpc('meta_webhook_event_receive', { p_leadgen_id: 'lead-old', p_page_id: 'page1', p_form_id: 'form1' })
+  admin.events.get('lead-old').status = 'processed'
+  await admin.rpc('meta_lead_discovery_claim', { p_page_id: 'page1' })
+  const state = admin.discoveries.get('page1'), since = state.window_since, until = state.window_until
+  if (traversal === 'forms') state.forms_next.params.after = 'expired'
+  else Object.assign(state, { forms_next: null, form_id: 'form1', active_form_name: 'Saved form', leads_next: { path: '/form1/leads', params: { fields: 'id', after: 'expired' } } })
+  let initial = 0
+  const { exports } = await loadHandler('_shared/meta-lead-worker.ts', { admin, fetch: address => {
+    const url = new URL(address)
+    if (url.searchParams.get('after') === 'expired') return json({ error: { code: 100, message: 'Invalid cursor' } }, 400)
+    if (url.pathname.endsWith('/leadgen_forms')) { initial++; return json({ data: [{ id: 'form1' }] }) }
+    if (url.pathname.endsWith('/form1/leads')) { initial++; assert.equal(JSON.parse(url.searchParams.get('filtering'))[0].value, Date.parse(since) / 1000); return json({ data: [{ id: 'lead1' }] }) }
+    return leadsGraph(address)
+  } })
+  const result = await exports.runLeadWorker(admin, { pageIds: ['page1'], token: 'test-token', deadlineMs: Date.now() + 45000, discover: true })
+  assert.equal(result.partial, true)
+  assert.match(result.errors[0], /100|cursor/i)
+  assert.equal(state.last_completed_until, undefined)
+  assert.equal(state.window_since, since)
+  assert.equal(state.window_until, until)
+  assert.equal((traversal === 'forms' ? state.forms_next : state.leads_next).params.after, undefined)
+  await exports.runLeadWorker(admin, { pageIds: ['page1'], token: 'test-token', deadlineMs: Date.now() + 45000, discover: true })
+  assert(initial >= 1)
+  assert.equal(state.last_completed_until, until)
+  assert.equal(admin.events.get('lead-old').status, 'processed')
+  assert.equal(admin.events.get('lead1').status, 'processed')
+})
+
+test('permission failure retains its discovery cursor and coverage window', async () => {
+  const admin = leadDatabase()
+  await admin.rpc('meta_lead_discovery_claim', { p_page_id: 'page1' })
+  admin.discoveries.get('page1').forms_next.params.after = 'saved'
+  const { exports } = await loadHandler('_shared/meta-lead-worker.ts', { admin, fetch: () => json({ error: { code: 200, message: 'Permission denied' } }, 403) })
+  await exports.runLeadWorker(admin, { pageIds: ['page1'], token: 'test-token', deadlineMs: Date.now() + 45000, discover: true })
+  assert.equal(admin.discoveries.get('page1').forms_next.params.after, 'saved')
+  assert.equal(admin.discoveries.get('page1').last_completed_until, undefined)
+})
