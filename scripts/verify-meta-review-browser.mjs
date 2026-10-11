@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chromium, expect as baseExpect } from '../../../.verification.local/node_modules/@playwright/test/index.mjs'
+import { chromium, expect as baseExpect } from '../.verification.local/node_modules/@playwright/test/index.mjs'
 import { buildFixtures } from './perf/mock.mjs'
 const expect=baseExpect.configure({timeout:20000}), origin=process.env.TRAFFIC_TEST_ORIGIN||'http://127.0.0.1:5199'
 const actor='ce110000-0000-4000-8000-000000000001',project='mbzwchnxtskysqplqiyy',now=new Date().toISOString()

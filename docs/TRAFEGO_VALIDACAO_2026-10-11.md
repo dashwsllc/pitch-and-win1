@@ -2,7 +2,7 @@
 
 ## Escopo e ambiente
 
-Branch `codex/traffic-reliability`, base `4d720775fc278522d18038a4f439f91a43acd305`, worktree `.worktrees/traffic-reliability`. Implementação das 12 tarefas do plano aprovado, com revisão independente do conjunto antes da entrega. Não houve implantação remota nem aprovação comercial.
+Implementação da branch `codex/traffic-reliability`, base `4d720775fc278522d18038a4f439f91a43acd305`, integrada localmente à `main` em 11/10/2026. Worktree de origem: `.worktrees/traffic-reliability`. Implementação das 12 tarefas do plano aprovado, com revisão independente do conjunto antes da entrega. Não houve implantação remota nem aprovação comercial.
 
 PostgreSQL 17.6 descartável em loopback, dois bancos com baseline real (schema sem dados comerciais), sete migrations novas e aplicação independente em um terceiro banco vazio. Funções de aplicação, constraints, RLS, grants, triggers e transações reais. Somente transportes Realtime/cron/pg_net/Vault e Graph são controlados. As fixtures usam `example.invalid`; cada verificação SQL desfaz seus dados. O teste integrado cria e remove apenas seu banco local temporário.
 
@@ -158,4 +158,12 @@ Final: fixed manual metrics remained unavailable — review-fixes manual-availab
 Final: complete single fix pass; no Critical/Important outstanding, no Minor deferred, no re-review. Full verification command: node .superpowers/sdd/2026-10-11-traffic-reliability/verify-task-12.mjs; exit 0. All final changes verified before commit.
 ```
 
-A limpeza recursiva de `.superpowers/sdd/2026-10-11-traffic-reliability` foi rejeitada pela revisão automática de aprovação com o motivo `blocked by policy`. A pasta temporária foi preservada; PostgreSQL local (55432) e Vite (5199) foram encerrados. Não houve tentativa alternativa de exclusão. A branch e o worktree permanecem disponíveis para a decisão de integração.
+A limpeza recursiva de `.superpowers/sdd/2026-10-11-traffic-reliability` foi rejeitada pela revisão automática de aprovação com o motivo `blocked by policy`. A pasta temporária foi preservada; PostgreSQL local (55432) e Vite (5199) foram encerrados. Não houve tentativa alternativa de exclusão. A integração local à `main` foi autorizada e executada; a branch e o worktree de origem continuam preservados devido à restrição de limpeza.
+
+## Integração local à main
+
+`git pull --ff-only` confirmou a base atualizada; `git merge --ff-only codex/traffic-reliability` integrou os 15 commits sem conflitos, de `4d72077` para `7fa5ca8`. A árvore resultante coincidiu com a branch revisada. A validação foi executada a partir do checkout principal.
+
+Passaram 75/75 Node, 8/8 Deno, 24/24 verificações SQL em dois bancos, as sete migrations em banco vazio, os testes de navegador de Tráfego e os quatro cenários globais de aprovação de vendas, TypeScript, Deno check, ESLint e build de produção. O teste de navegador inicialmente falhou com `ERR_MODULE_NOT_FOUND`: seu import do Playwright subia duas pastas além da raiz do repositório, funcionando apenas no worktree. Corrigido para o mesmo caminho relativo usado pelos demais testes de navegador, a repetição terminou com exit 0. Os gates já aprovados foram preservados e os restantes concluídos com exit 0; não houve mudança adicional na aplicação ou nas migrations.
+
+Evidências locais em `.superpowers/sdd/2026-10-11-traffic-reliability` no worktree de origem: `merged-main-tests.log` (Node/SQL/Deno e falha inicial do import), `merged-browser-recovery.log` (reprodução corrigida, exit 0) e `merged-main-tail-tests.log` (regressões globais/tipos/lint/build, exit 0). PostgreSQL temporário e Vite de teste foram encerrados; os arquivos permanecem preservados pelo bloqueio de limpeza já documentado. Deploy remoto e ativação dos jobs continuam sujeitos ao runbook de implantação seletiva.

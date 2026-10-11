@@ -2,7 +2,7 @@
 
 ## Estado da entrega
 
-Implementação local na branch `codex/traffic-reliability`, no worktree `.worktrees/traffic-reliability`. Não foram aplicadas migrations, publicadas funções/interface, alterados segredos ou decididos lotes comerciais no projeto remoto nesta entrega. A auditoria inicial consultou somente metadados remotos em transações de leitura. As verificações usam dados sintéticos.
+Implementação integrada localmente à `main` em 11/10/2026 por fast-forward de `4d72077` para `7fa5ca8`, a partir da branch `codex/traffic-reliability`. A validação no checkout principal também corrigiu o caminho local do Playwright no teste de navegador de Tráfego. Não foram aplicadas migrations, publicadas funções/interface, alterados segredos ou decididos lotes comerciais no projeto remoto nesta entrega. A auditoria inicial consultou somente metadados remotos em transações de leitura. As verificações usam dados sintéticos.
 
 A intenção preservada é conferir investimento Meta, revisar recebimentos, encaminhar contatos aprovados e medir vendas reais pela data de geração do lead. A aprovação do software não aprova os dados recebidos.
 
