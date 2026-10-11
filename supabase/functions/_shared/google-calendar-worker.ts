@@ -130,7 +130,8 @@ export async function deliverJob(job: Job, deps: WorkerDeps): Promise<void> {
     else if(error instanceof GoogleError) {
       code=error.code
       if(['calendar_access','reconnect_required'].includes(code)) {
-        if(connectionRevision) await store.setConnectionError(connectionRevision,code==='calendar_access'?'permission_denied':'reconnect_required')
+        const failedRevision=error.credentialRevision??connectionRevision
+        if(failedRevision) await store.setConnectionError(failedRevision,code==='calendar_access'?'permission_denied':'reconnect_required')
         retryAt=null
       } else if(error.retryable || ['precondition_failed','conflict','event_deleted'].includes(code)) retryAt=nextRetryAt(job.attempt,now(),random(),error.retryAfterMs)
       else retryAt=null

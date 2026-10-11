@@ -2,6 +2,7 @@ import { CALENDAR_SCOPES, type CalendarChoice, type GoogleEvent, type ManagedEve
 import type { Credential } from './google-calendar-store.ts'
 
 export class GoogleError extends Error {
+  credentialRevision: string | null = null
   constructor(public status: number, public code: string, public retryAfterMs: number | null = null, public retryable = false) { super(code); this.name = 'GoogleError' }
 }
 type Json = Record<string, unknown>
@@ -58,19 +59,22 @@ export class GoogleCalendarClient {
   constructor(options: { tokenProvider: TokenProvider; fetchImpl?: typeof fetch; now?: () => number; deadlineAt?: number }) {
     this.tokenProvider = options.tokenProvider; this.fetchImpl = options.fetchImpl ?? fetch; this.now = options.now ?? Date.now; this.deadlineAt = options.deadlineAt ?? Infinity
   }
-  private async request(path: string, options: RequestInit = {}, beforeWrite?: () => Promise<void>): Promise<Json> {
+  private async request<T = Json>(path: string, options: RequestInit = {}, beforeWrite?: () => Promise<void>, read?: (body: Json) => T): Promise<T> {
     for (let attempt = 0; attempt < 2; attempt++) {
       if (this.now() >= this.deadlineAt - 2000) throw new GoogleError(0, 'run_budget', null, true)
       const token = await this.tokenProvider(attempt === 1)
       if (this.now() >= this.deadlineAt - 2000) throw new GoogleError(0, 'run_budget', null, true)
-      if (!token.accessToken) throw new GoogleError(401,'reconnect_required')
+      if (!token.accessToken) { const error=new GoogleError(401,'reconnect_required');error.credentialRevision=token.revision;throw error }
       const headers = new Headers(options.headers); headers.set('Authorization', 'Bearer ' + token.accessToken)
       if (options.body) headers.set('Content-Type','application/json')
       if (beforeWrite) await beforeWrite()
       const { response, body } = await http(this.fetchImpl, API + path, { ...options, headers }, Math.min(8000, this.deadlineAt - this.now() - 2000))
-      if (response.ok) return body
+      if (response.ok) {
+        try { return read ? read(body) : body as T }
+        catch(error) { if(error instanceof GoogleError)error.credentialRevision=token.revision;throw error }
+      }
       if (response.status === 401 && attempt === 0) continue
-      throw providerError(response, body, this.now())
+      const error=providerError(response, body, this.now());error.credentialRevision=token.revision;throw error
     }
     throw new GoogleError(401,'reconnect_required')
   }
@@ -89,7 +93,7 @@ export class GoogleCalendarClient {
     } while (page)
     return [...calendars.values()]
   }
-  async getCalendar(id: string): Promise<CalendarChoice> { return choice(await this.request('/users/me/calendarList/' + segment(id))) }
+  async getCalendar(id: string): Promise<CalendarChoice> { return this.request('/users/me/calendarList/' + segment(id),{},undefined,choice) }
   async getAccountId(): Promise<string> { return (await this.getCalendar('primary')).id }
   async getEvent(calendarId: string, eventId: string): Promise<GoogleEvent | null> {
     try { return eventResult(await this.request('/calendars/' + segment(calendarId) + '/events/' + segment(eventId))) }

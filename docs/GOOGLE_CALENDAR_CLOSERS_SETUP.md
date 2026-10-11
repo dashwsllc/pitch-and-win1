@@ -18,9 +18,11 @@ O administrador conecta o Google em **Configurações → Google Agenda dos clos
 
 ## Estado da entrega
 
-Código e guia preparados em `codex/closer-calendar-sync`. Validação local: **31 testes Node/VM**, PostgreSQL via PGlite com migrations e fixtures reais, TypeScript e build aprovados; lint dos arquivos alterados sem erros, com um aviso de Fast Refresh.
+Código e guia preparados em `codex/closer-calendar-sync`. Validação: **33 testes Node/VM**, fixtures e concorrência real entre sessões PostgreSQL, TypeScript e build aprovados. No projeto Supabase de destino, um ensaio transacional com rollback validou as migrations, criptografia nativa do Vault, permissões, RLS, os dois agendamentos cron e a assinatura pg_net, sem enviar HTTP ou criar fixtures comerciais.
 
-**Isso ainda não comprova uma conexão ativa.** Antes da produção faltam: validar Vault/pg_net/pg_cron nativos e concorrência entre sessões PostgreSQL, testar os fluxos no navegador, instalar credenciais OAuth e realizar o ensaio Google em projeto e agenda exclusivos de teste. As fixtures locais substituem apenas Vault, cron e HTTP por implementações de teste; não fazem requisições externas.
+As quatro migrations e as três Edge Functions foram instaladas no projeto **dash**. O callback, a origem do dashboard, o segredo do cron e os dois segredos do Vault estão configurados. O teste HTTP real confirmou bloqueio de acesso sem autenticação e execução de entrega/reconciliação com `processed=0`, sem eventos Google. Histórico SQL, permissões e RLS foram conferidos após a instalação. Uma correção adicional tornou as atualizações compatíveis com o `safeupdate` do PostgREST; os testes SQL e de concorrência passaram novamente.
+
+**A integração permanece não conectada e não ativada.** Faltam publicar/validar o frontend, instalar as duas credenciais OAuth e realizar o ensaio Google em projeto e agenda exclusivos de teste antes da ativação comercial. Os testes locais usam uma implementação de teste do Vault; a criptografia real foi validada separadamente no Supabase, com um valor fictício descartado por rollback.
 
 ## 1. Google Cloud / OAuth
 
@@ -41,6 +43,8 @@ Referências: [OAuth do Google](https://developers.google.com/identity/protocols
 ## 2. Configuração privada do servidor
 
 Instale estas variáveis em **Supabase → Edge Functions → Secrets**, sem colocá-las no frontend, no Git ou na conversa:
+
+Na instalação atual, o administrador precisa adicionar somente `GOOGLE_CALENDAR_CLIENT_ID` e `GOOGLE_CALENDAR_CLIENT_SECRET`; as outras três variáveis e os dois segredos do Vault abaixo já foram instalados.
 
 | Variável | Valor |
 | --- | --- |
@@ -72,8 +76,11 @@ Aplique somente estas migrations, nesta ordem, verificando se a versão já exis
 1. `20261011100000_google_calendar_storage.sql`
 2. `20261011103000_google_calendar_queue.sql`
 3. `20261011110000_google_calendar_cron.sql`
+4. `20261011180000_google_calendar_safeupdate.sql`
 
 Storage e queue possuem transações próprias. Cron possui **duas transações**: instalação das extensões, depois os dois agendamentos. Preserve essa separação; não envolva todo o cron em uma transação externa. Registre cada versão no histórico somente ao aplicar seu conteúdo com sucesso. Se alguma versão já existir, compare o conteúdo e interrompa uma tentativa de reaplicação divergente.
+
+A quarta migration preserva assinaturas, permissões e dados; limita as atualizações à configuração única e aos dois modos de varredura conhecidos. Ela é necessária porque o PostgREST rejeita atualizações sem `WHERE`, inclusive dentro de RPCs. As quatro versões já estão registradas no projeto comercial: não reaplique-as. `supabase/tests/google_calendar_safeupdate.sql` pode ser executado dentro de uma transação com rollback para auditar essas instruções; confirme também o worker por HTTP.
 
 Confira os pré-requisitos do schema existente: `crm_leads`, `crm_activities`, `profiles`, `registration_requests`, `crm_user_can`, `crm_has_access`, `registration_has_access` e as regras comerciais já instaladas. As fixtures de bootstrap são **exclusivamente de teste** e não devem ser aplicadas à produção.
 

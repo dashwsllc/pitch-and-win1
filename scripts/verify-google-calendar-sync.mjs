@@ -362,6 +362,24 @@ test('client: every 401 retry revalidates the write lease after refreshing its c
   assert.equal(requests,1);assert.equal(guards,2)
 })
 
+test('worker: an access failure pauses the credential actually used after refresh, never a newer reconnection',async()=>{
+  for(const reconnect of [false,true])for(const failure of ['403','reader','401_retry']){
+    const f=await workerFixture()
+    // Use the worker's module identity so its GoogleError catch exercises the real client.
+    const loaded=await loadModule(workerPath),client=await loaded.dependency(clientPath)
+    let current='1',requests=0;const paused=[]
+    f.deps.store.setConnectionError=async revision=>{if(revision===current)paused.push(revision)}
+    f.deps.client=new client.GoogleCalendarClient({tokenProvider:async()=>{current='2';return{...credential(),revision:'2'}},fetchImpl:async u=>{
+      requests++;if(failure==='401_retry'&&requests===1)return response({},401)
+      if(reconnect)current='3'
+      return failure==='reader'?(String(u).includes('/calendarList/')?response({id:'shared@example',accessRole:'reader'}):response({},404)):response({},403)
+    }})
+    const [job]=await f.deps.store.claim();await loaded.exports.deliverJob(job,f.deps)
+    assert.deepEqual(paused,reconnect?[]:['2'],failure)
+    assert.equal(f.errors.at(-1).code,'calendar_access');assert.equal(f.errors.at(-1).retryAt,null)
+  }
+})
+
 test('worker: cancelled ID-only tombstone rotates, owned restorable tombstone keeps its ID',async()=>{
   for(const restorable of [true,false]){
     const f=await workerFixture();await f.deliver();const old=f.x.binding.eventId

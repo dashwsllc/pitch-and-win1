@@ -14,8 +14,16 @@ BEGIN
       AND NOT (a.id IS NOT NULL AND a.call_type='fechamento_closer' AND NOT a.is_completed AND a.cancelled_at IS NULL
         AND a.outcome IS NULL AND l.pipeline_stage='repassado_closer') THEN RETURN; END IF;
     INSERT INTO calendar_private.bindings(call_id,lead_id,calendar_id) VALUES(p_call_id,coalesce(a.lead_id,p_lead_id),c.calendar_id)
+      ON CONFLICT(call_id,calendar_id) DO NOTHING
       RETURNING * INTO b;
-    fresh:=true;
+    fresh:=FOUND;
+    IF NOT fresh THEN
+      -- The competing insert may have waited for a commercial transaction.
+      -- Keep its identity and re-read the latest committed CRM state after waiting.
+      SELECT * INTO STRICT b FROM calendar_private.bindings WHERE call_id=p_call_id AND calendar_id=c.calendar_id FOR UPDATE;
+      SELECT * INTO a FROM public.crm_activities WHERE id=p_call_id;
+      SELECT * INTO l FROM public.crm_leads WHERE id=coalesce(a.lead_id,p_lead_id);
+    END IF;
   END IF;
   removing:=a.id IS NULL OR l.id IS NULL OR a.cancelled_at IS NOT NULL
     OR a.call_type IS DISTINCT FROM 'fechamento_closer' OR coalesce(a.outcome IN ('devolvido_sdr','followup_sdr'),false)

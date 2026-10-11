@@ -33,6 +33,7 @@ DO $$ DECLARE l public.crm_leads; c public.crm_activities; BEGIN
   INSERT INTO calendar_qa(lead_id) VALUES(l.id);
 END $$;
 RESET ROLE;
+
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM calendar_private.bindings) THEN RAISE EXCEPTION 'qualification registered'; END IF; END $$;
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE l public.crm_leads; c public.crm_activities; BEGIN
@@ -162,3 +163,26 @@ SELECT set_config('request.jwt.claims','{"sub":"ca000000-0000-4000-8000-00000000
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN IF (SELECT count(*) FROM public.crm_google_calendar_status)<>2 THEN RAISE EXCEPTION 'approved closer cannot see call status'; END IF; END $$;
 RESET ROLE;
+
+-- A validated reconnect releases connection failures, while ownership/payload blocks stay blocked.
+SELECT set_config('request.jwt.claims','{}',true);
+DO $$ DECLARE j jsonb; q record; s jsonb; lease jsonb; BEGIN
+  SELECT b.id,b.event_id,b.revision INTO q FROM calendar_private.bindings b
+    JOIN calendar_seed_qa f ON f.call_id=b.call_id WHERE f.kind=1;
+  UPDATE calendar_private.outbox SET available_at=NULL;
+  UPDATE calendar_private.outbox SET available_at=clock_timestamp() WHERE binding_id=q.id;
+  j:=public.google_calendar_claim(1,60)->0;
+  PERFORM public.google_calendar_fail(q.id,(j->>'leaseToken')::uuid,q.revision,'calendar_access',NULL);
+  UPDATE calendar_private.outbox SET error_code='ownership_mismatch' WHERE binding_id<>q.id;
+  PERFORM public.google_calendar_set_connection_error(3,'permission_denied');
+  s:=public.google_calendar_oauth_start('ca000000-0000-4000-8000-000000000001',repeat('c',64),'https://www.wsltda.com');
+  PERFORM public.google_calendar_oauth_consume(repeat('c',64));
+  lease:=public.google_calendar_credential_claim(45);
+  IF NOT public.google_calendar_credential_save((lease->>'token')::uuid,3,'ca000000-0000-4000-8000-000000000001',(s->>'stateId')::uuid,
+    'qa-account','qa-access','qa-refresh',now()+interval '1 hour',ARRAY['https://www.googleapis.com/auth/calendar.events','https://www.googleapis.com/auth/calendar.calendarlist.readonly']) THEN RAISE EXCEPTION 'reconnect save failed'; END IF;
+  PERFORM public.google_calendar_credential_release((lease->>'token')::uuid);
+  j:=public.google_calendar_claim(1,60)->0;
+  IF j IS NULL OR j->'binding'->>'eventId' IS DISTINCT FROM q.event_id THEN RAISE EXCEPTION 'reconnect did not release the same persisted event'; END IF;
+  IF NOT public.google_calendar_ack(q.id,(j->>'leaseToken')::uuid,q.revision,'reconnected','etag',false) THEN RAISE EXCEPTION 'reconnect cannot acknowledge'; END IF;
+  IF EXISTS(SELECT 1 FROM calendar_private.outbox WHERE error_code='ownership_mismatch' AND available_at IS NOT NULL) THEN RAISE EXCEPTION 'reconnect released ownership blocks'; END IF;
+END $$;

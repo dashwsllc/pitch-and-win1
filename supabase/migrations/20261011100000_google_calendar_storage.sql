@@ -141,6 +141,12 @@ BEGIN
   rid:=vault.create_secret(p_refresh_token);
   UPDATE calendar_private.connection SET access_secret_id=aid,refresh_secret_id=rid,account_id=p_account_id,
     expires_at=p_expires_at,scopes=p_scopes,credential_revision=credential_revision+1,connection_status='connected',error_code=NULL;
+  IF p_actor IS NOT NULL THEN
+    UPDATE calendar_private.outbox SET available_at=clock_timestamp(),error_code=NULL,attempt=0,lease_token=NULL,lease_until=NULL
+      WHERE available_at IS NULL AND error_code IN ('calendar_access','reconnect_required');
+    UPDATE public.crm_google_calendar_status SET status='pending',error_code=NULL,updated_at=clock_timestamp()
+      WHERE status='error' AND error_code IN ('calendar_access','reconnect_required');
+  END IF;
   DELETE FROM vault.secrets WHERE id IN(c.access_secret_id,c.refresh_secret_id);
   RETURN true;
 END $$;

@@ -10,8 +10,8 @@ import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import {renderToStaticMarkup} from 'react-dom/server'
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..')
-async function load(path,imports={}) {
-  const context=vm.createContext({URL,URLSearchParams,Map,Set,console,__imports:{zod,...imports}}),cache=new Map()
+async function load(path,imports={},globals={}) {
+  const context=vm.createContext({URL,URLSearchParams,Map,Set,console,...globals,__imports:{zod,...imports}}),cache=new Map()
   function moduleFor(name){
     if(cache.has(name))return cache.get(name)
     const external=context.__imports[name]
@@ -56,7 +56,7 @@ test('hooks: closer session never requests admin data, mutations invalidate and 
   const effects=[],queries=[],invalidations=[],removed=[];let executive=false
   const client={invalidateQueries:async v=>invalidations.push(v),removeQueries:v=>removed.push(v)}
   const hooks=await load('src/hooks/useGoogleCalendar.tsx',{
-    react:{useEffect:fn=>effects.push(fn())},
+    react:{useEffect:fn=>effects.push(fn()),useRef:v=>({current:v})},
     '@tanstack/react-query':{useQuery:o=>{queries.push(o);return{data:undefined,isLoading:false,error:null}},useQueryClient:()=>client,useMutation:o=>({...o,mutateAsync:o.mutationFn,isPending:false})},
     '@/hooks/useAuth':{useAuth:()=>({user:{id:'A'},loading:false,registrationStatus:'approved'})},
     '@/hooks/useRoles':{useRoles:()=>({capabilities:{executive,leads:true},loading:false})},...db(status),
@@ -90,9 +90,9 @@ test('settings: duplicate calendar names require explicit selection of the canon
   const choices=[{id:'one@group.calendar.google.com',name:'agenda - closers',accessRole:'owner',timeZone:null},{id:'two@group.calendar.google.com',name:'agenda - closers',accessRole:'writer',timeZone:null}]
   const passthrough=({children,...p})=>React.createElement('div',p,children)
   const ui=await load('src/components/settings/GoogleCalendarIntegration.tsx',{
-    react:{useEffect:()=>{},useState:initial=>{const k=index++;if(!(k in cells))cells[k]=initial;return[cells[k],v=>cells[k]=v]}},'react/jsx-runtime':jsxRuntime,
+    react:{useCallback:fn=>fn,useEffect:()=>{},useState:initial=>{const k=index++;if(!(k in cells))cells[k]=initial;return[cells[k],v=>cells[k]=typeof v==='function'?v(cells[k]):v]}},'react/jsx-runtime':jsxRuntime,
     'react-router-dom':{useSearchParams:()=>[new URLSearchParams(),()=>{}]},
-    '@/hooks/useGoogleCalendar':{useGoogleCalendarAdmin:()=>({allowed:true,status,query:{isLoading:false,error:null},isPending:false,mutateAsync:async r=>{requests.push(r);return r.action==='list_calendars'?{calendars:choices}:status}})},
+    '@/hooks/useGoogleCalendar':{useGoogleCalendarAdmin:()=>({allowed:true,sessionKey:'A:0',isCurrent:()=>true,status,query:{isLoading:false,error:null},isPending:false,mutateAsync:async r=>{requests.push(r);return r.action==='list_calendars'?{calendars:choices}:status}})},
     '@/components/ui/card':{Card:passthrough,CardContent:passthrough,CardHeader:passthrough,CardTitle:passthrough},
     '@/components/ui/button':{Button:passthrough},'@/components/ui/label':{Label:passthrough},
   })
@@ -107,6 +107,45 @@ test('settings: duplicate calendar names require explicit selection of the canon
   await nodes.find(n=>n.props.children==='Ativar nesta agenda').props.onClick();await new Promise(resolve=>setImmediate(resolve))
   assert.equal(requests.at(-1).calendarId,choices[1].id)
 })
+test('settings: delayed OAuth and calendar results are discarded on logout, user switch, permission loss and unmount',async()=>{
+  const walk=root=>{const found=[];const visit=v=>{if(!v||typeof v!=='object')return;if(Array.isArray(v))return v.forEach(visit);if(v.props){found.push(v);visit(v.props.children)}};visit(root);return found}
+  const flush=()=>new Promise(r=>setImmediate(r))
+  for(const action of ['start_oauth','list_calendars'])for(const transition of ['logout','switch','permission','unmount']){
+    let cursor=0,userId='A',executive=true,settle;const cells=[],effects=[],invalidations=[],redirects=[]
+    const fakeReact={
+      useCallback:fn=>fn,
+      useRef:initial=>{const i=cursor++;return cells[i]??(cells[i]={current:initial})},
+      useState:initial=>{const i=cursor++;if(!(i in cells))cells[i]=initial;return[cells[i],v=>cells[i]=typeof v==='function'?v(cells[i]):v]},
+      useEffect:(fn,deps)=>{const i=cursor++,old=effects[i];if(!old||deps.some((v,k)=>v!==old.deps[k])){old?.cleanup?.();effects[i]={deps,cleanup:fn()}}},
+    }
+    const connected={...status,connection:action==='start_oauth'?'not_connected':'connected'}
+    const client={removeQueries:()=>{},invalidateQueries:async v=>invalidations.push(v)}
+    const hooks=await load('src/hooks/useGoogleCalendar.tsx',{
+      react:fakeReact,'@tanstack/react-query':{useQuery:()=>({data:connected,isLoading:false,error:null}),useQueryClient:()=>client,
+        useMutation:o=>({isPending:false,mutateAsync:async r=>{const result=await o.mutationFn(r);await o.onSuccess?.(result,r);return result}})},
+      '@/hooks/useAuth':{useAuth:()=>({user:userId?{id:userId}:null,loading:false,registrationStatus:'approved'})},
+      '@/hooks/useRoles':{useRoles:()=>({capabilities:{executive,leads:true},loading:false})},
+      '@/integrations/supabase/client':{supabase:{functions:{invoke:async()=>({data:await new Promise(r=>settle=r),error:null})}}},
+    })
+    const passthrough=({children,...p})=>React.createElement('div',p,children),params=new URLSearchParams()
+    const ui=await load('src/components/settings/GoogleCalendarIntegration.tsx',{
+      react:fakeReact,'react/jsx-runtime':jsxRuntime,'react-router-dom':{useSearchParams:()=>[params,()=>{}]},
+      '@/hooks/useGoogleCalendar':hooks,'@/components/ui/card':{Card:passthrough,CardContent:passthrough,CardHeader:passthrough,CardTitle:passthrough},
+      '@/components/ui/button':{Button:passthrough},'@/components/ui/label':{Label:passthrough},
+    },{window:{location:{assign:url=>redirects.push(url)}}})
+    const render=()=>{cursor=0;return ui.GoogleCalendarIntegration()}
+    let nodes=walk(render());nodes.find(n=>n.props.children===(action==='start_oauth'?'Conectar Google':'Escolher agenda')).props.onClick()
+    await flush();assert.ok(settle)
+    if(transition==='logout')userId='';if(transition==='switch')userId='B';if(transition==='permission')executive=false
+    if(transition==='unmount'){for(const effect of effects)effect?.cleanup?.()}else render()
+    settle(action==='start_oauth'?{authorizationUrl:'https://accounts.google.com/o/oauth2/v2/auth?state=old'}:{calendars:[{id:'old@group.calendar.google.com',name:'Agenda do usuário A',accessRole:'owner',timeZone:null}]})
+    await flush();await flush()
+    assert.deepEqual(redirects,[],`${transition}: stale OAuth redirected the new session`)
+    assert.equal(invalidations.length,0,`${transition}: stale request invalidated the new session`)
+    if(transition!=='unmount')assert.equal(walk(render()).some(n=>n.type==='select'),false,`${transition}: old calendar list leaked`)
+  }
+})
+
 test('protected route: logged-out CRM link is preserved, unsafe path and suspension are not',async()=>{
   let location={pathname:'/crm',search:'?tab=closer&lead='+id},suspended=false
   const route=await load('src/components/ProtectedRoute.tsx',{

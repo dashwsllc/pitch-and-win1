@@ -8,12 +8,13 @@ const url = new URL(address)
 if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
   throw Error('Use an isolated local Supabase test database. Remote/production targets are rejected.')
 }
-const migrations = ['20261011100000_google_calendar_storage.sql', '20261011103000_google_calendar_queue.sql']
+const migrations = ['20261011100000_google_calendar_storage.sql', '20261011103000_google_calendar_queue.sql', '20261011180000_google_calendar_safeupdate.sql']
 const standIn = process.env.GOOGLE_CALENDAR_TEST_VAULT_STANDIN === '1'
 if (standIn && url.pathname !== '/calendar_qa') throw Error('Vault stand-in is restricted to the disposable local calendar_qa database')
 const query = ['BEGIN;', "SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='90s';",
   ...migrations.map(name => readFileSync(resolve(root, 'supabase/migrations', name), 'utf8').replace(/^BEGIN;\s*/m, '').replace(/COMMIT;\s*$/m, '').replace(standIn ? /CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault;/ : /$^/, '')),
-  readFileSync(resolve(root, 'supabase/tests/google_calendar_sync.sql'), 'utf8'), 'ROLLBACK;'].join('\n')
+  readFileSync(resolve(root, 'supabase/tests/google_calendar_sync.sql'), 'utf8'),
+  readFileSync(resolve(root, 'supabase/tests/google_calendar_safeupdate.sql'), 'utf8'), 'ROLLBACK;'].join('\n')
 const scratch = resolve(root, '.verification.local')
 mkdirSync(scratch, { recursive: true })
 const file = resolve(scratch, 'google-calendar-test.sql')

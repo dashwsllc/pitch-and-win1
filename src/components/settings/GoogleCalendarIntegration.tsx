@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react'
+import {useCallback,useEffect,useState} from 'react'
 import {useSearchParams} from 'react-router-dom'
 import {Card,CardContent,CardHeader,CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
@@ -7,26 +7,34 @@ import {useGoogleCalendarAdmin} from '@/hooks/useGoogleCalendar'
 import type {CalendarChoice} from '@/lib/google-calendar-api'
 import type {ManageRequest} from '../../../supabase/functions/_shared/google-calendar-contract'
 const connectionLabels={not_connected:'Não conectado',connected:'Google conectado',reconnect_required:'Reconecte o Google',permission_denied:'Revise o acesso à agenda',disconnected:'Desconectado'}
+const emptySessionState=(sessionKey:string)=>({sessionKey,calendars:[] as CalendarChoice[],selected:'',error:'',notice:''})
 export function GoogleCalendarIntegration(){
   const admin=useGoogleCalendarAdmin(),[params,setParams]=useSearchParams()
-  const [calendars,setCalendars]=useState<CalendarChoice[]>([]),[selected,setSelected]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('')
+  const {isCurrent,sessionKey}=admin
+  const empty=emptySessionState(admin.sessionKey)
+  const [state,setState]=useState(empty)
+  const {calendars,selected,error,notice}=state.sessionKey===admin.sessionKey?state:empty
+  const update=useCallback((patch:Partial<ReturnType<typeof emptySessionState>>)=>{
+    if(isCurrent())setState(previous=>({...((previous.sessionKey===sessionKey)?previous:emptySessionState(sessionKey)),...patch}))
+  },[isCurrent,sessionKey])
   const status=admin.status
   useEffect(()=>{
     const callback=params.get('google_calendar')
     if(!callback)return
-    setNotice(callback==='connected'?'Conta Google conectada. Confira a agenda selecionada.':callback==='denied'?'A autorização do Google foi recusada. Você pode tentar novamente.':'Não foi possível conectar. Tente novamente.')
+    update({notice:callback==='connected'?'Conta Google conectada. Confira a agenda selecionada.':callback==='denied'?'A autorização do Google foi recusada. Você pode tentar novamente.':'Não foi possível conectar. Tente novamente.'})
     const next=new URLSearchParams(params);next.delete('google_calendar');setParams(next,{replace:true})
-  },[params,setParams])
+  },[params,setParams,update])
   const act=async(request:ManageRequest)=>{
-    setError('')
+    update({error:''})
     try{
       const result=await admin.mutateAsync(request)
+      if(!admin.isCurrent())return
       if('authorizationUrl'in result)window.location.assign(result.authorizationUrl)
-      if('calendars'in result){setCalendars(result.calendars);setSelected('');if(!result.calendars.length)setNotice('Nenhuma agenda com permissão de edição foi encontrada.')}
-      if(request.action==='activate'){setSelected('');setCalendars([]);setNotice('Sincronização ativada. As calls elegíveis serão enviadas automaticamente.')}
-      if(request.action==='disconnect'){setCalendars([]);setSelected('');setNotice('Sincronização pausada. Os eventos existentes foram preservados.')}
-      if(request.action==='retry')setNotice('Pendências liberadas para nova tentativa automática.')
-    }catch{setError('Não foi possível concluir. Confira a conexão e tente novamente.')}
+      if('calendars'in result)update({calendars:result.calendars,selected:'',notice:result.calendars.length?'':'Nenhuma agenda com permissão de edição foi encontrada.'})
+      if(request.action==='activate')update({selected:'',calendars:[],notice:'Sincronização ativada. As calls elegíveis serão enviadas automaticamente.'})
+      if(request.action==='disconnect')update({calendars:[],selected:'',notice:'Sincronização pausada. Os eventos existentes foram preservados.'})
+      if(request.action==='retry')update({notice:'Pendências liberadas para nova tentativa automática.'})
+    }catch{update({error:'Não foi possível concluir. Confira a conexão e tente novamente.'})}
   }
   if(!admin.allowed)return null
   const busy=admin.isPending,connected=status?.connection==='connected',active=connected&&!!status.activatedAt
@@ -47,7 +55,7 @@ export function GoogleCalendarIntegration(){
         </div>:<p role="status" className="text-sm">A configuração Google precisa ser instalada no servidor antes de conectar.</p>}
         {calendars.length>0&&!status.destinationLocked&&<div className="space-y-2">
           <Label htmlFor="closer-calendar">Agenda de destino</Label>
-          <select id="closer-calendar" className="flex w-full rounded-md border border-input bg-background p-2 text-sm" value={selected} disabled={busy} onChange={event=>setSelected(event.target.value)}>
+          <select id="closer-calendar" className="flex w-full rounded-md border border-input bg-background p-2 text-sm" value={selected} disabled={busy} onChange={event=>update({selected:event.target.value})}>
             <option value="">Selecione a agenda compartilhada</option>
             {calendars.map(calendar=><option key={calendar.id} value={calendar.id}>{calendar.name} — {calendar.id}</option>)}
           </select>
