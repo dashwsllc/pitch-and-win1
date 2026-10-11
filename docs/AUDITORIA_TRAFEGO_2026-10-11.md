@@ -166,7 +166,7 @@ Referências: `Trafego.tsx:464`, `:465`, `:477`, `meta-insights-sync/index.ts:41
 3. **Leitura:** consultas e funções de agregação alimentam um recorte único para cards, gráfico, tabela e exportação. Campanha, conjunto e anúncio permanecem identificáveis. Os resultados da Meta e os do CRM continuam separados, com coorte e cobertura visíveis.
 4. **Sincronização e operação:** restaurar sinais instalados, reduzir consultas pesadas, mostrar dados publicados versus pendentes, último sucesso e falha acionável. A falta de `pages_manage_ads` permanece visível até a autorização externa ser regularizada.
 
-O usuário aprovou prosseguir com o desenho recomendado em 11/10. Os detalhes de esquema, compatibilidade e interfaces foram formalizados em [Tráfego: confiabilidade da captura, aprovação e leitura](superpowers/specs/2026-10-11-traffic-reliability-design.md). A especificação aguarda revisão; o plano e a implementação ainda não foram iniciados.
+O usuário aprovou prosseguir com o desenho recomendado em 11/10 e aprovou a [especificação escrita](superpowers/specs/2026-10-11-traffic-reliability-design.md) ao pedir continuidade após sua apresentação. O [plano de implementação](superpowers/plans/2026-10-11-traffic-reliability.md) aguarda revisão e escolha do método de execução; a implementação ainda não foi iniciada.
 
 ## Verificação feita nesta auditoria
 
@@ -197,4 +197,4 @@ Diagnósticos: `.verification.local/traffic-audit-probe.mjs`, `traffic-audit-run
 
 ## Próximo ponto de decisão
 
-Revisar a [especificação escrita](superpowers/specs/2026-10-11-traffic-reliability-design.md). O skill `brainstorming`, exigido pelas instruções da tarefa, determina revisão da especificação e do plano antes de implementar. Este relatório continua registrando a auditoria e suas evidências, não uma implementação concluída.
+Revisar o [plano de implementação](superpowers/plans/2026-10-11-traffic-reliability.md) e escolher o método de execução. O skill `brainstorming`, exigido pelas instruções da tarefa, determina revisão do plano antes de implementar. Este relatório continua registrando a auditoria e suas evidências, não uma implementação concluída.

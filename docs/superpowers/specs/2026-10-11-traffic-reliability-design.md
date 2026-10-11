@@ -1,6 +1,6 @@
 # Tráfego: confiabilidade da captura, aprovação e leitura
 
-Data: 11/10/2026. Estado: desenho conversacional aprovado; especificação escrita aguardando revisão do usuário. A resposta “vamos prosseguir” autoriza esta formalização. Código de produto e configuração publicada ainda não foram alterados nesta tarefa.
+Data: 11/10/2026. Estado: especificação aprovada pelo pedido “continua de onde parou”, após sua apresentação para revisão. O [plano de implementação](../plans/2026-10-11-traffic-reliability.md) foi escrito e aguarda revisão e escolha do método de execução. Código de produto e configuração publicada ainda não foram alterados nesta tarefa.
 
 ## Intenção e resultado esperado
 
@@ -176,4 +176,4 @@ Além das regressões Node/Deno e testes transacionais de banco, executar TypeSc
 
 ## Revisão deste documento
 
-Autorrevisão concluída quanto a escopo, consistência, ausência de placeholders e ambiguidades principais: captura vazia, alias com zero, conflitos de chave, contratos legados, remoções revisadas e limites de partes foram explicitados. O próximo ponto de decisão é a revisão desta especificação pelo usuário; depois dela será escrito o plano de implementação, ainda sujeito à revisão e escolha do método de execução previstas no workflow solicitado.
+Autorrevisão concluída quanto a escopo, consistência, ausência de placeholders e ambiguidades principais: captura vazia, alias com zero, conflitos de chave, contratos legados, remoções revisadas e limites de partes foram explicitados. A especificação foi aprovada. O próximo ponto de decisão é a revisão do plano e a escolha do método de execução previstas no workflow solicitado.
