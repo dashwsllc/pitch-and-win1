@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Termos de Serviço | WS LTDA</title>
+  <meta name="description" content="Termos de Serviço do Dashboard WS LTDA (VOXEN CRM): regras de acesso e uso, dados de leads, comissões, integrações com Google e Meta, responsabilidades e foro." />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0b0414" />
+  <link rel="canonical" href="https://www.wsltda.com/termos-de-servico" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="pt_BR" />
+  <meta property="og:site_name" content="WS LTDA" />
+  <meta property="og:title" content="Termos de Serviço | WS LTDA" />
+  <meta property="og:description" content="Regras de acesso e uso do Dashboard WS LTDA (VOXEN CRM)." />
+  <meta property="og:url" content="https://www.wsltda.com/termos-de-servico" />
+  <style>
+    :root {
+      color-scheme: dark light;
+      --bg: #0b0414;
+      --glow: #261931;
+      --panel: #1a1523;
+      --panel-2: #130d1b;
+      --line: #ffffff14;
+      --line-strong: #ffffff26;
+      --text: #ece9ef;
+      --muted: #a8a2b0;
+      --accent: #fd7e20;
+      --link: #ffab6b;
+      --code: #0b0515;
+      --ok: #34d399;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f4f8;
+        --glow: #ffe6d1;
+        --panel: #ffffff;
+        --panel-2: #faf8fc;
+        --line: #2a1a3a1a;
+        --line-strong: #2a1a3a30;
+        --text: #1d1626;
+        --muted: #595164;
+        --accent: #e56a0f;
+        --link: #a94300;
+        --code: #f1edf5;
+        --ok: #047857;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--text);
+      background: radial-gradient(ellipse 760px 520px at 50% 0, var(--glow) 0%, transparent 78%), var(--bg);
+      font: 16px/1.7 "DM Sans", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      overflow-wrap: break-word;
+    }
+    a { color: var(--link); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+    code { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 2px 6px; background: var(--code); border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; }
+    .skip { position: absolute; left: 16px; top: -64px; padding: 10px 14px; background: var(--accent); color: #fff; border-radius: 8px; z-index: 10; }
+    .skip:focus { top: 12px; }
+    .wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+    .topbar { border-bottom: 1px solid var(--line); }
+    .topbar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; }
+    .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font-weight: 650; letter-spacing: -.02em; font-size: 18px; }
+    .brand-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, #fd7e20, #fe5606); box-shadow: 0 6px 22px #fe56062a, inset 0 1px 0 #ffffff40; }
+    .brand-icon svg { width: 21px; height: 21px; }
+    .topbar .btn { display: inline-flex; align-items: center; padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 550; }
+    .topbar .btn:hover { border-color: var(--accent); }
+
+    .hero { padding: 52px 0 28px; }
+    .eyebrow { display: inline-block; margin: 0 0 14px; padding: 4px 12px; border: 1px solid #fd7e2040; border-radius: 999px; background: #fd7e2014; color: var(--link); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 0 0 14px; font-size: clamp(30px, 5vw, 46px); line-height: 1.12; letter-spacing: -.035em; font-weight: 700; }
+    .lead { max-width: 70ch; margin: 0 0 24px; color: var(--muted); font-size: 18px; line-height: 1.65; }
+    .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 0 0 28px; padding: 0; list-style: none; }
+    .facts li { padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    .facts b { display: block; margin-bottom: 2px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+    .facts span { font-size: 15px; }
+    .summary { padding: 22px 24px; background: linear-gradient(180deg, #fd7e2014, transparent 70%), var(--panel); border: 1px solid #fd7e2038; border-radius: 18px; }
+    .summary h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: -.01em; }
+    .summary ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .summary li { position: relative; padding-left: 28px; }
+    .summary li::before { content: ""; position: absolute; left: 0; top: 7px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px #fd7e2026; }
+
+    .layout { display: grid; gap: 28px; padding: 28px 0 72px; }
+    .toc { align-self: start; }
+    .toc details { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    .toc summary { padding: 14px 18px; font-weight: 650; cursor: pointer; }
+    .toc ol { margin: 0; padding: 0 18px 14px 40px; display: grid; gap: 2px; font-size: 14.5px; }
+    .toc li { padding: 3px 0; }
+    .toc a { color: var(--muted); text-decoration: none; }
+    .toc a:hover { color: var(--link); text-decoration: underline; }
+    @media (min-width: 980px) {
+      .layout { grid-template-columns: 270px minmax(0, 1fr); gap: 56px; }
+      .toc { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow: auto; }
+      @supports selector(::details-content) {
+        .toc details::details-content { content-visibility: visible; display: block; }
+        .toc summary { pointer-events: none; cursor: default; list-style: none; padding-bottom: 6px; }
+        .toc summary::-webkit-details-marker { display: none; }
+      }
+    }
+
+    article section { padding-top: 8px; margin-bottom: 44px; scroll-margin-top: 20px; }
+    article h2 { display: flex; align-items: baseline; gap: 12px; margin: 0 0 14px; font-size: clamp(22px, 3vw, 27px); line-height: 1.25; letter-spacing: -.025em; }
+    article h2 .n { flex: none; min-width: 34px; padding: 2px 8px; border-radius: 9px; background: #fd7e2018; border: 1px solid #fd7e2038; color: var(--link); font-size: 15px; text-align: center; letter-spacing: 0; }
+    article h3 { margin: 26px 0 8px; font-size: 18px; letter-spacing: -.01em; }
+    article p { margin: 0 0 14px; max-width: 75ch; }
+    article ul, article ol { margin: 0 0 16px; padding-left: 22px; max-width: 75ch; }
+    article li { margin-bottom: 7px; }
+    article li::marker { color: var(--accent); }
+    .note { margin: 18px 0; padding: 14px 18px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; max-width: 75ch; }
+    .note p:last-child { margin-bottom: 0; }
+    .limited { margin: 18px 0; padding: 18px 22px; background: var(--panel); border: 1px solid #fd7e2050; border-radius: 14px; max-width: 75ch; }
+    .limited p { margin: 0 0 10px; }
+    .limited p:last-child { margin: 0; }
+    .limited .en { color: var(--muted); }
+
+    .table-wrap { margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); }
+    table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.55; }
+    th, td { padding: 12px 16px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    th { background: var(--panel-2); color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td:first-child { font-weight: 600; }
+    @media (max-width: 760px) {
+      table, tbody, tr, td { display: block; width: 100%; }
+      thead { position: absolute; left: -9999px; }
+      tr { padding: 10px 0; border-bottom: 1px solid var(--line-strong); }
+      tbody tr:last-child { border-bottom: 0; }
+      td { padding: 6px 16px; border: 0; }
+      td::before { content: attr(data-label); display: block; color: var(--muted); font-size: 11.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+    }
+
+    .contact { display: grid; gap: 4px; padding: 18px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; max-width: 75ch; }
+    .contact b { color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+    .contact div + b { margin-top: 10px; }
+
+    footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+    footer p { margin: 0; }
+
+    @media print {
+      :root { --bg: #fff; --glow: #fff; --panel: #fff; --panel-2: #f3f3f3; --line: #ccc; --line-strong: #999; --text: #000; --muted: #333; --link: #000; --code: #eee; }
+      body { background: #fff; font-size: 11.5pt; }
+      .topbar .btn, .toc, .skip { display: none; }
+      a { text-decoration: none; }
+      article section { break-inside: avoid-page; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#conteudo">Ir para o conteúdo</a>
+
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="/auth" aria-label="WS LTDA, ir para o dashboard">
+        <span class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+        </span>
+        WS LTDA
+      </a>
+      <a class="btn" href="/auth">Acessar o dashboard</a>
+    </div>
+  </header>
+
+    <main>
+    <div class="wrap">
+      <section class="hero" aria-labelledby="titulo">
+        <p class="eyebrow">Documento legal</p>
+        <h1 id="titulo">Termos de Serviço</h1>
+        <p class="lead">Estes Termos de Serviço regulam o acesso e o uso do Dashboard WS LTDA (VOXEN CRM), o sistema de gestão comercial da WS LTDA. Ao solicitar acesso ou usar o Dashboard, você concorda com eles. Leia também a <a href="/politica-de-privacidade">Política de Privacidade</a>.</p>
+
+        <ul class="facts">
+          <li><b>Última atualização</b><span><time datetime="2026-10-11">11 de outubro de 2026</time> · versão 1.0</span></li>
+          <li><b>Aplicativo</b><span>Dashboard WS LTDA (identificado no Google como VOXEN CRM)</span></li>
+          <li><b>Endereço</b><span>https://www.wsltda.com</span></li>
+          <li><b>Contato</b><span><a href="mailto:admvoxenai@gmail.com">admvoxenai@gmail.com</a></span></li>
+        </ul>
+
+        <div class="summary">
+          <h2>Em resumo</h2>
+          <ul>
+            <li>O Dashboard é uma ferramenta profissional, de acesso restrito a pessoas <strong>aprovadas por um administrador</strong>. Não é um serviço aberto ao público.</li>
+            <li>Sua conta é pessoal e intransferível. Você responde pelo que é feito com ela.</li>
+            <li>Dados de leads e clientes só podem ser usados no atendimento comercial da WS, com sigilo e dentro da LGPD.</li>
+            <li>Vendas, metas, pontuação e comissões devem ser registradas com veracidade. Fraude leva à suspensão do acesso.</li>
+            <li>As integrações com Google e Meta seguem os termos dessas empresas e a nossa Política de Privacidade (<a href="#google">seção 9</a>).</li>
+          </ul>
+        </div>
+      </section>
+
+      <div class="layout">
+        <nav class="toc" aria-label="Índice">
+          <details open>
+            <summary>Neste documento</summary>
+            <ol>
+              <li><a href="#aceite">Aceitação e definições</a></li>
+              <li><a href="#servico">O serviço</a></li>
+              <li><a href="#cadastro">Elegibilidade e cadastro</a></li>
+              <li><a href="#conta">Conta e segurança</a></li>
+              <li><a href="#uso">Uso permitido e condutas proibidas</a></li>
+              <li><a href="#dados">Dados de leads e clientes</a></li>
+              <li><a href="#comissoes">Vendas, Arena e comissões</a></li>
+              <li><a href="#integracoes">Integrações de terceiros</a></li>
+              <li><a href="#google">Serviços de API do Google</a></li>
+              <li><a href="#pi">Propriedade intelectual</a></li>
+              <li><a href="#privacidade">Privacidade e proteção de dados</a></li>
+              <li><a href="#disponibilidade">Disponibilidade e mudanças</a></li>
+              <li><a href="#suspensao">Suspensão e encerramento</a></li>
+              <li><a href="#responsabilidade">Garantias e limitação de responsabilidade</a></li>
+              <li><a href="#indenizacao">Responsabilidade do usuário</a></li>
+              <li><a href="#alteracoes">Alterações dos Termos</a></li>
+              <li><a href="#gerais">Disposições gerais</a></li>
+              <li><a href="#lei">Lei aplicável e foro</a></li>
+              <li><a href="#contato">Contato</a></li>
+            </ol>
+          </details>
+        </nav>
+
+        <article id="conteudo">
+
+          <section id="aceite">
+            <h2><span class="n">1</span>Aceitação e definições</h2>
+            <p>Estes Termos são um acordo entre você e <strong>YANQUES BRASILIA ACADEMY LTDA</strong>, inscrita no CNPJ sob o nº <strong>33.264.779/0001-01</strong>, com sede em <strong>Brasília/DF</strong>, que atua sob o nome comercial <strong>WS LTDA</strong> (“WS”, “nós”). Ao solicitar acesso, entrar ou usar o Dashboard, você declara que leu, entendeu e aceita estes Termos. Se não concordar, não use o Dashboard.</p>
+            <p>Neste documento:</p>
+            <ul>
+              <li><strong>Dashboard:</strong> o sistema web de gestão comercial da WS, em <a href="https://www.wsltda.com">https://www.wsltda.com</a>, identificado perante o Google como VOXEN CRM, com seus módulos (CRM, leads, vendas, assinaturas, Arena, metas, ranking, saques, tráfego e integrações).</li>
+              <li><strong>Usuário:</strong> a pessoa que recebe acesso ao Dashboard (vendedor, SDR, closer, gestor, executivo ou outra função).</li>
+              <li><strong>Administrador:</strong> usuário com permissão para aprovar cadastros, configurar o sistema e conectar integrações (perfis Executive e super administrador).</li>
+              <li><strong>Dados da WS:</strong> todo conteúdo registrado no Dashboard, incluindo dados de leads, compradores, clientes, vendas e atividades.</li>
+            </ul>
+          </section>
+
+          <section id="servico">
+            <h2><span class="n">2</span>O serviço</h2>
+            <p>O Dashboard é uma ferramenta <strong>interna e profissional</strong> para a operação comercial da WS: registro e acompanhamento de leads, CRM e agendamento de calls, vendas e assinaturas, metas, pontuação e ranking (Arena), solicitações de saque de comissão, acompanhamento de tráfego pago e integrações com serviços de terceiros.</p>
+            <p>O acesso é <strong>exclusivo</strong> para colaboradores e parceiros comerciais aprovados pela WS. O Dashboard não é oferecido ao público em geral, e estes Termos não criam venda, assinatura ou licença comercial de software a terceiros.</p>
+          </section>
+
+          <section id="cadastro">
+            <h2><span class="n">3</span>Elegibilidade e cadastro</h2>
+            <ul>
+              <li>Você precisa ter <strong>18 anos ou mais</strong> e capacidade legal para aceitar estes Termos.</li>
+              <li>O cadastro exige nome completo, e-mail e senha verdadeiros e atualizados.</li>
+              <li>O acesso só é liberado após <strong>aprovação manual</strong> de um administrador, que pode recusar ou revogar o cadastro a qualquer momento, com ou sem justificativa, observada a lei.</li>
+              <li>Sua função define o que você vê e faz no Dashboard. A WS pode alterar funções e permissões a qualquer momento.</li>
+            </ul>
+          </section>
+
+          <section id="conta">
+            <h2><span class="n">4</span>Conta e segurança</h2>
+            <ul>
+              <li>Sua conta é <strong>pessoal e intransferível</strong>. Não compartilhe sua senha nem permita que outra pessoa use seu acesso.</li>
+              <li>Você responde por todas as atividades feitas com a sua conta, salvo se provar que ocorreram sem culpa sua após comunicar o problema.</li>
+              <li>Use uma senha forte e exclusiva. Avise a WS imediatamente, pelo contato da <a href="#contato">seção 19</a>, se suspeitar de acesso indevido, perda de dispositivo ou vazamento de credenciais.</li>
+              <li>A redefinição de senha pode ser solicitada no Dashboard e processada por um administrador, conforme o fluxo vigente.</li>
+            </ul>
+          </section>
+
+          <section id="uso">
+            <h2><span class="n">5</span>Uso permitido e condutas proibidas</h2>
+            <p>Você pode usar o Dashboard apenas para as atividades comerciais autorizadas pela WS. É proibido:</p>
+            <ul>
+              <li>acessar, consultar ou copiar dados que sua função não permite, ou tentar contornar controles de acesso e de segurança;</li>
+              <li>usar a conta de outra pessoa, ou criar contas falsas ou duplicadas;</li>
+              <li>registrar vendas, leads, calls, abordagens ou resultados <strong>falsos, inflados ou duplicados</strong>, ou manipular pontuação, ranking, metas ou comissões;</li>
+              <li>exportar, copiar, divulgar, vender ou usar a base de leads e clientes <strong>fora do atendimento comercial da WS</strong>, inclusive em benefício próprio ou de concorrentes;</li>
+              <li>fazer engenharia reversa, descompilar, extrair código, raspar dados (scraping) ou usar robôs e automações sem autorização;</li>
+              <li>sobrecarregar, testar vulnerabilidades, interferir ou tentar derrubar o Dashboard ou seus provedores;</li>
+              <li>enviar vírus, código malicioso ou conteúdo ilícito, ofensivo ou discriminatório;</li>
+              <li>contatar leads com spam, assédio, promessas enganosas ou ignorando pedido de não contato;</li>
+              <li>violar a lei, direitos de terceiros ou as regras de plataformas integradas, como as da Meta e do Google.</li>
+            </ul>
+          </section>
+
+          <section id="dados">
+            <h2><span class="n">6</span>Dados de leads e clientes</h2>
+            <p>Ao usar o Dashboard você trata dados pessoais de terceiros em nome da WS. Por isso, você se compromete a:</p>
+            <ul>
+              <li>usar esses dados <strong>somente</strong> para o atendimento comercial autorizado pela WS, conforme a <a href="/politica-de-privacidade">Política de Privacidade</a> e a LGPD;</li>
+              <li>manter <strong>sigilo</strong> sobre os dados e não os levar para fora do Dashboard (planilhas pessoais, aplicativos de mensagem de uso particular, prints compartilhados), salvo quando a função exigir e a WS permitir;</li>
+              <li>registrar informações corretas e apenas o que for necessário, evitando dados sensíveis em campos livres;</li>
+              <li>respeitar pedidos de exclusão, correção ou de não contato, e repassá-los à WS pelo contato da <a href="#contato">seção 19</a>;</li>
+              <li>comunicar de imediato qualquer incidente ou suspeita de vazamento.</li>
+            </ul>
+            <p>O dever de sigilo continua depois que seu acesso termina.</p>
+          </section>
+
+          <section id="comissoes">
+            <h2><span class="n">7</span>Vendas, Arena e comissões</h2>
+            <ul>
+              <li><strong>Veracidade:</strong> você garante que as informações de vendas, assinaturas, calls e resultados que registra são verdadeiras.</li>
+              <li><strong>Aprovação:</strong> vendas e resultados podem passar por conferência e aprovação de um administrador antes de contarem para metas, pontuação ou comissão.</li>
+              <li><strong>Arena e metas:</strong> pontuação, ranking e metas seguem regras definidas e configuráveis pela gestão, que podem mudar com o tempo. A pontuação é um instrumento de acompanhamento e não cria, por si, direito a prêmio ou valor.</li>
+              <li><strong>Saques de comissão:</strong> o valor solicitado fica sujeito à conferência e à aprovação de um administrador. Você deve informar dados de pagamento corretos (chave Pix e dados do titular). A WS pode pedir esclarecimentos, reter ou recusar um pagamento enquanto verifica divergência, erro ou suspeita de fraude.</li>
+              <li><strong>Ajustes:</strong> a WS pode corrigir ou reverter valores quando identificar erro, fraude, cancelamento ou estorno da venda que originou a comissão, conforme as regras comerciais aplicáveis.</li>
+              <li>O uso do Dashboard não altera a natureza da relação jurídica entre você e a WS, que continua regida pelo contrato, acordo comercial ou política interna aplicável.</li>
+            </ul>
+          </section>
+
+          <section id="integracoes">
+            <h2><span class="n">8</span>Integrações de terceiros</h2>
+            <p>O Dashboard usa serviços de terceiros, como <strong>Google</strong> (Agenda), <strong>Meta</strong> (Lead Ads e métricas de anúncios), <strong>Supabase</strong> e <strong>Vercel</strong> (infraestrutura), <strong>Cloudflare</strong> (verificação anti-robô) e <strong>TypeSafe</strong> (leitura de campos de formulário). Esses serviços têm termos e políticas próprios, e a WS não os controla.</p>
+            <ul>
+              <li>Podem mudar, limitar ou deixar de funcionar sem aviso. A WS não responde por falhas desses serviços fora do seu controle.</li>
+              <li>Quem conecta uma integração em nome da WS declara ter <strong>autoridade</strong> sobre a conta, a página, o anúncio ou a agenda conectados e se compromete a seguir as regras da plataforma.</li>
+              <li>Os dados enviados e recebidos nas integrações estão descritos na <a href="/politica-de-privacidade">Política de Privacidade</a>.</li>
+            </ul>
+            <p>O Dashboard é independente e <strong>não é afiliado, patrocinado nem endossado</strong> pelo Google, pela Meta ou pelas demais empresas citadas. Seus nomes e marcas pertencem aos respectivos titulares.</p>
+          </section>
+
+          <section id="google">
+            <h2><span class="n">9</span>Serviços de API do Google</h2>
+            <p>A integração “Google Agenda · Closers” é opcional e só pode ser conectada por administradores, em Configurações. Ao conectá-la, o administrador:</p>
+            <ul>
+              <li>autoriza o Dashboard (VOXEN CRM) a criar, atualizar, consultar e remover, na agenda escolhida, os eventos das calls de fechamento, e a listar as agendas da conta para escolher o destino (escopos <code>calendar.events</code> e <code>calendar.calendarlist.readonly</code>);</li>
+              <li>declara ser o titular da conta Google conectada, ou ter autorização do titular, e ter permissão de edição na agenda escolhida;</li>
+              <li>concorda em usar o recurso conforme os <a href="https://policies.google.com/terms">Termos de Serviço do Google</a>.</li>
+            </ul>
+            <p>O Dashboard usa os dados do Google apenas para essa função e segue a <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do Usuário dos Serviços de API do Google</a>, inclusive os requisitos de Uso Limitado. Como acessamos, usamos, armazenamos, compartilhamos e apagamos esses dados está na <a href="/politica-de-privacidade#google">seção 5 da Política de Privacidade</a>.</p>
+            <p>A conexão pode ser desfeita a qualquer momento, em “Desconectar” nas Configurações ou em <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. Depois disso, o Dashboard deixa de criar e atualizar eventos. Os eventos já criados permanecem na agenda até que o administrador os exclua.</p>
+          </section>
+
+          <section id="pi">
+            <h2><span class="n">10</span>Propriedade intelectual</h2>
+            <ul>
+              <li>O Dashboard, seu código, design, textos, marca e demais elementos pertencem à WS ou a seus licenciantes e são protegidos pela lei.</li>
+              <li>Enquanto tiver acesso, você recebe uma licença <strong>limitada, pessoal, não exclusiva, intransferível e revogável</strong> para usar o Dashboard conforme estes Termos. Nada aqui transfere propriedade intelectual a você.</li>
+              <li>Os Dados da WS ficam sob a titularidade e a responsabilidade da WS (ou de quem de direito). Você autoriza a WS a tratá-los para operar, proteger e melhorar o Dashboard.</li>
+              <li>Sugestões e feedback que você enviar podem ser usados pela WS sem obrigação de pagamento ou de crédito.</li>
+            </ul>
+          </section>
+
+          <section id="privacidade">
+            <h2><span class="n">11</span>Privacidade e proteção de dados</h2>
+            <p>O tratamento de dados pessoais segue a <a href="/politica-de-privacidade">Política de Privacidade</a>, que faz parte destes Termos. Você pode exercer seus direitos de titular, inclusive pedir acesso, correção e exclusão, pelo contato da <a href="#contato">seção 19</a>.</p>
+          </section>
+
+          <section id="disponibilidade">
+            <h2><span class="n">12</span>Disponibilidade e mudanças</h2>
+            <ul>
+              <li>Fazemos o possível para manter o Dashboard disponível, mas ele é fornecido “como está” e “conforme disponível”, sem garantia de funcionamento ininterrupto ou livre de erros.</li>
+              <li>Podemos fazer manutenções, atualizações e mudanças no sistema, e adicionar, alterar ou remover recursos, a qualquer momento.</li>
+              <li>Recomendamos conferir seus registros e relatórios. Não devemos ser a única base para decisões financeiras importantes sem conferência.</li>
+            </ul>
+          </section>
+
+          <section id="suspensao">
+            <h2><span class="n">13</span>Suspensão e encerramento</h2>
+            <ul>
+              <li>A WS pode <strong>suspender ou encerrar</strong> seu acesso, imediatamente e sem aviso prévio, em caso de violação destes Termos, suspeita de fraude ou uso indevido, risco à segurança, ordem legal, fim da relação com a WS ou inatividade.</li>
+              <li>Você pode pedir o encerramento da sua conta pelo contato da <a href="#contato">seção 19</a>. A exclusão é feita por um administrador: o acesso é bloqueado e as sessões e identidades são revogadas.</li>
+              <li>Registros de vendas, comissões, saques e auditoria podem ser mantidos após o encerramento, pelos prazos legais, conforme a <a href="/politica-de-privacidade#retencao">Política de Privacidade</a>.</li>
+              <li>Continuam valendo depois do encerramento as cláusulas que, por natureza, devem sobreviver: sigilo, propriedade intelectual, responsabilidade e foro.</li>
+            </ul>
+          </section>
+
+          <section id="responsabilidade">
+            <h2><span class="n">14</span>Garantias e limitação de responsabilidade</h2>
+            <p>Na máxima extensão permitida pela lei, a WS não se responsabiliza por:</p>
+            <ul>
+              <li>indisponibilidade, falhas ou mudanças em serviços de terceiros ou em provedores de infraestrutura;</li>
+              <li>dados incorretos ou incompletos registrados por usuários ou recebidos de terceiros;</li>
+              <li>uso indevido da conta por culpa do usuário, como compartilhamento de senha;</li>
+              <li>decisões comerciais tomadas com base nos relatórios, metas e rankings do Dashboard;</li>
+              <li>danos indiretos, lucros cessantes ou perda de oportunidade.</li>
+            </ul>
+            <p>Nada nestes Termos exclui ou limita responsabilidade que a lei não permita excluir ou limitar, como a decorrente de dolo ou culpa grave, nem direitos que a lei garanta a você.</p>
+          </section>
+
+          <section id="indenizacao">
+            <h2><span class="n">15</span>Responsabilidade do usuário</h2>
+            <p>Você responde, nos limites da lei, pelos danos que causar à WS ou a terceiros por violar estes Termos, a lei ou direitos alheios, inclusive por uso indevido de dados pessoais. Se a WS for acionada por isso, poderá exercer o direito de regresso contra você.</p>
+          </section>
+
+          <section id="alteracoes">
+            <h2><span class="n">16</span>Alterações dos Termos</h2>
+            <p>Podemos atualizar estes Termos. A data no topo mostra a última versão. Mudanças relevantes serão avisadas no Dashboard ou por e-mail, com antecedência razoável quando possível. Continuar usando o Dashboard depois do aviso significa que você aceita a nova versão. Se não concordar, pare de usar o Dashboard e peça o encerramento da conta.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Versão</th><th>Mudança</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Data">11/10/2026</td><td data-label="Versão">1.0</td><td data-label="Mudança">Primeira publicação.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="gerais">
+            <h2><span class="n">17</span>Disposições gerais</h2>
+            <ul>
+              <li><strong>Acordo completo:</strong> estes Termos e a Política de Privacidade são o acordo integral sobre o uso do Dashboard, sem prejuízo de contratos ou acordos comerciais próprios entre você e a WS.</li>
+              <li><strong>Independência das cláusulas:</strong> se uma cláusula for considerada inválida, as demais continuam em vigor.</li>
+              <li><strong>Não renúncia:</strong> deixar de exercer um direito não significa renunciar a ele.</li>
+              <li><strong>Cessão:</strong> você não pode transferir seus direitos ou deveres. A WS pode ceder estes Termos em reorganização societária, com aviso.</li>
+              <li><strong>Caso fortuito e força maior:</strong> nenhuma parte responde por descumprimento causado por eventos fora de seu controle razoável.</li>
+              <li><strong>Comunicações:</strong> avisos podem ser feitos por e-mail ou por mensagem no Dashboard.</li>
+            </ul>
+          </section>
+
+          <section id="lei">
+            <h2><span class="n">18</span>Lei aplicável e foro</h2>
+            <p>Estes Termos são regidos pelas leis da República Federativa do Brasil. Fica eleito o foro da Circunscrição Judiciária de <strong>Brasília/DF</strong>, sede da WS, para resolver qualquer questão sobre eles, ressalvado o foro que a lei obrigatoriamente reconheça ao consumidor, quando aplicável.</p>
+          </section>
+
+          <section id="contato">
+            <h2><span class="n">19</span>Contato</h2>
+            <div class="contact">
+              <b>Empresa</b>
+              <div>YANQUES BRASILIA ACADEMY LTDA (nome comercial WS LTDA)</div>
+              <b>CNPJ</b>
+              <div>33.264.779/0001-01</div>
+              <b>Sede</b>
+              <div>Brasília/DF</div>
+              <b>Dúvidas, avisos e solicitações</b>
+              <div><a href="mailto:admvoxenai@gmail.com">admvoxenai@gmail.com</a></div>
+              <b>Site</b>
+              <div><a href="https://www.wsltda.com">https://www.wsltda.com</a></div>
+            </div>
+          </section>
+
+        </article>
+      </div>
+    </div>
+  </main>
+
+<footer>
+    <div class="wrap">
+      <p>© 2026 YANQUES BRASILIA ACADEMY LTDA (WS LTDA) · CNPJ 33.264.779/0001-01 · Brasília/DF</p>
+      <p><a href="/politica-de-privacidade">Política de Privacidade</a> · <a href="/auth">Acessar o dashboard</a> · <a href="#titulo">Voltar ao topo</a></p>
+    </div>
+  </footer>
+</body>
+</html>
