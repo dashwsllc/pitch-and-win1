@@ -2,7 +2,7 @@
 
 Data: 12/10/2026. Base examinada: `pitch-and-win1`, commit `8cebb5d`. Destino comercial: Supabase `dash`, `mbzwchnxtskysqplqiyy`.
 
-Estado: desenho das levas aprovado na conversa; especificação escrita aguardando revisão do usuário. Este documento não registra aprovação de leads reais nem autorização para publicar métricas automaticamente.
+Estado: desenho e especificação escrita aprovados pelo usuário nesta conversa em 12/10/2026. O plano de implementação será revisado antes da execução. Este documento não registra aprovação de leads reais nem autorização para publicar métricas automaticamente.
 
 ## 1. Resultado esperado
 
