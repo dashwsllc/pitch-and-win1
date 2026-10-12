@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Política de Privacidade | WS LTDA</title>
+  <meta name="description" content="Política de Privacidade do Dashboard WS LTDA (VOXEN CRM): quais dados pessoais tratamos, por quê, com quem compartilhamos, uso de dados do Google (Google Agenda) e da Meta, e como exercer seus direitos pela LGPD." />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0b0414" />
+  <link rel="canonical" href="https://www.wsltda.com/politica-de-privacidade" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="pt_BR" />
+  <meta property="og:site_name" content="WS LTDA" />
+  <meta property="og:title" content="Política de Privacidade | WS LTDA" />
+  <meta property="og:description" content="Como o Dashboard WS LTDA trata dados pessoais, inclusive dados de usuário do Google, e como você exerce seus direitos pela LGPD." />
+  <meta property="og:url" content="https://www.wsltda.com/politica-de-privacidade" />
+  <style>
+    :root {
+      color-scheme: dark light;
+      --bg: #0b0414;
+      --glow: #261931;
+      --panel: #1a1523;
+      --panel-2: #130d1b;
+      --line: #ffffff14;
+      --line-strong: #ffffff26;
+      --text: #ece9ef;
+      --muted: #a8a2b0;
+      --accent: #fd7e20;
+      --link: #ffab6b;
+      --code: #0b0515;
+      --ok: #34d399;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f4f8;
+        --glow: #ffe6d1;
+        --panel: #ffffff;
+        --panel-2: #faf8fc;
+        --line: #2a1a3a1a;
+        --line-strong: #2a1a3a30;
+        --text: #1d1626;
+        --muted: #595164;
+        --accent: #e56a0f;
+        --link: #a94300;
+        --code: #f1edf5;
+        --ok: #047857;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--text);
+      background: radial-gradient(ellipse 760px 520px at 50% 0, var(--glow) 0%, transparent 78%), var(--bg);
+      font: 16px/1.7 "DM Sans", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      overflow-wrap: break-word;
+    }
+    a { color: var(--link); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+    code { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 2px 6px; background: var(--code); border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; }
+    .skip { position: absolute; left: 16px; top: -64px; padding: 10px 14px; background: var(--accent); color: #fff; border-radius: 8px; z-index: 10; }
+    .skip:focus { top: 12px; }
+    .wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+    .topbar { border-bottom: 1px solid var(--line); }
+    .topbar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; }
+    .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font-weight: 650; letter-spacing: -.02em; font-size: 18px; }
+    .brand-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, #fd7e20, #fe5606); box-shadow: 0 6px 22px #fe56062a, inset 0 1px 0 #ffffff40; }
+    .brand-icon svg { width: 21px; height: 21px; }
+    .topbar .btn { display: inline-flex; align-items: center; padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 550; }
+    .topbar .btn:hover { border-color: var(--accent); }
+
+    .hero { padding: 52px 0 28px; }
+    .eyebrow { display: inline-block; margin: 0 0 14px; padding: 4px 12px; border: 1px solid #fd7e2040; border-radius: 999px; background: #fd7e2014; color: var(--link); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 0 0 14px; font-size: clamp(30px, 5vw, 46px); line-height: 1.12; letter-spacing: -.035em; font-weight: 700; }
+    .lead { max-width: 70ch; margin: 0 0 24px; color: var(--muted); font-size: 18px; line-height: 1.65; }
+    .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 0 0 28px; padding: 0; list-style: none; }
+    .facts li { padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    .facts b { display: block; margin-bottom: 2px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+    .facts span { font-size: 15px; }
+    .summary { padding: 22px 24px; background: linear-gradient(180deg, #fd7e2014, transparent 70%), var(--panel); border: 1px solid #fd7e2038; border-radius: 18px; }
+    .summary h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: -.01em; }
+    .summary ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .summary li { position: relative; padding-left: 28px; }
+    .summary li::before { content: ""; position: absolute; left: 0; top: 7px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px #fd7e2026; }
+
+    .layout { display: grid; gap: 28px; padding: 28px 0 72px; }
+    .toc { align-self: start; }
+    .toc details { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    .toc summary { padding: 14px 18px; font-weight: 650; cursor: pointer; }
+    .toc ol { margin: 0; padding: 0 18px 14px 40px; display: grid; gap: 2px; font-size: 14.5px; }
+    .toc li { padding: 3px 0; }
+    .toc a { color: var(--muted); text-decoration: none; }
+    .toc a:hover { color: var(--link); text-decoration: underline; }
+    @media (min-width: 980px) {
+      .layout { grid-template-columns: 270px minmax(0, 1fr); gap: 56px; }
+      .toc { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow: auto; }
+      @supports selector(::details-content) {
+        .toc details::details-content { content-visibility: visible; display: block; }
+        .toc summary { pointer-events: none; cursor: default; list-style: none; padding-bottom: 6px; }
+        .toc summary::-webkit-details-marker { display: none; }
+      }
+    }
+
+    article section { padding-top: 8px; margin-bottom: 44px; scroll-margin-top: 20px; }
+    article h2 { display: flex; align-items: baseline; gap: 12px; margin: 0 0 14px; font-size: clamp(22px, 3vw, 27px); line-height: 1.25; letter-spacing: -.025em; }
+    article h2 .n { flex: none; min-width: 34px; padding: 2px 8px; border-radius: 9px; background: #fd7e2018; border: 1px solid #fd7e2038; color: var(--link); font-size: 15px; text-align: center; letter-spacing: 0; }
+    article h3 { margin: 26px 0 8px; font-size: 18px; letter-spacing: -.01em; }
+    article p { margin: 0 0 14px; max-width: 75ch; }
+    article ul, article ol { margin: 0 0 16px; padding-left: 22px; max-width: 75ch; }
+    article li { margin-bottom: 7px; }
+    article li::marker { color: var(--accent); }
+    .note { margin: 18px 0; padding: 14px 18px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; max-width: 75ch; }
+    .note p:last-child { margin-bottom: 0; }
+    .limited { margin: 18px 0; padding: 18px 22px; background: var(--panel); border: 1px solid #fd7e2050; border-radius: 14px; max-width: 75ch; }
+    .limited p { margin: 0 0 10px; }
+    .limited p:last-child { margin: 0; }
+    .limited .en { color: var(--muted); }
+
+    .table-wrap { margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); }
+    table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.55; }
+    th, td { padding: 12px 16px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    th { background: var(--panel-2); color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td:first-child { font-weight: 600; }
+    @media (max-width: 760px) {
+      table, tbody, tr, td { display: block; width: 100%; }
+      thead { position: absolute; left: -9999px; }
+      tr { padding: 10px 0; border-bottom: 1px solid var(--line-strong); }
+      tbody tr:last-child { border-bottom: 0; }
+      td { padding: 6px 16px; border: 0; }
+      td::before { content: attr(data-label); display: block; color: var(--muted); font-size: 11.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+    }
+
+    .contact { display: grid; gap: 4px; padding: 18px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; max-width: 75ch; }
+    .contact b { color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+    .contact div + b { margin-top: 10px; }
+
+    footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+    footer p { margin: 0; }
+
+    @media print {
+      :root { --bg: #fff; --glow: #fff; --panel: #fff; --panel-2: #f3f3f3; --line: #ccc; --line-strong: #999; --text: #000; --muted: #333; --link: #000; --code: #eee; }
+      body { background: #fff; font-size: 11.5pt; }
+      .topbar .btn, .toc, .skip { display: none; }
+      a { text-decoration: none; }
+      article section { break-inside: avoid-page; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#conteudo">Ir para o conteúdo</a>
+
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="/auth" aria-label="WS LTDA, ir para o dashboard">
+        <span class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+        </span>
+        WS LTDA
+      </a>
+      <a class="btn" href="/auth">Acessar o dashboard</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <section class="hero" aria-labelledby="titulo">
+        <p class="eyebrow">Documento legal</p>
+        <h1 id="titulo">Política de Privacidade</h1>
+        <p class="lead">Esta política explica, em linguagem direta, quais dados pessoais o Dashboard WS LTDA trata, para quê, com quem os compartilha, por quanto tempo os guarda e como você exerce seus direitos, conforme a Lei Geral de Proteção de Dados (LGPD, Lei nº 13.709/2018).</p>
+
+        <ul class="facts">
+          <li><b>Última atualização</b><span><time datetime="2026-10-11">11 de outubro de 2026</time> · versão 1.0</span></li>
+          <li><b>Aplicativo</b><span>Dashboard WS LTDA (identificado no Google como VOXEN CRM)</span></li>
+          <li><b>Endereço</b><span>https://www.wsltda.com</span></li>
+          <li><b>Contato de privacidade</b><span><a href="mailto:admvoxenai@gmail.com">admvoxenai@gmail.com</a></span></li>
+        </ul>
+
+        <div class="summary">
+          <h2>Em resumo</h2>
+          <ul>
+            <li>O Dashboard é um sistema de gestão comercial (CRM, vendas, metas, ranking e comissões). Usamos os dados para operar esse sistema, e não para publicidade de terceiros.</li>
+            <li><strong>Não vendemos dados pessoais</strong> e não usamos cookies de publicidade, remarketing nem ferramentas de análise comportamental.</li>
+            <li>A integração <strong>opcional com o Google Agenda</strong> é feita só por administradores. Ela cria, atualiza e remove eventos das calls de fechamento e segue a Política de Dados do Usuário dos Serviços de API do Google, inclusive os requisitos de Uso Limitado (<a href="#google">seção 5</a>).</li>
+            <li>Dados de leads vêm, em regra, de formulários de anúncios da Meta preenchidos pelas próprias pessoas (<a href="#meta">seção 6</a>).</li>
+            <li>Você pode pedir acesso, correção ou exclusão dos seus dados a qualquer momento, por e-mail (<a href="#exclusao">seção 14</a>).</li>
+          </ul>
+        </div>
+      </section>
+
+      <div class="layout">
+        <nav class="toc" aria-label="Índice">
+          <details open>
+            <summary>Neste documento</summary>
+            <ol>
+              <li><a href="#quem-somos">Quem somos e a quem se aplica</a></li>
+              <li><a href="#dados">Dados que tratamos</a></li>
+              <li><a href="#origem">De onde vêm os dados</a></li>
+              <li><a href="#finalidades">Finalidades e bases legais</a></li>
+              <li><a href="#google">Dados de usuário do Google</a></li>
+              <li><a href="#meta">Meta (Facebook e Instagram)</a></li>
+              <li><a href="#ia">IA e decisões automatizadas</a></li>
+              <li><a href="#compartilhamento">Com quem compartilhamos</a></li>
+              <li><a href="#internacional">Transferência internacional</a></li>
+              <li><a href="#cookies">Cookies e armazenamento local</a></li>
+              <li><a href="#retencao">Por quanto tempo guardamos</a></li>
+              <li><a href="#seguranca">Segurança</a></li>
+              <li><a href="#direitos">Seus direitos</a></li>
+              <li><a href="#exclusao">Como pedir a exclusão dos dados</a></li>
+              <li><a href="#menores">Crianças e adolescentes</a></li>
+              <li><a href="#alteracoes">Alterações desta política</a></li>
+              <li><a href="#contato">Contato e Encarregado (DPO)</a></li>
+              <li><a href="#lei">Lei aplicável</a></li>
+            </ol>
+          </details>
+        </nav>
+
+        <article id="conteudo">
+
+          <section id="quem-somos">
+            <h2><span class="n">1</span>Quem somos e a quem esta política se aplica</h2>
+            <p>O <strong>Dashboard WS LTDA</strong> (“Dashboard”) é um sistema web de gestão comercial acessível em <a href="https://www.wsltda.com">https://www.wsltda.com</a>. Perante o Google, o aplicativo é identificado como <strong>VOXEN CRM</strong>.</p>
+            <p>O Dashboard é operado por <strong>YANQUES BRASILIA ACADEMY LTDA</strong>, inscrita no CNPJ sob o nº <strong>33.264.779/0001-01</strong>, com sede em <strong>Brasília/DF</strong>, que atua sob o nome comercial <strong>WS LTDA</strong> (“WS”, “nós”). Para os fins da LGPD, a WS é a <strong>controladora</strong> dos dados pessoais tratados no Dashboard.</p>
+            <p>Esta política vale para:</p>
+            <ul>
+              <li><strong>Usuários:</strong> pessoas que solicitam e recebem acesso ao Dashboard (vendedores, SDRs, closers, gestores e executivos). O acesso é restrito a pessoas aprovadas por um administrador.</li>
+              <li><strong>Leads e contatos:</strong> pessoas que preenchem formulários de anúncios ou cujos dados são registrados no CRM para atendimento comercial.</li>
+              <li><strong>Compradores e clientes:</strong> pessoas cujas vendas e assinaturas são registradas.</li>
+              <li><strong>Visitantes</strong> das páginas públicas, como esta.</li>
+            </ul>
+            <p>Esta política não cobre sites e serviços de terceiros que possam ser acessados a partir do Dashboard (por exemplo, Google e Meta), que têm políticas próprias.</p>
+          </section>
+
+          <section id="dados">
+            <h2><span class="n">2</span>Dados que tratamos</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Categoria</th><th>Dados</th><th>Titulares</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Categoria">Conta e acesso</td><td data-label="Dados">Nome completo, e-mail, senha (guardada apenas de forma irreversível, nunca em texto legível), função solicitada e atribuída, status e datas da aprovação do cadastro, solicitações de redefinição de senha.</td><td data-label="Titulares">Usuários</td></tr>
+                  <tr><td data-label="Categoria">Perfil</td><td data-label="Dados">Nome de exibição, foto (avatar) enviada pelo usuário, status da conta.</td><td data-label="Titulares">Usuários</td></tr>
+                  <tr><td data-label="Categoria">Atividade comercial</td><td data-label="Dados">Abordagens registradas, atividades e histórico no CRM, metas, pontuação e posição no ranking (Arena), comissões e taxa aplicada.</td><td data-label="Titulares">Usuários</td></tr>
+                  <tr><td data-label="Categoria">Vendas e assinaturas</td><td data-label="Dados">Produto, valor, data, nome, WhatsApp e e-mail do comprador ou cliente.</td><td data-label="Titulares">Compradores e clientes</td></tr>
+                  <tr><td data-label="Categoria">Pagamento de comissões (saques)</td><td data-label="Dados">Valor solicitado e aprovado, chave Pix e seu tipo, nome e CPF do titular da chave, status e datas de pagamento.</td><td data-label="Titulares">Usuários</td></tr>
+                  <tr><td data-label="Categoria">Leads e contatos (CRM)</td><td data-label="Dados">Nome, idade, e-mail, telefone, empresa, cargo, LinkedIn, foto de perfil, origem do lead, temperatura e prioridade, valor estimado, etapa do funil, histórico de contatos, anotações, calls agendadas e seus resultados.</td><td data-label="Titulares">Leads</td></tr>
+                  <tr><td data-label="Categoria">Formulários da Meta (Lead Ads)</td><td data-label="Dados">Nome, telefone, e-mail e demais respostas do formulário; respostas ao aviso de consentimento do formulário; identificadores de página, formulário, campanha e anúncio; data e hora do envio.</td><td data-label="Titulares">Leads</td></tr>
+                  <tr><td data-label="Categoria">Desempenho de anúncios</td><td data-label="Dados">Métricas agregadas por campanha das contas de anúncios da WS (investimento, impressões, cliques, leads). Não identificam pessoas.</td><td data-label="Titulares">Não se aplica</td></tr>
+                  <tr><td data-label="Categoria">Google Agenda</td><td data-label="Dados">Lista de agendas, identificador da conta conectada, eventos criados pelo Dashboard e credenciais de acesso. Detalhes na <a href="#google">seção 5</a>.</td><td data-label="Titulares">Administradores, closers e leads com call agendada</td></tr>
+                  <tr><td data-label="Categoria">Dados técnicos e de segurança</td><td data-label="Dados">Endereço IP, tipo de navegador e dispositivo, data e hora de acesso, tokens de sessão, registros de erro e trilhas de auditoria de ações administrativas.</td><td data-label="Titulares">Usuários e visitantes</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Não pedimos <strong>dados pessoais sensíveis</strong> (art. 5º, II, da LGPD), como saúde, origem racial ou étnica, convicção religiosa, opinião política ou biometria. Os campos livres do CRM (anotações) devem conter apenas o que for necessário ao atendimento comercial.</p>
+          </section>
+
+          <section id="origem">
+            <h2><span class="n">3</span>De onde vêm os dados</h2>
+            <ul>
+              <li><strong>De você:</strong> no cadastro, no perfil e nas solicitações que faz no Dashboard.</li>
+              <li><strong>Da nossa equipe:</strong> vendas, leads, anotações e atividades registradas por usuários autorizados.</li>
+              <li><strong>Da Meta:</strong> respostas de formulários de anúncios e métricas de campanhas, por integrações autorizadas pela WS (<a href="#meta">seção 6</a>).</li>
+              <li><strong>Do Google:</strong> lista de agendas e informações dos eventos criados pelo próprio Dashboard, quando um administrador ativa a integração (<a href="#google">seção 5</a>).</li>
+              <li><strong>Automaticamente:</strong> dados técnicos gerados quando você usa o Dashboard.</li>
+            </ul>
+          </section>
+
+          <section id="finalidades">
+            <h2><span class="n">4</span>Finalidades e bases legais</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Finalidade</th><th>Dados principais</th><th>Base legal (LGPD, art. 7º)</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Finalidade">Criar e administrar contas, verificar identidade, aprovar acessos e recuperar senhas</td><td data-label="Dados principais">Conta e acesso, dados técnicos</td><td data-label="Base legal (LGPD, art. 7º)">Execução de contrato ou de procedimentos preliminares (V); legítimo interesse (IX)</td></tr>
+                  <tr><td data-label="Finalidade">Operar o CRM, vendas, assinaturas, metas, ranking e relatórios</td><td data-label="Dados principais">Atividade comercial, vendas, leads</td><td data-label="Base legal (LGPD, art. 7º)">Execução de contrato (V); legítimo interesse (IX)</td></tr>
+                  <tr><td data-label="Finalidade">Calcular, aprovar e pagar comissões</td><td data-label="Dados principais">Saques, vendas, comissões</td><td data-label="Base legal (LGPD, art. 7º)">Execução de contrato (V); cumprimento de obrigação legal ou regulatória, fiscal e contábil (II)</td></tr>
+                  <tr><td data-label="Finalidade">Contatar leads que pediram contato em formulário e conduzir o atendimento comercial</td><td data-label="Dados principais">Leads, formulários da Meta</td><td data-label="Base legal (LGPD, art. 7º)">Procedimentos preliminares a pedido do titular (V); legítimo interesse (IX)</td></tr>
+                  <tr><td data-label="Finalidade">Manter na Google Agenda os eventos das calls de fechamento</td><td data-label="Dados principais">Dados da <a href="#google">seção 5</a></td><td data-label="Base legal (LGPD, art. 7º)">Legítimo interesse e execução de contrato (V, IX); a conexão exige autorização expressa do administrador (I)</td></tr>
+                  <tr><td data-label="Finalidade">Segurança, prevenção a fraude e abuso, auditoria de ações administrativas</td><td data-label="Dados principais">Dados técnicos, trilhas de auditoria</td><td data-label="Base legal (LGPD, art. 7º)">Legítimo interesse (IX); cumprimento de obrigação legal (II)</td></tr>
+                  <tr><td data-label="Finalidade">Cumprir obrigações legais, atender autoridades e exercer direitos em processos</td><td data-label="Dados principais">Conforme a exigência</td><td data-label="Base legal (LGPD, art. 7º)">Obrigação legal (II); exercício regular de direitos (VI)</td></tr>
+                  <tr><td data-label="Finalidade">Manter a estabilidade e o desempenho do sistema</td><td data-label="Dados principais">Dados técnicos</td><td data-label="Base legal (LGPD, art. 7º)">Legítimo interesse (IX)</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Quando a base é o legítimo interesse, avaliamos a necessidade e o impacto sobre você, e você pode se opor ao tratamento (<a href="#direitos">seção 13</a>). Não usamos dados pessoais para publicidade de terceiros nem para vender perfis.</p>
+          </section>
+
+          <section id="google">
+            <h2><span class="n">5</span>Dados de usuário do Google (Google Agenda)</h2>
+            <p>Esta seção descreve como o Dashboard (<strong>VOXEN CRM</strong>) acessa, usa, armazena, compartilha e apaga dados recebidos das APIs do Google.</p>
+
+            <h3>5.1 O que é a integração</h3>
+            <p>A integração “Google Agenda · Closers” é <strong>opcional</strong> e só pode ser conectada por administradores (perfil Executive), em Configurações. O administrador autoriza o acesso na tela de consentimento do Google (OAuth 2.0) e escolhe, de forma explícita, a agenda de destino. A sincronização é de <strong>mão única</strong>: do Dashboard para o Google. Alterações feitas no Google não são importadas para o CRM.</p>
+
+            <h3>5.2 Permissões (escopos) solicitadas e para quê</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Escopo</th><th>Uso no Dashboard</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Escopo"><code>https://www.googleapis.com/auth/calendar.events</code></td><td data-label="Uso no Dashboard">Criar, atualizar, consultar e remover, na agenda escolhida, os eventos de calls de fechamento gerenciados pelo Dashboard.</td></tr>
+                  <tr><td data-label="Escopo"><code>https://www.googleapis.com/auth/calendar.calendarlist.readonly</code></td><td data-label="Uso no Dashboard">Listar as agendas da conta em que o administrador tem permissão de edição, para ele escolher a de destino e para o Dashboard conferir o nível de permissão. Acesso somente leitura.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Não pedimos acesso a e-mails (Gmail), contatos, arquivos (Drive) nem a outros serviços do Google.</p>
+
+            <h3>5.3 Dados do Google que acessamos</h3>
+            <ul>
+              <li>A lista de agendas da conta conectada (identificador, nome, fuso horário e nível de permissão).</li>
+              <li>O identificador da agenda principal da conta conectada, que normalmente é o endereço de e-mail dessa conta Google, usado para identificar qual conta está conectada.</li>
+              <li>Informações dos eventos <strong>criados pelo Dashboard</strong> (identificador, ETag, status, título, descrição e horário), para conferir e manter cada evento atualizado.</li>
+              <li>As credenciais OAuth (tokens de acesso e de renovação) emitidas pelo Google após a autorização.</li>
+            </ul>
+
+            <h3>5.4 Dados que enviamos ao Google</h3>
+            <p>Para cada call de fechamento agendada para um closer, o Dashboard grava na agenda escolhida um evento de 30 minutos (fuso America/Sao_Paulo) com: título no formato “Call de fechamento — nome do lead | nome do closer”; descrição com o responsável, o status, o resultado da call (quando concluída) e um link para o lead no CRM; e identificadores técnicos internos em propriedades privadas do evento.</p>
+            <p>O Dashboard <strong>não envia ao Google</strong> o telefone, o e-mail nem outros dados de contato do lead. Também não convida participantes, não dispara notificações a terceiros e não cria reuniões do Google Meet.</p>
+
+            <h3>5.5 Como usamos os dados do Google</h3>
+            <p>Usamos os dados do Google <strong>exclusivamente</strong> para oferecer a função visível ao usuário: manter, na agenda compartilhada dos closers, os eventos das calls de fechamento registradas no CRM. Não usamos o conteúdo de outros eventos da agenda para nenhuma outra finalidade.</p>
+
+            <h3>5.6 Armazenamento e proteção</h3>
+            <ul>
+              <li>Os tokens OAuth ficam <strong>criptografados</strong> em cofre de segredos do banco de dados (Supabase Vault) e só são lidos por funções de servidor. Nunca chegam ao navegador nem a usuários comuns.</li>
+              <li>O segredo do cliente OAuth fica somente em variáveis privadas do servidor, fora do código-fonte e do navegador.</li>
+              <li>Todo o tráfego usa HTTPS. A autorização usa um estado de uso único e de curta duração para impedir reuso do retorno do Google.</li>
+              <li>O acesso à conexão é limitado a administradores aprovados.</li>
+            </ul>
+
+            <h3>5.7 Compartilhamento</h3>
+            <p>Não vendemos nem transferimos dados recebidos do Google a terceiros, exceto: (i) a provedores de infraestrutura que tratam os dados em nosso nome (Supabase e Vercel, <a href="#compartilhamento">seção 8</a>); (ii) quando necessário para cumprir a lei, uma ordem de autoridade ou para proteger a segurança; ou (iii) em reorganização societária, com aviso prévio.</p>
+            <p>Também <strong>não</strong> usamos dados do Google para publicidade, nem para criar, melhorar ou treinar modelos de inteligência artificial ou de aprendizado de máquina de uso geral. Pessoas só têm acesso a esses dados se o usuário consentir expressamente, para fins de segurança ou investigação de abuso, para cumprir a lei, ou em formato agregado e anonimizado para operações internas.</p>
+
+            <h3>5.8 Retenção, revogação e exclusão</h3>
+            <ul>
+              <li>As credenciais são mantidas enquanto a conexão estiver ativa.</li>
+              <li><strong>Para revogar:</strong> o administrador clica em “Desconectar” em Configurações. O Dashboard interrompe a sincronização, apaga as credenciais armazenadas e pede ao Google a revogação do token. Também é possível revogar a qualquer momento em <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+              <li>Os eventos já criados continuam na agenda e podem ser excluídos pelo administrador no Google Agenda. Guardamos os vínculos técnicos (identificadores e status de sincronização) para evitar eventos duplicados caso a conexão seja refeita.</li>
+              <li><strong>Para apagar tudo:</strong> peça por e-mail (<a href="#exclusao">seção 14</a>). Eliminamos também os vínculos técnicos e o histórico de sincronização, ressalvado o que a lei nos obrigar a manter.</li>
+            </ul>
+
+            <h3>5.9 Declaração de Uso Limitado (Limited Use)</h3>
+            <div class="limited">
+              <p>O uso e a transferência, para qualquer outro aplicativo, das informações recebidas das APIs do Google pela WS LTDA seguirão a <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do Usuário dos Serviços de API do Google</a>, incluindo os requisitos de Uso Limitado.</p>
+              <p class="en" lang="en">WS LTDA’s use and transfer to any other app of information received from Google APIs will adhere to <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+            </div>
+          </section>
+
+          <section id="meta">
+            <h2><span class="n">6</span>Meta (Facebook e Instagram)</h2>
+            <ul>
+              <li><strong>Formulários de anúncios (Lead Ads):</strong> quando alguém preenche um formulário em um anúncio da WS no Facebook ou Instagram, a Meta nos envia um aviso e as respostas, por uma integração autorizada. Guardamos esses dados no módulo de Leads para que SDRs e closers entrem em contato. O formulário exibe o aviso de privacidade e o de consentimento da própria Meta, e guardamos as respostas a esse aviso.</li>
+              <li><strong>Métricas de anúncios:</strong> consultamos o desempenho das campanhas das contas de anúncios da WS. São dados agregados que não identificam pessoas.</li>
+              <li>As credenciais de acesso à Meta ficam apenas em ambiente de servidor. O Dashboard <strong>não usa “Entrar com Facebook”</strong> e não instala pixel nem SDK da Meta neste site.</li>
+              <li>Usamos os dados vindos da plataforma da Meta somente para as finalidades descritas nesta política, sem vendê-los.</li>
+              <li>A Meta trata seus dados conforme a própria <a href="https://www.facebook.com/privacy/policy/">Política de Privacidade da Meta</a>. Para pedir a exclusão dos dados que temos, siga a <a href="#exclusao">seção 14</a>.</li>
+            </ul>
+          </section>
+
+          <section id="ia">
+            <h2><span class="n">7</span>Inteligência artificial e decisões automatizadas</h2>
+            <h3>7.1 Leitura dos campos do formulário</h3>
+            <p>Quando um formulário da Meta usa rótulos de pergunta que não reconhecemos, e o recurso está habilitado, enviamos ao serviço <strong>TypeSafe</strong> (<code>api.typesafe.ai</code>) os rótulos das perguntas e a primeira resposta de cada campo, para que ele indique <strong>quais respostas correspondem a nome, telefone e e-mail</strong>. O serviço apenas escolhe entre respostas que já existem; ele não cria nem altera dados. Se o serviço falhar, os campos ficam para revisão manual. Com o recurso desligado, usamos apenas correspondência exata de rótulos.</p>
+            <h3>7.2 Pontuação e ranking</h3>
+            <p>A pontuação e o ranking da Arena são calculados automaticamente, por regras objetivas definidas pela gestão, a partir de eventos registrados (calls, repasses e vendas aprovadas). O pagamento de comissões depende de aprovação de um administrador. Não tomamos decisões exclusivamente automatizadas que produzam efeitos jurídicos sobre leads ou compradores. Usuários podem pedir <strong>revisão</strong> de cálculos e dos critérios usados (art. 20 da LGPD) pelo contato da <a href="#contato">seção 17</a>.</p>
+          </section>
+
+          <section id="compartilhamento">
+            <h2><span class="n">8</span>Com quem compartilhamos</h2>
+            <p><strong>Dentro da WS</strong>, o acesso depende da função (vendedor, SDR, closer, gestor, executivo e super administrador) e segue o princípio do menor privilégio. Gestores e executivos veem dados da equipe para acompanhar desempenho e pagar comissões.</p>
+            <p><strong>Prestadores de serviço (operadores)</strong> que tratam dados em nosso nome:</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Prestador</th><th>Para quê</th><th>Dados envolvidos</th><th>Localização</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Prestador">Supabase, Inc.</td><td data-label="Para quê">Banco de dados, autenticação, armazenamento de arquivos (fotos) e funções de servidor</td><td data-label="Dados envolvidos">Todos os dados do Dashboard</td><td data-label="Localização">Estados Unidos</td></tr>
+                  <tr><td data-label="Prestador">Vercel Inc.</td><td data-label="Para quê">Hospedagem e entrega da aplicação</td><td data-label="Dados envolvidos">Dados técnicos de acesso (IP, navegador)</td><td data-label="Localização">Estados Unidos e rede global de distribuição</td></tr>
+                  <tr><td data-label="Prestador">Cloudflare, Inc. (Turnstile)</td><td data-label="Para quê">Verificação anti-robô no login e no cadastro</td><td data-label="Dados envolvidos">Token de verificação, IP e dados do navegador</td><td data-label="Localização">Internacional</td></tr>
+                  <tr><td data-label="Prestador">Meta Platforms</td><td data-label="Para quê">Anúncios e formulários de captação (<a href="#meta">seção 6</a>)</td><td data-label="Dados envolvidos">Leads e métricas de campanhas</td><td data-label="Localização">Internacional</td></tr>
+                  <tr><td data-label="Prestador">Google LLC</td><td data-label="Para quê">Google Agenda (<a href="#google">seção 5</a>)</td><td data-label="Dados envolvidos">Eventos de calls e agendas</td><td data-label="Localização">Internacional</td></tr>
+                  <tr><td data-label="Prestador">TypeSafe</td><td data-label="Para quê">Leitura de campos de formulário (<a href="#ia">seção 7</a>)</td><td data-label="Dados envolvidos">Rótulos e respostas do formulário</td><td data-label="Localização">Conforme o provedor</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Podemos compartilhar dados também com <strong>autoridades</strong>, quando a lei ou uma ordem judicial exigir, e com assessores contábeis e jurídicos sujeitos a sigilo. <strong>Não vendemos nem alugamos dados pessoais.</strong></p>
+          </section>
+
+          <section id="internacional">
+            <h2><span class="n">9</span>Transferência internacional de dados</h2>
+            <p>Parte dos nossos prestadores armazena ou processa dados fora do Brasil, principalmente nos Estados Unidos. Essas transferências seguem o art. 33 da LGPD e se apoiam em mecanismos como cláusulas contratuais e termos de tratamento de dados dos próprios prestadores. Você pode pedir informações sobre essas garantias pelo contato da <a href="#contato">seção 17</a>.</p>
+          </section>
+
+          <section id="cookies">
+            <h2><span class="n">10</span>Cookies e armazenamento local</h2>
+            <p>Usamos apenas itens <strong>essenciais</strong> ao funcionamento do Dashboard:</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Item</th><th>Tipo</th><th>Finalidade</th><th>Duração</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Item">Sessão de login</td><td data-label="Tipo">Armazenamento local do navegador (localStorage; sessionStorage se indisponível)</td><td data-label="Finalidade">Manter você conectado</td><td data-label="Duração">Até sair ou expirar</td></tr>
+                  <tr><td data-label="Item"><code>sidebar:state</code></td><td data-label="Tipo">Cookie próprio</td><td data-label="Finalidade">Lembrar se a barra lateral está aberta</td><td data-label="Duração">7 dias</td></tr>
+                  <tr><td data-label="Item"><code>theme</code></td><td data-label="Tipo">Armazenamento local</td><td data-label="Finalidade">Tema claro ou escuro</td><td data-label="Duração">Até você limpar</td></tr>
+                  <tr><td data-label="Item">Som de alerta de vendas e controle de avisos já exibidos</td><td data-label="Tipo">Armazenamento local e de sessão</td><td data-label="Finalidade">Lembrar preferências e evitar avisos repetidos</td><td data-label="Duração">Até você limpar ou a sessão acabar</td></tr>
+                  <tr><td data-label="Item">Cloudflare Turnstile</td><td data-label="Tipo">Script e dados técnicos de terceiro</td><td data-label="Finalidade">Distinguir pessoas de robôs no login e no cadastro</td><td data-label="Duração">Definida pela Cloudflare</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Não usamos cookies de publicidade, de remarketing nem ferramentas de análise comportamental (como Google Analytics ou pixels de redes sociais). Você pode apagar esses dados nas configurações do navegador, mas talvez precise entrar de novo.</p>
+          </section>
+
+          <section id="retencao">
+            <h2><span class="n">11</span>Por quanto tempo guardamos</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Dado</th><th>Prazo</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Dado">Conta e perfil</td><td data-label="Prazo">Enquanto a conta estiver ativa. Na exclusão da conta, o acesso é bloqueado e as identidades e sessões são revogadas.</td></tr>
+                  <tr><td data-label="Dado">Vendas, assinaturas, comissões, saques e trilhas de auditoria</td><td data-label="Prazo">Pelos prazos exigidos pela legislação fiscal e contábil e para o exercício regular de direitos (em regra, até 5 anos). Esses registros dependem do vínculo com o usuário e, por isso, são mantidos de forma restrita mesmo após a exclusão da conta.</td></tr>
+                  <tr><td data-label="Dado">Leads, histórico do CRM e dados de formulários da Meta</td><td data-label="Prazo">Enquanto forem necessários ao atendimento comercial ou ao exercício de direitos. Depois, ou a seu pedido, são eliminados ou anonimizados.</td></tr>
+                  <tr><td data-label="Dado">Credenciais do Google</td><td data-label="Prazo">Até o administrador desconectar (então são apagadas). Veja a <a href="#google">seção 5.8</a>.</td></tr>
+                  <tr><td data-label="Dado">Registros técnicos (logs)</td><td data-label="Prazo">Pelo período definido pelos provedores de infraestrutura e pela lei aplicável, como o art. 15 do Marco Civil da Internet (Lei nº 12.965/2014), quando for o caso.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Cópias de segurança podem conservar dados por um período limitado até serem sobrescritas.</p>
+          </section>
+
+          <section id="seguranca">
+            <h2><span class="n">12</span>Segurança</h2>
+            <ul>
+              <li>Conexão criptografada (HTTPS com HSTS) e cabeçalhos de segurança, como Content-Security-Policy.</li>
+              <li>Senhas guardadas apenas em forma irreversível (hash) pelo provedor de autenticação.</li>
+              <li>Cadastros só são liberados após <strong>aprovação manual</strong> de um administrador.</li>
+              <li>Controle de acesso por função e regras de segurança em nível de linha no banco de dados (Row Level Security), para que cada pessoa veja só o que sua função permite.</li>
+              <li>Credenciais de integrações (Google, Meta e outras) em ambiente de servidor, e as do Google em cofre criptografado.</li>
+              <li>Verificação anti-robô no login e no cadastro.</li>
+              <li>Trilhas de auditoria das ações administrativas.</li>
+            </ul>
+            <p>Nenhum sistema é totalmente imune a falhas. Em caso de incidente que possa gerar risco ou dano relevante, comunicaremos a Autoridade Nacional de Proteção de Dados (ANPD) e os titulares afetados, conforme o art. 48 da LGPD.</p>
+          </section>
+
+          <section id="direitos">
+            <h2><span class="n">13</span>Seus direitos</h2>
+            <p>Pelo art. 18 da LGPD, você pode pedir, a qualquer momento:</p>
+            <ul>
+              <li>confirmação de que tratamos seus dados;</li>
+              <li>acesso aos dados;</li>
+              <li>correção de dados incompletos, inexatos ou desatualizados;</li>
+              <li>anonimização, bloqueio ou eliminação de dados desnecessários, excessivos ou tratados em desconformidade;</li>
+              <li>portabilidade dos dados;</li>
+              <li>eliminação dos dados tratados com base no seu consentimento;</li>
+              <li>informação sobre com quem compartilhamos os dados;</li>
+              <li>informação sobre a possibilidade de não consentir e suas consequências;</li>
+              <li>revogação do consentimento;</li>
+              <li>oposição a tratamento feito com base em legítimo interesse;</li>
+              <li>revisão de decisões tomadas apenas com tratamento automatizado (art. 20).</li>
+            </ul>
+            <p><strong>Como exercer:</strong> escreva para <a href="mailto:admvoxenai@gmail.com?subject=Privacidade%20-%20solicita%C3%A7%C3%A3o%20do%20titular">admvoxenai@gmail.com</a>. Podemos pedir informações para confirmar sua identidade e proteger seus dados. O atendimento é gratuito. Confirmamos a existência do tratamento e damos acesso em formato simplificado de imediato e, se você pedir, em declaração completa em até <strong>15 dias</strong> (art. 19). Usuários também podem corrigir nome e foto na página Perfil do Dashboard.</p>
+            <p>Se achar que seus direitos não foram atendidos, você pode reclamar à ANPD: <a href="https://www.gov.br/anpd">www.gov.br/anpd</a>.</p>
+          </section>
+
+          <section id="exclusao">
+            <h2><span class="n">14</span>Como pedir a exclusão dos dados</h2>
+            <ol>
+              <li>Envie um e-mail para <a href="mailto:admvoxenai@gmail.com?subject=Exclus%C3%A3o%20de%20dados">admvoxenai@gmail.com</a> com o assunto “Exclusão de dados”.</li>
+              <li>Informe seu nome e o e-mail ou telefone que usou (no formulário do anúncio, no cadastro ou na compra). Se for o caso, diga que quer apagar também a conexão com o Google.</li>
+              <li>Confirmaremos sua identidade e responderemos em até 15 dias.</li>
+              <li>Eliminamos ou anonimizamos os dados e dizemos o que, se algo, precisamos manter por obrigação legal e por quê (<a href="#retencao">seção 11</a>).</li>
+            </ol>
+            <div class="note">
+              <p><strong>Usuários do Dashboard:</strong> a exclusão da conta também pode ser pedida a um executivo da WS. <strong>Conexão com o Google:</strong> desconecte em Configurações e revogue o acesso em <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. <strong>Formulários da Meta:</strong> os dados que a Meta guarda são removidos pelas ferramentas dela.</p>
+            </div>
+          </section>
+
+          <section id="menores">
+            <h2><span class="n">15</span>Crianças e adolescentes</h2>
+            <p>O Dashboard é uma ferramenta profissional destinada a maiores de 18 anos e não é dirigida a crianças ou adolescentes. Se um lead ou contato informar dados de menor de 18 anos, tratamos esses dados no melhor interesse do menor e, quando exigido, com o consentimento específico de ao menos um dos pais ou do responsável legal (art. 14 da LGPD). Pais e responsáveis podem pedir acesso ou exclusão pelo contato da <a href="#contato">seção 17</a>.</p>
+          </section>
+
+          <section id="alteracoes">
+            <h2><span class="n">16</span>Alterações desta política</h2>
+            <p>Podemos atualizar esta política para refletir mudanças no Dashboard, nas integrações ou na lei. A data no topo mostra a última versão. Mudanças relevantes serão avisadas no Dashboard ou por e-mail, e versões anteriores podem ser pedidas pelo contato da <a href="#contato">seção 17</a>.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Versão</th><th>Mudança</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Data">11/10/2026</td><td data-label="Versão">1.0</td><td data-label="Mudança">Primeira publicação, incluindo as integrações com Google Agenda e Meta.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="contato">
+            <h2><span class="n">17</span>Contato e Encarregado (DPO)</h2>
+            <div class="contact">
+              <b>Controladora</b>
+              <div>YANQUES BRASILIA ACADEMY LTDA (nome comercial WS LTDA)</div>
+              <b>CNPJ</b>
+              <div>33.264.779/0001-01</div>
+              <b>Sede</b>
+              <div>Brasília/DF</div>
+              <b>Privacidade e Encarregado pelo tratamento de dados</b>
+              <div><a href="mailto:admvoxenai@gmail.com">admvoxenai@gmail.com</a></div>
+              <b>Site</b>
+              <div><a href="https://www.wsltda.com">https://www.wsltda.com</a></div>
+            </div>
+          </section>
+
+          <section id="lei">
+            <h2><span class="n">18</span>Lei aplicável</h2>
+            <p>Esta política é regida pelas leis da República Federativa do Brasil, em especial a Lei Geral de Proteção de Dados (Lei nº 13.709/2018) e o Marco Civil da Internet (Lei nº 12.965/2014).</p>
+          </section>
+
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>© 2026 YANQUES BRASILIA ACADEMY LTDA (WS LTDA) · CNPJ 33.264.779/0001-01 · Brasília/DF</p>
+      <p><a href="/termos-de-servico">Termos de Serviço</a> · <a href="/auth">Acessar o dashboard</a> · <a href="#titulo">Voltar ao topo</a></p>
+    </div>
+  </footer>
+</body>
+</html>

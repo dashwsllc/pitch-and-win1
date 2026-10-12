@@ -192,7 +192,7 @@ export default function Auth() {
           </Tabs>
         </>}
       </section>
-      <footer className="auth-footer"><ShieldCheck aria-hidden="true" /><span>Acesso exclusivo para colaboradores WS LTDA</span></footer>
+      <footer className="auth-footer"><ShieldCheck aria-hidden="true" /><span>Acesso exclusivo para colaboradores WS LTDA · <a className="auth-footer-link" href="/politica-de-privacidade">Política de Privacidade</a> · <a className="auth-footer-link" href="/termos-de-servico">Termos de Serviço</a></span></footer>
     </div>
   </main>
 }

@@ -31,6 +31,12 @@
     }
   ],
   "rewrites": [
+    { "source": "/politica-de-privacidade", "destination": "/politica-de-privacidade.html" },
+    { "source": "/politica-de-privacidade/", "destination": "/politica-de-privacidade.html" },
+    { "source": "/termos-de-servico", "destination": "/termos-de-servico.html" },
+    { "source": "/termos-de-servico/", "destination": "/termos-de-servico.html" },
+    { "source": "/termos-de-uso", "destination": "/termos-de-servico.html" },
+    { "source": "/termos-de-uso/", "destination": "/termos-de-servico.html" },
     { "source": "/(.*)", "destination": "/" }
   ]
 }
