@@ -45,7 +45,7 @@ export function GoogleCalendarIntegration(){
       {admin.query.isLoading?<p role="status">Consultando conexão…</p>:admin.query.error?<div role="alert"><p>Não foi possível consultar a integração.</p><Button variant="outline" onClick={()=>void admin.query.refetch()}>Tentar novamente</Button></div>:status&&<>
         <p role="status" className="font-medium">{connectionLabels[status.connection]}{active?' · Sincronização ativa':connected?' · Aguardando ativação':''}</p>
         {status.calendar&&<div className="rounded border p-3 text-sm"><p>{status.calendar.name}</p><p className="break-all text-xs text-muted-foreground">{status.calendar.id}</p></div>}
-        <p className="text-xs text-muted-foreground">As calls do Closer usam o horário do CRM, com duração de 30 minutos e fuso de São Paulo. Alterações e cancelamentos são enviados automaticamente.</p>
+        <p className="text-xs text-muted-foreground">As calls do Closer usam o horário e a duração definidos no CRM, com fuso de São Paulo. Alterações e cancelamentos são enviados automaticamente.</p>
         {status.configured?<div className="flex flex-wrap gap-2">
           {!connected&&<Button disabled={busy} onClick={()=>void act({action:'start_oauth'})}>{status.connection==='not_connected'?'Conectar Google':'Reconectar Google'}</Button>}
           {connected&&!status.destinationLocked&&<Button variant="outline" disabled={busy} onClick={()=>void act({action:'list_calendars'})}>Escolher agenda</Button>}
