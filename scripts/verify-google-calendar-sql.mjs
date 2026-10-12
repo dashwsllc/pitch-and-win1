@@ -16,7 +16,7 @@ try {
  const legacy=setup.slice(setup.indexOf("if(name.startsWith('20260907180000')) run(`")+"if(name.startsWith('20260907180000')) run(`".length,setup.indexOf("`,'legacy fixture objects')"))
  const dir=resolve(root,'supabase/migrations')
  const selected=readdirSync(dir).filter(n=>n.endsWith('.sql')&&n.slice(0,14)<='20260912090000')
- selected.push(...readdirSync(dir).filter(n=>['20260914030000','20260921120000','20260921160000','20260922140000','20260923100000','20260923190000','20260925100000','20261006100000','20261007140000','20261008100000'].includes(n.slice(0,14))))
+ selected.push(...readdirSync(dir).filter(n=>['20260914030000','20260914210000','20260921120000','20260921160000','20260922140000','20260923100000','20260923190000','20260925100000','20261006100000','20261007140000','20261008100000'].includes(n.slice(0,14))))
  for(label of selected.sort()) {
   if(label.startsWith('20260329054553')) continue
   if(label.startsWith('20260907180000')) await db.exec(legacy)
@@ -34,6 +34,10 @@ try {
  await db.exec(readFileSync(resolve(root,'supabase/tests/google_calendar_cron.sql'),'utf8'))
  await db.exec(readFileSync(resolve(dir,'20261011110000_google_calendar_cron.sql'),'utf8').replace('CREATE EXTENSION IF NOT EXISTS pg_net;','').replace('CREATE EXTENSION IF NOT EXISTS pg_cron;',''))
  await db.exec(readFileSync(resolve(root,'supabase/tests/google_calendar_cron_assert.sql'),'utf8'))
+ label='call detail migrations'
+ for(const name of ['20261011180000_google_calendar_safeupdate.sql','20261012090000_google_calendar_call_details.sql','20261012100000_agenda_lead_temperature.sql']) await db.exec(readFileSync(resolve(dir,name),'utf8'))
+ label='classification and call details fixtures'
+ await db.exec('BEGIN;'+readFileSync(resolve(root,'supabase/tests/google_calendar_details.sql'),'utf8')+'ROLLBACK;')
  console.log('PASS: real PostgreSQL DDL, CRM/RLS/queue/OAuth fixtures and cron SQL. Vault, cron and HTTP use local stand-ins; native encryption and concurrent sessions remain release gates.')
 } catch(error) {
  // Do not dump SQL query text, token values or request bodies on failure.

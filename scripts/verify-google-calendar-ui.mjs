@@ -86,6 +86,17 @@ test('badge: absent, loading, failed and outdated status never claim synchroniza
   assert.match(renderToStaticMarkup(React.createElement(ui.CRMCalendarStatus,{callId:id})),/Agenda não ativada/)
 })
 
+test('badge: loss of calendar access tells the executive to review its permissions',async()=>{
+  const ui=await load('src/components/crm/CRMCalendarStatus.tsx',{
+    react:{...React,useContext:()=>({statuses:new Map([[id,{status:'error',desiredRevision:'2',confirmedRevision:'1',errorCode:'calendar_access'}]]),loading:false,error:null})},'react/jsx-runtime':jsxRuntime,
+    '@/hooks/useGoogleCalendar':{useGoogleCalendarStatuses:()=>({statuses:new Map(),loading:false,error:null})},
+    '@/components/ui/badge':{Badge:({children,...props})=>React.createElement('span',props,children)},
+    '@/hooks/useRoles':{useRoles:()=>({capabilities:{executive:true}})},
+    'react-router-dom':{Link:({children,to})=>React.createElement('a',{href:to},children)},...db(status),
+  })
+  assert.match(renderToStaticMarkup(React.createElement(ui.CRMCalendarStatus,{callId:id})),/Revisar acesso à agenda/)
+})
+
 test('Agenda refresh requests real sync and refreshes both data caches even when the provider fails',async()=>{
   for(const failure of [false,true]){
     const invalidations=[],requests=[]

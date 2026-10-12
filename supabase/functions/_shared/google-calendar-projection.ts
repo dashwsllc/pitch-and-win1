@@ -5,6 +5,7 @@ const outcomes: Record<string, string> = {
   avancou: 'Avançou', followup: 'Follow-up necessário', followup_sdr: 'Follow-up do SDR',
   repassado_closer: 'Enviado ao Closer', devolvido_sdr: 'Devolvido ao SDR',
 }
+const temperatures: Record<string, string> = { frio: 'Frio', morno: 'Morno', quente: 'Quente' }
 export function googleEventId(uuid: string): string {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid)) throw new Error('invalid_event_uuid')
   return uuid.replaceAll('-', '').toLowerCase()
@@ -25,6 +26,7 @@ export function projectCall(input: ProjectionInput): DesiredEvent {
     summary: `Call de fechamento — ${lead.athleteName?.trim() || lead.name} | ${closer}`,
     description: [`Responsável: ${closer}`, `Status: ${completed ? 'Concluída' : 'Agendada'}`,
       `Lead / responsável pelo atleta: ${lead.name}`,`Duração: ${minutes} minutos`,
+      `Temperatura do lead: ${temperatures[lead.temperature ?? ''] ?? 'Não informada'}`,
       ...(completed && call.outcome ? [`Resultado: ${outcomes[call.outcome] ?? 'Concluída'}`] : []), `CRM (contexto completo): ${link.href}`,
       callContext(input)].filter(Boolean).map(escapeCalendarText).join('\n'),
     start: { dateTime: new Date(start).toISOString(), timeZone: CALENDAR_TIME_ZONE },

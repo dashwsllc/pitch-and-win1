@@ -99,6 +99,10 @@ test('page: closers see calls, CRM links and Google Calendar without admin contr
   assert.match(html,/href="\/crm\?tab=closer&amp;lead=10000000-0000-4000-8000-000000000001"/)
   assert.match(html,/href="https:\/\/calendar\.google\.com\/calendar\/r"/)
   assert.doesNotMatch(html,/Gerenciar integração/)
+  for(const [temperature,label] of [['frio','Frio'],['morno','Morno'],['quente','Quente'],[null,'Não informada']]){
+    lead.temperature=temperature
+    assert.match(render(),new RegExp(`Temperatura do lead: ${label}`))
+  }
   state.error=new Error('CRM unavailable');assert.doesNotMatch(render(),/Atleta fictício/)
   state.error=null;state.loading=true;assert.doesNotMatch(render(),/Atleta fictício/)
   state.loading=false;state.executive=true;assert.match(render(),/Gerenciar integração/)

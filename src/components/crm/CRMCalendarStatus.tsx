@@ -22,7 +22,7 @@ export function CRMCalendarStatus({callId}:{callId:string}){
   const {statuses,loading,error}=useContext(CalendarContext),{capabilities}=useRoles()
   const row=statuses.get(callId),state=row?effectiveCallStatus(row):'disabled'
   const failed=!!error||state==='error'&&row?.errorCode!=='meet_pending'||state==='awaiting_connection'
-  const action=row?.errorCode==='reconnect_required'?'Reconectar Google':row?.errorCode==='permission_denied'?'Revisar acesso à agenda':'Tentar novamente'
+  const action=row?.errorCode==='reconnect_required'?'Reconectar Google':['permission_denied','calendar_access'].includes(row?.errorCode??'')?'Revisar acesso à agenda':'Tentar novamente'
   return <span className="inline-flex flex-wrap items-center gap-1" role="status">
     <Badge variant="outline" className={`h-5 px-2 text-[10px] ${state==='synced'&&!loading&&!error?'text-emerald-600':failed?'text-amber-600':'text-muted-foreground'}`}>{calendarStatusLabel(row,loading,error)}</Badge>
     {failed&&(capabilities.executive?<Link to="/agenda#google-calendar" className="text-[10px] underline">{action}</Link>:<span className="text-[10px] text-muted-foreground">Solicite a revisão ao administrador.</span>)}

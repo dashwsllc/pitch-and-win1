@@ -20,6 +20,11 @@ import {callDurationMinutes,callEndIso} from '@/lib/crm-call-duration'
 const displayTime = new Intl.DateTimeFormat('pt-BR', {
   timeZone: BRASILIA_TIME_ZONE, dateStyle: 'medium', timeStyle: 'short',
 })
+const temperatures: Record<string, {label: string; className: string}> = {
+  frio: {label: 'Frio', className: 'border-slate-500/40 bg-slate-500/15 text-slate-500 dark:text-slate-300'},
+  morno: {label: 'Morno', className: 'border-yellow-600/40 bg-yellow-600/15 text-yellow-700 dark:text-yellow-500'},
+  quente: {label: 'Quente', className: 'border-orange-600/40 bg-orange-600/15 text-orange-700 dark:text-orange-400'},
+}
 
 export default function Agenda() {
   const {capabilities} = useRoles()
@@ -77,9 +82,11 @@ export default function Agenda() {
               {visible.map(call => {
                 const lead = leadById.get(call.lead_id)!
                 const endsAt=callEndIso(call)
+                const temperature=temperatures[lead.temperature] ?? {label: 'Não informada', className: 'text-muted-foreground'}
                 return <li key={call.id} className="flex min-h-40 flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 bg-background/40 p-5">
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2"><p className="break-words font-semibold">{lead.athlete_name || lead.name || 'Lead'}</p><Badge variant="outline">{agendaCallLabel(call)}</Badge></div>
+                    <Badge variant="outline" className={temperature.className}>Temperatura do lead: {temperature.label}</Badge>
                     {lead.athlete_name && lead.name && <p className="text-sm text-muted-foreground">Responsável pelo atleta: {lead.name}</p>}
                     <p className="flex flex-wrap items-center gap-2 text-sm"><Clock className="h-4 w-4 shrink-0 text-primary" /><time dateTime={call.scheduled_at!}>{displayTime.format(new Date(call.scheduled_at!))}</time>{endsAt&&<><span>até</span><time dateTime={endsAt}>{displayTime.format(new Date(endsAt))}</time></>}<span>({callDurationMinutes(call)} min)</span></p>
                     <p className="text-sm text-muted-foreground">Closer: {names.get(call.assigned_to ?? '') || 'Responsável indisponível'}</p>

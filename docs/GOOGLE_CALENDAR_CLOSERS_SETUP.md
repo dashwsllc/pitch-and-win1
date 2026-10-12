@@ -12,6 +12,7 @@ O administrador conecta o Google na seção **Google Agenda · Closers** dessa p
 - Calls de fechamento pendentes, encaminhadas para Closer, com responsável e horário, entram na sincronização. Qualificação e leads apenas prontos para encaminhar não entram.
 - Duração: a informada no agendamento do CRM (1 a 480 minutos). Calls anteriores conservam 30 minutos. Fuso apresentado: **America/Sao_Paulo**. O início conserva o instante de `scheduled_at` e o término é calculado pela duração gravada.
 - Remarcar ou trocar o closer atualiza o evento existente. Uma nova call recebe outra identidade.
+- A classificação **Frio, Morno ou Quente** aparece no card da `/agenda` e na descrição do Google. Alterar somente a temperatura, o nome ou o contexto no CRM também atualiza o mesmo evento. Dados sem classificação aparecem como “Não informada”.
 - Concluir preserva o histórico e o resultado. Cancelar, excluir ou devolver ao SDR remove o evento da call vinculada.
 - A ativação captura uma lista durável das calls futuras elegíveis. Conclusão, cancelamento ou exclusão antes do processamento são tratados pelo estado final dessa call.
 - Cada call mantém seu ID persistente. Repetições após timeout ou falha local recuperam esse ID; lease, revisão e ETag protegem atualizações concorrentes e eventos de terceiros.
@@ -52,7 +53,13 @@ Ao encerrar, o QA foi **desconectado**, as credenciais de acesso/refresh foram r
 
 O administrador informou a publicação do aplicativo Google e renovou a autorização comercial depois dela. A publicação é uma confirmação do administrador; não se afirma verificação pelo Google. A permissão de edição da conta administradora foi comprovada ao selecionar e ativar a agenda. O painel de compartilhamento do Google não carregou nesta sessão; as permissões individuais dos closers devem ser conferidas pelo administrador no Google Agenda.
 
-Detalhe visual pendente da revisão: quando ocorre `calendar_access`, o badge pode mostrar **Tentar novamente** em vez de **Revisar acesso**. A permissão e o tratamento da falha continuam protegidos; o texto do botão é o ajuste cosmético remanescente.
+### Classificação e alterações automáticas — 12/10/2026
+
+A migration `20261012100000_agenda_lead_temperature.sql` acrescenta a temperatura ao snapshot e às alterações que solicitam entrega. Ela atualiza em lugar os eventos vinculados existentes, preservando ID e Meet; não importa calls antigas sem vínculo nem reativa eventos removidos. Mantém assinaturas e permissões das funções. Para rollback do código, restaure as duas definições anteriores de `lead_changed` e `google_calendar_snapshot`, conservando vínculos e fila; o campo opcional permite funções antigas e novas durante a publicação.
+
+As regressões cobrem as três classificações, dados ausentes, edição de horário/duração/closer/contexto com um único evento e Meet preservado, e remoção após sair da fila Closer, excluir call ou lead. As fixtures PostgreSQL executam `crm_transition` para classificação/edição/devolução e `crm_delete_lead`, verificando a fila durável após a exclusão em cascata. Nenhum lead comercial é alterado para o ensaio. Erros `calendar_access` agora orientam o administrador a **Revisar acesso à agenda**.
+
+Validação desta mudança: **49/49 testes Calendar Node/VM**, verificação unitária do CRM, fixtures SQL em PostgreSQL WASM, TypeScript, Deno e build aprovados. Lint dos dois componentes: zero erros e o aviso de Fast Refresh já existente. A migration foi aplicada isoladamente no dash, com histórico atômico e cópia das definições anteriores para rollback; `google-calendar-sync` e `google-calendar-manage` foram publicados mantendo a autenticação. O evento comercial existente recebeu a revisão 2 pelo cron, com o mesmo ID e Meet, classificação `frio` e fila zerada.
 
 ## 1. Google Cloud / OAuth
 
@@ -122,6 +129,7 @@ Aplique somente estas migrations, nesta ordem, verificando se a versão já exis
 3. `20261011110000_google_calendar_cron.sql`
 4. `20261011180000_google_calendar_safeupdate.sql`
 5. `20261012090000_google_calendar_call_details.sql` — duração, contexto, Meet e atualização manual; mantém as assinaturas antigas de agendamento/edição.
+6. `20261012100000_agenda_lead_temperature.sql` — classificação no snapshot, entrega após editar temperatura e atualização dos eventos já vinculados.
 
 Storage e queue possuem transações próprias. Cron possui **duas transações**: instalação das extensões, depois os dois agendamentos. Preserve essa separação; não envolva todo o cron em uma transação externa. Registre cada versão no histórico somente ao aplicar seu conteúdo com sucesso. Se alguma versão já existir, compare o conteúdo e interrompa uma tentativa de reaplicação divergente.
 

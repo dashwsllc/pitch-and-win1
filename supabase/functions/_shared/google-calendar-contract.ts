@@ -25,7 +25,7 @@ export type CallSyncStatus = {
 }
 export type CallSource = { id: string; leadId: string; callType: string | null; scheduledAt: string | null;
   assignedTo: string | null; isCompleted: boolean; cancelledAt: string | null; outcome: string | null; durationMinutes?:number; context?:string|null }
-export type LeadSource = { id: string; name: string; pipelineStage: string; athleteName?:string|null; qualificationSummary?:string|null; observations?:string|null }
+export type LeadSource = { id: string; name: string; pipelineStage: string; athleteName?:string|null; qualificationSummary?:string|null; observations?:string|null; temperature?:string|null }
 export type Binding = { id: string; callId: string; leadId: string; calendarId: string; eventId: string;
   generation: number; revision: string; confirmedRevision: string | null; confirmedHash: string | null; etag: string | null }
 export type ProjectionInput = { call: CallSource | null; lead: LeadSource | null; closerName: string | null;

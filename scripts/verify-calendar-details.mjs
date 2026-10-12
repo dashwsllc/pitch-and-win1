@@ -2,6 +2,29 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {loadModule,input,workerFixture} from './verify-google-calendar-sync.mjs'
 
+test('projection includes the current CRM lead classification without inventing a missing one',async()=>{
+  const {exports:p}=await loadModule('supabase/functions/_shared/google-calendar-projection.ts')
+  for(const [temperature,label] of [['frio','Frio'],['morno','Morno'],['quente','Quente'],[null,'Não informada'],['invalid','Não informada']]){
+    const x=input();x.lead.temperature=temperature
+    assert.match(p.projectCall(x).event.description,new RegExp(`Temperatura do lead: ${label}`))
+  }
+})
+
+test('CRM edits update one event and preserve its Meet; leaving Closer or deleting removes the event',async()=>{
+  const f=await workerFixture();f.edit(x=>{x.lead.temperature='frio'});await f.deliver()
+  const id=f.x.binding.eventId,meet=f.events.get(id).hangoutLink
+  f.edit(x=>{x.lead.temperature='quente';x.call.context='Contexto editado';x.call.durationMinutes=45;x.call.scheduledAt='2026-10-14T17:00:00Z';x.closerName='Outro closer'})
+  await f.deliver()
+  const e=f.events.get(id)
+  assert.equal(f.events.size,1);assert.equal(e.hangoutLink,meet);assert.match(e.description,/Temperatura do lead: Quente/)
+  assert.match(e.description,/Contexto editado/);assert.match(e.summary,/Outro closer/)
+  assert.equal(e.start.dateTime,'2026-10-14T17:00:00.000Z');assert.equal(e.end.dateTime,'2026-10-14T17:45:00.000Z')
+  for(const remove of [x=>{x.lead.pipelineStage='em_qualificacao'},x=>{x.call=null},x=>{x.lead=null}]){
+    const r=await workerFixture();await r.deliver();r.edit(remove);await r.deliver()
+    assert.equal(r.events.size,0);assert.equal(r.removed,true)
+  }
+})
+
 test('projection uses CRM duration and lead context without treating notes as Google HTML',async()=>{
   const {exports:p}=await loadModule('supabase/functions/_shared/google-calendar-projection.ts')
   const x=input();x.call.durationMinutes=75;x.call.context='Pauta da call'

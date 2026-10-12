@@ -24,6 +24,17 @@ UPDATE details_qa SET event_id=b.event_id FROM calendar_private.bindings b WHERE
 DO $$ DECLARE before_revision bigint; j jsonb; s jsonb; cid uuid; BEGIN
   SELECT call_id INTO cid FROM details_qa;
   SELECT revision INTO before_revision FROM calendar_private.bindings WHERE call_id=cid;
+  PERFORM public.crm_transition((SELECT lead_id FROM details_qa),'classify',
+    (SELECT version FROM public.crm_leads WHERE id=(SELECT lead_id FROM details_qa)),jsonb_build_object('temperature','quente'));
+  IF (SELECT revision FROM calendar_private.bindings WHERE call_id=cid)<=before_revision THEN RAISE EXCEPTION 'temperature did not enqueue'; END IF;
+  SELECT revision INTO before_revision FROM calendar_private.bindings WHERE call_id=cid;
+  PERFORM public.crm_transition((SELECT lead_id FROM details_qa),'classify',
+    (SELECT version FROM public.crm_leads WHERE id=(SELECT lead_id FROM details_qa)),jsonb_build_object('temperature','quente'));
+  IF (SELECT revision FROM calendar_private.bindings WHERE call_id=cid)<>before_revision THEN RAISE EXCEPTION 'unchanged temperature enqueued'; END IF;
+  PERFORM public.crm_transition((SELECT lead_id FROM details_qa),'edit',
+    (SELECT version FROM public.crm_leads WHERE id=(SELECT lead_id FROM details_qa)),jsonb_build_object('name','Details QA editado','observations','Informação atualizada'));
+  IF (SELECT revision FROM calendar_private.bindings WHERE call_id=cid)<=before_revision THEN RAISE EXCEPTION 'CRM edit did not enqueue'; END IF;
+  SELECT revision INTO before_revision FROM calendar_private.bindings WHERE call_id=cid;
   INSERT INTO public.crm_lead_contexts(lead_id,author_id,author_name,author_role,context_type,content)
     SELECT lead_id,'cd000000-0000-4000-8000-000000000002','QA','closer','manual_note','Contexto QA' FROM details_qa;
   IF (SELECT revision FROM calendar_private.bindings WHERE call_id=cid)<=before_revision THEN RAISE EXCEPTION 'context did not enqueue'; END IF;
@@ -34,6 +45,7 @@ DO $$ DECLARE before_revision bigint; j jsonb; s jsonb; cid uuid; BEGIN
   j:=public.google_calendar_claim(1,60)->0;
   s:=public.google_calendar_snapshot((j->'binding'->>'id')::uuid,(j->>'leaseToken')::uuid);
   IF (s->'call'->>'durationMinutes')::integer<>45 OR s->'contexts'->0->>'content'<>'Contexto QA' THEN RAISE EXCEPTION 'snapshot details absent'; END IF;
+  IF s->'lead'->>'temperature' IS DISTINCT FROM 'quente' THEN RAISE EXCEPTION 'snapshot classification absent'; END IF;
   IF NOT public.google_calendar_ack_details((j->'binding'->>'id')::uuid,(j->>'leaseToken')::uuid,(j->'binding'->>'revision')::bigint,'hash','etag',false,'https://meet.google.com/abc-defg-hij') THEN RAISE EXCEPTION 'meet ACK failed'; END IF;
   IF (SELECT meeting_url FROM public.crm_google_calendar_status WHERE call_id=cid)<>'https://meet.google.com/abc-defg-hij' THEN RAISE EXCEPTION 'meet link not persisted'; END IF;
   UPDATE public.crm_activities SET scheduled_at=now()+interval '2 days' WHERE id=cid;
@@ -42,6 +54,30 @@ DO $$ DECLARE before_revision bigint; j jsonb; s jsonb; cid uuid; BEGIN
   IF (SELECT status FROM public.crm_google_calendar_status WHERE call_id=cid)<>'removal_pending' THEN RAISE EXCEPTION 'cancel removal missing'; END IF;
   DELETE FROM public.crm_activities WHERE id=cid;
   IF NOT EXISTS(SELECT 1 FROM calendar_private.outbox o JOIN calendar_private.bindings b ON b.id=o.binding_id WHERE b.call_id=cid) THEN RAISE EXCEPTION 'deleted call removal lost'; END IF;
+END $$;
+-- Exercise the same versioned CRM actions used by the Closer screen.
+DO $$ DECLARE l public.crm_leads; c public.crm_activities; b calendar_private.bindings; j jsonb; s jsonb; scenario text; BEGIN
+  FOREACH scenario IN ARRAY ARRAY['return','delete'] LOOP
+    INSERT INTO public.crm_leads(name,phone,athlete_name) VALUES('Lifecycle QA '||scenario,'11999999999','Atleta lifecycle') RETURNING * INTO l;
+    c:=public.crm_schedule_call_details(l.id,'fechamento_closer',now()+interval '1 day','cd000000-0000-4000-8000-000000000002','Pauta lifecycle',30,l.version);
+    SELECT * INTO l FROM public.crm_leads WHERE id=l.id;
+    SELECT * INTO b FROM calendar_private.bindings WHERE call_id=c.id;
+    IF scenario='return' THEN
+      PERFORM public.crm_transition(l.id,'return',l.version,jsonb_build_object('note','Retorno QA para SDR'));
+      IF (SELECT status FROM public.crm_google_calendar_status WHERE call_id=c.id)<>'removal_pending' THEN RAISE EXCEPTION 'CRM return did not queue removal'; END IF;
+    ELSE
+      PERFORM public.crm_delete_lead(l.id,l.version);
+      IF EXISTS(SELECT 1 FROM public.crm_activities WHERE id=c.id) OR EXISTS(SELECT 1 FROM public.crm_leads WHERE id=l.id) THEN RAISE EXCEPTION 'CRM lead deletion did not cascade'; END IF;
+    END IF;
+    IF NOT EXISTS(SELECT 1 FROM calendar_private.outbox WHERE binding_id=b.id) THEN RAISE EXCEPTION 'CRM removal lost durable queue'; END IF;
+    IF (SELECT event_id FROM calendar_private.bindings WHERE id=b.id)<>b.event_id THEN RAISE EXCEPTION 'CRM removal rotated identity'; END IF;
+    UPDATE calendar_private.outbox SET available_at=NULL WHERE binding_id<>b.id;
+    j:=public.google_calendar_claim(1,60)->0;
+    s:=public.google_calendar_snapshot(b.id,(j->>'leaseToken')::uuid);
+    IF scenario='return' AND s->'call'->>'outcome' IS DISTINCT FROM 'devolvido_sdr' THEN RAISE EXCEPTION 'return snapshot did not request removal'; END IF;
+    IF scenario='delete' AND (s->'call' IS DISTINCT FROM 'null'::jsonb OR s->'lead' IS DISTINCT FROM 'null'::jsonb) THEN RAISE EXCEPTION 'deleted lead snapshot did not request removal'; END IF;
+    IF NOT public.google_calendar_ack_details(b.id,(j->>'leaseToken')::uuid,(j->'binding'->>'revision')::bigint,'removed',NULL,true,NULL) THEN RAISE EXCEPTION 'CRM removal ACK failed'; END IF;
+  END LOOP;
 END $$;
 DO $$ BEGIN
   IF has_function_privilege('authenticated','public.google_calendar_request_refresh(uuid)','execute') OR has_function_privilege('anon','public.crm_edit_call_details(uuid,uuid,timestamptz,timestamptz,integer)','execute') THEN RAISE EXCEPTION 'RPC grants too broad'; END IF;
