@@ -6,6 +6,8 @@ Implementação integrada à `main` em 11/10/2026, com push e publicação da re
 
 A intenção preservada é conferir investimento Meta, revisar recebimentos, encaminhar contatos aprovados e medir vendas reais pela data de geração do lead. A aprovação do software não aprova os dados recebidos.
 
+Retomada em 12/10: o token de Página do Explorer expirou em 11/10 às 16h de Brasília. O usuário de sistema existente conseguiu obter um token para a mesma Página e consultar os formulários. O worker agora valida a identidade do token configurado e recupera o token da Página pelo usuário de sistema quando necessário. A resolução é feita somente quando há trabalho Graph e fica em memória por requisição, sem gravar credenciais em recibos, checkpoints ou logs. Ver [diagnóstico e validação da retomada](TRAFEGO_RETOMADA_2026-10-12.md).
+
 ## Fluxo implementado
 
 1. Insights captura páginas duráveis por conta/nível/janela, com lease, cursor sem token e prazo limitado. Retomada não abre capturas novas. Resposta parcial é HTTP 202; falha é 502. Nenhuma página publica métricas diretamente.
@@ -44,7 +46,7 @@ Os nomes reais devem coincidir com os arquivos do pacote; não renomear versões
 
 Publicar em seguida `meta-insights-sync`, `meta-lead-webhook`, `meta-leads-reconciliation` e `meta-lead-worker`. O webhook mantém `verify_jwt=false` e exige HMAC; as outras três mantêm `verify_jwt=true` e autorização própria. Reconciliação/worker exigem `x-cron-secret`; não habilitar sua chamada pública. Publicar a interface depois das funções. Os tipos Supabase foram regenerados do baseline real com as sete migrations; a camada de aplicação descreve separadamente o campo CRM preenchido pelo trigger.
 
-Verificar presença dos secrets Edge: `META_SYSTEM_USER_TOKEN`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_SYNC_CRON_SECRET`, `META_PAGE_IDS`; `META_PAGE_ACCESS_TOKEN` tem prioridade para formulários/leads quando configurado. Neste projeto, a Meta exigiu um token de Página para listar formulários; o token de usuário usado no Explorer não atendia essa chamada. O usuário salvou o `access_token` retornado pela consulta da Página. `META_GRAPH_API_VERSION` está em `v26.0`, após confirmar que a Meta devolvia os cursores nessa versão e retestar métricas e leads. O validador de domínio, caminho e filtros foi preservado. Vault exige os nomes `meta_cron_anon_key` e `meta_sync_cron_secret`, com valor correspondente ao segredo Edge. Não colocar valores em arquivos, logs ou conversa.
+Verificar presença dos secrets Edge: `META_SYSTEM_USER_TOKEN`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_SYNC_CRON_SECRET`, `META_PAGE_IDS`. `META_PAGE_ACCESS_TOKEN` mantém prioridade quando válido e correspondente à Página. Se estiver expirado, representar outra identidade ou estiver ausente, o worker consulta `/<page_id>?fields=id,access_token` com o usuário de sistema já autorizado e valida a identidade recebida. Erros de permissão/transporte continuam visíveis; não acionam essa recuperação. Ausência de credencial válida mantém os recibos recuperáveis e o backoff de configuração. `META_GRAPH_API_VERSION` está em `v26.0`, validada com métricas e leads. O validador de domínio, caminho e filtros foi preservado. Vault exige os nomes `meta_cron_anon_key` e `meta_sync_cron_secret`, com valor correspondente ao segredo Edge. Não colocar valores em arquivos, logs ou conversa.
 
 Após banco → Edge → front, preflight aprovado e conferência de permissões, ativar **somente** estes nomes com `cron.alter_job(jobid, active := true)` em transação administrativa:
 

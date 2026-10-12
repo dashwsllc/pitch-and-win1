@@ -3,6 +3,7 @@ import { metaGraphGet, MetaGraphError, describeMetaGraphError, isAuthError, isPe
 import { extractLeadFields, type FieldAnswer } from './meta-lead-extract.ts'
 
 import { callJev } from './meta-typesafe.ts'
+import type { LeadPageTokenResolver } from './meta-page-token.ts'
 
 interface LeadDetail {
   id: string; created_time: string; form_id: string; ad_id?: string
@@ -40,8 +41,9 @@ export async function receiveLeadgenEvent(admin: SupabaseClient, event: { leadge
   }
   return { eventId, status: 'pending' }
 }
-export async function processClaimedLead(admin: SupabaseClient, event: ClaimedLeadEvent, token: string, budget: GraphBudget): Promise<LeadIngestOutcome> {
+export async function processClaimedLead(admin: SupabaseClient, event: ClaimedLeadEvent, token: string, budget: GraphBudget, resolveToken?: LeadPageTokenResolver): Promise<LeadIngestOutcome> {
   try {
+    if (resolveToken) token = await resolveToken(event.page_id, budget)
     const detail = await metaGraphGet<LeadDetail>(`/${event.leadgen_id}`, {
       fields: 'id,created_time,form_id,ad_id,campaign_id,campaign_name,field_data,custom_disclaimer_responses',
     }, token, budget)

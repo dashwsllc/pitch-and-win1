@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { postgresApi } from './helpers/meta-postgres-api.mjs'
 import { buildTrafficView } from '../src/lib/meta-traffic-view.ts'
 import { loadHandler } from './helpers/meta-edge-harness.mjs'
-import { leadDatabase, leadsGraph } from './helpers/meta-lead-fixtures.mjs'
+import { leadDatabase, leadsGraph, json } from './helpers/meta-lead-fixtures.mjs'
 const request = body => new Request('https://example.invalid', { method: 'POST', headers: { 'x-cron-secret': 'test-cron', 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 test('cron discovery boolean selects drain-only and rejects malformed modes', async () => {
   const admin = leadDatabase(), paths = []
@@ -23,7 +23,8 @@ test('busy pages rotate across minute workers so another authorized page is not 
   for (const page of ['page1','page2']) await original('meta_webhook_event_receive', { p_leadgen_id: 'lead-'+page, p_page_id: page, p_form_id: 'form1' })
   admin.rpc = async (name,args) => { const response = await original(name,args); if(name==='meta_lead_event_ingest' || (name==='meta_lead_events_claim' && args.p_page_ids[0]==='page1' && response.data.length===0)) now+=40000; return response }
   const {handler} = await loadHandler('meta-leads-reconciliation/index.ts', {admin,clock:Clock,extraEnv:{META_PAGE_IDS:'page1,page2'},fetch:address=>{
-    const id=new URL(address).pathname.split('/').at(-1)
+    const url=new URL(address), id=url.pathname.split('/').at(-1)
+    if (url.searchParams.get('fields')==='id,access_token') return json({id,access_token:'synthetic-'+id})
     return new Response(JSON.stringify(id==='form1'?{name:'Synthetic'}:{id,form_id:'form1',created_time:'2026-10-09T12:00:00Z',field_data:[{name:'full_name',values:['Synthetic']},{name:'phone_number',values:['11999990000']},{name:'email',values:['qa@example.invalid']}]}))
   }})
   assert.equal((await handler(request({discover:false}))).status,202)
@@ -40,6 +41,7 @@ test('hourly discovery rotates busy first pages on consecutive scheduled hours',
   const admin = leadDatabase()
   const { handler } = await loadHandler('meta-leads-reconciliation/index.ts', { admin, clock: Clock, extraEnv: { META_PAGE_IDS: 'page1,page2' }, fetch: address => {
     const url = new URL(address), next = new URL(url)
+    if (url.searchParams.get('fields')==='id,access_token') return json({id:url.pathname.split('/').at(-1),access_token:'synthetic-page'})
     assert(url.pathname.endsWith('/leadgen_forms'))
     next.searchParams.set('after', String(++sequence)); now += 39000
     return new Response(JSON.stringify({ data: [], paging: { next: next.href } }))
@@ -122,7 +124,11 @@ test('real PostgreSQL: paginated capture and signed webhook require approval, su
     const webhook = await loadHandler('meta-lead-webhook/index.ts', { admin, extraEnv: { META_APP_SECRET: 'test-secret' }, fetch: () => { throw Error('Inline webhook Graph call') } })
     assert.equal((await webhook.handler(signed())).status, 200); assert.equal((await webhook.handler(signed())).status, 200)
     const fields = [{ name: 'full_name', values: ['Synthetic Parent'] }, { name: 'phone_number', values: ['11999990000'] }, { name: 'email', values: ['qa@example.invalid'] }, { name: 'athlete_name', values: ['Synthetic Athlete'] }, { name: 'athlete_birth_date', values: ['2010-03-15'] }, { name: 'athlete_position', values: ['Meia'] }, { name: 'Objetivo', values: ['Preservar resposta original'] }]
-    const worker = await loadHandler('meta-leads-reconciliation/index.ts', { admin, fetch: address => new URL(address).pathname.endsWith('/form1') ? json({ name: 'Synthetic form' }) : json({ id: 'lead-integration', form_id: 'form1', created_time: since + 'T12:00:00Z', field_data: fields }) })
+    const worker = await loadHandler('meta-leads-reconciliation/index.ts', { admin, fetch: address => {
+      const url = new URL(address)
+      if (url.pathname.endsWith('/page1') && url.searchParams.get('fields') === 'id,access_token') return json({ id: 'page1', access_token: 'synthetic-page-token' })
+      return url.pathname.endsWith('/form1') ? json({ name: 'Synthetic form' }) : json({ id: 'lead-integration', form_id: 'form1', created_time: since + 'T12:00:00Z', field_data: fields })
+    } })
     assert.equal((await worker.handler(request({ discover: false }))).status, 200)
     const lead = (await client.query("SELECT * FROM public.meta_form_leads WHERE meta_lead_id='lead-integration'")).rows[0]
     assert.equal(lead.approval_status, 'pendente'); assert.equal(lead.crm_lead_id, null); assert.deepEqual(lead.field_data, fields)

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0'
 import { fetchGraphPage, MetaGraphError, type MetaGraphRequest } from './meta-graph.ts'
 import { leadRpc, leadErrorMessage, processClaimedLead, receiveLeadgenEvent, type ClaimedLeadEvent } from './meta-lead-ingest.ts'
+import type { LeadPageTokenResolver } from './meta-page-token.ts'
 
 interface Form { id: string; name?: string }
 interface DiscoveryState {
@@ -14,7 +15,7 @@ export interface LeadWorkerResult {
 function requireIds(rows: Form[]) {
   if (rows.length > 500 || rows.some(row => !/^[A-Za-z0-9_-]{1,100}$/.test(row.id))) throw new Error('Página de descoberta inválida')
 }
-async function discoverPage(admin: SupabaseClient, pageId: string, token: string, deadlineMs: number, result: LeadWorkerResult) {
+async function discoverPage(admin: SupabaseClient, pageId: string, token: string, deadlineMs: number, result: LeadWorkerResult, resolveToken?: LeadPageTokenResolver) {
   const state = await leadRpc<DiscoveryState | null>(admin, 'meta_lead_discovery_claim', { p_page_id: pageId, p_lease_seconds: 60 })
   if (!state) { result.partial = true; return }
   let failure: string | null = null
@@ -26,6 +27,7 @@ async function discoverPage(admin: SupabaseClient, pageId: string, token: string
     Object.assign(state, update)
   }
   try {
+    if (resolveToken) token = await resolveToken(pageId, { deadlineMs })
     while (Date.now() + 2000 < deadlineMs) {
       if (!state.form_id && state.form_queue.length) {
         const [form, ...rest] = state.form_queue
@@ -82,7 +84,7 @@ async function discoverPage(admin: SupabaseClient, pageId: string, token: string
     catch (error) { result.errors.push(leadErrorMessage(error, token)); result.partial = true }
   }
 }
-export async function runLeadWorker(admin: SupabaseClient, input: { pageIds: string[]; token: string | null; deadlineMs: number; discover: boolean }): Promise<LeadWorkerResult> {
+export async function runLeadWorker(admin: SupabaseClient, input: { pageIds: string[]; token: string | null; deadlineMs: number; discover: boolean; resolveToken?: LeadPageTokenResolver }): Promise<LeadWorkerResult> {
   const result: LeadWorkerResult = { processed: 0, failed: 0, ignored: 0, discovered: 0, partial: false, errors: [] }
   if (!input.pageIds.length) { result.errors.push('META_PAGE_IDS não configurado; nenhuma página autorizada'); return result }
   if (!input.token) { result.errors.push('Token de acesso da Meta não configurado; recebimentos mantidos na fila'); return result }
@@ -93,7 +95,7 @@ export async function runLeadWorker(admin: SupabaseClient, input: { pageIds: str
       if (!events.length) return
       for (const event of events) {
         if (Date.now() + 4000 >= deadlineMs) { result.partial = true; return }
-        const outcome = await processClaimedLead(admin, event, token, { deadlineMs })
+        const outcome = await processClaimedLead(admin, event, token, { deadlineMs }, input.resolveToken)
         if (outcome.status === 'processed') result.processed++
         else if (outcome.status === 'error') { result.failed++; if (result.errors.length < 10) result.errors.push(outcome.error) }
       }
@@ -105,7 +107,7 @@ export async function runLeadWorker(admin: SupabaseClient, input: { pageIds: str
     await drain(input.discover ? Math.max(Date.now(), networkDeadline - 10000) : networkDeadline)
     if (input.discover) for (const pageId of input.pageIds) {
       if (Date.now() + 4000 >= networkDeadline) { result.partial = true; break }
-      await discoverPage(admin, pageId, token, networkDeadline, result)
+      await discoverPage(admin, pageId, token, networkDeadline, result, input.resolveToken)
     }
     if (input.discover && Date.now() + 4000 < networkDeadline) await drain(networkDeadline)
   } catch (error) { result.errors.push(leadErrorMessage(error, token)); result.partial = true }

@@ -1,6 +1,6 @@
 # Conexão oficial com a API da Meta — guia de configuração
 
-Criado em 27/09/2026; revisado em 11/10/2026. Guia de configuração da sincronização automática de métricas e leads de formulário. O resultado de cada execução deve ser conferido na aba Conexão: uma resposta HTTP 200 antiga não comprova que os dados foram sincronizados.
+Criado em 27/09/2026; revisado em 12/10/2026. Guia de configuração da sincronização automática de métricas e leads de formulário. O resultado de cada execução deve ser conferido na aba Conexão: uma resposta HTTP 200 antiga não comprova que os dados foram sincronizados.
 
 O pacote de confiabilidade de 11/10 foi publicado seletivamente no Supabase e na Vercel. Após regularizar o token de Página, métricas e descoberta responderam HTTP 200, 148 recibos foram processados e os cinco jobs foram ativados. Siga [o roteiro atual](TRAFEGO_CONFIABILIDADE_OPERACAO_2026-10-11.md) para novas implantações e recuperação. As publicações de 09/10 descritas ao final são evidência histórica. Os recebimentos exigem revisão e aprovação explícita.
 
@@ -44,7 +44,7 @@ Project Settings → **Edge Functions** → **Secrets**. Adicione exatamente est
 | `META_SYNC_LOOKBACK_DAYS` | `3` (padrão se omitido) | Opcional |
 | `META_SYNC_DEEP_LOOKBACK_DAYS` | não usado diretamente — a varredura diária já manda `days:8` fixo | — |
 | `META_RECONCILIATION_LOOKBACK_HOURS` | Legado; descoberta inicial usa 48h e depois checkpoint persistido. Recibos antigos não expiram por essa janela. | Não usado no worker atual |
-| `META_PAGE_ACCESS_TOKEN` | `access_token` retornado pela consulta da Página correta; cobre formulários, leads e respostas. A Meta exigiu esse tipo de token neste projeto. | Necessário para os leads desta Página |
+| `META_PAGE_ACCESS_TOKEN` | Token da Página correta, com prioridade quando válido. Se ausente ou expirado, o worker obtém um token para a Página pelo usuário de sistema já autorizado. Tokens originados de uma sessão curta podem expirar; nunca enviar valores pelo chat. | Opcional quando o usuário de sistema consegue obter o token da Página |
 
 ## 6. Segredos do cron (rodar uma única vez, direto no SQL Editor do Supabase — nunca commitar isso)
 

@@ -49,6 +49,8 @@ export function leadDatabase({ failReceive = '', failLead = '' } = {}) {
 export const json = (body, status = 200) => new Response(JSON.stringify(body), { status })
 export function leadsGraph(address) {
   const url = new URL(address)
+  if (url.pathname.endsWith('/me')) return json({ id: 'page1' })
+  if (url.pathname.endsWith('/page1') && url.searchParams.get('fields') === 'id,access_token') return json({ id: 'page1', access_token: 'test-derived-page' })
   if (url.pathname.endsWith('/leadgen_forms')) return json({ data: [{ id: 'form1', name: 'Test' }] })
   if (url.pathname.endsWith('/leads')) return json({ data: [{ id: 'lead1' }, { id: 'lead2' }] })
   if (url.pathname.endsWith('/form1')) return json({ id: 'form1', name: 'Test' })
