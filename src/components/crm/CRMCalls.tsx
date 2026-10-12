@@ -67,6 +67,7 @@ export function CRMCallScheduler({
   const [when, setWhen] = useState(() => {
     return isoToBrasiliaLocalInput(call?.scheduled_at);
   });
+  const [durationMinutes,setDurationMinutes]=useState(call?.duration_minutes??30);
   const [context, setContext] = useState("");
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState("");
@@ -79,16 +80,16 @@ export function CRMCallScheduler({
   const holdsCallWithoutAccess = !!call?.assigned_to && !candidates.some((a) => a.user_id === call.assigned_to);
   const assignedName = candidates.find((a) => a.user_id === assigned)?.display_name;
   const nothingToSave = !!call && (() => {
-    const plan = planCallEdit(call, { assignedTo: assigned, when });
+    const plan = planCallEdit(call, { assignedTo: assigned, when,durationMinutes });
     return plan.ok === false && plan.reason === "nothing";
   })();
   const saveEdit = async (scheduled: NonNullable<typeof call>) => {
-    const plan = planCallEdit(scheduled, { assignedTo: assigned, when });
+    const plan = planCallEdit(scheduled, { assignedTo: assigned, when,durationMinutes });
     if (plan.ok === false) {
       setFailure(
         plan.reason === "nothing"
           ? "Nada foi alterado."
-          : plan.reason === "past_time"
+          : plan.reason === 'invalid_duration' ? 'Informe uma duração entre 1 e 480 minutos.' : plan.reason === "past_time"
             ? "Escolha um horário futuro."
             : "Informe uma data e hora válidas.",
       );
@@ -97,11 +98,12 @@ export function CRMCallScheduler({
     setSaving(true);
     setFailure("");
     try {
-      const { error } = await supabase.rpc("update_crm_call", {
+      const { error } = await supabase.rpc("crm_edit_call_details", {
         p_activity_id: scheduled.id,
         p_assigned_to: plan.assignedTo,
         p_scheduled_at: plan.scheduledAt,
         p_expected_revision: scheduled.updated_at,
+        p_duration_minutes:durationMinutes,
       });
       if (error) throw error;
       await client.invalidateQueries({ queryKey: ["crm"] });
@@ -119,6 +121,7 @@ export function CRMCallScheduler({
     if (saving) return;
     if (call) return saveEdit(call);
     const scheduledAt = brasiliaLocalInputToIso(when);
+    if(!Number.isInteger(durationMinutes)||durationMinutes<1||durationMinutes>480){setFailure('Informe uma duração entre 1 e 480 minutos.');return;}
     if (!scheduledAt || Date.parse(scheduledAt) <= Date.now()) {
       setFailure("Escolha um horário futuro.");
       return;
@@ -128,20 +131,14 @@ export function CRMCallScheduler({
     try {
       if (type === 'qualificacao' && !canScheduleQualificationCall) throw new Error('Esta conta agenda apenas calls para o Closer.');
       if (type === 'fechamento_closer' && !canCreateClosing) throw new Error('Somente SDR, Closer ou Executive agenda a call de fechamento.');
-      const { error } = isSdrHandoff
-        ? await supabase.rpc("handoff_and_schedule_closer_call", {
-            p_lead_id: lead.id,
-            p_expected_version: lead.version,
-            p_assigned_to: assigned,
-            p_scheduled_at: scheduledAt,
-            p_context: context,
-          })
-        : await supabase.rpc("schedule_closer_call", {
+      const { error } = await supabase.rpc("crm_schedule_call_details", {
             p_lead_id: lead.id,
             p_call_type: type,
             p_assigned_to: assigned,
             p_scheduled_at: scheduledAt,
             p_context: context,
+            p_duration_minutes:durationMinutes,
+            p_expected_version: isSdrHandoff ? lead.version : null,
           });
       if (error) throw error;
       await client.invalidateQueries({ queryKey: ["crm"] });
@@ -273,6 +270,11 @@ export function CRMCallScheduler({
               onChange={(e) => setWhen(e.target.value)}
               required
             />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="call-duration">Duração da call (minutos)</Label>
+            <Input id="call-duration" type="number" min={1} max={480} step={1} required value={durationMinutes} onChange={e=>setDurationMinutes(Number(e.target.value))} />
+            <p className="text-xs text-muted-foreground">O Google Agenda reservará esse mesmo intervalo.</p>
           </div>
           {!call && (
             <div className="space-y-1">

@@ -20,7 +20,16 @@ function useCalendarSession(){
   const generation=lifecycle.current.generation
   const isCurrent=()=>lifecycle.current.mounted&&lifecycle.current.adminAllowed&&lifecycle.current.generation===generation
   useEffect(()=>{if(!adminAllowed&&userId)client.removeQueries({predicate:q=>q.queryKey[0]==='google-calendar'&&q.queryKey[1]==='admin'&&q.queryKey[2]===userId})},[client,userId,adminAllowed])
-  return{userId,adminAllowed,allowed:approved&&capabilities.leads,client,sessionKey:`${userId}:${generation}`,isCurrent}
+  const isSessionCurrent=()=>lifecycle.current.mounted&&lifecycle.current.generation===generation
+  return{userId,adminAllowed,syncAllowed:approved&&capabilities.closer,allowed:approved&&capabilities.leads,client,sessionKey:`${userId}:${generation}`,isCurrent,isSessionCurrent}
+}
+export function useGoogleCalendarRefresh(){
+  const {userId,syncAllowed,client,isSessionCurrent}=useCalendarSession()
+  return useMutation({mutationFn:async()=>{
+    if(!syncAllowed||!isSessionCurrent())throw new Error('calendar_access_required')
+    try {const result=await manageCalendar({action:'sync'});if(!isSessionCurrent())throw new Error('calendar_session_changed');return result}
+    finally {if(isSessionCurrent())await client.invalidateQueries({predicate:q=>q.queryKey[0]==='crm'||q.queryKey[0]==='google-calendar'&&q.queryKey[2]===userId}, {throwOnError:true})}
+  }})
 }
 export function useGoogleCalendarAdmin(){
   const {userId,adminAllowed,client,sessionKey,isCurrent}=useCalendarSession()

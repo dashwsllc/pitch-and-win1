@@ -85,6 +85,25 @@ test('badge: absent, loading, failed and outdated status never claim synchroniza
   assert.equal(ui.calendarStatusLabel({...stale,confirmedRevision:'2'},false,null),'Agenda: sincronizada')
   assert.match(renderToStaticMarkup(React.createElement(ui.CRMCalendarStatus,{callId:id})),/Agenda não ativada/)
 })
+
+test('Agenda refresh requests real sync and refreshes both data caches even when the provider fails',async()=>{
+  for(const failure of [false,true]){
+    const invalidations=[],requests=[]
+    const h=await load('src/hooks/useGoogleCalendar.tsx',{
+      react:{useEffect:fn=>fn(),useRef:v=>({current:v})},
+      '@tanstack/react-query':{useQueryClient:()=>({removeQueries:()=>{},invalidateQueries:async o=>invalidations.push(o)}),useMutation:o=>({mutateAsync:o.mutationFn}),useQuery:()=>({})},
+      '@/hooks/useAuth':{useAuth:()=>({user:{id:'A'},loading:false,registrationStatus:'approved'})},
+      '@/hooks/useRoles':{useRoles:()=>({capabilities:{closer:true,leads:true,executive:false},loading:false})},
+      '@/integrations/supabase/client':{supabase:{functions:{invoke:async(_fn,{body})=>{requests.push(body);return failure?{data:null,error:Error('offline')}:{data:{processed:1,pending:false},error:null}}}}},
+    })
+    const refresh=h.useGoogleCalendarRefresh()
+    if(failure)await assert.rejects(refresh.mutateAsync());else assert.equal((await refresh.mutateAsync()).processed,1)
+    assert.equal(requests[0].action,'sync');assert.equal(invalidations.length,1)
+    assert.equal(invalidations[0].predicate({queryKey:['crm','activities','A']}),true)
+    assert.equal(invalidations[0].predicate({queryKey:['google-calendar','calls','A']}),true)
+    assert.equal(invalidations[0].predicate({queryKey:['google-calendar','calls','B']}),false)
+  }
+})
 test('settings: duplicate calendar names require explicit selection of the canonical ID',async()=>{
   const cells=[],requests=[];let index=0
   const choices=[{id:'one@group.calendar.google.com',name:'agenda - closers',accessRole:'owner',timeZone:null},{id:'two@group.calendar.google.com',name:'agenda - closers',accessRole:'writer',timeZone:null}]

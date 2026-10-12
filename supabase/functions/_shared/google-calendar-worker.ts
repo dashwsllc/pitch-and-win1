@@ -1,13 +1,19 @@
 import type { GoogleEvent, ManagedEvent } from './google-calendar-contract.ts'
 import { GoogleCalendarClient, GoogleError } from './google-calendar-client.ts'
 import { CalendarStore, CalendarStoreError, type Job, type Snapshot } from './google-calendar-store.ts'
-import { projectCall, ownsEvent, eventMatches, managedEventHash } from './google-calendar-projection.ts'
+import { projectCall, ownsEvent, eventMatches, managedEventHash, googleMeetingUrl, withMeeting } from './google-calendar-projection.ts'
 
 export type WorkerDeps = { store: CalendarStore; client: GoogleCalendarClient; now: () => number; random: () => number; deadlineAt?: number }
 class LeaseLost extends Error {}
 class Changed extends Error {}
 class BudgetSpent extends Error {}
 class Blocked extends Error { constructor(public code: string) { super(code) } }
+function requireMeeting(event:GoogleEvent):void {
+  if(googleMeetingUrl(event))return
+  const conference=event.conferenceData as {createRequest?:{status?:{statusCode?:string}}}|undefined
+  if(conference?.createRequest?.status?.statusCode==='failure')throw new Blocked('meet_failed')
+  throw new GoogleError(0,'meet_pending',5000,true)
+}
 export function nextRetryAt(attempt: number, now: number, random: number, retryAfterMs: number | null): string {
   const base = Math.min(21_600_000,30_000 * 2 ** Math.min(20,Math.max(0,attempt-1)))
   const delay = Math.min(21_600_000,base * (1 + Math.max(0,Math.min(1,random)) * 0.25))
@@ -41,8 +47,8 @@ export async function deliverJob(job: Job, deps: WorkerDeps): Promise<void> {
       // Snapshot also checks the connection is enabled and this lease remains ours.
     }
   }
-  async function ack(snapshot: Snapshot, hash: string | null, etag: string | null, removed: boolean) {
-    await store.ack(snapshot.binding.id,job.leaseToken,snapshot.binding.revision,hash,etag,removed)
+  async function ack(snapshot: Snapshot, hash: string | null, etag: string | null, removed: boolean,meetingUrl:string|null=null) {
+    await store.ack(snapshot.binding.id,job.leaseToken,snapshot.binding.revision,hash,etag,removed,meetingUrl)
   }
   async function rotate(snapshot: Snapshot) {
     await guard(snapshot)()
@@ -78,6 +84,9 @@ export async function deliverJob(job: Job, deps: WorkerDeps): Promise<void> {
           const created=await client.insertEvent(binding.calendarId,binding.eventId,desired.event,guard(snapshot))
           checkedOwner(created,snapshot)
           if(!eventMatches(created,desired.event)) throw new Blocked('invalid_event_response')
+          // Google generates conferences asynchronously. Never confirm a missing Meet.
+          if(desired.kind==='upsert')requireMeeting(created)
+          if(googleMeetingUrl(created))continue
           await ack(snapshot,await managedEventHash(desired.event),created.etag ?? null,false);return
         }
         if(actual.status==='cancelled') {
@@ -91,6 +100,8 @@ export async function deliverJob(job: Job, deps: WorkerDeps): Promise<void> {
             const restored=await client.patchEvent(binding.calendarId,binding.eventId,desired.event,actual.etag,actual,guard(snapshot))
             checkedOwner(restored,snapshot)
             if(!eventMatches(restored,desired.event)) throw new Blocked('invalid_event_response')
+            if(desired.kind==='upsert')requireMeeting(restored)
+            if(googleMeetingUrl(restored))continue
             await ack(snapshot,await managedEventHash(desired.event),restored.etag ?? null,false);return
           } catch(error) {
             if(error instanceof GoogleError && error.code==='event_deleted') {
@@ -100,14 +111,21 @@ export async function deliverJob(job: Job, deps: WorkerDeps): Promise<void> {
           }
         }
         checkedOwner(actual,snapshot)
-        if(eventMatches(actual,desired.event)) {
+        const meetingUrl=googleMeetingUrl(actual)
+        desired.event=withMeeting(desired.event,meetingUrl)
+        const conference=actual.conferenceData as {createRequest?:{status?:{statusCode?:string}}}|undefined
+        if(desired.kind==='upsert'&&!meetingUrl&&conference?.createRequest?.status?.statusCode==='pending')throw new GoogleError(0,'meet_pending',5000,true)
+        if(eventMatches(actual,desired.event)&&(desired.kind==='completed'||meetingUrl)) {
           await guard(snapshot)()
-          await ack(snapshot,await managedEventHash(desired.event),actual.etag ?? null,false);return
+          await ack(snapshot,await managedEventHash(desired.event),actual.etag ?? null,false,meetingUrl);return
         }
         const updated=await client.patchEvent(binding.calendarId,binding.eventId,desired.event,actual.etag ?? '',actual,guard(snapshot))
         checkedOwner(updated,snapshot)
         if(!eventMatches(updated,desired.event)) throw new Blocked('invalid_event_response')
-        await ack(snapshot,await managedEventHash(desired.event),updated.etag ?? null,false);return
+        const updatedMeet=googleMeetingUrl(updated)
+        if(desired.kind==='upsert')requireMeeting(updated)
+        if(updatedMeet!==meetingUrl)continue
+        await ack(snapshot,await managedEventHash(desired.event),updated.etag ?? null,false,updatedMeet);return
       } catch(error) {
         if(error instanceof Changed) continue
         if(error instanceof GoogleError && error.code==='precondition_failed' && preconditions++<2) continue
@@ -150,6 +168,7 @@ export async function runCalendarSync(mode: 'deliver'|'reconcile', deps: WorkerD
     await deliverJob(job,{...deps,deadlineAt});processed++
   }
   pending ||= processed===20 || deps.now()+20_000>=deadlineAt
+  pending ||= await deps.store.hasPending()
   await deps.store.recordRun(new Date(started).toISOString())
   return {processed,pending}
 }

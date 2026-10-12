@@ -14,22 +14,22 @@ export type AdminStatus = {
   backfillPending: boolean; errorCode: string | null
 }
 export type ManageRequest = { action: 'status' } | { action: 'start_oauth' } | { action: 'list_calendars' }
-  | { action: 'disconnect' } | { action: 'activate'; calendarId: string } | { action: 'retry'; callId?: string }
+  | { action: 'disconnect' } | { action: 'activate'; calendarId: string } | { action: 'retry'; callId?: string } | {action:'sync'}
 export type ManageResultByAction = {
   status: AdminStatus; activate: AdminStatus; disconnect: AdminStatus; retry: AdminStatus
-  start_oauth: { authorizationUrl: string }; list_calendars: { calendars: CalendarChoice[] }
+  start_oauth: { authorizationUrl: string }; list_calendars: { calendars: CalendarChoice[] }; sync:{processed:number;pending:boolean}
 }
 export type CallSyncStatus = {
   callId: string; desiredRevision: string; confirmedRevision: string | null; status: SyncStatus
-  errorCode: string | null; lastSyncedAt: string | null
+  errorCode: string | null; lastSyncedAt: string | null; meetingUrl?:string|null
 }
 export type CallSource = { id: string; leadId: string; callType: string | null; scheduledAt: string | null;
-  assignedTo: string | null; isCompleted: boolean; cancelledAt: string | null; outcome: string | null }
-export type LeadSource = { id: string; name: string; pipelineStage: string }
+  assignedTo: string | null; isCompleted: boolean; cancelledAt: string | null; outcome: string | null; durationMinutes?:number; context?:string|null }
+export type LeadSource = { id: string; name: string; pipelineStage: string; athleteName?:string|null; qualificationSummary?:string|null; observations?:string|null }
 export type Binding = { id: string; callId: string; leadId: string; calendarId: string; eventId: string;
   generation: number; revision: string; confirmedRevision: string | null; confirmedHash: string | null; etag: string | null }
 export type ProjectionInput = { call: CallSource | null; lead: LeadSource | null; closerName: string | null;
-  binding: Binding; projectId: string; dashboardOrigin: string }
+  binding: Binding; projectId: string; dashboardOrigin: string; contexts?:{type:string;content:string}[] }
 export type ManagedEvent = { summary: string; description: string; start: { dateTime: string; timeZone: string };
   end: { dateTime: string; timeZone: string }; extendedProperties: { private: Record<string, string> } }
 export type DesiredEvent = { kind: 'upsert' | 'completed'; event: ManagedEvent } | { kind: 'remove' } | { kind: 'blocked'; code: 'incomplete_call' }

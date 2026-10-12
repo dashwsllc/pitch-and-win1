@@ -42,8 +42,8 @@ export class CalendarStore {
     return value ? {...value, projectId: this.projectId, dashboardOrigin: this.dashboardOrigin} : null
   }
   renew(bindingId: string, token: string, seconds = 60) { return this.rpc<boolean>('renew', {p_binding_id: bindingId, p_token: token, p_lease_seconds: seconds}) }
-  ack(bindingId: string, token: string, revision: string, hash: string | null, etag: string | null, removed: boolean) {
-    return this.rpc<boolean>('ack', {p_binding_id: bindingId, p_token: token, p_revision: revision, p_hash: hash, p_etag: etag, p_removed: removed})
+  ack(bindingId: string, token: string, revision: string, hash: string | null, etag: string | null, removed: boolean, meetingUrl:string|null=null) {
+    return this.rpc<boolean>('ack_details', {p_binding_id: bindingId, p_token: token, p_revision: revision, p_hash: hash, p_etag: etag, p_removed: removed,p_meeting_url:meetingUrl})
   }
   fail(bindingId: string, token: string, revision: string, code: string, retryAt: string | null) {
     return this.rpc<void>('fail', {p_binding_id: bindingId, p_token: token, p_revision: revision, p_code: code, p_retry_at: retryAt})
@@ -53,6 +53,8 @@ export class CalendarStore {
   }
   scanPage(mode: 'backfill' | 'reconcile', limit = 500) { return this.rpc<{processed: number; done: boolean}>('scan_page', {p_mode: mode, p_limit: limit}) }
   recordRun(startedAt: string) { return this.rpc<void>('record_run', {p_started_at: startedAt}) }
+  requestRefresh(actor:string){return this.rpc<boolean>('request_refresh',{p_actor:actor})}
+  hasPending(){return this.rpc<boolean>('pending')}
 }
 
 // All refreshes, OAuth replacements and disconnects share the same database lease.

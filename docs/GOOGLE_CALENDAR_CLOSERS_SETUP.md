@@ -10,13 +10,16 @@ O administrador conecta o Google na seção **Google Agenda · Closers** dessa p
 
 - O CRM é a fonte de verdade. Alterações no Google não são importadas.
 - Calls de fechamento pendentes, encaminhadas para Closer, com responsável e horário, entram na sincronização. Qualificação e leads apenas prontos para encaminhar não entram.
-- Duração: **30 minutos**. Fuso apresentado: **America/Sao_Paulo**. O início conserva o instante de `scheduled_at`.
+- Duração: a informada no agendamento do CRM (1 a 480 minutos). Calls anteriores conservam 30 minutos. Fuso apresentado: **America/Sao_Paulo**. O início conserva o instante de `scheduled_at` e o término é calculado pela duração gravada.
 - Remarcar ou trocar o closer atualiza o evento existente. Uma nova call recebe outra identidade.
 - Concluir preserva o histórico e o resultado. Cancelar, excluir ou devolver ao SDR remove o evento da call vinculada.
 - A ativação captura uma lista durável das calls futuras elegíveis. Conclusão, cancelamento ou exclusão antes do processamento são tratados pelo estado final dessa call.
 - Cada call mantém seu ID persistente. Repetições após timeout ou falha local recuperam esse ID; lease, revisão e ETag protegem atualizações concorrentes e eventos de terceiros.
 - Entrega: cron a cada minuto. Reconciliação de calls pendentes: a cada 15 minutos. Eventos concluídos e confirmados não são consultados periodicamente.
-- Não são criados convites, Google Meet ou recorrências. Campos externos não controlados pelo CRM são preservados.
+- O evento contém a pauta, qualificação, observações e os contextos do lead, com um link para o contexto completo no CRM. Textos extensos usam um trecho limitado; anexos não são enviados. Alterar ou remover contexto solicita nova revisão do mesmo evento.
+- Cada call recebe um Google Meet; remarcar conserva o mesmo evento e Meet. O Google pode gerar o link de forma assíncrona: a interface mostra “preparando Google Meet” e aguarda a resposta antes de confirmar. Falha de criação permanece visível para nova tentativa.
+- **Atualizar**, na Agenda, solicita reconciliação e entrega no servidor e recarrega calls/status. O botão permanece ocupado durante a solicitação. Acesso exige Closer aprovado; o servidor limita solicitações concorrentes/repetidas. Filas maiores continuam no cron e mostram processamento pendente.
+- Não são criados convites ou recorrências. Campos externos não controlados pelo CRM são preservados.
 
 ## Estado da entrega
 
@@ -118,6 +121,7 @@ Aplique somente estas migrations, nesta ordem, verificando se a versão já exis
 2. `20261011103000_google_calendar_queue.sql`
 3. `20261011110000_google_calendar_cron.sql`
 4. `20261011180000_google_calendar_safeupdate.sql`
+5. `20261012090000_google_calendar_call_details.sql` — duração, contexto, Meet e atualização manual; mantém as assinaturas antigas de agendamento/edição.
 
 Storage e queue possuem transações próprias. Cron possui **duas transações**: instalação das extensões, depois os dois agendamentos. Preserve essa separação; não envolva todo o cron em uma transação externa. Registre cada versão no histórico somente ao aplicar seu conteúdo com sucesso. Se alguma versão já existir, compare o conteúdo e interrompa uma tentativa de reaplicação divergente.
 

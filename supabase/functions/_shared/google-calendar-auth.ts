@@ -21,11 +21,15 @@ export async function assertCalendarAdmin(userId: string): Promise<void> {
   }
 }
 export async function requireCalendarAdmin(req: Request): Promise<{userId:string}> {
+  const result=await requireCalendarUser(req)
+  await assertCalendarAdmin(result.userId)
+  return result
+}
+export async function requireCalendarUser(req:Request):Promise<{userId:string}>{
   const auth = req.headers.get('authorization')
   if (!auth || !/^Bearer\s+\S+$/i.test(auth)) throw new RequestError(401,'authentication_required')
   const {data,error} = await calendarRuntime().db.auth.getUser(auth.replace(/^Bearer\s+/i,''))
   if (error || !data.user) throw new RequestError(401,'authentication_required')
-  await assertCalendarAdmin(data.user.id)
   return {userId:data.user.id}
 }
 export async function hashOAuthState(raw: string): Promise<string> {

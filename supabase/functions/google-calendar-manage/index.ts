@@ -1,5 +1,6 @@
 import type { AdminStatus, ManageRequest } from '../_shared/google-calendar-contract.ts'
-import { calendarRuntime, requireCalendarAdmin, createOAuthState, buildAuthorizationUrl, dashboardOrigin } from '../_shared/google-calendar-auth.ts'
+import { calendarRuntime, requireCalendarAdmin, requireCalendarUser, createOAuthState, buildAuthorizationUrl, dashboardOrigin } from '../_shared/google-calendar-auth.ts'
+import { runCalendarSync } from '../_shared/google-calendar-worker.ts'
 import { GoogleCalendarClient, GoogleError, revokeOAuthToken } from '../_shared/google-calendar-client.ts'
 import { CalendarStoreError, getCredential } from '../_shared/google-calendar-store.ts'
 import { jsonResponse, preflightResponse, isTrustedOrigin, readJsonBody, RequestError } from '../_shared/http.ts'
@@ -11,7 +12,7 @@ function adminResponse(req: Request, status: AdminStatus): Response {
 function parseRequest(value: unknown): ManageRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new RequestError(400,'invalid_request')
   const v = value as Record<string,unknown>, action = v.action
-  if (typeof action !== 'string' || !['status','start_oauth','list_calendars','activate','disconnect','retry'].includes(action)) throw new RequestError(400,'invalid_request')
+  if (typeof action !== 'string' || !['status','start_oauth','list_calendars','activate','disconnect','retry','sync'].includes(action)) throw new RequestError(400,'invalid_request')
   const allowed = action === 'activate' ? ['action','calendarId'] : action === 'retry' ? ['action','callId'] : ['action']
   if (Object.keys(v).some(key=>!allowed.includes(key))) throw new RequestError(400,'invalid_request')
   if (action === 'activate' && (typeof v.calendarId !== 'string' || !v.calendarId.trim() || v.calendarId.length>1024 || v.calendarId==='primary')) throw new RequestError(400,'select_calendar_id')
@@ -23,9 +24,15 @@ export async function handleManage(req: Request): Promise<Response> {
   if (!isTrustedOrigin(req)) return jsonResponse(req,{error:'untrusted_origin'},403)
   if (req.method !== 'POST') return jsonResponse(req,{error:'method_not_allowed'},405)
   try {
-    const {userId} = await requireCalendarAdmin(req), request = parseRequest(await readJsonBody(req))
+    const request = parseRequest(await readJsonBody(req))
+    const {userId} = await (request.action==='sync'?requireCalendarUser(req):requireCalendarAdmin(req))
     const {store} = calendarRuntime()
     switch(request.action) {
+      case 'sync': {
+        if(!await store.requestRefresh(userId))return jsonResponse(req,{processed:0,pending:true})
+        const client=new GoogleCalendarClient({deadlineAt:Date.now()+45_000,tokenProvider:force=>getCredential(store,force)})
+        return jsonResponse(req,await runCalendarSync('reconcile',{store,client,now:Date.now,random:Math.random}))
+      }
       case 'status': return adminResponse(req,await store.adminStatus(userId))
       case 'retry': return adminResponse(req,await store.retry(userId,request.callId))
       case 'start_oauth': {

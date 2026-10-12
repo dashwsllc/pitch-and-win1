@@ -10,7 +10,7 @@ const admin=z.object({configured:z.boolean(),connection:z.enum(['not_connected',
 const authorization=z.object({authorizationUrl:z.string().url().refine(value=>{
   const u=new URL(value);return u.origin==='https://accounts.google.com'&&u.pathname==='/o/oauth2/v2/auth'&&!u.username&&!u.password
 })}).strict()
-const resultSchemas={status:admin,activate:admin,disconnect:admin,retry:admin,start_oauth:authorization,list_calendars:z.object({calendars:z.array(choice)}).strict()}
+const resultSchemas={status:admin,activate:admin,disconnect:admin,retry:admin,start_oauth:authorization,list_calendars:z.object({calendars:z.array(choice)}).strict(),sync:z.object({processed:z.number().int().nonnegative(),pending:z.boolean()}).strict()}
 export async function manageCalendar<A extends ManageRequest['action']>(request:Extract<ManageRequest,{action:A}>):Promise<ManageResultByAction[A]> {
   const {data,error}=await supabase.functions.invoke('google-calendar-manage',{body:request})
   if(error)throw new Error('calendar_request_failed')
@@ -24,15 +24,15 @@ export function effectiveCallStatus(row:CallSyncStatus):SyncStatus {
   if(['synced','removed'].includes(row.status)&&row.desiredRevision!==row.confirmedRevision)return row.status==='removed'?'removal_pending':'pending'
   return row.status
 }
-const rowSchema=z.object({call_id:z.string().uuid(),desired_revision:revision,confirmed_revision:revision.nullable(),status:syncStatus,error_code:z.string().nullable(),last_synced_at:date}).strict()
+const rowSchema=z.object({call_id:z.string().uuid(),desired_revision:revision,confirmed_revision:revision.nullable(),status:syncStatus,error_code:z.string().nullable(),last_synced_at:date,meeting_url:z.string().regex(/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}$/).nullable().optional()}).strict()
 export async function fetchCalendarStatuses(callIds:string[]):Promise<Map<string,CallSyncStatus>> {
   const ids=[...new Set(callIds)].sort(),statuses=new Map<string,CallSyncStatus>()
   for(let index=0;index<ids.length;index+=100){
-    const {data,error}=await supabase.from('crm_google_calendar_status').select('call_id,desired_revision,confirmed_revision,status,error_code,last_synced_at').in('call_id',ids.slice(index,index+100))
+    const {data,error}=await supabase.from('crm_google_calendar_status').select('call_id,desired_revision,confirmed_revision,status,error_code,last_synced_at,meeting_url').in('call_id',ids.slice(index,index+100))
     if(error)throw new Error('calendar_status_unavailable')
     const parsed=z.array(rowSchema).safeParse(data)
     if(!parsed.success)throw new Error('invalid_calendar_response')
-    for(const r of parsed.data)statuses.set(r.call_id,{callId:r.call_id,desiredRevision:r.desired_revision,confirmedRevision:r.confirmed_revision,status:r.status,errorCode:r.error_code,lastSyncedAt:r.last_synced_at})
+    for(const r of parsed.data)statuses.set(r.call_id,{callId:r.call_id,desiredRevision:r.desired_revision,confirmedRevision:r.confirmed_revision,status:r.status,errorCode:r.error_code,lastSyncedAt:r.last_synced_at,meetingUrl:r.meeting_url??null})
   }
   return statuses
 }

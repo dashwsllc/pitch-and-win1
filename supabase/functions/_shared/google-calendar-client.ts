@@ -107,14 +107,17 @@ export class GoogleCalendarClient {
     }
   }
   async insertEvent(calendarId: string, eventId: string, event: ManagedEvent, beforeWrite?: () => Promise<void>): Promise<GoogleEvent> {
-    return eventResult(await this.request('/calendars/' + segment(calendarId) + '/events?sendUpdates=none', {
-      method:'POST', body:JSON.stringify({ ...event, id:eventId, reminders:{useDefault:true} }),
+    return eventResult(await this.request('/calendars/' + segment(calendarId) + '/events?sendUpdates=none&conferenceDataVersion=1', {
+      method:'POST', body:JSON.stringify({ ...event, id:eventId, reminders:{useDefault:true},conferenceData:{createRequest:{requestId:eventId,conferenceSolutionKey:{type:'hangoutsMeet'}}} }),
     }, beforeWrite))
   }
   async patchEvent(calendarId: string, eventId: string, event: ManagedEvent, etag: string, current?: GoogleEvent, beforeWrite?: () => Promise<void>): Promise<GoogleEvent> {
     if (!etag) throw new GoogleError(412,'precondition_failed')
-    const body = { ...event, ...(current?.status === 'cancelled' ? {status:'confirmed'} : {}), extendedProperties:{private:{ ...current?.extendedProperties?.private, ...event.extendedProperties.private }} }
-    return eventResult(await this.request('/calendars/' + segment(calendarId) + '/events/' + segment(eventId) + '?sendUpdates=none', {
+    const conference=current?.conferenceData as {createRequest?:{status?:{statusCode?:string}}}|undefined
+    const needsMeet=!current?.hangoutLink && (!conference || conference.createRequest?.status?.statusCode==='failure')
+    const body = { ...event, ...(current?.status === 'cancelled' ? {status:'confirmed'} : {}),
+      ...(needsMeet?{conferenceData:{createRequest:{requestId:conference?.createRequest?.status?.statusCode==='failure'?`${eventId}-${crypto.randomUUID()}`:`${eventId}-${event.extendedProperties.private.revision}`,conferenceSolutionKey:{type:'hangoutsMeet'}}}}:{}),extendedProperties:{private:{ ...current?.extendedProperties?.private, ...event.extendedProperties.private }} }
+    return eventResult(await this.request('/calendars/' + segment(calendarId) + '/events/' + segment(eventId) + '?sendUpdates=none&conferenceDataVersion=1', {
       method:'PATCH', headers:{'If-Match':etag}, body:JSON.stringify(body),
     }, beforeWrite))
   }

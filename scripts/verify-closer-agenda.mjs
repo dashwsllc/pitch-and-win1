@@ -83,6 +83,7 @@ test('page: closers see calls, CRM links and Google Calendar without admin contr
     'react-router-dom':{Link:({children,to})=>React.createElement('a',{href:to},children)},
     '@tanstack/react-query':{useQueryClient:()=>({invalidateQueries:async()=>{}})},
     '@/hooks/useRoles':{useRoles:()=>({capabilities:{closer:true,executive:state.executive}})},
+    '@/hooks/useGoogleCalendar':{useGoogleCalendarRefresh:()=>({mutate:()=>{},isPending:false,isError:false,isSuccess:false})},
     '@/hooks/useCRM':{useCRMLeads:()=>({leads:[lead],loading:state.loading,error:state.error,refetch:async()=>{}}),useCRMActivities:()=>({activities:[call('call-1'),call('qualification',{call_type:'qualificacao'})],loading:false,error:null,fetchActivities:async()=>{}}),useCRMAssignees:()=>({data:[{user_id:'closer-1',display_name:'Closer fictício',role:'closer'}],isPending:false,isError:false,refetch:async()=>{}}),useCRMRealtime:()=>({realtimeUnavailable:false})},
     '@/components/layout/DashboardLayout':{DashboardLayout:passthrough},
     '@/components/ui/card':{Card:passthrough,CardContent:passthrough,CardHeader:passthrough,CardTitle:passthrough},

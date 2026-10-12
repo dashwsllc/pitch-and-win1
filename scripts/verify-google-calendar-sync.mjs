@@ -66,7 +66,7 @@ test('projection: absolute timestamps cross midnight identically in any host tim
   assert.equal(e.end.dateTime, '2026-10-12T03:20:00.000Z')
   assert.equal(e.start.timeZone, 'America/Sao_Paulo')
   assert.equal(e.summary, 'Call de fechamento — Lead Teste | Maria')
-  assert.match(e.description, /\/crm\?tab=closer&lead=20000000-0000-4000-8000-000000000001/)
+  assert.match(e.description, /\/crm\?tab=closer&amp;lead=20000000-0000-4000-8000-000000000001/)
   assert.ok(!JSON.stringify(e).includes('NOTA_INTERNA'))
   x.call.assignedTo = null; assert.equal(p.projectCall(x).kind, 'blocked')
   x.call.assignedTo = 'closer1'
@@ -250,7 +250,7 @@ test('callback: reconnect validates the locked destination before accepting anot
   }
 })
 const workerPath='supabase/functions/_shared/google-calendar-worker.ts'
-async function workerFixture() {
+export async function workerFixture() {
   const loaded=await loadModule(workerPath), worker=loaded.exports
   const {GoogleCalendarClient}=await loaded.dependency(clientPath)
   const x=input(), events=new Map(), tombstones=new Set(), writes=[]
@@ -264,7 +264,7 @@ async function workerFixture() {
     fail:async(_id,_token,revision,code,retryAt)=>{errors.push({revision,code,retryAt});leased=false},
     setConnectionError:async()=>{paused=true},
     rotateEventId:async(_id,_token,revision,oldId)=>{assert.ok(leased);assert.equal(revision,x.binding.revision);assert.equal(oldId,x.binding.eventId);log.push('rotate');x.binding.eventId='40000000000040008000000000000001';x.binding.generation++;x.binding.revision=String(BigInt(x.binding.revision)+1n);return structuredClone(x.binding)},
-    scanPage:async mode=>({processed:0,done:true}),recordRun:async()=>{},
+    scanPage:async mode=>({processed:0,done:true}),recordRun:async()=>{},hasPending:async()=>!confirmed,
   }
   const client=new GoogleCalendarClient({tokenProvider:async()=>credential(),fetchImpl:async(u,o)=>{
     const url=new URL(u),method=o.method??'GET',id=decodeURIComponent(url.pathname.split('/').at(-1))
@@ -275,7 +275,7 @@ async function workerFixture() {
     if(method==='POST') {
       const body=JSON.parse(o.body)
       if(events.has(body.id)||tombstones.has(body.id))return response({},409)
-      const event={...body,etag:'v1',status:'confirmed'};events.set(body.id,event)
+      const event={...body,etag:'v1',status:'confirmed',hangoutLink:'https://meet.google.com/abc-defg-hij',conferenceData:{entryPoints:[{entryPointType:'video',uri:'https://meet.google.com/abc-defg-hij'}]}};events.set(body.id,event)
       if(onInsert){const fn=onInsert;onInsert=null;fn()}
       if(insertTimeout){insertTimeout=false;throw Error('response lost')}
       return response(event)
@@ -304,7 +304,7 @@ test('worker: lost insert response and failed local ACK retry the persisted iden
 })
 test('worker: concurrent claims, cancellation during insert and old revisions cannot falsely confirm',async()=>{
   const f=await workerFixture();f.onInsert=()=>f.edit(x=>{x.call.cancelledAt='2026-10-13T12:00:00Z'})
-  await Promise.all([f.deliver(),f.deliver()]);assert.equal(f.events.size,1);assert.equal(f.synced,false)
+  await Promise.all([f.deliver(),f.deliver()]);assert.equal(f.events.size,0);assert.equal(f.synced,true)
   await f.deliver();assert.equal(f.events.size,0);assert.ok(f.removed);assert.ok(f.synced)
   const c=await workerFixture();c.edit(x=>{x.call.isCompleted=true;x.call.outcome='venda_concluida';x.lead.pipelineStage='fechado_ganho'})
   await c.deliver();assert.match([...c.events.values()][0].description,/Conclu/);assert.ok(c.synced)

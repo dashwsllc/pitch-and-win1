@@ -14,7 +14,7 @@ import type { CRMResultSale } from "@/lib/crm-results";
 import type { CRMReturnData } from "@/components/crm/CRMReturnDialog";
 
 export type CRMLead = Tables<"crm_leads">;
-export type CRMActivity = Tables<"crm_activities">;
+export type CRMActivity = Tables<"crm_activities"> & {duration_minutes?:number};
 export type CRMLeadContext = Tables<"crm_lead_contexts">;
 export const PIPELINE_STAGES = [
   { value: "novo", label: "Novo" },
@@ -96,6 +96,7 @@ export function useCRMRealtime() {
       window.clearTimeout(debounce);
       debounce = window.setTimeout(() => {
         void client.invalidateQueries({ queryKey: ["crm"] });
+        void client.invalidateQueries({queryKey:['google-calendar']});
       }, 120);
     };
     const channel = supabase

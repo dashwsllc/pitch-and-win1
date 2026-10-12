@@ -38,7 +38,7 @@ assert.deepEqual(crmCapabilities(['executive']), { admin: false, executive: true
 assert.ok(Object.values(crmCapabilities(['super_admin'])).every(Boolean))
 const callsSource = readFileSync(new URL('../src/components/crm/CRMCalls.tsx', import.meta.url), 'utf8')
 const cardSource = readFileSync(new URL('../src/components/crm/CRMLeadCard.tsx', import.meta.url), 'utf8')
-assert.match(callsSource, /isSdrHandoff[\s\S]*handoff_and_schedule_closer_call/)
+assert.match(callsSource, /p_expected_version: isSdrHandoff \? lead.version : null/)
 assert.match(callsSource, /O lead só será enviado ao Closer depois que o agendamento for/)
 assert.match(cardSource, /Agendar Call c\/ SDR/)
 assert.match(cardSource, /Agendar Call c\/ Closer/)
@@ -301,6 +301,8 @@ assert.match(readFileSync(new URL('../src/components/crm/CRMReturnDialog.tsx', i
 
 // Edição de call já agendada: só o que mudou vai ao banco, e o horário é comparado como a pessoa o vê (minuto, Brasília).
 const { planCallEdit, callEditToast } = await import('../src/lib/crm-call-edit.ts')
+assert.deepEqual(planCallEdit({assigned_to:'u-x',scheduled_at:'2026-10-01T18:00:00Z',duration_minutes:30},{assignedTo:'u-x',when:'2026-10-01T15:00',durationMinutes:75}),{ok:true,assignedTo:null,scheduledAt:null,durationMinutes:75})
+assert.deepEqual(planCallEdit({assigned_to:'u-x',scheduled_at:'2026-10-01T18:00:00Z'},{assignedTo:'u-x',when:'2026-10-01T15:00',durationMinutes:0}),{ok:false,reason:'invalid_duration'})
 const scheduledCall = { assigned_to: 'u-x', scheduled_at: '2026-10-07T18:00:30Z' }
 const refNow = Date.parse('2026-10-06T12:00:00Z')
 assert.deepEqual(planCallEdit(scheduledCall, { assignedTo: 'u-x', when: '2026-10-07T15:00' }, refNow), { ok: false, reason: 'nothing' })
@@ -317,7 +319,7 @@ assert.equal(callEditToast({ assignedTo: null, scheduledAt: 'x' }), 'Call reagen
 assert.equal(callEditToast({ assignedTo: 'u-y', scheduledAt: 'x' }), 'Responsável e horário da call atualizados')
 assert.match(cardSource, /const canEditCall = !closed && !!call && !call\.is_completed && capabilities\.sdr;/)
 assert.match(cardSource, /Editar call agendada/)
-assert.match(schedulerSource, /update_crm_call/)
+assert.match(schedulerSource, /crm_edit_call_details/)
 const editMigration = readFileSync(new URL('../supabase/migrations/20261006100000_crm_edit_scheduled_call.sql', import.meta.url), 'utf8')
 assert.match(editMigration, /PERFORM public\.crm_require_role\('sdr'\)/)
 assert.match(editMigration, /REVOKE ALL ON FUNCTION public\.update_crm_call\(uuid,uuid,timestamptz,timestamptz\) FROM PUBLIC, anon, authenticated/)
