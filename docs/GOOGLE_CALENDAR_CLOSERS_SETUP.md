@@ -18,11 +18,36 @@ O administrador conecta o Google em **Configurações → Google Agenda dos clos
 
 ## Estado da entrega
 
-Código e guia preparados em `codex/closer-calendar-sync`. Validação: **33 testes Node/VM**, fixtures e concorrência real entre sessões PostgreSQL, TypeScript e build aprovados. No projeto Supabase de destino, um ensaio transacional com rollback validou as migrations, criptografia nativa do Vault, permissões, RLS, os dois agendamentos cron e a assinatura pg_net, sem enviar HTTP ou criar fixtures comerciais.
+**Sincronização comercial ativa desde 12/10/2026, às 01:18:58 (São Paulo).** O dashboard autenticado mostra **Google conectado · Sincronização ativa** para **Agenda - Closers**, da conta **admvoxenai@gmail.com**, no Supabase **dash / mbzwchnxtskysqplqiyy**. ID canônico fixado: `234bbc5bd841e08df54e838d73a7fb0d3ad6511966f883634cc72ebb7d7713aa@group.calendar.google.com`.
 
-As quatro migrations e as três Edge Functions foram instaladas no projeto **dash**, ref **mbzwchnxtskysqplqiyy**, confirmado novamente pelo usuário. O callback e a origem do dashboard estão presentes nos Secrets das Edge Functions, e os dois nomes de segredos do cron estão presentes no Vault. A conferência de 11/10/2026 encontrou ausentes `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` e `GOOGLE_CALENDAR_CRON_SECRET` nos Secrets das Edge Functions; ainda é necessário instalar esses três valores privados. O teste HTTP anterior confirmou bloqueio de acesso sem autenticação e execução de entrega/reconciliação com `processed=0`, sem eventos Google. Histórico SQL, permissões e RLS foram conferidos após a instalação. Uma correção adicional tornou as atualizações compatíveis com o `safeupdate` do PostgREST; os testes SQL e de concorrência passaram novamente.
+O primeiro ciclo automático, às **01:19:00**, foi confirmado no servidor e no dashboard: cron `google-calendar-deliver` com status `succeeded`, HTTP **200**, `processed=0`, `pending=false`, sem timeout ou erro de transporte. Não havia calls futuras elegíveis na ativação; a conferência seguinte também encontrou zero. Fila, backfill e erros estavam zerados. Calls novas elegíveis serão enviadas pelo cron a cada minuto; a reconciliação roda a cada 15 minutos.
 
-**A integração permanece não conectada e não ativada.** Faltam publicar/validar o frontend, instalar as duas credenciais OAuth e o segredo do cron nas Edge Functions, e realizar o ensaio Google em projeto e agenda exclusivos de teste antes da ativação comercial. Os testes locais usam uma implementação de teste do Vault; a criptografia real foi validada separadamente no Supabase, com um valor fictício descartado por rollback.
+O frontend comercial foi publicado pela Vercel no commit `1b1659a35a66e26df140eb6cd902baef07d688cc`. As quatro migrations Calendar e as três Edge Functions estão instaladas no dash. Os cinco Secrets Google foram recuperados e conferidos; o administrador repôs os dois valores privados diretamente no Supabase. A troca OAuth comprovou a correspondência do cliente/segredo; a execução autenticada comprovou o segredo do cron. Valores privados não foram gravados no guia ou no frontend.
+
+Validação do código: **33/33 testes Node/VM**, fixtures SQL, concorrência real entre sessões PostgreSQL, TypeScript e build aprovados. Lint dos arquivos alterados: zero erros e um aviso existente de Fast Refresh. A revisão final teve quatro achados importantes corrigidos com regressões RED→GREEN. O ensaio transacional comercial validou Vault nativo, grants, RLS, cron e pg_net com rollback.
+
+### Ensaio real isolado — 12/10/2026
+
+Executado no Supabase **twntitzqiclycqpqukyq**, conta **chocolatwen.habbo@gmail.com**, agenda privada **VOXEN CRM - Closers QA**. Foram usadas operações reais do CRM, Edge worker, OAuth no navegador e alterações manuais no Google, com dados fictícios. O evento inicial `000fbd70acc045368b979b7c34309760` manteve a identidade nas atualizações e na recuperação da exclusão manual.
+
+| Etapa | Eventos ativos no Google | Resultado observado |
+| --- | ---: | --- |
+| Encaminhar e repetir entrega | 1 | Mesmo evento; nenhuma duplicação |
+| Remarcar e trocar closer | 1 | Mesmo ID, revisões confirmadas, 30 min em São Paulo |
+| Editar manualmente no Google | 1 | CRM restaurou título/horário; local externo preservado |
+| Apagar manualmente no Google | 1 após reconciliação | Mesmo ID recuperado |
+| Desconectar e reconectar | 1 | Mesmo destino, vínculo e evento |
+| Concluir | 1 | Histórico e resultado preservados |
+| Agendar nova call | 2 | Nova identidade; histórico anterior preservado |
+| Cancelar | 1 | Somente o evento cancelado removido |
+| Nova call e devolver ao SDR | 1 após devolução | Evento pendente removido; histórico preservado |
+| Excluir o lead fictício | 0 | Três remoções confirmadas; fila drenada |
+
+Ao encerrar, o QA foi **desconectado**, as credenciais de acesso/refresh foram removidas do Vault e os quatro usuários fictícios foram excluídos. Conferência final: **zero usuários, leads, calls e trabalhos pendentes**; os três vínculos com remoção confirmada foram conservados para auditoria. O projeto Free continua reservado para testes. Nenhuma fixture foi criada na agenda comercial.
+
+O administrador informou a publicação do aplicativo Google e renovou a autorização comercial depois dela. A publicação é uma confirmação do administrador; não se afirma verificação pelo Google. A permissão de edição da conta administradora foi comprovada ao selecionar e ativar a agenda. O painel de compartilhamento do Google não carregou nesta sessão; as permissões individuais dos closers devem ser conferidas pelo administrador no Google Agenda.
+
+Detalhe visual pendente da revisão: quando ocorre `calendar_access`, o badge pode mostrar **Tentar novamente** em vez de **Revisar acesso**. A permissão e o tratamento da falha continuam protegidos; o texto do botão é o ajuste cosmético remanescente.
 
 ## 1. Google Cloud / OAuth
 
@@ -36,6 +61,20 @@ As quatro migrations e as três Edge Functions foram instaladas no projeto **das
    `https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/google-calendar-oauth-callback`
 6. Configure a publicação/verificação exigida pelo Google para o público da aplicação. Em aplicativos externos no modo **Testing**, autorizações com esses scopes têm refresh token com validade de sete dias; esse modo não serve para a operação permanente.
 
+### Branding e publicação do aplicativo comercial
+
+O administrador forneceu `https://www.wsltda.com/politica-de-privacidade`. Em 11/10/2026, uma consulta HTTP sem sessão respondeu 200 com o título “Política de Privacidade | WS LTDA”; a página contém a seção Google Agenda e os dois scopes usados pela integração.
+
+Em [Branding do VOXEN CRM](https://console.cloud.google.com/auth/branding?project=voxen-crm-511315), configure o nome do aplicativo, o e-mail de suporte `admvoxenai@gmail.com`, a página inicial `https://www.wsltda.com` e essa URL de política. Salve e volte a [Público-alvo](https://console.cloud.google.com/auth/audience?project=voxen-crm-511315). Após corrigir o Branding e os domínios autorizados, o administrador informou “publiquei”. O formulário continua sem carregar no navegador do Codex; essa confirmação é do administrador. A publicação não equivale à verificação do Google: o novo consentimento ainda mostra o aviso de aplicativo não verificado. Após sair de Testing, faça uma nova autorização para não depender da concessão emitida em modo de testes.
+
+### Disponibilidade do ambiente de teste
+
+O administrador autorizou preparar um ambiente separado e criou **voxen-calendar-qa**, ref **`twntitzqiclycqpqukyq`**, na organização **VOXEN CRM — Teste Agenda**, ID `ajangybhwoyprqbeesjk`, da conta `chocolatwen.habbo@gmail.com`, no plano Free e região São Paulo. A CLI confirmou `ACTIVE_HEALTHY`. Foram instaladas 34 migrations de base do CRM e as quatro desta integração, preservando auth e Vault nativos; as três Edge Functions estão ativas. As fixtures SQL e a verificação de compatibilidade com safeupdate passaram em transação com rollback, sem usuários de teste ou vínculos persistidos. Todos os objetos públicos possuem RLS, e os dois jobs apontam somente para esse ref de teste.
+
+Em 12/10/2026, foram instalados os cinco Secrets QA e as entradas privadas correspondentes do cron. Os hashes do cliente OAuth conferiram e as chamadas autenticadas de entrega/reconciliação responderam HTTP 200. O callback de recusa consumiu o estado sem conectar; o consentimento aprovado e a reconexão concluíram com os dois scopes esperados. O ciclo completo de eventos passou, conforme a tabela acima. A migration de base `20260914210000_crm_lead_deletion.sql`, ausente no bootstrap inicial, foi revisada, ensaiada com rollback e instalada somente no QA para validar a exclusão real: **35 versões de base e quatro Calendar**. O registro dessa versão foi conferido contra a fonte exata. A CLI comercial voltou a autenticar normalmente e confirmou a ativação no dash. Config, vínculo e URL do frontend comercial apontam para mbzwchnxtskysqplqiyy. O projeto 321 pertence a outra aplicação.
+
+O projeto Google de teste **VOXEN CRM - Teste Agenda**, ID **`voxen-calendar-qa-20261011`**, foi criado na conta `chocolatwen.habbo@gmail.com`. Após o administrador ativar a verificação em duas etapas e autorizar os termos da API, a notificação do Google confirmou a ativação de `calendar-json.googleapis.com`. A identidade **VOXEN CRM - Ensaio Agenda** foi configurada em modo externo de testes após confirmação explícita da Política de Dados do Usuário. O cliente **VOXEN CRM - Agenda Closers QA** usa somente o callback `https://twntitzqiclycqpqukyq.supabase.co/functions/v1/google-calendar-oauth-callback`. Esse projeto não substitui o projeto Google comercial `voxen-crm-511315`.
+
 A origem do dashboard comercial é `https://www.wsltda.com`. O login apresenta `admvoxenai@gmail.com` como sugestão; confira a conta na autorização e a agenda no seletor. Essa sugestão não impede que o Google use outra conta logada.
 
 Referências: [OAuth do Google](https://developers.google.com/identity/protocols/oauth2), [política de produção OAuth](https://developers.google.com/identity/protocols/oauth2/production-readiness/policy-compliance), [CalendarList.get](https://developers.google.com/workspace/calendar/api/v3/reference/calendarList/get).
@@ -44,7 +83,7 @@ Referências: [OAuth do Google](https://developers.google.com/identity/protocols
 
 Instale estas variáveis em **Supabase → Edge Functions → Secrets**, sem colocá-las no frontend, no Git ou na conversa:
 
-Na conferência de 11/10/2026, o administrador precisa adicionar `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` e `GOOGLE_CALENDAR_CRON_SECRET` em [Secrets do projeto dash](https://supabase.com/dashboard/project/mbzwchnxtskysqplqiyy/functions/secrets). As duas URLs estão presentes. Os nomes dos dois segredos do Vault foram conferidos; o valor de `GOOGLE_CALENDAR_CRON_SECRET` deve coincidir com `google_calendar_cron_secret` do Vault desse mesmo projeto. A conferência não exibiu valores privados.
+Na conferência de recuperação de 11/10/2026, os cinco nomes foram confirmados presentes em [Secrets do projeto dash](https://supabase.com/dashboard/project/mbzwchnxtskysqplqiyy/functions/secrets). O ID do cliente e as duas URLs foram repostos e verificados. A autenticação de `GOOGLE_CALENDAR_CRON_SECRET` foi validada por HTTP usando o segredo do Vault no próprio servidor. O segredo Google deve pertencer ao mesmo cliente OAuth; o ID do cliente não pode ser usado como segredo. A correspondência do segredo Google foi comprovada pela troca OAuth bem-sucedida. Os nomes dos dois segredos do Vault também foram conferidos; nenhum valor privado foi exibido.
 
 | Variável | Valor |
 | --- | --- |
