@@ -328,5 +328,29 @@ BEGIN
   op:=public.meta_traffic_operation();
   PERFORM pg_temp.assert(op->'webhook'->0->>'page_id'='qa-page' AND (op->'webhook'->0->>'leadgen_subscribed')::boolean=false,'webhook state must be exposed');
 END $$;
+
+-- 9. Um backfill antigo não fica acima de uma leva decidida mais recente.
+DO $$
+DECLARE actor uuid:=(SELECT id FROM t_actor WHERE name='exec'); recent_lead uuid; old_lead uuid; recent_wave uuid; old_wave uuid; page jsonb;
+BEGIN
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  UPDATE public.meta_lead_waves SET is_open=false WHERE is_open;
+  recent_lead:=pg_temp.mk_lead('qa-list-recent',timestamptz '2026-10-12 08:00:00-03');
+  SELECT wave_id INTO recent_wave FROM public.meta_form_leads WHERE id=recent_lead;
+  PERFORM set_config('request.jwt.claim.role','authenticated',true);
+  PERFORM set_config('request.jwt.claim.sub',actor::text,true);
+  PERFORM public.meta_wave_decide(recent_wave,'rejeitar',ARRAY[recent_lead],'[]','Teste de ordenação');
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  old_lead:=pg_temp.mk_lead('qa-list-backfill',timestamptz '2026-10-06 08:00:00-03');
+  PERFORM public.meta_wave_rebuild_core();
+  SELECT wave_id INTO old_wave FROM public.meta_form_leads WHERE id=old_lead;
+  PERFORM pg_temp.assert((SELECT number FROM public.meta_lead_waves WHERE id=old_wave)>
+    (SELECT number FROM public.meta_lead_waves WHERE id=recent_wave),'backfill must reproduce a newer wave number');
+  PERFORM set_config('request.jwt.claim.role','authenticated',true);
+  page:=public.meta_wave_list(NULL,1,0);
+  PERFORM pg_temp.assert(page->'waves'->0->>'id'=recent_wave::text,'wave list must paginate by lead time, not wave number');
+  page:=public.meta_wave_list(NULL,1,1);
+  PERFORM pg_temp.assert(page->'waves'->0->>'id'<>recent_wave::text,'pagination must not repeat the newest wave');
+END $$;
 SELECT 'PASS: waves, minimal CRM sync with context, idempotence, visible failures and retry, chronological rebuild, automatic metric publication and conference' AS verification;
 ROLLBACK;

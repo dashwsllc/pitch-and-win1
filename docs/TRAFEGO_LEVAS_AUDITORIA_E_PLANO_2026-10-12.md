@@ -405,6 +405,18 @@ Testes de interface do CRM que já falhavam antes desta mudança (conferido num 
 
 Em 12/10 de manhã outra sessão escreveu `docs/superpowers/specs/2026-10-12-traffic-lead-waves-design.md` e o plano correspondente (worktree `.worktrees/traffic-lead-waves`). As diferenças principais: lá a planilha mantém aprovação por lote, métricas não são publicadas automaticamente e levas nunca são reorganizadas. Esta implementação segue as respostas dadas ao usuário nesta conversa (seção 7) e o pedido posterior de importação com a mesma eficiência. As duas não devem ser publicadas juntas.
 
+## 14. Revisão para publicação (12/10, à tarde)
+
+A migration original já havia sido executada pelo usuário. Seu texto foi registrado no histórico remoto como `20261012150000`, sem executar novamente o SQL. As 29 funções conferidas (a listagem foi corrigida separadamente) têm a mesma impressão digital em UTF-8 no ensaio local e em produção: `fa385139b05d178273165239cd051afd`.
+
+A revisão encontrou um caso em que um backfill ganhava número maior que uma leva já decidida e aparecia acima dela, apesar de seus leads serem antigos. `20261012173955_meta_lead_wave_chronological_listing.sql` corrige a listagem e a paginação pela data do último lead, usando o número apenas como desempate. O teste de regressão falhou antes da correção e passou depois. A migration original permanece intacta.
+
+O risco de retomar uma captura antiga com atribuição diferente foi conferido: não havia captura de métricas `running` ou `partial` antes da publicação. A descoberta desde 07/10 concluiu e seus recibos foram drenados: 426 leads, 22 levas, nenhum lead pendente sem leva e ordem cronológica consistente. Nenhuma leva real foi aprovada nesta revisão.
+
+Validação repetida: 100 testes Node, 8 Deno, 2 de concorrência em PostgreSQL e os 2 testes de navegador passaram; os 12 arquivos SQL de regressão passaram em banco descartável atualizado. Tipos, ESLint dos arquivos alterados, build e varredura de segredos passaram. Os testes adicionais de caixa de entrada e sugestões também passaram. A consulta de preflight do banco local conserva histórico incompleto, pois o ensaio aplica SQL diretamente; isso não foi usado como prova de prontidão da produção.
+
+O check de segurança do GitHub já falhava no commit base por dependências de ferramentas de desenvolvimento (13 avisos altos e 5 moderados). Esta entrega não altera dependências nem desativa esse check.
+
 ## Apêndice A — consultas usadas
 
 Todas são somente leitura e foram executadas no projeto `mbzwchnxtskysqplqiyy`.
