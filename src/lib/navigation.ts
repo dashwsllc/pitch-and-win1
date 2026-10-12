@@ -12,6 +12,7 @@ import {
   Target,
   ShoppingBag,
   ListChecks,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react"
 import { canAccessArena, canAccessTraffic } from "@/lib/arena"
@@ -38,6 +39,7 @@ export const menuItems: MenuItem[] = [
   { title: "Leads", url: "/leads", icon: Users },
   { title: "Assinaturas", url: "/assinaturas", icon: ShoppingBag },
   { title: "CRM", url: "/crm", icon: Target },
+  { title: "Agenda", url: "/agenda", icon: CalendarDays },
   { title: "Saques", url: "/saques", icon: Wallet },
   { title: "Perfil", url: "/perfil", icon: User },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
@@ -54,6 +56,7 @@ export const sellerMenuItems: MenuItem[] = [
   { title: "Leads", url: "/leads", icon: Users },
   { title: "Assinaturas", url: "/assinaturas", icon: ShoppingBag },
   { title: "CRM", url: "/crm", icon: Target },
+  { title: "Agenda", url: "/agenda", icon: CalendarDays },
   { title: "Saques", url: "/saques", icon: Wallet },
   { title: "Perfil", url: "/perfil", icon: User },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
@@ -69,7 +72,7 @@ interface MenuAccess {
 /** Os itens que o papel atual enxerga, na ordem do menu. */
 export function itensDoMenu({ isExecutive, isSuperAdmin, roles, capabilities }: MenuAccess): MenuItem[] {
   return (isExecutive ? menuItems : sellerMenuItems).filter(item =>
-    (item.url !== '/crm' || capabilities.leads) && (item.url !== '/vendas' || capabilities.sales) &&
+    (item.url !== '/crm' || capabilities.leads) && (item.url !== '/agenda' || capabilities.closer) && (item.url !== '/vendas' || capabilities.sales) &&
     (item.url !== '/leads' || roles.some(role => ['sdr','executive','super_admin'].includes(role))) &&
     (item.url !== '/assinaturas' || isSuperAdmin) && (item.url !== '/arena' || canAccessArena(roles)) &&
     (item.url !== '/trafego' || canAccessTraffic(roles)))

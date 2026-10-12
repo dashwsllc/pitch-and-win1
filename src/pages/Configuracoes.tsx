@@ -15,17 +15,21 @@ import {
   writeProactiveNotificationsPreference,
 } from "@/lib/notification-preferences"
 
-import { GoogleCalendarIntegration } from '@/components/settings/GoogleCalendarIntegration'
-import { useRoles } from '@/hooks/useRoles'
+import { Navigate, useLocation } from 'react-router-dom'
 
 export default function Configuracoes() {
-  const { capabilities } = useRoles()
+  const location = useLocation()
   const { theme, setTheme } = useTheme()
   const { signOut } = useAuth()
   const [notifications, setNotifications] = useState(
     readProactiveNotificationsPreference,
   )
   const [emailNotifications, setEmailNotifications] = useState(true)
+
+  // Existing OAuth callbacks and saved administration links keep working.
+  if (location.hash === '#google-calendar' || new URLSearchParams(location.search).has('google_calendar')) {
+    return <Navigate to={`/agenda${location.search}#google-calendar`} replace />
+  }
 
   const handleSignOut = async () => {
     try {
@@ -64,8 +68,6 @@ export default function Configuracoes() {
             Personalize sua experiência e gerencie suas preferências
           </p>
         </div>
-
-        {capabilities.executive && <GoogleCalendarIntegration />}
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Aparência */}

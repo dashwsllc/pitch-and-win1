@@ -4,7 +4,9 @@
 
 Destino comercial: agenda existente **“agenda - closers”**, administrada por **admvoxenai@gmail.com**. A conta deve ter permissão `writer` ou `owner`. Compartilhe a agenda com os closers pelo Google Agenda; a integração não altera compartilhamentos.
 
-O administrador conecta o Google em **Configurações → Google Agenda dos closers** e seleciona explicitamente o **ID da agenda**. Nomes iguais aparecem com IDs diferentes. Não use o email como substituto do ID e não selecione a agenda principal por suposição.
+O ícone **Agenda** no menu abre **/agenda**, uma área exclusiva de quem tem acesso ao Closer no CRM, incluindo os perfis administrativos. A página exibe calls de fechamento agendadas e histórico, filtro por data em Brasília, status de sincronização, acesso à call no CRM e um botão para abrir o Google Agenda. Os dados respeitam as permissões existentes do CRM.
+
+O administrador conecta o Google na seção **Google Agenda · Closers** dessa página e seleciona explicitamente o **ID da agenda**. Os controles de conexão, ativação, nova tentativa e pausa são exclusivos dos administradores. Nomes iguais aparecem com IDs diferentes. Não use o email como substituto do ID e não selecione a agenda principal por suposição. Links antigos de Configurações e o retorno OAuth são encaminhados à nova área, preservando o resultado da autorização.
 
 - O CRM é a fonte de verdade. Alterações no Google não são importadas.
 - Calls de fechamento pendentes, encaminhadas para Closer, com responsável e horário, entram na sincronização. Qualificação e leads apenas prontos para encaminhar não entram.
@@ -170,7 +172,7 @@ Para a instalação nativa, valide em duas sessões que o mesmo job e a mesma cr
 Depois de aprovar o ensaio:
 
 1. Entre no dashboard comercial com um executivo aprovado.
-2. Em Configurações, clique em **Conectar Google** e autorize **admvoxenai@gmail.com**.
+2. Abra **Agenda** no menu; na seção administrativa, clique em **Conectar Google** e autorize **admvoxenai@gmail.com**.
 3. Selecione **“agenda - closers”** conferindo seu ID canônico e permissão de edição. Clique em ativar.
 4. Aguarde o backfill e o primeiro ciclo de entrega; confira agenda, contagem de pendências/erros, horário da última execução e as calls reais autorizadas.
 5. Verifique um evento e seu link para o CRM. Confira também o acesso dos closers à agenda compartilhada.

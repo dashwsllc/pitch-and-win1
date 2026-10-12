@@ -24,6 +24,7 @@ const Perfil = lazy(pageLoaders.profile);
 const Configuracoes = lazy(pageLoaders.settings);
 const Saques = lazy(pageLoaders.withdrawals);
 const CRM = lazy(pageLoaders.crm);
+const Agenda = lazy(pageLoaders.agenda);
 const MinhasVendas = lazy(pageLoaders.mySales);
 const Arena = lazy(pageLoaders.arena);
 const Metas = lazy(pageLoaders.goals);
@@ -124,6 +125,7 @@ const App = () => (
                   <CRM />
                 </ProtectedRoute>
               } />
+              <Route path="/agenda" element={<ProtectedRoute closerOnly><Agenda /></ProtectedRoute>} />
               <Route path="/minhas-vendas" element={
                 <ProtectedRoute>
                   <MinhasVendas />

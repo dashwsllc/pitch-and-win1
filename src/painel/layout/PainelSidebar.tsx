@@ -36,7 +36,7 @@ import { iniciais } from '../lib/iniciais'
 // Os itens e o que cada papel enxerga vêm de src/lib/navigation.ts (os mesmos do trilho das outras telas).
 const GRUPOS: Array<{ titulo: string; urls: string[] }> = [
   { titulo: 'Acompanhar', urls: ['/', '/executive', '/arena', '/metas', '/ranking', '/trafego'] },
-  { titulo: 'Operação', urls: ['/vendas', '/minhas-vendas', '/leads', '/crm', '/assinaturas', '/saques'] },
+  { titulo: 'Operação', urls: ['/vendas', '/minhas-vendas', '/leads', '/crm', '/agenda', '/assinaturas', '/saques'] },
   { titulo: 'Conta', urls: ['/perfil', '/configuracoes'] },
 ]
 

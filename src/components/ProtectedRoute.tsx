@@ -15,6 +15,7 @@ interface ProtectedRouteProps {
   arenaOnly?: boolean;
   trafficOnly?: boolean;
   leadInboxOnly?: boolean;
+  closerOnly?: boolean;
 }
 
 export function ProtectedRoute({
@@ -25,6 +26,7 @@ export function ProtectedRoute({
   arenaOnly = false,
   trafficOnly = false,
   leadInboxOnly = false,
+  closerOnly = false,
 }: ProtectedRouteProps) {
   const location = useLocation();
   const { user, loading: authLoading, signOut } = useAuth();
@@ -48,7 +50,7 @@ export function ProtectedRoute({
 
   if (
     authLoading ||
-    (user && (profileLoading || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly || leadInboxOnly) && rolesLoading)))
+    (user && (profileLoading || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly || leadInboxOnly || closerOnly) && rolesLoading)))
   ) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -66,7 +68,7 @@ export function ProtectedRoute({
     return <Navigate to="/auth" replace state={from ? { from } : undefined} />;
   }
 
-  if (error || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly || leadInboxOnly) && rolesError)) {
+  if (error || ((executiveOnly || superAdminOnly || salesOnly || arenaOnly || trafficOnly || leadInboxOnly || closerOnly) && rolesError)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-6 text-center">
         <p>Não foi possível verificar seu acesso.</p>
@@ -85,6 +87,7 @@ export function ProtectedRoute({
   if (executiveOnly && !isExecutive) return <Navigate to="/" replace />;
   if (superAdminOnly && !isSuperAdmin) return <Navigate to="/" replace />;
   if (salesOnly && !capabilities.sales) return <Navigate to="/" replace />;
+  if (closerOnly && !capabilities.closer) return <Navigate to="/" replace />;
   if (arenaOnly && !canAccessArena(roles)) return <Navigate to="/" replace />;
   if (trafficOnly && !canAccessTraffic(roles)) return <Navigate to="/" replace />;
   if (leadInboxOnly && !roles.some(role => ['sdr', 'executive', 'super_admin'].includes(role))) return <Navigate to="/" replace />;
