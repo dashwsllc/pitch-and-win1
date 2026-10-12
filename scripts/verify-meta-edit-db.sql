@@ -21,8 +21,9 @@ BEGIN
     'full_name','Responsável QA','phone','11999990000','email','qa@example.invalid',
     'athlete_name','Atleta QA','athlete_birth_date','2010-03-15','athlete_position','Meia',
     'field_data','[{"name":"Motivação","values":["Original"]}]'::jsonb,'raw_notes','Motivação: Original');
-  response:=public.meta_import_leads('qa-edit.csv',jsonb_build_array(item));
-  SELECT * INTO b FROM public.meta_lead_import_batches WHERE id=(response->>'batch_id')::uuid;
+  -- Lote antigo ainda pendente (anterior às levas): a correção de linha continua auditada.
+  INSERT INTO public.meta_lead_import_batches(imported_by,filename,row_count,status,rows)
+    VALUES(other_user,'qa-edit.csv',1,'pendente',jsonb_build_array(item)) RETURNING * INTO b;
   PERFORM public.meta_edit_import_row('leads',b.id,0,b.updated_at,'{"full_name":"Nome corrigido"}','Corrigir nome informado');
   SELECT * INTO b FROM public.meta_lead_import_batches WHERE id=b.id;
   IF b.rows->0->>'full_name'<>'Nome corrigido' OR b.status<>'pendente' OR b.rows->0->'field_data'<>item->'field_data' THEN
@@ -32,6 +33,9 @@ BEGIN
     AND summary->'changes' @> '[{"field":"full_name","before":"Responsável QA","after":"Nome corrigido"}]') THEN
     RAISE EXCEPTION 'FAIL: pending edit lacks before/after audit'; END IF;
   b:=public.meta_review_lead_import(b.id,'aprovar',b.updated_at);
+  SELECT * INTO STRICT f FROM public.meta_form_leads WHERE meta_lead_id=prefix;
+  IF f.approval_status<>'pendente' OR f.wave_id IS NULL OR f.full_name<>'Nome corrigido' THEN RAISE EXCEPTION 'FAIL: corrected spreadsheet row must wait in a wave'; END IF;
+  PERFORM public.meta_wave_decide(f.wave_id,'aprovar',ARRAY[f.id]);
   SELECT * INTO STRICT f FROM public.meta_form_leads WHERE meta_lead_id=prefix;
   SELECT to_jsonb(c) INTO crm_before FROM public.crm_leads c WHERE id=f.crm_lead_id;
   snapshot:=public.meta_get_traffic_lead(f.id);

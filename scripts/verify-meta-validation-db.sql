@@ -34,7 +34,8 @@ BEGIN
  PERFORM pg_temp.expect_error('SELECT public.meta_connect_ad_account(''456'',''QA'')','42501');
  PERFORM set_config('request.jwt.claim.sub',manager::text,true);
  response:=public.meta_import_leads('incomplete.csv','[{"meta_lead_id":"synthetic-incomplete","full_name":"","phone":"","email":"","field_data":[{"name":"Motivação","values":["Livre"]}]}]');
- PERFORM pg_temp.assert(response->>'status'='pendente','incomplete lead discarded');
+ PERFORM pg_temp.assert(response->>'status'='recebido' AND (response->'result'->>'received')::int=1
+   AND EXISTS(SELECT 1 FROM public.meta_form_leads WHERE meta_lead_id='synthetic-incomplete' AND approval_status='pendente' AND wave_id IS NOT NULL AND crm_lead_id IS NULL),'incomplete lead discarded');
 END $$;
 SELECT 'PASS: traffic validation, collision, access and partial imports' AS verification;
 ROLLBACK;

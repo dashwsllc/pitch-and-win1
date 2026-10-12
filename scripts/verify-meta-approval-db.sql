@@ -18,13 +18,16 @@ BEGIN
     'created_time','2026-09-20T17:30:00Z','source_row',2,'raw_notes','Motivação: Ser profissional',
     'field_data','[{"name":"Motivação","values":["Ser profissional"]}]'::jsonb);
   PERFORM set_config('request.jwt.claim.sub',executive_id::text,true);
+  -- A planilha entra nas MESMAS levas dos leads automáticos: nada chega ao CRM antes da aprovação.
   response := public.meta_import_leads('qa-approval.csv',jsonb_build_array(item));
-  IF response->>'status' IS DISTINCT FROM 'pendente'
-    OR EXISTS(SELECT 1 FROM public.meta_form_leads WHERE meta_lead_id=prefix||'-manual') THEN
-    RAISE EXCEPTION 'FAIL: Executive import bypassed manual approval in Tráfego';
+  IF response->>'status' IS DISTINCT FROM 'recebido' OR (response->'result'->>'received')::int<>1
+    OR NOT EXISTS(SELECT 1 FROM public.meta_form_leads WHERE meta_lead_id=prefix||'-manual' AND approval_status='pendente'
+      AND wave_id IS NOT NULL AND crm_lead_id IS NULL) THEN
+    RAISE EXCEPTION 'FAIL: manual import must wait for approval inside a Tráfego wave';
   END IF;
-  SELECT * INTO STRICT batch FROM public.meta_lead_import_batches WHERE id=(response->>'batch_id')::uuid;
-  -- A stale or missing preview version must never approve a batch.
+  -- Lote antigo ainda pendente (criado antes das levas): versão ausente ou desatualizada nunca o aprova.
+  INSERT INTO public.meta_lead_import_batches(imported_by,filename,row_count,status,rows)
+    VALUES(executive_id,'legacy-approval.csv',1,'pendente',jsonb_build_array(item||jsonb_build_object('meta_lead_id',prefix||'-legacy'))) RETURNING * INTO batch;
   BEGIN
     PERFORM public.meta_review_lead_import(batch.id,'aprovar',NULL);
     RAISE EXCEPTION 'FAIL: NULL version approved a lead batch';
@@ -38,22 +41,25 @@ BEGIN
     PERFORM public.meta_review_lead_import(batch.id,'aprovar',batch.updated_at);
     RAISE EXCEPTION 'FAIL: SDR approved an import';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-  -- The same three permitted roles must independently approve, without needing CRM access.
+  -- Os mesmos três papéis aprovam a leva de forma independente, sem precisar de acesso ao CRM.
   FOREACH r IN ARRAY ARRAY['traffic_manager','executive','super_admin'] LOOP
     PERFORM set_config('request.jwt.claim.sub','',true);
-  DELETE FROM public.user_roles WHERE user_id=operator_id;
+    DELETE FROM public.user_roles WHERE user_id=operator_id;
     EXECUTE format('INSERT INTO public.user_roles(user_id,role) VALUES($1,%L)',r) USING operator_id;
     PERFORM set_config('request.jwt.claim.sub',operator_id::text,true);
     response := public.meta_import_leads('qa-'||r||'.csv',jsonb_build_array(item||jsonb_build_object('meta_lead_id',prefix||'-'||r)));
-    IF response->>'status' IS DISTINCT FROM 'pendente' THEN RAISE EXCEPTION 'FAIL: privileged import auto-approved'; END IF;
-    SELECT * INTO STRICT batch FROM public.meta_lead_import_batches WHERE id=(response->>'batch_id')::uuid;
-    batch := public.meta_review_lead_import(batch.id,'aprovar',batch.updated_at);
-    IF batch.result->>'crm' IS DISTINCT FROM '1' THEN RAISE EXCEPTION 'FAIL: approval did not synchronize a complete lead'; END IF;
+    IF response->>'status' IS DISTINCT FROM 'recebido' OR EXISTS(SELECT 1 FROM public.meta_form_leads WHERE meta_lead_id=prefix||'-'||r AND approval_status<>'pendente') THEN
+      RAISE EXCEPTION 'FAIL: privileged import auto-approved'; END IF;
     SELECT * INTO STRICT lead FROM public.meta_form_leads WHERE meta_lead_id=prefix||'-'||r;
+    PERFORM public.meta_wave_decide(lead.wave_id,'aprovar',ARRAY[lead.id]);
+    SELECT * INTO STRICT lead FROM public.meta_form_leads WHERE id=lead.id;
+    IF lead.crm_sync_status IS DISTINCT FROM 'enviado' THEN RAISE EXCEPTION 'FAIL: approval did not synchronize a complete lead'; END IF;
     IF lead.approval_status<>'aprovado' OR lead.reviewed_by<>operator_id OR lead.reviewed_at IS NULL
       OR (SELECT sdr_id FROM public.crm_leads WHERE id=lead.crm_lead_id) IS NOT NULL
-      OR (SELECT pipeline_stage FROM public.crm_leads WHERE id=lead.crm_lead_id)<>'novo' THEN
-      RAISE EXCEPTION 'FAIL: approval attribution or shared SDR queue is wrong';
+      OR (SELECT pipeline_stage FROM public.crm_leads WHERE id=lead.crm_lead_id)<>'novo'
+      OR (SELECT athlete_name FROM public.crm_leads WHERE id=lead.crm_lead_id) IS DISTINCT FROM 'Atleta QA'
+      OR (SELECT lead_generated_at FROM public.crm_leads WHERE id=lead.crm_lead_id) IS DISTINCT FROM timestamptz '2026-09-20T17:30:00Z' THEN
+      RAISE EXCEPTION 'FAIL: approval attribution, spreadsheet data or generation time is wrong';
     END IF;
     IF NOT EXISTS(SELECT 1 FROM public.meta_audit_events WHERE entity_id=lead.id
       AND actor_id=operator_id AND action='lead.synced') THEN RAISE EXCEPTION 'FAIL: CRM synchronization not audited'; END IF;
@@ -61,14 +67,13 @@ BEGIN
 
   -- Rejection stays private, requires a reason, and records the reviewer.
   PERFORM set_config('request.jwt.claim.sub',executive_id::text,true);
-  SELECT * INTO STRICT batch FROM public.meta_lead_import_batches WHERE filename='qa-approval.csv' AND id=(
-    SELECT id FROM public.meta_lead_import_batches WHERE rows->0->>'meta_lead_id'=prefix||'-manual');
+  SELECT * INTO STRICT batch FROM public.meta_lead_import_batches WHERE filename='legacy-approval.csv' AND status='pendente';
   BEGIN
     PERFORM public.meta_review_lead_import(batch.id,'rejeitar',batch.updated_at,'x');
     RAISE EXCEPTION 'FAIL: rejection accepted an empty reason';
   EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'FAIL:%' THEN RAISE; END IF; END;
   batch:=public.meta_review_lead_import(batch.id,'rejeitar',batch.updated_at,'Dados recusados pelo gestor');
-  IF batch.status<>'rejeitado' OR EXISTS(SELECT 1 FROM public.meta_form_leads WHERE meta_lead_id=prefix||'-manual')
+  IF batch.status<>'rejeitado' OR EXISTS(SELECT 1 FROM public.meta_form_leads WHERE meta_lead_id=prefix||'-legacy')
     OR NOT EXISTS(SELECT 1 FROM public.meta_audit_events WHERE entity_id=batch.id AND action='batch.rejected'
       AND actor_id=executive_id AND summary->>'note'='Dados recusados pelo gestor') THEN
     RAISE EXCEPTION 'FAIL: rejected import published or lost its audited decision'; END IF;
@@ -114,7 +119,12 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   PERFORM set_config('request.jwt.claim.sub',executive_id::text,true);
   response := public.meta_review_form_lead(lead.id,'aprovar',lead.updated_at);
-  IF response->>'queued' IS DISTINCT FROM '1' THEN RAISE EXCEPTION 'FAIL: incomplete approved lead was not retained for SDR completion'; END IF;
+  -- Name and WhatsApp are enough: the SDR completes athlete data inside the CRM.
+  IF response->>'crm' IS DISTINCT FROM '1' OR response->>'queued' IS DISTINCT FROM '0' THEN RAISE EXCEPTION 'FAIL: approved lead with name and WhatsApp did not reach the CRM'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.meta_form_leads f JOIN public.crm_leads c ON c.id=f.crm_lead_id
+    WHERE f.id=lead.id AND f.crm_sync_status='enviado' AND c.sdr_id IS NULL AND c.athlete_name IS NULL
+      AND c.lead_generated_at=f.created_time AND c.lead_source='meta_ads_form') THEN
+    RAISE EXCEPTION 'FAIL: minimal Meta lead missing from the shared CRM queue with its generation time'; END IF;
   PERFORM set_config('request.jwt.claim.sub',operator_id::text,true);
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO count_visible FROM public.meta_form_leads WHERE id=lead.id;
@@ -144,19 +154,21 @@ BEGIN
 
   -- A collision with a pending API lead must be explicitly reported as unresolved.
   PERFORM set_config('request.jwt.claim.sub','',true);
+  -- A WhatsApp below the CRM minimum keeps this approved form unsent (crm_sync_status = 'falhou').
   crm_id := public.meta_ingest_form_lead(item||jsonb_build_object('meta_lead_id',prefix||'-collision',
-    'page_id','qa-page','form_id','qa-form'));
+    'page_id','qa-page','form_id','qa-form','phone','123'));
   PERFORM set_config('request.jwt.claim.sub',executive_id::text,true);
   response := public.meta_import_leads('collision.csv',jsonb_build_array(item||jsonb_build_object('meta_lead_id',prefix||'-collision')));
-  SELECT * INTO STRICT batch FROM public.meta_lead_import_batches WHERE id=(response->>'batch_id')::uuid;
-  batch := public.meta_review_lead_import(batch.id,'aprovar',batch.updated_at);
-  IF batch.result->>'failed' IS DISTINCT FROM '1' OR jsonb_array_length(batch.result->'issues')<>1
+  IF (response->'result'->>'duplicates')::int<>1 OR (response->'result'->>'received')::int<>0
+    OR response->'result'->'issues'->0->>'reason' NOT LIKE 'Lead já recebido e aguardando aprovação na leva #%'
     OR (SELECT approval_status FROM public.meta_form_leads WHERE id=crm_id)<>'pendente'
-    THEN RAISE EXCEPTION 'FAIL: a pending API collision was silently reported as reviewed duplicate'; END IF;
+    THEN RAISE EXCEPTION 'FAIL: a pending API collision was not explained as an already received lead'; END IF;
 
   -- Generic CRM inserts must atomically reconcile an approved form too.
   SELECT * INTO STRICT lead FROM public.meta_form_leads WHERE id=crm_id;
   PERFORM public.meta_review_form_lead(lead.id,'aprovar',lead.updated_at);
+  IF (SELECT crm_sync_status FROM public.meta_form_leads WHERE id=lead.id) IS DISTINCT FROM 'falhou' THEN
+    RAISE EXCEPTION 'FAIL: invalid WhatsApp was not reported as a visible CRM sync failure'; END IF;
   INSERT INTO public.crm_leads(name,phone,email,athlete_name,athlete_birth_date,athlete_position,lead_source,meta_form_lead_id)
     VALUES('QA','11999990000','qa@example.invalid','Atleta QA','2010-03-15','Meia','meta_ads_form',lead.id) RETURNING id INTO crm_id;
   IF (SELECT crm_lead_id FROM public.meta_form_leads WHERE id=lead.id) IS DISTINCT FROM crm_id
