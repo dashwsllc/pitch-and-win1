@@ -9,7 +9,9 @@ import { errorMessage } from '@/lib/sales'
 import { metaEditLabels } from '@/lib/meta-edit'
 
 const actions: Record<string, string> = {
-  'capture.prepared': 'Captura pronta para revisão', 'capture.row_edited': 'Linha da captura editada',
+  'capture.prepared': 'Captura pronta para revisão', 'capture.auto_approved': 'Captura publicada automaticamente',
+  'wave.approved': 'Leva aprovada e enviada ao CRM', 'wave.rejected': 'Leva rejeitada', 'wave.retried': 'Reenvio ao CRM',
+  'wave.reopened': 'Leva reaberta para aprovação', 'lead.reopened': 'Lead reaberto para aprovação', 'capture.row_edited': 'Linha da captura editada',
   'capture.conflict_resolved': 'Conflito da captura resolvido', 'capture.aprovado': 'Captura aprovada',
   'capture.rejeitado': 'Captura rejeitada', 'metric.removed': 'Métrica removida',
   'lead.edited': 'Lead editado', 'batch.row_edited': 'Linha de importação editada',
@@ -20,7 +22,7 @@ const actions: Record<string, string> = {
   'batch.received': 'Importação recebida', 'batch.approved': 'Importação aprovada',
   'batch.rejected': 'Importação rejeitada', 'batch.updated': 'Importação atualizada',
 }
-const entities = { capture_review: 'Revisão de captura', lead: 'Lead', lead_batch: 'Planilha de leads', metrics_batch: 'Importação de métricas', metrics_row: 'Métrica publicada' }
+const entities = { capture_review: 'Revisão de captura', lead: 'Lead', lead_batch: 'Planilha de leads', metrics_batch: 'Importação de métricas', metrics_row: 'Métrica publicada', lead_wave: 'Leva de leads' }
 
 export function MetaAudit() {
   const { user } = useAuth()
@@ -50,7 +52,8 @@ export function MetaAudit() {
       {event.summary.row !== undefined && <p className="text-xs text-muted-foreground">Linha {event.summary.row}</p>}
       {event.summary.changes?.length > 0 && <details><summary className="cursor-pointer text-sm">Conferir valores antes e depois</summary><div className="mt-2 overflow-x-auto"><table className="w-full table-fixed text-left text-xs"><thead><tr><th className="p-2">Campo</th><th className="p-2">Antes</th><th className="p-2">Depois</th></tr></thead><tbody>{event.summary.changes.map((change, index) => <tr key={index} className="border-t"><td className="p-2 align-top">{metaEditLabels[change.field] || change.field}</td><td className="whitespace-pre-wrap break-words p-2 align-top">{typeof change.before === 'object' && change.before !== null ? JSON.stringify(change.before, null, 2) : String(change.before ?? '—')}</td><td className="whitespace-pre-wrap break-words p-2 align-top">{typeof change.after === 'object' && change.after !== null ? JSON.stringify(change.after, null, 2) : String(change.after ?? '—')}</td></tr>)}</tbody></table></div></details>}
       {event.summary.warning && <p className="break-words text-sm">Para completar: {event.summary.warning}</p>}
-      {event.summary.result && <div className="space-y-2 text-sm"><p>{event.summary.result.crm} no CRM · {event.summary.result.queued} para completar · {event.summary.result.duplicates} duplicados · {event.summary.result.failed} com falha</p>{event.summary.result.issues?.length > 0 && <details><summary className="cursor-pointer">Conferir linhas com pendência</summary><ul className="mt-2 space-y-1">{event.summary.result.issues.map((issue, index) => <li key={index} className="break-words">Linha {issue.row}: {issue.reason}</li>)}</ul></details>}</div>}
+      {event.entity_type === 'lead_wave' && <p className="text-sm">Leva #{event.summary.number}{event.summary.decided !== undefined ? ` · ${event.summary.decided} decididos` : ''}{event.summary.excluded ? ` · ${event.summary.excluded} tirados da leva` : ''}{event.summary.sent !== undefined ? ` · ${event.summary.sent} no CRM` : ''}{event.summary.failed ? ` · ${event.summary.failed} com falha` : ''}{event.summary.retried !== undefined ? ` · ${event.summary.recovered} de ${event.summary.retried} reenviados` : ''}{event.summary.reopened !== undefined ? ` · ${event.summary.reopened} reabertos` : ''}{event.summary.moved_to_next ? ` · ${event.summary.moved_to_next} passaram para a próxima leva` : ''}</p>}
+      {event.summary.result && <div className="space-y-2 text-sm"><p>{'received' in event.summary.result ? `${event.summary.result.received} nas levas · ${event.summary.result.duplicates} já recebidos · ${event.summary.result.failed} recusados` : `${event.summary.result.crm} no CRM · ${event.summary.result.queued} para completar · ${event.summary.result.duplicates} duplicados · ${event.summary.result.failed} com falha`}</p>{event.summary.result.issues?.length > 0 && <details><summary className="cursor-pointer">Conferir linhas com pendência</summary><ul className="mt-2 space-y-1">{event.summary.result.issues.map((issue, index) => <li key={index} className="break-words">Linha {issue.row}: {issue.reason}</li>)}</ul></details>}</div>}
       {event.summary.crm_lead_id && <p className="break-words text-xs text-muted-foreground">CRM: {event.summary.crm_lead_id}</p>}
     </article>)}
     <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Página {page + 1} · {query.data?.count ?? '…'} eventos</p><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page === 0 || query.isFetching} onClick={() => setPage(current => current - 1)}>Anterior</Button><Button size="sm" variant="outline" disabled={query.isFetching || !query.data || (page + 1) * 50 >= query.data.count} onClick={() => setPage(current => current + 1)}>Próxima</Button></div></div>

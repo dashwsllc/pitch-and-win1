@@ -19,6 +19,7 @@ const contextLabels: Record<string, string> = {
   whatsapp_summary: 'Resumo de WhatsApp',
   call_transcript: 'Transcrição de ligação',
   manual_note: 'Anotação manual',
+  meta_form: 'Respostas do formulário',
 }
 
 export function CRMContextPanel({ lead }: { lead: CRMLead }) {
@@ -195,7 +196,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
                 <p className="text-[11px] text-muted-foreground">Editado por {safePlainText(entry.updated_by_name, 160) || 'usuário CRM'} em {callDate(entry.updated_at)}</p>
               )}
             </div>
-            {canWrite && <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={`Editar ${contextLabels[entry.context_type] || 'contexto'}`} onClick={() => startEdit(entry)}>
+            {canWrite && entry.context_type !== 'meta_form' && <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={`Editar ${contextLabels[entry.context_type] || 'contexto'}`} onClick={() => startEdit(entry)}>
               <Pencil className="h-3.5 w-3.5" />
             </Button>}
           </div>

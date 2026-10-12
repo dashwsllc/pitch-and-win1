@@ -14,6 +14,14 @@ type ExtraFunctions = {
   // Legacy ranking contract may be deployed separately from the traffic schema.
   get_daily_call_ranking: FunctionDef<Record<string, never>>;
   meta_traffic_operation: FunctionDef<Record<string, never>>;
+  // Levas de 20 leads (formulários da Meta e planilhas), envio ao CRM e conferência de leads.
+  meta_wave_list: FunctionDef<{ p_status: 'pendente' | 'aprovada' | 'rejeitada' | null; p_limit: number; p_offset: number }>;
+  meta_wave_leads: FunctionDef<{ p_wave: string }>;
+  meta_wave_decide: FunctionDef<{ p_wave: string; p_action: 'aprovar' | 'rejeitar'; p_lead_ids: string[]; p_excluded: Json; p_note: string }>;
+  meta_wave_retry: FunctionDef<{ p_wave: string; p_lead: string | null }>;
+  meta_wave_rebuild: FunctionDef<Record<string, never>>;
+  meta_wave_reopen: FunctionDef<{ p_wave: string | null; p_lead: string | null }>;
+  meta_traffic_conference: FunctionDef<{ p_start: string; p_end: string }>;
   meta_traffic_review_list: FunctionDef<{ p_kind: 'metrics' | 'leads' | null; p_status: string | null; p_offset: number; p_limit: number }>;
   meta_capture_review_part: FunctionDef<{ p_id: string; p_version: number; p_offset: number; p_limit: number }>;
   meta_capture_review_decide: FunctionDef<{ p_id: string; p_version: number; p_action: 'aprovar' | 'rejeitar'; p_note: string }>;

@@ -7,7 +7,7 @@ import { arenaClient } from '@/lib/arena-api'
 import type { MetaFormLead } from '@/lib/meta-leads'
 import type { MetaDailyRow } from '@/lib/meta-traffic'
 import { errorMessage } from '@/lib/sales'
-import { FormAnswers } from './MetaLeadApprovals'
+import { FormAnswers } from './FormAnswers'
 import { MetaEditButton } from './MetaEditDialog'
 import { MetaPendingImports } from './MetaPendingImports'
 

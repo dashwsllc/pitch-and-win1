@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { FileSpreadsheet, Upload } from 'lucide-react'
-import { MetaLeadApprovals } from '@/components/traffic/MetaLeadApprovals'
+import { FileSpreadsheet, Layers3, Upload } from 'lucide-react'
+import { MetaLeadWaves } from '@/components/traffic/MetaLeadWaves'
+import { MetaLeadConference } from '@/components/traffic/MetaLeadConference'
 import { MetaAudit } from '@/components/traffic/MetaAudit'
 import { MetaTrafficData, MetaImportEdits } from '@/components/traffic/MetaTrafficData'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -19,7 +19,7 @@ import { useRoles } from '@/hooks/useRoles'
 import { aggregateMeta, buildImportRows, csvFields, defaultCsvMapping, type CsvMapping, type MetaDailyRow, type MetaLevel } from '@/lib/meta-traffic'
 import { buildLeadImportRows, defaultLeadCsvMapping, leadCsvFields, summarizeLeadImport, type LeadCsvMapping, type LeadImportRow, type LeadImportResult, type LeadImportResponse } from '@/lib/meta-lead-import'
 import { parseSpreadsheetFile } from '@/lib/spreadsheet'
-import { MetaTrafficConnection, TrafficOperationIndicator } from '@/components/traffic/MetaTrafficConnection'
+import { MetaTrafficConnection, TrafficAlerts, TrafficOperationIndicator } from '@/components/traffic/MetaTrafficConnection'
 import { errorMessage, money } from '@/lib/sales'
 import { MetaTrafficPerformance } from '@/components/traffic/MetaTrafficPerformance'
 import { buildTrafficView, validTrafficDate, type QueryState, type TrafficScope } from '@/lib/meta-traffic-view'
@@ -27,6 +27,8 @@ import type { TrafficCohortResult } from '../../shared/meta-contract'
 import { refreshDashboardMutation } from '@/lib/sync'
 import { MetaPendingImports } from '@/components/traffic/MetaPendingImports'
 import { createLatestFileLoader, fetchTrafficReviewList } from '@/lib/meta-traffic-queries'
+import { chunkRows, elapsedLabel, leadDateTime, leadDateTimeShort, type WaveList } from '@/lib/meta-waves'
+import type { Json } from '@/integrations/supabase/types'
 
 type Suggestion = { id: string; author_name: string; subject: string; body: string; campaign_id: string | null; status: string; created_at: string; updated_at: string }
 type Reply = { id: string; suggestion_id: string; author_name: string; body: string; created_at: string }
@@ -105,21 +107,25 @@ function ImportPanel({ today, onSubmitted }: { today: string; onSubmitted: () =>
   </section>
 }
 
-function LeadResult({ result }: { result: LeadImportResult }) {
+type LeadImportOutcome = { fileName: string; result: LeadImportResult; sent: number; total: number; error: string | null }
+const emptyLeadResult = (): LeadImportResult => ({ received: 0, duplicates: 0, failed: 0, issues: [] })
+
+function LeadResult({ outcome, onOpenWaves }: { outcome: LeadImportOutcome; onOpenWaves: () => void }) {
+  const { result } = outcome
   return <div className="space-y-3 text-sm" role="status">
-    <div className="flex flex-wrap gap-x-4 gap-y-1"><span>{result.crm} no CRM</span><span>{result.queued} para completar</span><span>{result.duplicates} duplicados, já recebidos</span><span className={result.failed ? 'text-destructive' : undefined}>{result.failed} falhas</span></div>
-    <div className="flex flex-wrap gap-4"><Link className="underline underline-offset-4" to="/crm?tab=leads">Abrir esteira do CRM</Link><Link className="underline underline-offset-4" to="/leads">Completar leads recebidos</Link></div>
-    {!!result.issues.length && <details><summary className="cursor-pointer">Ver linhas que precisam de atenção ({result.issues.length})</summary><ul className="mt-2 max-h-64 space-y-2 overflow-y-auto">{result.issues.map((issue, index) => <li key={index} className="break-words">Linha {issue.row} · {issue.kind === 'failed' ? 'Não importada' : 'Guardada para completar'}: {issue.reason}</li>)}</ul></details>}
+    <div className="grid gap-2 sm:grid-cols-3">
+      <div className="surface-inset-glow rounded-lg p-3"><p className="text-2xl font-light tabular-nums">{result.received}</p><p className="text-xs text-muted-foreground">leads nas levas de aprovação</p></div>
+      <div className="surface-inset-glow rounded-lg p-3"><p className="text-2xl font-light tabular-nums">{result.duplicates}</p><p className="text-xs text-muted-foreground">já recebidos antes (não duplicados)</p></div>
+      <div className="surface-inset-glow rounded-lg p-3"><p className={`text-2xl font-light tabular-nums ${result.failed ? 'text-destructive' : ''}`}>{result.failed}</p><p className="text-xs text-muted-foreground">linhas recusadas</p></div>
+    </div>
+    {outcome.error ? <p role="alert" className="text-destructive">O envio parou em {outcome.sent} de {outcome.total} linhas: {outcome.error}. Envie o mesmo arquivo de novo: o que já entrou não é duplicado.</p>
+      : <p className="text-muted-foreground">Os leads aguardam aprovação em Tráfego → Aprovações, na posição da data e hora em que cada um caiu. Nada vai ao CRM antes da aprovação da leva.</p>}
+    <Button size="sm" variant="outline" onClick={onOpenWaves}><Layers3 className="h-4 w-4" />Abrir levas</Button>
+    {!!result.issues.length && <details><summary className="cursor-pointer">Ver linhas com observação ({result.issues.length})</summary><ul className="mt-2 max-h-64 space-y-2 overflow-y-auto">{result.issues.map((issue, index) => <li key={index} className="break-words">Linha {issue.row} · {issue.kind === 'failed' ? 'Recusada' : 'Já recebido'}: {issue.reason}</li>)}</ul></details>}
   </div>
 }
 
-function notifyLeadResult(result: LeadImportResult) {
-  const message = `${result.crm} no CRM · ${result.queued} para completar · ${result.duplicates} duplicados · ${result.failed} falhas`
-  if (result.failed) toast.warning(message)
-  else toast.success(message)
-}
-
-function LeadImportPanel({ onSubmitted }: { onSubmitted: () => Promise<unknown> }) {
+function LeadImportPanel({ onSubmitted, onOpenWaves }: { onSubmitted: () => Promise<unknown>; onOpenWaves: () => void }) {
   const [fileName, setFileName] = useState('')
   const [headers, setHeaders] = useState<string[]>([])
   const [values, setValues] = useState<string[][]>([])
@@ -127,7 +133,8 @@ function LeadImportPanel({ onSubmitted }: { onSubmitted: () => Promise<unknown> 
   const [busy, setBusy] = useState(false)
   const [fileError, setFileError] = useState('')
   const [dragOver, setDragOver] = useState(false)
-  const [outcome, setOutcome] = useState<LeadImportResponse | null>(null)
+  const [outcome, setOutcome] = useState<LeadImportOutcome | null>(null)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const loadVersion = useRef(0)
   const [previewState, setPreviewState] = useState<{ mapping: LeadCsvMapping; values: string[][]; data: LeadImportRow[] | string } | null>(null)
   useEffect(() => {
@@ -153,22 +160,37 @@ function LeadImportPanel({ onSubmitted }: { onSubmitted: () => Promise<unknown> 
       setMapping(defaultLeadCsvMapping(parsed.headers)); setFileError('')
     } catch (cause) { if (version === loadVersion.current) { setFileError(errorMessage(cause)); setFileName('') } }
   }
+  // Envia em blocos de 200 linhas (cada bloco é atômico e cabe no limite de tempo da API). Reenviar o mesmo
+  // arquivo é seguro: linhas já recebidas voltam como "já recebido" e nada é duplicado.
   const submit = async () => {
     if (!Array.isArray(preview) || !preview.length) return
-    setBusy(true)
+    const rows = preview, name = fileName, chunks = chunkRows(rows), total = emptyLeadResult()
+    let sent = 0, failure: string | null = null
+    setBusy(true); setOutcome(null); setProgress({ done: 0, total: rows.length })
     try {
-      const response = await arenaRpc<LeadImportResponse>('meta_import_leads', { p_filename: fileName, p_rows: preview })
-      setOutcome(response)
+      for (const [index, chunk] of chunks.entries()) {
+        const label = (chunks.length > 1 ? `${name} (parte ${index + 1} de ${chunks.length})` : name).slice(0, 180)
+        const response = await arenaRpc<LeadImportResponse>('meta_import_leads', { p_filename: label, p_rows: chunk as unknown as Json })
+        total.received += response.result.received; total.duplicates += response.result.duplicates; total.failed += response.result.failed
+        total.issues.push(...response.result.issues)
+        sent += chunk.length; setProgress({ done: sent, total: rows.length })
+      }
+    } catch (cause) { failure = errorMessage(cause) }
+    setOutcome({ fileName: name, result: total, sent, total: rows.length, error: failure })
+    if (failure) toast.error(`Envio interrompido em ${sent} de ${rows.length} linhas. Reenvie o arquivo: nada será duplicado.`)
+    else {
       setValues([]); setMapping(null); setFileName('')
-      if (response.result) notifyLeadResult(response.result)
-      else toast.success(response.rows + ' linhas enviadas para aprovação do gestor.')
-      try { await onSubmitted() } catch { toast.warning('Importação registrada. Atualize a página para conferir os dados.') }
-    } catch (cause) { toast.error(errorMessage(cause)) }
-    finally { setBusy(false) }
+      const message = `${total.received} leads nas levas · ${total.duplicates} já recebidos · ${total.failed} recusados`
+      if (total.failed) toast.warning(message)
+      else toast.success(message)
+    }
+    setBusy(false); setProgress(null)
+    try { await onSubmitted() } catch { toast.warning('Importação registrada. Atualize a página para conferir os dados.') }
   }
   return <section className="surface-panel space-y-5 rounded-2xl p-5 sm:p-6">
-    <div><h2 className="text-lg font-medium">Importar leads (planilha)</h2><p className="mt-1 text-sm text-muted-foreground">Importe os leads exportados dos formulários da Meta. Todas as respostas são preservadas. Toda importação aguarda aprovação manual em Tráfego por um Gestor de Tráfego, Executive ou Super Admin. Após a aprovação, leads completos seguem para a fila compartilhada do CRM e os demais ficam em Leads para o SDR completar.</p></div>
-    {outcome && <div className="space-y-3 rounded-lg border border-border/60 p-4"><h3 className="font-medium">{outcome.status === 'pendente' ? 'Enviado para aprovação' : 'Importação processada'}</h3>{outcome.result ? <LeadResult result={outcome.result} /> : <p className="text-sm text-muted-foreground">{outcome.rows} linhas guardadas. O CRM e a fila serão atualizados após a aprovação.</p>}</div>}
+    <div><h2 className="text-lg font-medium">Importar leads (planilha)</h2><p className="mt-1 text-sm text-muted-foreground">Importe os leads exportados dos formulários da Meta (ou de outra origem). Cada linha entra nas mesmas levas dos leads automáticos, na posição da data e hora em que o lead caiu, com todas as respostas preservadas. Na aprovação da leva, o lead vai para o CRM do SDR com o horário em que caiu. Reenviar o mesmo arquivo não duplica leads.</p></div>
+    {outcome && <div className="space-y-3 rounded-lg border border-border/60 p-4"><h3 className="font-medium">{outcome.error ? 'Importação interrompida' : 'Importação recebida'} · {outcome.fileName}</h3><LeadResult outcome={outcome} onOpenWaves={onOpenWaves} /></div>}
+    {progress && <div role="status" className="space-y-2"><div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-ember transition-all" style={{ width: `${Math.round(progress.done / Math.max(1, progress.total) * 100)}%` }} /></div><p className="text-xs text-muted-foreground">Enviando {progress.done} de {progress.total} linhas…</p></div>}
     <div>
       <Label htmlFor="lead-file">Arquivo (CSV, XLS ou XLSX)</Label>
       <label
@@ -185,13 +207,24 @@ function LeadImportPanel({ onSubmitted }: { onSubmitted: () => Promise<unknown> 
       </label>
     </div>
     {fileError && <p role="alert" className="text-sm text-destructive">{fileError}</p>}
-    {mapping && <><div><h3 className="font-medium">Conferir colunas · {fileName}</h3><p className="text-xs text-muted-foreground">Campos sem coluna ficam vazios. Posições fora das opções do CRM e dados incompletos ficam guardados para revisão. Sem data válida, usamos a data de recebimento e mantemos a resposta original.</p></div>
+    {mapping && <><div><h3 className="font-medium">Conferir colunas · {fileName}</h3><p className="text-xs text-muted-foreground">Mapeie a coluna de data e hora do lead: é ela que define a ordem nas levas. Planilha só com data entra com horário aproximado (sinalizado); sem data válida, usamos o horário do recebimento e mantemos a resposta original. Campos sem coluna ficam vazios e o SDR completa no CRM.</p></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{leadCsvFields.map(field => <div key={field.key}><Label htmlFor={'lead-map-' + field.key}>{field.label}{field.required ? ' *' : ''}</Label><select id={'lead-map-' + field.key} disabled={busy} className={selectClass} value={mapping[field.key]} onChange={event => setMapping({ ...mapping, [field.key]: event.target.value })}><option value="">Sem coluna</option>{headers.map((header, index) => <option key={index} value={header}>{header}</option>)}</select></div>)}</div>
       {!preview && <p className="text-sm text-muted-foreground" role="status">Preparando prévia…</p>}
-      {typeof preview === 'string' ? <p role="alert" className="text-sm text-destructive">{preview}</p> : summary && <div className="space-y-3 rounded-lg border border-border/60 p-4 text-sm"><strong>{summary.total} linhas para envio.</strong><p className="text-muted-foreground">Prévia: {summary.complete} prontos para o CRM · {summary.manual} para completar · {summary.duplicates} duplicados no arquivo. Leads já recebidos também serão ignorados, sem criar cópias.</p><div className="overflow-x-auto"><table className="w-full text-left text-xs"><caption className="mb-2 text-left text-muted-foreground">Primeiras 10 linhas · confira os dados antes de enviar</caption><thead><tr>{['Linha', 'Responsável', 'WhatsApp', 'Atleta', 'Destino previsto'].map(label => <th key={label} className="px-2 py-2">{label}</th>)}</tr></thead><tbody>{Array.isArray(preview) && preview.slice(0, 10).map((row, index) => <tr key={index} className="border-t border-border/40"><td className="px-2 py-2">{row.source_row}</td><td className="px-2 py-2">{row.full_name || '—'}</td><td className="px-2 py-2">{row.phone || '—'}</td><td className="px-2 py-2">{row.athlete_name || '—'}</td><td className="px-2 py-2">{row.complete ? 'CRM' : 'Completar'}{row.warnings?.length ? ' · revisar data' : ''}</td></tr>)}</tbody></table></div></div>}
-      <Button disabled={busy || !Array.isArray(preview) || !preview.length} onClick={() => void submit()}>{busy ? 'Enviando…' : 'Enviar para aprovação'}</Button>
+      {typeof preview === 'string' ? <p role="alert" className="text-sm text-destructive">{preview}</p> : summary && <div className="space-y-3 rounded-lg border border-border/60 p-4 text-sm"><strong>{summary.total} linhas para envio.</strong><p className="text-muted-foreground">Prévia: {summary.unique} leads irão para as levas ({summary.complete} com cadastro completo · {summary.manual} que o SDR completa no CRM) · {summary.duplicates} repetidos no arquivo{summary.approximateTime ? ` · ${summary.approximateTime} sem horário na planilha` : ''}. Leads já recebidos antes são reconhecidos e não viram cópias.</p><div className="overflow-x-auto"><table className="w-full text-left text-xs"><caption className="mb-2 text-left text-muted-foreground">Os 10 leads mais recentes do arquivo · confira os dados antes de enviar</caption><thead><tr>{['Linha', 'Caiu em', 'Responsável', 'WhatsApp', 'Atleta', 'Cadastro'].map(label => <th key={label} className="px-2 py-2">{label}</th>)}</tr></thead><tbody>{Array.isArray(preview) && [...preview].sort((a, b) => b.created_time.localeCompare(a.created_time)).slice(0, 10).map((row, index) => <tr key={index} className="border-t border-border/40"><td className="px-2 py-2">{row.source_row}</td><td className="px-2 py-2 tabular-nums">{row.time_known ? leadDateTime(row.created_time) : <span className="text-amber-300">{leadDateTimeShort(row.created_time).slice(0, 5)} · horário aproximado</span>}</td><td className="px-2 py-2">{row.full_name || '—'}</td><td className="px-2 py-2">{row.phone || '—'}</td><td className="px-2 py-2">{row.athlete_name || '—'}</td><td className="px-2 py-2">{row.complete ? 'Completo' : 'SDR completa'}</td></tr>)}</tbody></table></div></div>}
+      <Button disabled={busy || !Array.isArray(preview) || !preview.length} onClick={() => void submit()}>{busy ? 'Enviando…' : 'Enviar para as levas de aprovação'}</Button>
     </>}
   </section>
+}
+
+/** Aviso no topo de Tráfego: leads esperando aprovação, com o horário do mais recente. */
+function PendingLeadsBanner({ waves, onOpen }: { waves: WaveList | undefined; onOpen: () => void }) {
+  if (!waves?.pending_leads && !waves?.failed_leads) return null
+  return <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ember/30 bg-ember/[0.07] p-4">
+    <p className="text-sm"><strong className="tabular-nums">{waves.pending_leads}</strong> {waves.pending_leads === 1 ? 'lead aguardando' : 'leads aguardando'} aprovação
+      {waves.newest_pending_lead_at && <> · o mais recente caiu em <strong className="tabular-nums">{leadDateTimeShort(waves.newest_pending_lead_at)}</strong> ({elapsedLabel(waves.newest_pending_lead_at, Date.now())})</>}
+      {!!waves.failed_leads && <> · <span className="text-rose-300">{waves.failed_leads} com falha no envio ao CRM</span></>}</p>
+    <Button size="sm" className="bg-gradient-ember text-white hover:opacity-90" onClick={onOpen}><Layers3 className="h-4 w-4" />Abrir levas</Button>
+  </div>
 }
 
 function Suggestions({ campaigns }: { campaigns: { id: string; name: string }[] }) {
@@ -251,6 +284,9 @@ export default function Trafego() {
   const validRange = validTrafficDate(start) && validTrafficDate(end) && start <= end && end <= today
   const query = useQuery({ queryKey: ['meta-traffic', user?.id, start, end, level], enabled: !!user && validRange && tab === 'performance', queryFn: () => fetchAllPages<MetaDailyRow>((from, to) => arenaClient.from('meta_traffic_daily').select('*').gte('date', start).lte('date', end).eq('level', level).order('date').order('id').range(from, to)) })
   const pendingCount = useQuery({ queryKey: ['meta-review-count', user?.id], enabled: !!user, refetchInterval: tab === 'approvals' ? 30_000 : false, queryFn: () => fetchTrafficReviewList({ status: 'pendente', limit: 1 }) })
+  const waveBadge = useQuery({ queryKey: ['meta-wave-badge', user?.id], enabled: !!user, refetchInterval: 30_000,
+    queryFn: () => arenaRpc<WaveList>('meta_wave_list', { p_status: 'pendente', p_limit: 1, p_offset: 0 }) })
+  const pendingLeads = waveBadge.data?.pending_leads ?? 0, failedLeads = waveBadge.data?.failed_leads ?? 0, pendingReviews = pendingCount.data?.count ?? 0
   const allRows = query.data || emptyRows
   const accounts = useMemo(() => [...new Map(allRows.map(row => [row.account_id, { id: row.account_id, name: row.account_name || row.account_id }])).values()], [allRows])
   const accountRows = account ? allRows.filter(row => row.account_id === account) : allRows
@@ -272,18 +308,21 @@ export default function Trafego() {
     await refreshDashboardMutation(queryClient)
   }
   return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6"><header><h1 className="text-3xl font-light">Tráfego</h1><p className="mt-2 text-sm text-muted-foreground">Desempenho da Meta Ads para decisões de investimento, aquisição e otimização.</p></header>
-    <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import" className="gap-1.5"><Upload className="h-3.5 w-3.5" /> Importar</TabsTrigger><TabsTrigger value="approvals">Aprovações{pendingCount.data?.count ? ` (${pendingCount.data.count})` : ''}</TabsTrigger><TabsTrigger value="data">Dados e edições</TabsTrigger><TabsTrigger value="audit">Auditoria</TabsTrigger><TabsTrigger value="connection">Conexão</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
+    <TrafficAlerts onOpenConnection={() => setTab('connection')} />
+    {tab !== 'approvals' && <PendingLeadsBanner waves={waveBadge.data} onOpen={() => setTab('approvals')} />}
+    <Tabs value={tab} onValueChange={setTab} className="space-y-5"><TabsList className="h-auto flex-wrap"><TabsTrigger value="performance">Desempenho</TabsTrigger><TabsTrigger value="import" className="gap-1.5"><Upload className="h-3.5 w-3.5" /> Importar</TabsTrigger><TabsTrigger value="approvals" className="gap-1.5">Aprovações{pendingLeads > 0 && <span aria-label={`${pendingLeads} leads aguardando`} className="rounded-full bg-gradient-ember px-1.5 text-[11px] font-semibold tabular-nums text-white">{pendingLeads}</span>}{failedLeads > 0 && <span aria-label={`${failedLeads} com falha`} className="rounded-full bg-rose-500/80 px-1.5 text-[11px] font-semibold tabular-nums text-white">{failedLeads}</span>}{pendingReviews > 0 && <span aria-label={`${pendingReviews} revisões pendentes`} className="rounded-full bg-white/15 px-1.5 text-[11px] tabular-nums">{pendingReviews}</span>}</TabsTrigger><TabsTrigger value="data">Dados e edições</TabsTrigger><TabsTrigger value="audit">Auditoria</TabsTrigger><TabsTrigger value="connection">Conexão</TabsTrigger><TabsTrigger value="suggestions">Sugestões</TabsTrigger></TabsList>
       <TabsContent value="performance" className="space-y-5"><section className="surface-panel grid gap-4 rounded-2xl p-5 sm:grid-cols-2 lg:grid-cols-4"><div><Label htmlFor="traffic-period">Período</Label><select id="traffic-period" className={selectClass} value={period} onChange={event => setPeriod(event.target.value)}><option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="month">Mês atual</option><option value="custom">Personalizado</option></select></div><div><Label htmlFor="traffic-level">Nível</Label><select id="traffic-level" className={selectClass} value={level} onChange={event => { setLevel(event.target.value as MetaLevel); setAccount(''); setCampaign('') }}><option value="campaign">Campanhas</option><option value="adset">Conjuntos</option><option value="ad">Anúncios</option></select></div><div><Label htmlFor="traffic-account">Conta Meta</Label><select id="traffic-account" className={selectClass} value={account} onChange={event => { setAccount(event.target.value); setCampaign('') }}><option value="">Todas as contas</option>{accounts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-campaign">Campanha</Label><select id="traffic-campaign" className={selectClass} value={campaign} onChange={event => setCampaign(event.target.value)}><option value="">Todas as campanhas</option>{campaigns.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div><Label htmlFor="traffic-origin">Origem</Label><select id="traffic-origin" className={selectClass} value={origin} onChange={event => setOrigin(event.target.value as MetaDailyRow['source'] | '')}><option value="">Todas</option><option value="csv">CSV</option><option value="api">API</option></select></div>{period === 'custom' && <><div><Label htmlFor="traffic-start">De</Label><Input id="traffic-start" type="date" value={customStart} max={today} onChange={event => setCustomStart(event.target.value)} /></div><div><Label htmlFor="traffic-end">Até</Label><Input id="traffic-end" type="date" value={customEnd} max={today} onChange={event => setCustomEnd(event.target.value)} /></div></>}</section>
         <TrafficOperationIndicator active={tab === 'performance'} />
         <MetaTrafficPerformance view={viewResult.view} queryState={queryState} cohortState={cohortState} onRetry={() => { void query.refetch(); if (level === 'campaign') void cohortQuery.refetch() }} />
+        {validRange && <MetaLeadConference active={tab === 'performance'} start={start} end={end} campaignId={campaign || null} onOpenWaves={() => setTab('approvals')} />}
       </TabsContent>
       <TabsContent value="import" className="space-y-5">
         <ImportPanel today={today} onSubmitted={reviewed} />
-        <LeadImportPanel onSubmitted={reviewed} />
+        <LeadImportPanel onSubmitted={reviewed} onOpenWaves={() => setTab('approvals')} />
 
         <MetaPendingImports active={tab === 'import'} canReview={false} history onReviewed={reviewed} />
       </TabsContent>
-      <TabsContent value="approvals" className="space-y-5"><p className="text-sm text-muted-foreground">A aprovação manual libera dados para Desempenho e leads para a equipe SDR. Gestor de Tráfego, Executive e Super Admin podem revisar.</p><MetaLeadApprovals canReview={canReview} onReviewed={reviewed} /><MetaPendingImports active={tab === 'approvals'} canReview={canReview} onReviewed={reviewed} /></TabsContent>
+      <TabsContent value="approvals" className="space-y-5"><p className="text-sm text-muted-foreground">Leads são aprovados em levas de 20, da mais recente para a mais antiga. Métricas da API com captura completa e sem conflito são publicadas automaticamente; abaixo ficam só as capturas e planilhas de métricas que precisam de decisão. Gestor de Tráfego, Executive e Super Admin podem revisar.</p><MetaLeadWaves active={tab === 'approvals'} canReview={canReview} onReviewed={reviewed} /><MetaPendingImports active={tab === 'approvals'} canReview={canReview} onReviewed={reviewed} /></TabsContent>
       <TabsContent value="data" className="space-y-5"><MetaTrafficData canEdit={canReview} onSaved={reviewed} /><MetaImportEdits active={tab === 'data'} canEdit={canReview} onSaved={reviewed} /></TabsContent>
       <TabsContent value="audit"><MetaAudit /></TabsContent>
       <TabsContent value="connection"><MetaTrafficConnection active={tab === 'connection'} onProposeChange={() => setTab('suggestions')} /></TabsContent>

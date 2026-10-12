@@ -19,7 +19,7 @@ test('repeated Meta IDs stay identical, including the l: prefix from exports', a
   const prefixed = [...row]; prefixed[0] = 'l:1001'
   const leads = await build([row, prefixed])
   assert.deepEqual(leads.map(lead => lead.meta_lead_id), ['1001', '1001'])
-  assert.deepEqual(summarizeLeadImport(leads), { total: 2, complete: 1, manual: 0, duplicates: 1 })
+  assert.deepEqual(summarizeLeadImport(leads), { total: 2, unique: 1, complete: 1, manual: 0, duplicates: 1, approximateTime: 0 })
 })
 
 test('ID-less reimports keep their identity after renaming and reordering a file', async () => {
@@ -38,6 +38,22 @@ test('Brazilian lead times are interpreted in Brasilia even on a UTC computer', 
     const [lead] = await build([row])
     assert.equal(lead.created_time, '2026-09-20T17:30:00.000Z')
   } finally { if (original === undefined) delete process.env.TZ; else process.env.TZ = original }
+})
+
+test('the lead time is exact when the file has it, and marked approximate when it has only the date', async () => {
+  const [withTime] = await build([row])
+  assert.equal(withTime.time_known, true)
+  assert.deepEqual(withTime.warnings, [])
+  const dateOnly = [...row]; dateOnly[0] = '1002'; dateOnly[headers.indexOf('Created time')] = '20/09/2026'
+  const [approximate] = await build([dateOnly])
+  assert.equal(approximate.time_known, false)
+  assert.equal(approximate.created_time, '2026-09-20T15:00:00.000Z')
+  assert.match(approximate.warnings[0], /sem horário/)
+  const invalid = [...row]; invalid[headers.indexOf('Created time')] = 'ontem à tarde'
+  const [fallback] = await build([invalid])
+  assert.equal(fallback.time_known, false)
+  assert.match(fallback.warnings[0], /recebimento/)
+  assert.equal(summarizeLeadImport([withTime, approximate]).approximateTime, 1)
 })
 
 test('an impossible birth date is not counted as ready for the CRM', async () => {

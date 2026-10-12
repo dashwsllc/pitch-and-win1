@@ -11,13 +11,13 @@ import { canApproveTrafficReview, decideTrafficReviews, fetchLegacyBatchRows, fe
   trafficReviewOptions, trafficReviewPartKey, trafficReviewSeenKey, type TrafficReviewSummary, type TrafficReviewRow } from '@/lib/meta-traffic-queries'
 import type { ImportRow } from '@/lib/meta-traffic'
 import type { LeadImportRow } from '@/lib/meta-lead-import'
-import { FormAnswers } from './MetaLeadApprovals'
+import { FormAnswers } from './FormAnswers'
 import { MetaEditButton } from './MetaEditDialog'
 
 export function TrafficReviewOverview({ summary: s }: { summary: TrafficReviewSummary }) {
   return <div><h3 className="break-words font-medium">{s.kind === 'metrics' ? 'Métricas' : 'Leads'} · {s.filename}</h3>
     <p className="text-sm text-muted-foreground">{s.row_count} linhas · {s.upsert_count} inclusões/atualizações · {s.remove_count} remoções · {s.conflict_count} conflitos</p>
-    <p className="text-xs text-muted-foreground">{s.source.toUpperCase()} · {s.replaced_by_review_id ? 'Incorporado em revisão API' : s.status}{s.window_start && ` · ${s.window_start} a ${s.window_end}`} · {new Date(s.created_at).toLocaleString('pt-BR')}</p>
+    <p className="text-xs text-muted-foreground">{s.source.toUpperCase()} · {s.replaced_by_review_id ? 'Incorporado em revisão API' : s.kind === 'leads' && s.status === 'recebido' ? 'Recebida: os leads foram para as levas de aprovação' : s.status}{s.window_start && ` · ${s.window_start} a ${s.window_end}`} · {new Date(s.created_at).toLocaleString('pt-BR')}</p>
     {s.remove_count > 0 && <p className="mt-2 text-sm text-amber-600">A aprovação também remove {s.remove_count} registros publicados ausentes nesta captura. Confira as remoções nos detalhes.</p>}
   </div>
 }
@@ -109,7 +109,7 @@ export function MetaPendingImports({ active, canReview, onReviewed, history = fa
     {list.isError && <div role="alert"><p className="text-destructive">{errorMessage(list.error)}</p><Button variant="outline" onClick={() => void list.refetch()}>Tentar novamente</Button></div>}
     {list.isPending && <p role="status">Carregando revisões…</p>}
     {list.data?.count === 0 && <p className="text-sm text-muted-foreground">{history ? 'Nenhuma importação registrada.' : 'Nenhuma revisão pendente.'}</p>}
-    {!history && canReview && <Button disabled={busy || !eligible.length} onClick={() => void decide(eligible, 'aprovar', '')}>Aprovar todas as conferidas nesta página ({eligible.length})</Button>}
+    {!history && canReview && !!list.data?.count && <Button className="h-auto whitespace-normal text-left" disabled={busy || !eligible.length} onClick={() => void decide(eligible, 'aprovar', '')}>Aprovar todas as conferidas nesta página ({eligible.length})</Button>}
     {list.data?.rows.map(s => <ReviewCard key={`${user?.id}:${trafficReviewSeenKey(s)}`} summary={s} active={active} history={history} canReview={canReview} busy={busy} refresh={refresh} decide={decide} mark={(key, value) => setSeen(current => ({ ...current, [key]: value }))} />)}
     <PageControls offset={offset} total={list.data?.count || 0} size={50} busy={list.isFetching || busy} change={next => { setOffset(next); setSeen({}) }} />
   </section>
