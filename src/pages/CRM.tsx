@@ -760,8 +760,8 @@ export default function CRM() {
                     }}>
                       <TabsList className="h-auto flex flex-wrap justify-start gap-1">
                         {[
-                          ...(tab === "leads" ? [{ value: "pipeline", label: "Esteira do LEAD" }] : []),
                           { value: "list", label: tab === "leads" ? "Todos ativos" : "Lista" },
+                          ...(tab === "leads" ? [{ value: "pipeline", label: "Esteira do LEAD" }] : []),
                           { value: "temperature", label: "Aquecimento" },
                           { value: "approach", label: "Abordagem" },
                           ...(tab === "leads" ? [] : [{ value: "pipeline", label: "Esteira do LEAD" }]),
