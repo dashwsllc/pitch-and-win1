@@ -134,3 +134,8 @@ export function sumActions(actions: MetaAction[] | undefined, types: string[]): 
 export const LEAD_ACTION_TYPES = ['lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead']
 export const PURCHASE_ACTION_TYPES = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase']
 export const MESSAGING_ACTION_TYPES = ['onsite_conversion.messaging_conversation_started_7d']
+// Funil de campanhas de Vendas: cada métrica usa UMA ação (a primeira presente), nunca a soma de aliases.
+// Os nomes vêm da documentação da Meta e são conferidos nas raw_actions da conta no primeiro dia de campanha.
+export const LANDING_PAGE_VIEW_ACTION_TYPES = ['landing_page_view', 'omni_landing_page_view']
+export const ADD_TO_CART_ACTION_TYPES = ['add_to_cart', 'omni_add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart']
+export const INITIATE_CHECKOUT_ACTION_TYPES = ['initiate_checkout', 'omni_initiated_checkout', 'offsite_conversion.fb_pixel_initiate_checkout']

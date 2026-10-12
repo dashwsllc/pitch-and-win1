@@ -1,7 +1,7 @@
-export function captureDatabase({accounts=[{account_id:'123'}],failPrepare=false}={}) {
- const calls=[],runs=new Map(),imported=[],finishes=[]
+export function captureDatabase({accounts=[{account_id:'123'}],failPrepare=false,publish=()=>({published:true,inserted:0,updated:0,removed:0}),failPublish=false}={}) {
+ const calls=[],runs=new Map(),imported=[],finishes=[],publications=[]
  let lease=0
- const admin={calls,runs,imported,finishes,
+ const admin={calls,runs,imported,finishes,publications,
   from(table){
    const filters={};let updating=false
    const chain={select(){return chain},eq(key,value){filters[key]=value;return chain},in(){return chain},not(){return chain},order(){return chain},limit(){return chain},update(){updating=true;return chain},
@@ -18,6 +18,10 @@ export function captureDatabase({accounts=[{account_id:'123'}],failPrepare=false
     const id='run-'+runs.size
     runs.set(id,{id,status:'running',account_id:args.p_account_id,level:args.p_level,window_start:args.p_start,window_end:args.p_end,request_params:args.p_params,account_metadata:args.p_metadata,page_count:0,rows_synced:0,next_request:{path:'/act_'+args.p_account_id+'/insights',params:args.p_params}})
     return {data:id,error:null}
+   }
+   if(name==='meta_capture_publish_system'){
+    publications.push(args)
+    return failPublish?{data:null,error:{message:'publication unavailable'}}:{data:publish(args,publications.length),error:null}
    }
    const run=runs.get(args.p_id)
    if(name==='meta_capture_claim'){run.claim_token='lease-'+(++lease);return {data:structuredClone(run),error:null}}

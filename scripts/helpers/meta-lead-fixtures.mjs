@@ -1,6 +1,6 @@
 export function leadDatabase({ failReceive = '', failLead = '' } = {}) {
-  const events = new Map(), discoveries = new Map(), calls = [], finishes = []
-  return { events, discoveries, calls, finishes,
+  const events = new Map(), discoveries = new Map(), calls = [], finishes = [], webhooks = []
+  return { events, discoveries, calls, finishes, webhooks,
     from() { const builder = { select() { return builder }, eq(key, value) { builder.id = value; return builder }, async single() { return { data: [...events.values()].find(row => row.id === builder.id), error: null } } }; return builder },
     async rpc(name, args) {
       calls.push({ name, args })
@@ -42,6 +42,12 @@ export function leadDatabase({ failReceive = '', failLead = '' } = {}) {
         Object.assign(state, args.p_state); state.version++; return ok(state.version)
       }
       if (name === 'meta_lead_discovery_release') return ok(null)
+      if (name === 'meta_lead_discovery_note_webhook') {
+        webhooks.push(args)
+        const state = discoveries.get(args.p_page_id)
+        if (state) state.webhook_checked_at = new Date().toISOString()
+        return ok(null)
+      }
       throw new Error(`Unexpected RPC ${name}`)
     },
   }

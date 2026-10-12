@@ -62,7 +62,15 @@ Deno.serve(async (req) => {
         const account = await readMetaAccount(admin, job.accountId, token, deadlineMs - 5000)
         const window = job.since && job.until ? { since: job.since, until: job.until } : accountWindow(account.timezone, days)
         const result = await captureAccountLevel(admin, { ...job, ...window, actor, triggeredBy, deadlineMs, pageLimit: 2 }, token)
-        results.push({ accountId: account.id, level: job.level, ...result })
+        // Captura completa e sem conflito é publicada na hora; conflito, edição manual ou remoção em massa
+        // continuam pendentes para revisão humana. Falha ao publicar não invalida a captura.
+        let publication: unknown
+        if (result.state === 'complete' && result.reviewId) {
+          const { data, error } = await admin.rpc('meta_capture_publish_system', { p_review: result.reviewId })
+          publication = error ? { published: false, reason: 'error' } : data
+          if (error) console.error('meta-insights-sync publish failed', error.message)
+        }
+        results.push({ accountId: account.id, level: job.level, ...result, ...(publication ? { publication } : {}) })
         partial ||= result.state === 'partial' || result.state === 'skipped'
       } catch (error) {
         let message = error && typeof error === 'object' && 'message' in error ? String(error.message).replaceAll(token, '[credencial]').replaceAll(encodeURIComponent(token), '[credencial]') : 'Falha da conta Meta'
