@@ -60,13 +60,16 @@ UPDATE public.crm_leads c SET lead_received_at=l.first_received_at,import_channe
 ALTER FUNCTION public.meta_ingest_lead_import_row(jsonb,uuid,uuid) RENAME TO meta_ingest_lead_import_row_v1;
 CREATE FUNCTION public.meta_ingest_lead_import_row(item jsonb,p_batch_id uuid,p_reviewer uuid) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
-DECLARE channel text:=coalesce(item->>'entry_channel','form'); meta_id text;
+DECLARE channel text:=coalesce(item->>'entry_channel','form'); meta_id text; source_date timestamptz; date_known boolean;
 BEGIN
  IF channel NOT IN('form','website') THEN RAISE EXCEPTION 'Origem da importação inválida' USING ERRCODE='22023'; END IF;
  PERFORM public.meta_ingest_lead_import_row_v1(item,p_batch_id,p_reviewer);
+ BEGIN source_date:=nullif(btrim(item->>'created_time'),'')::timestamptz; EXCEPTION WHEN data_exception THEN source_date:=NULL; END;
+ date_known:=coalesce(isfinite(source_date) AND source_date<=clock_timestamp()+interval '1 day',false)
+  AND coalesce(item->>'source_has_date','true')<>'false';
  meta_id:=regexp_replace(btrim(coalesce(item->>'meta_lead_id','')),'^l:([0-9]+)$','\1');
  IF meta_id='' THEN meta_id:='csv:'||md5(coalesce(item->'field_data','[]'::jsonb)::text||'|'||coalesce(item->>'full_name','')||'|'||coalesce(item->>'phone','')||'|'||coalesce(item->>'created_time','')); END IF;
- UPDATE public.meta_form_leads SET entry_channel=channel,source_snapshot=coalesce(source_snapshot,'{}')||
+ UPDATE public.meta_form_leads SET entry_channel=channel,import_contact=coalesce(import_contact,'{}')||jsonb_build_object('source_has_date',date_known),source_snapshot=coalesce(source_snapshot,'{}')||
   jsonb_build_object('manual_row',item,'entry_channel',channel) WHERE meta_lead_id=meta_id AND lead_import_batch_id=p_batch_id;
 END $$;
 REVOKE ALL ON FUNCTION public.meta_ingest_lead_import_row(jsonb,uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
@@ -189,7 +192,9 @@ BEGIN
       'crm_sync_last_at',l.crm_sync_last_at,'traffic_edited_at',l.traffic_edited_at,
       'source',CASE WHEN l.lead_import_batch_id IS NULL THEN 'api' ELSE 'planilha' END,
       'batch_filename',(SELECT b.filename FROM public.meta_lead_import_batches b WHERE b.id=l.lead_import_batch_id),
-      'time_known',CASE WHEN l.import_contact->>'time_known' IN ('true','false') THEN (l.import_contact->>'time_known')::boolean ELSE true END) ORDER BY l.first_received_at DESC,l.created_time DESC,l.id)
+      'time_known',CASE WHEN l.import_contact->>'time_known' IN ('true','false') THEN (l.import_contact->>'time_known')::boolean ELSE true END,
+      'date_known',CASE WHEN l.import_contact->>'source_has_date' IN ('true','false') THEN (l.import_contact->>'source_has_date')::boolean
+        WHEN l.import_contact->>'time_known'='false' THEN false ELSE true END) ORDER BY l.first_received_at DESC,l.created_time DESC,l.id)
       FROM public.meta_form_leads l WHERE l.wave_id=p_wave),'[]'))
   INTO result;
   RETURN result;

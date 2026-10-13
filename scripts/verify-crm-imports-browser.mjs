@@ -27,6 +27,7 @@ const state = { revision: 1, leads: [
   // Newly recovered older generation has priority by receipt, not CRM creation or generation.
   lead(3, 'Formulário Recuperado', 'form', 'manual', ago(17), ago(86400 * 7)),
 ] }
+state.leads[2].import_snapshot.import_contact = { time_known: false, source_has_date: false }
 const clock = value => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(value))
 const browser = await chromium.launch({ headless: true })
 async function session(index) {
@@ -79,6 +80,8 @@ try {
   await first.getByRole('button', { name: 'Contexto de Formulário Recuperado', exact: true }).click()
   const detail = first.getByRole('region', { name: 'Dados completos da importação' })
   await expect(detail.getByText(longAnswer, { exact: true })).toBeVisible()
+  await expect(detail.getByText('Data e horário não informados na origem',{exact:true})).toBeVisible()
+  await expect(first.getByText('Caiu em (horário de Brasília)',{exact:true})).toHaveCount(0)
   await detail.getByText('Consentimentos completos', { exact: true }).click()
   await expect(detail.locator('details').nth(0).locator('pre')).toContainText('CONSENTIMENTO INTEGRAL QA')
   await detail.getByText('Consultar registro integral, atribuição e dados adicionais', { exact: true }).click()

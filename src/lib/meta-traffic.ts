@@ -70,7 +70,7 @@ export function defaultCsvMapping(headers: string[]): CsvMapping {
   ])) as CsvMapping
 }
 
-export function parseCsv(source: string) {
+export function parseCsv(source: string, options: { preserveCells?: boolean } = {}) {
   const text = source.replace(/^\uFEFF/, '')
   const firstLine = text.split(/\r?\n/, 1)[0] ?? ''
   const delimiter = [';', ',', '\t'].sort((a, b) => firstLine.split(b).length - firstLine.split(a).length)[0]
@@ -78,22 +78,23 @@ export function parseCsv(source: string) {
   let row: string[] = []
   let cell = ''
   let quoted = false
+  const value = () => options.preserveCells ? cell : cell.trim()
   for (let i = 0; i < text.length; i += 1) {
     const char = text[i]
     if (char === '"') {
       if (quoted && text[i + 1] === '"') { cell += '"'; i += 1 }
       else quoted = !quoted
     } else if (char === delimiter && !quoted) {
-      row.push(cell.trim()); cell = ''
+      row.push(value()); cell = ''
     } else if ((char === '\n' || char === '\r') && !quoted) {
       if (char === '\r' && text[i + 1] === '\n') i += 1
-      row.push(cell.trim()); cell = ''
+      row.push(value()); cell = ''
       if (row.some(value => value !== '')) rows.push(row)
       row = []
     } else cell += char
   }
   if (quoted) throw new Error('CSV com aspas não fechadas.')
-  row.push(cell.trim())
+  row.push(value())
   if (row.some(value => value !== '')) rows.push(row)
   const [headers, ...values] = rows
   if (!headers?.length || !values.length) throw new Error('CSV sem cabeçalho ou linhas de dados.')

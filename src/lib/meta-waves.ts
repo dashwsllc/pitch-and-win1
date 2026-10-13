@@ -64,6 +64,7 @@ export interface WaveLead {
   source: 'api' | 'planilha'
   batch_filename: string | null
   time_known: boolean
+  date_known?: boolean
 }
 
 export interface WaveList {

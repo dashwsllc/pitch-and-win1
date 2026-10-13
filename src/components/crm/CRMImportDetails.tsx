@@ -1,7 +1,7 @@
 import type { CRMLead } from '@/hooks/useCRM'
 import { FormAnswers } from '@/components/traffic/FormAnswers'
-import { importChannel, importChannelLabels, importMethodLabels, importReceivedAt, importSnapshot } from '@/lib/crm-imports'
-import { leadDateTime, leadDay } from '@/lib/meta-waves'
+import { importChannel, importChannelLabels, importGenerationLabel, importMethodLabels, importReceivedAt, importSnapshot } from '@/lib/crm-imports'
+import { leadDateTime } from '@/lib/meta-waves'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
@@ -35,7 +35,7 @@ function ImportDetailsContent({ lead }: { lead: CRMLead }) {
   const knownTime = contact.time_known !== false
   const text = (value: unknown) => typeof value === 'string' ? value : ''
   const fields = [
-    ['Formulário enviado em', knownTime ? leadDateTime(generated) : `${leadDay(generated)} · horário não informado na origem`],
+    ['Geração na origem', importGenerationLabel(generated, knownTime, typeof contact.source_has_date === 'boolean' ? contact.source_has_date : undefined)],
     ['Recebido no sistema em', leadDateTime(importReceivedAt(lead))],
     ['Disponível no CRM em', leadDateTime(lead.created_at)],
     ['Campanha', text(source.campaign_name) || text(source.campaign_id)],

@@ -155,7 +155,7 @@ function LeadImportPanel({ onSubmitted, onOpenWaves }: { onSubmitted: () => Prom
     setMapping(null); setValues([]); setFileError('')
     try {
       if (file.size > 2_000_000) throw new Error('Arquivo acima de 2 MB. Divida a exportação em partes menores.')
-      const parsed = await parseSpreadsheetFile(file)
+      const parsed = await parseSpreadsheetFile(file, { preserveCells: true })
       if (version !== loadVersion.current) return
       setFileName(file.name); setHeaders(parsed.headers); setValues(parsed.values)
       setMapping(defaultLeadCsvMapping(parsed.headers)); setFileError('')

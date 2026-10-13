@@ -30,6 +30,7 @@ export type LeadImportRow = {
   complete: boolean
   // false quando a planilha não traz horário (ou data) confiável: o horário é só uma referência para ordenar.
   time_known: boolean
+  source_has_date: boolean
   source_row?: number
   warnings?: string[]
 }
@@ -42,7 +43,7 @@ export type LeadImportResult = {
 // Formato dos lotes antigos, quando a aprovação enviava direto ao CRM.
 export type LegacyLeadImportResult = { crm: number; queued: number; duplicates: number; failed: number; issues: { row: number; kind: 'queued' | 'failed'; reason: string }[] }
 export type LeadImportResponse = { batch_id: string; rows: number; status: 'recebido' | 'pendente' | 'aprovado'; result: LeadImportResult }
-export type LeadCsvField = keyof Omit<LeadImportRow, 'complete' | 'field_data' | 'raw_notes' | 'source_row' | 'warnings' | 'time_known' | 'entry_channel' | 'raw_cells' | 'source_file'>
+export type LeadCsvField = keyof Omit<LeadImportRow, 'complete' | 'field_data' | 'raw_notes' | 'source_row' | 'warnings' | 'time_known' | 'source_has_date' | 'entry_channel' | 'raw_cells' | 'source_file'>
 export type LeadCsvMapping = Record<LeadCsvField, string>
 
 export const athletePositions = ['Goleiro', 'Zagueiro', 'Lateral', 'Volante', 'Meia', 'Atacante']
@@ -105,7 +106,7 @@ function parseDateTime(value: string) {
     : /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T12:00:00-03:00` : trimmed.replace(' ', 'T')
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(source)) source += '-03:00'
   const date = new Date(source)
-  const fallback = !trimmed || invalidCalendar || invalidClock || Number.isNaN(date.valueOf())
+  const fallback = !trimmed || invalidCalendar || invalidClock || Number.isNaN(date.valueOf()) || date.valueOf() > Date.now() + 86400_000
   // Data sem hora: o horário (12:00) é só uma referência e a leva avisa que ele é aproximado.
   const hasTime = br ? br[4] !== undefined : !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)
   return { value: fallback ? new Date().toISOString() : date.toISOString(), fallback, hasTime }
@@ -170,7 +171,7 @@ export async function buildLeadImportRows(values: string[][], headers: string[],
       athlete_weight_kg: get('athlete_weight_kg').trim(), city_state: get('city_state').trim(),
       performance_report_url: get('performance_report_url').trim(),
       field_data, raw_notes: field_data.map(item => `${item.name}: ${item.values[0]}`).join('\n'),
-      complete: false, source_row: index + 2, time_known: !created.fallback && created.hasTime,
+      complete: false, source_row: index + 2, time_known: !created.fallback && created.hasTime, source_has_date: !created.fallback,
       warnings: created.fallback ? ['Data do lead ausente ou inválida; usamos o horário do recebimento da planilha.']
         : created.hasTime ? [] : ['Planilha sem horário; usamos 12:00 só como referência para ordenar.'],
     }

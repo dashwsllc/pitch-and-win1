@@ -1,3 +1,5 @@
+import { leadDateTime, leadDay } from './meta-waves'
+
 export type ImportChannel = 'form' | 'website'
 export type ImportMethod = 'automatic' | 'manual'
 export type ImportSection = ImportChannel | 'all'
@@ -33,6 +35,11 @@ export function importReceivedAt(lead: CRMImportMetadata) {
   const saved = importSnapshot(lead).first_received_at
   const value = lead.lead_received_at || (typeof saved === 'string' ? saved : null)
   return value && Number.isFinite(Date.parse(value)) ? value : null
+}
+/** Never label fallback processing dates or synthetic noon as an actual submission. */
+export function importGenerationLabel(at: string | null | undefined, timeKnown: boolean, dateKnown?: boolean) {
+  if (!at || !Number.isFinite(Date.parse(at)) || dateKnown === false || (!timeKnown && dateKnown !== true)) return 'Data e horário não informados na origem'
+  return timeKnown ? leadDateTime(at) : `${leadDay(at)} · horário não informado na origem`
 }
 const timestamp = (value?: string | null) => value && Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0
 export function compareCRMImportRecency(a: ImportedLead, b: ImportedLead) {

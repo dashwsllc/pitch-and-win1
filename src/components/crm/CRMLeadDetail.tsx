@@ -31,8 +31,8 @@ import { outcomeLabel } from "@/lib/crm-stages";
 import { CRMContextPanel } from "./CRMContextPanel";
 import { CRMImportDetails } from './CRMImportDetails';
 import { CRMLeadArrival } from "./CRMLeadArrival";
-import { leadArrivedAt, leadDateTime } from "@/lib/meta-waves";
-import { importChannelLabels } from '@/lib/crm-imports';
+import { leadDateTime } from "@/lib/meta-waves";
+import { importChannelLabels, importReceivedAt } from '@/lib/crm-imports';
 
 const stateLabels: Record<string, string> = {
   temperature: "Aquecimento",
@@ -91,7 +91,7 @@ export function CRMLeadDetail({
     ["Altura (cm)", lead.athlete_height_cm],
     ["Peso (kg)", lead.athlete_weight_kg],
     ["Origem", lead.import_channel ? importChannelLabels[lead.import_channel] : lead.lead_source ? (LEAD_SOURCE_LABELS[lead.lead_source] || lead.lead_source) : null],
-    ["Caiu em (horário de Brasília)", leadArrivedAt(lead) ? leadDateTime(leadArrivedAt(lead)) : null],
+    ["Recebido no sistema (Brasília)", importReceivedAt(lead) ? leadDateTime(importReceivedAt(lead)) : null],
     ["Valor estimado", lead.estimated_deal_value],
     ["Prioridade", lead.priority],
     ["Observações", lead.observations],

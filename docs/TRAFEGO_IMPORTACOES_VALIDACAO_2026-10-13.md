@@ -14,7 +14,11 @@ Destino comercial: `dash`, `mbzwchnxtskysqplqiyy`. Branch `codex/traffic-lead-wa
 
 ## Evidência local
 
-Em 13/10: 108 regressões Node passaram (81 principais + 27 de captura/token/edição/desempenho), TypeScript sem erros, ESLint dos 14 arquivos TypeScript alterados sem erros, build de produção concluído. Não foi acrescentada dependência de produto.
+Em 13/10: 111 regressões Node passaram após a revisão, TypeScript sem erros, ESLint dos arquivos TypeScript alterados sem erros, build de produção concluído. Não foi acrescentada dependência de produto.
+
+Revisão independente `gpt-6.1-sol/high` (o modelo inicialmente escolhido não iniciou por limite de uso): nenhum achado crítico, dois importantes, ambos corrigidos em uma passagem TDD. O primeiro era remoção de espaços na leitura real de CSV/XLSX; a leitura de leads agora preserva células e cabeçalhos, normalizando apenas os campos usados no cadastro. O segundo era apresentação de datas/horários artificiais como envio; arquivos sem data mostram indisponibilidade, arquivos somente com data não mostram meio-dia como horário real. Os testes começam em arquivos reais e passam pelo contrato do banco/ficha.
+
+Consulta somente leitura de 13/10 às 14:50 (Brasília): 54 fatos de métricas, todos correspondentes às suas capturas aprovadas, sem divergência em gasto/leads/impressões/cliques, sem chaves duplicadas e sem revisão pendente. Cada nível (campanha/conjunto/anúncio) apresenta R$311,98 e425leads, níveis alternativos e não somáveis. Busca de contatos atualizada e sem erro; assinatura do webhook ainda sem confirmação, portanto a latência ao vivo permanece não comprovada.
 
 PostgreSQL 17.6 descartável, exclusivamente `127.0.0.1:55812/traffic_waves_test`, aplicando a estrutura real e as migrations do fluxo de tráfego:
 

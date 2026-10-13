@@ -49,5 +49,15 @@ BEGIN
  PERFORM pg_temp.assert((outcome->>'sent')::int=19 AND (outcome->>'failed')::int=1,'one invalid contact prevented nineteen valid deliveries');
  PERFORM pg_temp.assert((SELECT count(*)=20 FROM public.meta_form_leads WHERE meta_lead_id LIKE prefix||'-partial-%'),'partial send removed a source lead');
  PERFORM pg_temp.assert((SELECT count(*)=19 FROM public.crm_leads crm_row JOIN public.meta_form_leads f ON crm_row.meta_form_lead_id=f.id WHERE f.meta_lead_id LIKE prefix||'-partial-%'),'partial send lost or duplicated a CRM contact');
+ response:=public.meta_import_leads('qa-date-precision.csv',jsonb_build_array(
+  jsonb_build_object('meta_lead_id',prefix||'-undated','full_name','Synthetic undated','phone','11999990001','time_known',false,'source_has_date',false),
+  jsonb_build_object('meta_lead_id',prefix||'-date-only','full_name','Synthetic date only','phone','11999990001','created_time','2026-10-07T15:00:00Z','time_known',false,'source_has_date',true)));
+ SELECT id INTO received FROM public.meta_form_leads WHERE meta_lead_id=prefix||'-undated';
+ snapshot:=public.meta_wave_begin_review((SELECT wave_id FROM public.meta_form_leads WHERE id=received));
+ PERFORM pg_temp.assert(EXISTS(SELECT FROM jsonb_array_elements(snapshot->'leads') x WHERE x->>'id'=received::text AND x->>'date_known'='false'),'unknown generation date was not exposed to the wave');
+ SELECT jsonb_agg(jsonb_build_object('id',x->>'id','updated_at',x->>'updated_at')) INTO members FROM jsonb_array_elements(snapshot->'leads')x;
+ outcome:=public.meta_wave_decide_versioned((snapshot->'wave'->>'id')::uuid,(snapshot->'wave'->>'version')::bigint,members,'aprovar','[]','',gen_random_uuid());
+ PERFORM pg_temp.assert((SELECT import_snapshot->'import_contact'->>'source_has_date'='false' FROM public.crm_leads WHERE meta_form_lead_id=received),'CRM lost the missing-generation-date flag');
+ PERFORM pg_temp.assert((SELECT import_snapshot->'import_contact'->>'source_has_date'='true' FROM public.crm_leads WHERE meta_form_lead_id=(SELECT id FROM public.meta_form_leads WHERE meta_lead_id=prefix||'-date-only')),'CRM lost date-only precision');
 END $$;
 ROLLBACK;

@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useLiveClockSelector } from '@/hooks/useLiveClock'
 import { arenaRpc } from '@/lib/arena-api'
 import { waveDecisionPayload } from '@/lib/meta-wave-decisions'
+import { importGenerationLabel } from '@/lib/crm-imports'
 import { errorMessage } from '@/lib/sales'
 import {
   decisionMessage, elapsedLabel, leadClock, leadDateTime, leadDateTimeShort, leadDay, leadSyncView, leadUrgency, urgencyClass, waveOutcomeLabel,
@@ -124,7 +125,7 @@ function WaveCard({ wave, newest, open, active, canReview, refresh, onToggle }: 
         {wave.status !== 'pendente' && wave.reviewed_at && <p className="text-xs text-muted-foreground">{waveStatusLabel[wave.status]} em {leadDateTimeShort(wave.reviewed_at)}{wave.reviewed_by_name ? ` por ${wave.reviewed_by_name}` : ''}{wave.review_note ? ` · ${wave.review_note}` : ''}</p>}
       </div>
       <div className="flex items-center gap-3">
-        {wave.status === 'pendente' && wave.last_lead_at && <Elapsed at={wave.last_lead_at} live />}
+        {wave.status === 'pendente' && (wave.last_received_at || wave.last_lead_at) && <Elapsed at={(wave.last_received_at || wave.last_lead_at)!} live />}
         {wave.failed > 0 && <Chip className="border-rose-500/40 bg-rose-500/10 text-rose-300"><AlertTriangle className="h-3 w-3" />{wave.failed} com falha</Chip>}
         <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
       </div>
@@ -246,7 +247,7 @@ function LeadCard({ lead, newest, canReview, reviewable, busy, excludedReason, o
       <p className="text-xs tabular-nums text-muted-foreground">{leadDay(received)}</p>
       {newest && <Chip className="border-ember/40 text-ember">Mais recente da leva</Chip>}
       <Elapsed at={received} live={pending} />
-      <p className="pt-1 text-[11px] tabular-nums text-muted-foreground">Formulário: {lead.time_known ? leadDateTime(lead.created_time) : `${leadDay(lead.created_time)} · horário não informado`}</p>
+      <p className="pt-1 text-[11px] tabular-nums text-muted-foreground">Geração na origem: {importGenerationLabel(lead.created_time, lead.time_known, lead.date_known)}</p>
       {!lead.time_known && <p className="text-[11px] text-amber-300" title={lead.import_warning || undefined}>Horário aproximado (planilha)</p>}
     </div>
     <div className="min-w-0 space-y-1.5">

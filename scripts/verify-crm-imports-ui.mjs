@@ -47,3 +47,13 @@ test('CRM source details preserve long answers, complete consent data and origin
  assert.match(html,/site.csv/)
  assert.match(html,/07\/10\/2026.*08:00:00/)
 })
+
+test('generation display never presents absent dates or synthetic noon as a real submission',()=>{
+ const {CRMImportDetails}=load('src/components/crm/CRMImportDetails.tsx')
+ for(const [hasDate,expected] of [[false,'Data e horário não informados na origem'],[true,'13/10/2026 · horário não informado na origem']]){
+  const html=renderToStaticMarkup(React.createElement(CRMImportDetails,{lead:{...rows[1],import_snapshot:{
+   created_time:'2026-10-13T15:00:00Z',import_contact:{source_has_date:hasDate,time_known:false}}}}))
+  assert.match(html,new RegExp(expected))
+  assert.doesNotMatch(html,/13\/10\/2026 12:00:00/)
+ }
+})

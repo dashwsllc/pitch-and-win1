@@ -143,7 +143,7 @@ try {
   assert.deepEqual(calls.filter(call => call.name === 'meta_wave_reopen').at(-1).args, { p_wave: state.waves[2].id, p_lead: null })
   // Importação manual em blocos de 200 linhas, sem perder nenhuma.
   await page.getByRole('tab', { name: /Importar/ }).click()
-  const csv = ['Created time,Full name,Phone number', ...Array.from({ length: 450 }, (_, index) => `11/10/2026 ${String(8 + Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}:00,Lead ${index},1199${String(index).padStart(7, '0')}`)].join('\n')
+  const csv = ['Created time,Full name,Phone number,Contexto', ...Array.from({ length: 450 }, (_, index) => `11/10/2026 ${String(8 + Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}:00,Lead ${index},1199${String(index).padStart(7, '0')},"  resposta ${index}  "`)].join('\n')
   await page.locator('#lead-file').setInputFiles({ name: 'export-meta.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
   await expect(page.getByText('450 linhas para envio.')).toBeVisible()
   await page.getByRole('button', { name: 'Enviar para as levas de aprovação' }).click()
@@ -152,6 +152,7 @@ try {
   assert.deepEqual(imports.map(call => [call.args.p_filename, call.args.p_rows.length]), [['export-meta.csv (parte 1 de 3)', 200], ['export-meta.csv (parte 2 de 3)', 200], ['export-meta.csv (parte 3 de 3)', 50]])
   assert.equal(new Set(imports.flatMap(call => call.args.p_rows.map(row => row.meta_lead_id))).size, 450)
   assert(imports.every(call => call.args.p_rows.every(row => row.time_known === true)))
+  assert.equal(imports[0].args.p_rows[0].raw_cells[3].value,'  resposta 0  ')
   assert.deepEqual(errors, [])
   console.log('PASS: newest wave first and auto-opened, exact lead times, approximate-time marker, exclusion with reason, two-step approval, stale reload, visible failure and retry, lead and wave reopening, chunked manual import without losing rows')
 } finally { await browser.close() }
