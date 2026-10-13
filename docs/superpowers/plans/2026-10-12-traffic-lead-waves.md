@@ -10,6 +10,16 @@
 
 **Spec:** [2026-10-12-traffic-lead-waves-design.md](../specs/2026-10-12-traffic-lead-waves-design.md), aprovada pelo usuário nesta conversa em 12/10/2026.
 
+## Ajustes de execução aprovados e compatibilidade
+
+A instrução posterior do usuário dá prioridade ao **primeiro recebimento durável**, com geração original explicitamente identificada, e acrescenta SDR → Importações → Formulários / Site, distinguindo automático/manual. O desenho do site foi aprovado; sua especificação escrita permanece em revisão própria.
+
+As tarefas 1–5 adotam a implementação publicada por outro fluxo (`15c88e7..4e4ab88`) e corrigem os pontos faltantes em uma evolução compatível. O arquivo efetivo é `20261013165410_crm_import_integrity.sql`, criado pela CLI; tipos/helper existentes `meta-waves.ts` e `arena-api.ts` são reutilizados. O teste de CRM é `verify-crm-import-integrity-db.sql`; os testes TypeScript são `verify-meta-wave-versioned-ui.mjs`, `verify-crm-imports-ui.mjs`, `verify-crm-import-query.mjs` e `verify-manual-import-integrity.mjs`. Navegadores: `verify-meta-lead-waves-browser.mjs` e `verify-crm-imports-browser.mjs` (duas sessões SDR).
+
+Expandir uma leva é leitura; o primeiro botão Aprovar/Rejeitar inicia e fecha a revisão. Isso preserva a disponibilidade imediata sem criar uma leva nova a cada atualização automática da tela. As decisões antigas de levas continuam como função interna, inacessível aos clientes, para impedir que contornem as versões. O contexto integral é preservado no CRM e consultado sob demanda, mantendo a lista ágil.
+
+O relatório de validação desta evolução é `docs/TRAFEGO_IMPORTACOES_VALIDACAO_2026-10-13.md`. As descrições originais abaixo permanecem como histórico do plano; este ajuste e as instruções posteriores do usuário prevalecem sobre os nomes de arquivos e a prioridade por geração.
+
 ## Global Constraints
 
 - Destino comercial: Supabase `dash`, `mbzwchnxtskysqplqiyy`.

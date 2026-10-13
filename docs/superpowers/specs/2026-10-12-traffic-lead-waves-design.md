@@ -4,6 +4,16 @@ Data: 12/10/2026. Base examinada: `pitch-and-win1`, commit `8cebb5d`. Destino co
 
 Estado: desenho e especificação escrita aprovados pelo usuário nesta conversa em 12/10/2026. O plano de implementação será revisado antes da execução. Este documento não registra aprovação de leads reais nem autorização para publicar métricas automaticamente.
 
+## Atualização de execução — 13/10/2026
+
+O usuário aprovou o plano e a execução nativa e depois determinou prioridade **sempre pelo recebimento mais recente**. Essa instrução substitui a ordenação por geração descrita adiante: primeiro recebimento durável decrescente, geração decrescente no empate e identificador estável. Os três instantes continuam distintos e aparecem com data e horário ao segundo em Brasília.
+
+Também solicitou **SDR → Importações**, dividido entre **Formulários** e **Site / conversão direta**, com filtros independentes para entrada automática e manual. O cadastro preserva, na mesma transação de envio, a captura integral aprovada, inclusive respostas extensas, consentimentos, arquivo original, colunas não mapeadas e atribuição. A lista consulta somente metadados e contato; a ficha busca a captura completa sob as mesmas regras de acesso do CRM.
+
+Outro fluxo já instalou as levas e o envio mínimo no CRM. Esta execução evolui esse contrato com a migration `20261013165410_crm_import_integrity.sql`, sem reaplicar ou substituir `20261012150000`. Abrir o detalhe é uma prévia; iniciar explicitamente aprovação/rejeição fecha a entrada da leva e conserva o conjunto conferido. A decisão coletiva exige versões de todos os membros e chave de repetição. A antiga decisão coletiva passa a helper interno.
+
+A integração automática do site tem desenho conversacional aprovado e especificação própria em `2026-10-13-site-lead-import-design.md`, ainda aguardando aprovação escrita. A importação manual de arquivos do site já usa as mesmas levas e o mesmo envio ao CRM. A auditoria abrangente de métricas permanece fora desta entrega de integridade das importações.
+
 ## 1. Resultado esperado
 
 O gestor precisa revisar leads de formulário em levas de até 20, localizar primeiro os mais recentes e encaminhar os aprovados à fila compartilhada do SDR. O SDR precisa ver quando cada pessoa enviou o formulário e há quanto tempo aguarda atendimento. Data de geração, chegada ao sistema e entrada no CRM têm significados diferentes e precisam permanecer identificadas.
