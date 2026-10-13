@@ -450,6 +450,8 @@ Todas as consultas foram somente leitura (`npx supabase db query --linked --proj
 
 ## Apêndice A — consultas usadas
 
+Atualização de13/10: o trabalho da branch `codex/traffic-lead-waves` foi reconciliado com a implementação publicada. A evolução agora é compatível, com migration própria `20261013165410`, sem recriar as levas nem reaplicar a migration12150000. O aviso histórico da seção15 para não publicar aquela versão não se aplica à evolução revisada e integrada no PR#1. A instrução posterior do usuário prioriza recebimento durável; geração original continua identificada. Estado publicado e provas: [validação de Importações](TRAFEGO_IMPORTACOES_VALIDACAO_2026-10-13.md).
+
 Todas são somente leitura e foram executadas no projeto `mbzwchnxtskysqplqiyy`.
 
 ```sql

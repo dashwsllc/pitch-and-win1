@@ -41,8 +41,14 @@ Para repetir os navegadores: iniciar Vite no checkout, definir `TRAFFIC_TEST_ORI
 
 ## Estado de publicação e pendências
 
-A última consulta comercial anterior à publicação encontrou 426 leads, todos pendentes, em 22 levas, sem vínculo CRM. As novas colunas ainda não estavam instaladas. Este documento registra a implementação e a prova local; não confirma implantação desta evolução.
+A evolução foi publicada em 13/10/2026, no destino comercial confirmado. Migration `20261013165410_crm_import_integrity`, aplicada seletivamente em transação com histórico e comparação de fingerprints dos dados de origem, levas e CRM antes/depois: todos preservados. Nenhuma migration anterior foi reaplicada.
 
-A publicação seletiva requer aplicar somente a nova migration, atualizar o frontend e reconferir recibos, vínculos, limites e grants. Aprovação de contatos reais continua na tela, por decisão comercial.
+PR [#1](https://github.com/dashwsllc/pitch-and-win1/pull/1) integrado em `abad5b4`. O checkout principal foi atualizado por fast-forward. Frontend publicado no projeto Vercel `prj_m8Z9WxSHwBsOZEs5LInysrd5DE1w`, proprietário dos domínios `wsltda.com` e `www.wsltda.com`; deployment `dpl_C18EntzD5Uf9usPTteZDXnUvaFpp` em estado READY. A prévia automática com erro pertencia a outro projeto ligado ao repositório, sem acesso pela conta atual; ela não foi usada como destino. O envio foi feito de um arquivo Git contendo somente os761arquivos rastreados, excluindo configuração local e o banco descartável.
+
+Em produção, HTTP200 e chunks publicados conferidos para revisão versionada, Importações do SDR, origem Site, captura integral, células originais, precisão de datas e conexão com `mbzwchnxtskysqplqiyy`. As12funções instaladas são textualmente iguais às ensaiadas (normalizando CRLF). SHA256 canônico UTF8: `54a70c403099efbef56dbd02b45fb87faad0ba167d941b029ab52ba79beab527`. O banco descartável Windows usa WIN1252; comparação de `md5(text)` entre os bancos dá diferença de encoding e foi substituída pela comparação literal e hash UTF8.
+
+Conferência de 13/10 às15:09:09 (Brasília):426leads,426pendentes,22levas, uma aberta, capacidade máxima20, zero sem leva, zero sem recebimento e zero vínculos CRM. A tabela de solicitações de decisão tem RLS e não permite leitura autenticada; a decisão não permite chamada anônima. Os dois novos avisos do Advisor referem-se aos endpoints autenticados de revisão, ambos com autorização de Tráfego interna; nenhum novo aviso de execução anônima.
+
+A regressão de vendas do GitHub passou. O check de segurança de dependências continua com18avisos preexistentes (13altos,5moderados), também presentes na base; dependências não foram alteradas e nenhum check foi desligado. Varredura de segredos passou. A interface autenticada e os envios comerciais foram comprovados somente com dados sintéticos no ensaio; nenhum contato comercial foi aprovado ou rejeitado durante publicação. Aprovação de contatos reais continua na tela, por decisão comercial.
 
 A fila automática do site ainda não foi implementada: a especificação escrita própria aguarda revisão. A origem manual Site já está coberta. O check-up amplo de gastos, métricas e rastreamento do site também permanece ativo; a correção destas importações não prova que toda a operação de tráfego esteja encerrada.
