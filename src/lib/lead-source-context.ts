@@ -67,7 +67,7 @@ export function completeSourceFields(source: Record<string, unknown>): Field[] {
   Object.entries(record(payload.attribution)).forEach(([key, value]) => walk(value, ['Origem', key]))
   // Original server columns can carry contact/attribution that older captures lack.
   const known = { ...contact, ...record(payload.attribution) }
-  Object.entries(record(payload.source_record)).filter(([key, value]) => (!Object.hasOwn(known, key) || JSON.stringify(value) !== JSON.stringify(known[key])) && !['id','created_at','updated_at','source_revision'].includes(key))
+  Object.entries(record(payload.source_record)).filter(([key, value]) => (!Object.prototype.hasOwnProperty.call(known, key) || JSON.stringify(value) !== JSON.stringify(known[key])) && !['id','created_at','updated_at','source_revision'].includes(key))
    .forEach(([key, value]) => walk(value, ['Registro original', key]))
   Object.entries(payload).filter(([key]) => !['contact','profile','report','attribution','source_record'].includes(key))
    .forEach(([key, value]) => walk(value, [key]))
