@@ -8,9 +8,9 @@ Os **316 contatos históricos** foram recuperados por páginas de **200 + 116**,
 
 Às 18:48:49 de Brasília, a origem tinha **317 contatos e 319 eventos entregues**, incluindo uma captura sintética identificada como **Teste de integração — não abordar**. A fila estava zerada, sem lease expirado, falha pendente ou quarentena. Todos os **319 hashes do conteúdo integral** dos eventos coincidiram entre origem e destino, com comparação UTF8.
 
-Os **426 leads anteriores da dashboard** mantiveram os mesmos IDs e continuaram pendentes. Após a recuperação, duas aprovações ocorreram no uso normal da dashboard; a conferência encontrou ambos no CRM com origem Site, método automático, geração, primeiro recebimento e snapshot integral corretos. A execução não chamou uma aprovação ou rejeição comercial. A captura sintética continua pendente, sem CRM, para que o operador identifique o ensaio.
+Os **426 leads anteriores da dashboard** mantiveram os mesmos IDs e continuaram pendentes. Às 18:55 de Brasília, o uso normal havia aprovado 22 contatos do site e rejeitado a captura sintética. A conferência encontrou os 22 no CRM com origem Site, método automático, geração, primeiro recebimento e snapshot integral corretos; o teste rejeitado não tem cadastro CRM. A execução não chamou uma aprovação ou rejeição comercial.
 
-O conjunto chegou a **743 leads**, com levas de até **20** e **zero órfãos**. As quantidades pendentes podem mudar conforme a revisão humana. As consultas não compararam visitas com contatos e não alteraram gastos ou métricas Meta.
+O conjunto chegou a **743 leads**, com levas de até **20** e **zero órfãos**. Na conferência das 18:55, havia 720 pendentes, 22 aprovados e um rejeitado. As quantidades pendentes podem mudar conforme a revisão humana. As consultas não compararam visitas com contatos e não alteraram gastos ou métricas Meta.
 
 ## Entrega medida
 
@@ -21,7 +21,7 @@ O conjunto chegou a **743 leads**, com levas de até **20** e **zero órfãos**.
 | Perfil inicial integral recebido | 18:47:26; respostas disponíveis para revisão |
 | Atualização posterior, 18:48:01 | Terceiro evento recebido às 18:48:02; **1.724 ms** desde o início da requisição |
 | Prioridade e vínculo | Mesmo contato, mesma leva e mesmo primeiro recebimento; geração original preservada |
-| Decisão | Pendente, sem aprovação automática ou cadastro CRM sintético |
+| Decisão | Pendente durante a medição; posteriormente rejeitado na revisão humana, sem cadastro CRM sintético |
 
 Esses tempos são uma medição do ensaio, não uma garantia de latência em toda conexão. O nudge tenta entregar após o commit e o job a cada minuto recupera pendências. Uma tentativa transitória falhou durante o backfill; o mesmo evento foi reenviado e confirmado posteriormente, sem duplicação.
 
@@ -59,7 +59,7 @@ Migrations instaladas seletivamente, junto de seu histórico, sem `db push` ou r
 | Site | `20261013183641_funnel_lead_outbox.sql` |
 | Site | `20261013183939_funnel_lead_delivery_cron.sql` |
 
-O agendamento e nudge nasceram desativados e foram ativados somente após funções, configuração privada, clientes e conferência de preservação. O job `funnel-lead-delivery` está ativo a cada minuto.
+O agendamento e nudge nasceram desativados e foram ativados somente após funções, configuração privada, clientes e conferência de preservação. O job `funnel-lead-delivery` está ativo a cada minuto. As cinco execuções de 18:51 a 18:55 terminaram com sucesso; a origem continuava com zero pendências e zero bloqueios.
 
 | Publicação | Versão e evidência |
 | --- | --- |

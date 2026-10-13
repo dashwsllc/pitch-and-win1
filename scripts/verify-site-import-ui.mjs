@@ -9,7 +9,7 @@ test('site history separates source versions from SDR data and escapes the compl
  const text='Valuable context '.repeat(1000)+'<script>never execute</script>'
  const html=renderToStaticMarkup(React.createElement(SiteEventContent,{event:{source_revision:3,status:'context_only',received_at:'2026-10-13T14:32:15Z',event:{generated_at:'2026-09-10T13:04:05Z',source_updated_at:'2026-10-13T14:30:12Z',payload:{profile:{notes:text}}}}}))
  assert.match(html,/13\/10\/2026.*11:32:15/);assert.match(html,/10\/09\/2026.*10:04:05/);assert.match(html,/11:30:12/)
- assert.match(html,/&lt;script&gt;never execute&lt;\/script&gt;/);assert.equal((html.match(/Valuable context /g)??[]).length,1000)
+ assert.match(html,/&lt;script&gt;never execute&lt;\/script&gt;/);assert.equal((html.match(/<dd[^>]*>(.*?)<\/dd>/gs).join('').match(/Valuable context /g)??[]).length,1000)
  assert(!siteEventListColumns.split(',').includes('event'),'list eagerly downloads complete payload')
  assert.match(html,/cadastro.*SDR|SDR.*cadastro/)
 })
