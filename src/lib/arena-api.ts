@@ -11,6 +11,7 @@ import type { LeadImportRow, LeadImportResult } from "./meta-lead-import";
 // migration. This is the SAME authenticated Supabase client and auth session.
 type FunctionDef<Args> = { Args: Args; Returns: Json };
 type ExtraFunctions = {
+  site_bridge_operation: FunctionDef<Record<string, never>>;
   // Legacy ranking contract may be deployed separately from the traffic schema.
   get_daily_call_ranking: FunctionDef<Record<string, never>>;
   meta_traffic_operation: FunctionDef<Record<string, never>>;
@@ -195,6 +196,7 @@ type ArenaDatabase = Omit<Database, "public"> & {
         status: 'pendente' | 'aprovado' | 'rejeitado'; rows: LeadImportRow[]; updated_at: string;
         reviewed_by: string | null; reviewed_at: string | null; review_note: string | null; result: LeadImportResult | null }>;
       meta_form_leads: ReadTable<MetaFormLead>;
+      site_import_events: ReadTable<{ event_id: string; receipt_id: string; source_project: string; source_lead_id: string; source_revision: number; schema_version: number; body_sha256: string; event: Json; received_at: string; meta_form_lead_id: string | null; status: string; error_code: string | null }>;
       meta_audit_events: ReadTable<MetaAuditEvent>;
       meta_ad_accounts: ReadTable<MetaAdAccount>;
       meta_sync_runs: ReadTable<MetaSyncRun>;

@@ -60,3 +60,6 @@ verify_jwt = true
 
 [functions.meta-lead-worker]
 verify_jwt = true
+
+[functions.site-lead-receiver]
+verify_jwt = false

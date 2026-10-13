@@ -1,0 +1,57 @@
+BEGIN;
+SET LOCAL statement_timeout='90s';
+DO $$
+DECLARE sid uuid:=gen_random_uuid(); eid uuid:=gen_random_uuid(); e jsonb; r jsonb; replay jsonb; f public.meta_form_leads; first_at timestamptz; original_wave uuid; actor uuid; sdr uuid; snap jsonb; members jsonb; c public.crm_leads; previous_crm jsonb; v bigint; manual_id uuid; manual_sid uuid:=gen_random_uuid();
+BEGIN
+ actor:=pg_temp.seed_meta_actor('approved',false,'executive'); sdr:=pg_temp.seed_meta_actor('approved',false,'sdr');
+ PERFORM set_config('request.jwt.claim.sub',actor::text,true); PERFORM set_config('request.jwt.claim.role','authenticated',true);
+ e:=jsonb_build_object('schema_version',1,'event_id',eid,'source_project','mehmqibxzxfqdxqjnjad','source_lead_id',sid,'source_revision',1,'generated_at','2026-09-01T10:11:12Z','source_updated_at','2026-10-13T10:11:12Z','payload',jsonb_build_object('contact',jsonb_build_object('name','Synthetic site João','phone','11999990000','email','test@example.invalid'),'profile',jsonb_build_object('photo',repeat('X',100000),'city','São Paulo'),'attribution',jsonb_build_object('utm_campaign',repeat('A',700))));
+ r:=public.site_import_receive(e,repeat('a',64)); replay:=public.site_import_receive(e,repeat('a',64));
+ PERFORM pg_temp.assert(r=replay,'lost ACK retry changed receipt');
+ SELECT * INTO STRICT f FROM public.meta_form_leads WHERE meta_lead_id='site:zyron:'||sid;
+ first_at:=f.first_received_at;original_wave:=f.wave_id;
+ PERFORM pg_temp.assert(f.entry_channel='website' AND f.approval_status='pendente' AND f.wave_id IS NOT NULL AND f.crm_lead_id IS NULL,'site bypassed pending wave');
+ PERFORM pg_temp.assert(length(f.source_snapshot->'site_event'->'payload'->'profile'->>'photo')=100000,'raw photo truncated');
+ BEGIN PERFORM public.site_import_receive(e,repeat('b',64)); RAISE EXCEPTION 'FAIL: divergent replay accepted'; EXCEPTION WHEN unique_violation THEN NULL; END;
+ e:=jsonb_set(jsonb_set(e,'{event_id}',to_jsonb(gen_random_uuid())),'{source_revision}','3');e:=jsonb_set(e,'{payload,contact,name}','"Newest version"');
+ -- Summary limits count multibyte scalars; complete source values remain in the event.
+ e:=jsonb_set(e,'{payload,profile}',(SELECT jsonb_object_agg('field-'||i,repeat('⚽漢',1100)||i) FROM generate_series(1,30)i));
+ r:=public.site_import_receive(e,repeat('c',64));
+ e:=jsonb_set(jsonb_set(e,'{event_id}',to_jsonb(gen_random_uuid())),'{source_revision}','2');e:=jsonb_set(e,'{payload,contact,name}','"Old version"');
+ r:=public.site_import_receive(e,repeat('d',64));
+ PERFORM pg_temp.assert(r->>'status'='superseded','old revision not identified');
+ PERFORM pg_temp.assert((SELECT full_name='Newest version' AND first_received_at=first_at AND wave_id=original_wave AND updated_at>f.updated_at FROM public.meta_form_leads WHERE id=f.id),'revision regressed data, moved membership or reset receipt');
+ PERFORM pg_temp.assert((SELECT count(*)=3 FROM public.site_import_events WHERE source_lead_id=sid),'out-of-order events lost');
+ snap:=public.meta_wave_begin_review(f.wave_id);
+ SELECT jsonb_agg(jsonb_build_object('id',x->>'id','updated_at',x->>'updated_at')) INTO members FROM jsonb_array_elements(snap->'leads')x;
+ PERFORM public.meta_wave_decide_versioned(f.wave_id,(snap->'wave'->>'version')::bigint,members,'aprovar','[]','',gen_random_uuid());
+ SELECT * INTO STRICT c FROM public.crm_leads WHERE meta_form_lead_id=f.id;
+ UPDATE public.crm_leads SET phone='11988887777' WHERE id=c.id;
+ SELECT to_jsonb(x) INTO previous_crm FROM public.crm_leads x WHERE id=c.id;
+ e:=jsonb_set(jsonb_set(e,'{event_id}',to_jsonb(gen_random_uuid())),'{source_revision}','4');
+ SELECT revision INTO v FROM public.dashboard_events WHERE topic='crm';r:=public.site_import_receive(e,repeat('e',64));
+ PERFORM pg_temp.assert(r->>'status'='context_only','approved profile was not retained as history');
+ PERFORM pg_temp.assert((SELECT to_jsonb(x)=previous_crm FROM public.crm_leads x WHERE id=c.id),'source overwrote SDR or approved snapshot');
+ PERFORM pg_temp.assert((SELECT revision>v FROM public.dashboard_events WHERE topic='crm'),'source event emitted no CRM signal');
+ e:=jsonb_set(jsonb_set(e,'{event_id}',to_jsonb(gen_random_uuid())),'{schema_version}','99');e:=jsonb_set(e,'{source_revision}','5');r:=public.site_import_receive(e,repeat('f',64));
+ PERFORM pg_temp.assert(r->>'status'='quarantined','unknown schema disappeared');
+ e:=jsonb_set(jsonb_set(e,'{event_id}',to_jsonb(gen_random_uuid())),'{schema_version}','1');e:=jsonb_set(e,'{source_lead_id}',to_jsonb(gen_random_uuid()));e:=jsonb_set(e,'{source_revision}','1');e:=jsonb_set(e,'{payload,contact}','{}');r:=public.site_import_receive(e,repeat('1',64));
+ PERFORM pg_temp.assert(r->>'status'='pending_review' AND (SELECT import_warning IS NOT NULL FROM public.meta_form_leads WHERE id=(SELECT meta_form_lead_id FROM public.site_import_events WHERE event_id=(e->>'event_id')::uuid)),'invalid contact discarded instead of preserved for correction');
+ -- A manual import with the same trusted identity keeps its origin and review data.
+ PERFORM public.meta_import_leads('synthetic-site.csv',jsonb_build_array(jsonb_build_object('meta_lead_id','site:zyron:'||manual_sid,'entry_channel','website','full_name','Manual original','phone','11999990000')));
+ SELECT id INTO manual_id FROM public.meta_form_leads WHERE meta_lead_id='site:zyron:'||manual_sid;
+ e:=jsonb_set(jsonb_set(e,'{event_id}',to_jsonb(gen_random_uuid())),'{source_lead_id}',to_jsonb(manual_sid));e:=jsonb_set(e,'{payload,contact,name}','"Automatic source"');r:=public.site_import_receive(e,repeat('2',64));
+ PERFORM pg_temp.assert((SELECT meta_form_lead_id=manual_id FROM public.site_import_events WHERE event_id=(e->>'event_id')::uuid),'manual identity duplicated');
+ PERFORM pg_temp.assert((SELECT full_name='Manual original' AND lead_import_batch_id IS NOT NULL FROM public.meta_form_leads WHERE id=manual_id),'automatic source overwrote manual capture');
+ PERFORM pg_temp.assert(NOT has_function_privilege('authenticated','public.site_import_receive(jsonb,text)','EXECUTE') AND NOT has_function_privilege('anon','public.site_import_receive(jsonb,text)','EXECUTE'),'clients can forge inbox');
+ PERFORM pg_temp.assert(NOT has_table_privilege('authenticated','public.site_import_events','UPDATE'),'clients can alter history');
+ PERFORM public.site_bridge_heartbeat_receive(jsonb_build_object('source_project','mehmqibxzxfqdxqjnjad','observed_at','2026-10-13T15:00:00Z','pending_count',3,'quarantined_count',1));
+ PERFORM public.site_bridge_heartbeat_receive(jsonb_build_object('source_project','mehmqibxzxfqdxqjnjad','observed_at','2026-10-13T14:00:00Z','pending_count',0,'quarantined_count',0));
+ PERFORM pg_temp.assert(public.site_bridge_operation()->>'pending_count'='3','old heartbeat regressed queue');
+ PERFORM set_config('request.jwt.claim.sub',sdr::text,true);
+ SET LOCAL ROLE authenticated;
+ PERFORM pg_temp.assert((SELECT count(*)=0 FROM public.site_import_events WHERE source_lead_id=manual_sid),'SDR sees unapproved event');
+ RESET ROLE;
+END $$;
+SELECT 'PASS: site identity, receipts, complete history, review, permissions and heartbeat' AS verification;
+ROLLBACK;

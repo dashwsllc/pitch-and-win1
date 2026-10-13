@@ -12,7 +12,7 @@ export async function loadHandler(path, { fetch, admin, extraEnv = {}, clock = D
   let handler
   const env = { META_SYNC_CRON_SECRET: 'test-cron', META_SYSTEM_USER_TOKEN: 'test-token',
     META_PAGE_IDS: 'page1', SUPABASE_URL: 'https://example.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-key', ...extraEnv }
-  const context = vm.createContext({ URL, Request, Response, TextEncoder, crypto, fetch, AbortController, setTimeout, clearTimeout, Date: clock,
+  const context = vm.createContext({ URL, Request, Response, TextEncoder, TextDecoder, crypto, fetch, AbortController, AbortSignal, setTimeout, clearTimeout, Date: clock,
     console: { error() {}, log() {} },
     Deno: { env: { get: key => env[key] }, serve: value => { handler = value } },
     __admin: admin })
