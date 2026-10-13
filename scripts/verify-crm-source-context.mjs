@@ -65,3 +65,36 @@ test('future fields and multi-choice values survive normalization without being 
  assert.match(html,/Não/);assert.match(html,/0/)
  assert.match(html,/Não informado na origem/)
 })
+test('future site sections and divergent original values remain readable with their provenance', () => {
+ const html = render('crm/CRMImportDetails.tsx', {lead:{import_channel:'website',import_method:'automatic',import_snapshot:{source_snapshot:{site_event:{payload:{
+  contact:{phone:'11999990000'},source_record:{phone:'(11) 99999-0000',email:'qa@example.invalid'},
+  qualification:{goal:'Objetivo em seção nova',answers:[{question:'Contexto futuro?',answer:'RESPOSTA FUTURA INTEGRAL'}]}
+ }}}}}})
+ assert.match(html,/<dd[^>]*>\(11\) 99999-0000<\/dd>/)
+ assert.match(html,/<dt[^>]*>Registro original \/ WhatsApp<\/dt>/)
+ assert.match(html,/<dd[^>]*>Objetivo em seção nova<\/dd>/)
+ assert.match(html,/<dd[^>]*>RESPOSTA FUTURA INTEGRAL<\/dd>/)
+})
+test('traffic corrections are separate from the original submitted Meta answers', () => {
+ const html=render('crm/CRMImportDetails.tsx',{lead:{import_channel:'form',import_method:'automatic',import_snapshot:{
+  field_data:[question('qual_é_o_principal_objetivo_do_atleta_no_futebol_hoje?','Resposta revista por Tráfego')],
+  source_snapshot:{field_data:[question('qual_é_o_principal_objetivo_do_atleta_no_futebol_hoje?','Resposta enviada pelo atleta')]}
+ }}})
+ assert.match(html,/<dd[^>]*>Resposta enviada pelo atleta<\/dd>/)
+ assert.match(html,/<dd[^>]*>Resposta revista por Tráfego<\/dd>/)
+ assert.match(html,/Dados revisados/)
+})
+test('site contact and athlete profile keep separate identities even when names coincide', () => {
+ const html=render('crm/CRMImportDetails.tsx',{lead:{import_channel:'website',import_method:'automatic',import_snapshot:{source_snapshot:{site_event:{payload:{
+  contact:{name:'Nome sintético igual',phone:'11999990000'},profile:{name:'Nome sintético igual',city:'Cidade do atleta'}
+ }}}}}})
+ assert.equal((html.match(/<dd[^>]*>Nome sintético igual<\/dd>/g)??[]).length,2)
+ assert.match(html,/<dt[^>]*>Contato \/ Nome informado<\/dt>/)
+ assert.match(html,/<dt[^>]*>Perfil do atleta \/ Nome informado<\/dt>/)
+})
+test('readability must not change emails, click attribution or literal report identifiers', () => {
+ const html=render('traffic/FormAnswers.tsx',{fields:[question('email','nome_sobrenome@example.invalid'),question('utm_campaign','campanha_teste'),question('Relatório / id','relatorio_teste')]})
+ assert.match(html,/<dd[^>]*>nome_sobrenome@example.invalid<\/dd>/)
+ assert.match(html,/<dd[^>]*>campanha_teste<\/dd>/)
+ assert.match(html,/<dd[^>]*>relatorio_teste<\/dd>/)
+})

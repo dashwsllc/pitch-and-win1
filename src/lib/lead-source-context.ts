@@ -15,13 +15,15 @@ const labels: Record<string, string> = {
  gclid:'Identificador de clique Google', fbclid:'Identificador de clique Meta', ttclid:'Identificador de clique TikTok',
  created_time:'Data/hora informada na origem', lead_status:'Status na origem', report:'Relatório', stats:'Notas', stat_details:'Detalhes das notas',
  strengths:'Pontos fortes', weaknesses:'Pontos a melhorar', recommendations:'Recomendações', technicalAnalysis:'Análise técnica',
+ qualification:'Qualificação', question:'Pergunta', answer:'Resposta', answers:'Respostas', goal:'Objetivo', context:'Contexto',
 }
 export function sourceQuestionLabel(name: string) {
  return name.split(' / ').map(part => labels[part] ?? prettyQuestion(part)).join(' / ')
 }
 export function sourceAnswerCategory(name: string): SourceContextCategory {
- const key = normalized(name)
+ const key = normalized(name).replace(/^(registro original|dados revisados) /, '')
  if (/^(relatorio|report)\b/.test(key)) return 'Relatório do site'
+ if (/^perfil do atleta\b/.test(key)) return 'Perfil do atleta'
  if (/^(origem|attribution)\b/.test(key) || /^(utm |ad |adset |campaign |form |platform$|is organic$|gclid$|fbclid$|ttclid$|created time$|lead status$|id$)/.test(key)) return 'Origem da campanha'
  if (/quem .*preenchendo|^(full name|name|nome|phone|telefone|whatsapp|email|e mail|date of birth|data de nascimento|state|estado|city|cidade|contato)\b/.test(key)) return 'Contato e identificação'
  if (/compromet|compromisso|de 0 a 10/.test(key)) return 'Comprometimento'
@@ -59,18 +61,24 @@ export function completeSourceFields(source: Record<string, unknown>): Field[] {
  const payload = record(record(saved.site_event).payload)
  if (Object.keys(payload).length) {
   const contact = record(payload.contact)
-  Object.entries(contact).forEach(([key, value]) => walk(value, [key]))
-  Object.entries(record(payload.profile)).forEach(([key, value]) => walk(value, [key]))
+  Object.entries(contact).forEach(([key, value]) => walk(value, ['Contato', key]))
+  Object.entries(record(payload.profile)).forEach(([key, value]) => walk(value, ['Perfil do atleta', key]))
   if (payload.report != null) walk(payload.report, ['Relatório'])
   Object.entries(record(payload.attribution)).forEach(([key, value]) => walk(value, ['Origem', key]))
   // Original server columns can carry contact/attribution that older captures lack.
   const known = { ...contact, ...record(payload.attribution) }
-  Object.entries(record(payload.source_record)).filter(([key]) => !(key in known) && !['id','created_at','updated_at','source_revision'].includes(key))
+  Object.entries(record(payload.source_record)).filter(([key, value]) => (!Object.hasOwn(known, key) || JSON.stringify(value) !== JSON.stringify(known[key])) && !['id','created_at','updated_at','source_revision'].includes(key))
+   .forEach(([key, value]) => walk(value, ['Registro original', key]))
+  Object.entries(payload).filter(([key]) => !['contact','profile','report','attribution','source_record'].includes(key))
    .forEach(([key, value]) => walk(value, [key]))
  } else {
-  metaAnswers(source.field_data).forEach(answer => add(answer.label, [answer.value]))
   const manual = record(saved.manual_row)
-  metaAnswers(manual.field_data).forEach(answer => add(answer.label, [answer.value]))
+  const originals = Array.isArray(saved.field_data) ? metaAnswers(saved.field_data) : Array.isArray(manual.field_data) ? metaAnswers(manual.field_data) : null
+  originals?.forEach(answer => add(answer.label, [answer.value]))
+  metaAnswers(source.field_data).forEach(answer => {
+   const unchanged = originals?.some(original => normalized(original.label) === normalized(answer.label) && original.value === answer.value)
+   if (!unchanged) add(originals ? 'Dados revisados / ' + answer.label : answer.label, [answer.value])
+  })
   const cells = manual.raw_cells ?? saved.raw_cells
   if (Array.isArray(cells)) cells.forEach(cell => {
    const item = record(cell)
