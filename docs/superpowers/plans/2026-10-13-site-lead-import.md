@@ -8,7 +8,7 @@
 
 **Tech Stack:** Supabase/PostgreSQL, Edge Functions/Deno, Web Crypto HMAC-SHA256, React/TypeScript, TanStack Query, Node e ensaios SQL/Chromium existentes. Nenhuma dependência de produto nova.
 
-**Spec:** [2026-10-13-site-lead-import-design.md](../specs/2026-10-13-site-lead-import-design.md), aprovada pelo usuário em 13/10/2026. Execução nativa já escolhida; este plano aguarda revisão antes de implementar.
+**Spec:** [2026-10-13-site-lead-import-design.md](../specs/2026-10-13-site-lead-import-design.md), aprovada pelo usuário em 13/10/2026. Plano aprovado e implementação nativa autorizada em 13/10/2026.
 
 ## Global Constraints
 
@@ -155,4 +155,4 @@ Heartbeat assinado: `{ schema_version:1, kind:'heartbeat', source_project, obser
 
 Cobertura: origem/contexto →1/2/4/5; entrega/ACK/repetição →1/2/3/6; captura posterior →2/4/5; horários/levas/revisão →1/5/6; históricos →2/6; segurança/ativação/reversão →1/3/6. Os cinco focos possuem casos explícitos. Contrato de evento, identidade canônica, estados do recibo e nomes das RPCs são únicos ao longo do plano.
 
-O plano respeita o estado remoto extra da fonte e conserva os triggers internos. Limite de transporte não apaga payload: um evento grande fica identificado para recuperação, com o contato inicial já disponível. O método nativo está preservado. Próxima etapa: usuário revisar este plano escrito; depois, execução contínua, com uma revisão independente ao final.
+O plano respeita o estado remoto extra da fonte e conserva os triggers internos. Limite de transporte não apaga payload: um evento grande fica identificado para recuperação, com o contato inicial já disponível. O método nativo está aprovado: execução contínua, com uma revisão independente ao final.
