@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { AlertTriangle, CheckCircle2, ChevronDown, Clock3, FileSpreadsheet, Layers3, RadioTower, RotateCcw, Send, Undo2, XCircle } from 'lucide-react'
@@ -7,10 +7,10 @@ import { Input } from '@/components/ui/input'
 import { useAuth } from '@/hooks/useAuth'
 import { useLiveClockSelector } from '@/hooks/useLiveClock'
 import { arenaRpc } from '@/lib/arena-api'
-import type { Json } from '@/integrations/supabase/types'
+import { waveDecisionPayload } from '@/lib/meta-wave-decisions'
 import { errorMessage } from '@/lib/sales'
 import {
-  decisionMessage, elapsedLabel, leadClock, leadDateTimeShort, leadDay, leadSyncView, leadUrgency, urgencyClass, waveOutcomeLabel,
+  decisionMessage, elapsedLabel, leadClock, leadDateTime, leadDateTimeShort, leadDay, leadSyncView, leadUrgency, urgencyClass, waveOutcomeLabel,
   waveRangeLabel, waveStatusLabel, type WaveDecision, type WaveDetail, type WaveLead, type WaveList, type WaveRetry, type WaveStatus, type WaveSummary,
 } from '@/lib/meta-waves'
 import { FormAnswers } from './FormAnswers'
@@ -71,7 +71,7 @@ export function MetaLeadWaves({ active, canReview, onReviewed }: { active: boole
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div className="max-w-2xl">
         <h2 id="meta-waves-title" className="flex items-center gap-2 text-lg font-medium"><Layers3 className="h-5 w-5 text-ember" />Levas de leads</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Formulários da Meta e planilhas importadas, em levas de 20. A leva mais recente aparece primeiro e, dentro dela, o lead mais novo no topo, com a data e o horário exatos em que caiu. Ao aprovar, cada lead vai para o CRM do SDR com nome, WhatsApp, as respostas e o horário.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Leads automáticos e manuais, em levas de até 20. Recebimentos mais recentes aparecem primeiro, com horário incluindo segundos. O horário original do formulário fica separado. Ao aprovar, cada lead segue ao setor Importações do SDR com os dados e o contexto preservados.</p>
       </div>
       <div className="flex flex-wrap gap-2" role="status" aria-live="polite">
         <div className="surface-inset-glow rounded-xl px-4 py-2 text-center"><p className="text-2xl font-light tabular-nums">{data ? data.pending_leads : '…'}</p><p className="text-[11px] uppercase tracking-wide text-muted-foreground">leads aguardando</p></div>
@@ -79,7 +79,7 @@ export function MetaLeadWaves({ active, canReview, onReviewed }: { active: boole
         {!!data?.failed_leads && <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-center"><p className="text-2xl font-light tabular-nums text-rose-300">{data.failed_leads}</p><p className="text-[11px] uppercase tracking-wide text-rose-300/80">com falha no CRM</p></div>}
       </div>
     </header>
-    {data?.newest_pending_lead_at && <p className="text-sm">Lead mais recente aguardando: <strong className="tabular-nums">{leadDateTimeShort(data.newest_pending_lead_at)}</strong> <Elapsed at={data.newest_pending_lead_at} live /></p>}
+    {data?.newest_pending_lead_at && <p className="text-sm">Recebimento mais recente aguardando: <strong className="tabular-nums">{leadDateTime(data.newest_pending_lead_at)}</strong> <Elapsed at={data.newest_pending_lead_at} live /></p>}
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div role="tablist" aria-label="Filtrar levas" className="inline-flex max-w-full overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.02] p-1">
         {filters.map(item => <button key={item.value} role="tab" aria-selected={filter === item.value} onClick={() => { setFilter(item.value); setOffset(0); setOpenId(null); setTouched(item.value !== 'pendente') }}
@@ -88,8 +88,8 @@ export function MetaLeadWaves({ active, canReview, onReviewed }: { active: boole
       <Button size="sm" variant="outline" disabled={list.isFetching} onClick={() => void list.refetch()}>Atualizar</Button>
     </div>
     {data?.needs_rebuild && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-      <span>Chegaram leads fora da ordem (por exemplo, de uma planilha antiga). A reorganização automática roda a cada busca; se preferir, reorganize agora.</span>
-      {canReview && <Button size="sm" variant="outline" disabled={rebuilding} onClick={() => void rebuild()}>{rebuilding ? 'Reorganizando…' : 'Reorganizar por horário'}</Button>}
+      <span>Há leads preservados aguardando distribuição. Atribuir uma leva mantém os grupos já existentes.</span>
+      {canReview && <Button size="sm" variant="outline" disabled={rebuilding} onClick={() => void rebuild()}>{rebuilding ? 'Distribuindo…' : 'Distribuir leads sem leva'}</Button>}
     </div>}
     {list.isError && <div role="alert" className="space-y-2 text-sm text-destructive"><p>{errorMessage(list.error)}</p><Button size="sm" variant="outline" onClick={() => void list.refetch()}>Tentar novamente</Button></div>}
     {list.isPending && <p role="status" className="text-sm text-muted-foreground">Carregando levas…</p>}
@@ -119,7 +119,7 @@ function WaveCard({ wave, newest, open, active, canReview, refresh, onToggle }: 
           {newest && <Chip className="border-ember/50 bg-gradient-ember text-white">Mais recente</Chip>}
           {wave.is_open && <Chip className="border-sky-500/40 bg-sky-500/10 text-sky-300"><RadioTower className="h-3 w-3" />Recebendo leads</Chip>}
         </div>
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span className="inline-flex items-center gap-1.5 tabular-nums text-ash"><Clock3 className="h-3.5 w-3.5" />{waveRangeLabel(wave)}</span>
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span className="inline-flex items-center gap-1.5 tabular-nums text-ash"><Clock3 className="h-3.5 w-3.5" />{wave.last_received_at ? `Recebidos: ${leadDateTime(wave.first_received_at)} → ${leadDateTime(wave.last_received_at)}` : waveRangeLabel(wave)}</span>
           <span>{wave.lead_count} {wave.lead_count === 1 ? 'lead' : 'leads'} · {waveOutcomeLabel(wave)}</span></p>
         {wave.status !== 'pendente' && wave.reviewed_at && <p className="text-xs text-muted-foreground">{waveStatusLabel[wave.status]} em {leadDateTimeShort(wave.reviewed_at)}{wave.reviewed_by_name ? ` por ${wave.reviewed_by_name}` : ''}{wave.review_note ? ` · ${wave.review_note}` : ''}</p>}
       </div>
@@ -137,36 +137,48 @@ function WavePanel({ wave, active, canReview, refresh }: { wave: WaveSummary; ac
   const { user } = useAuth()
   const detail = useQuery({ queryKey: ['meta-wave-leads', user?.id, wave.id], enabled: active && !!user, refetchInterval: active ? 20_000 : false,
     queryFn: () => arenaRpc<WaveDetail>('meta_wave_leads', { p_wave: wave.id }) })
+  const [snapshot, setSnapshot] = useState<WaveDetail | null>(null)
+  const requestId = useRef<string | null>(null)
   const [excluded, setExcluded] = useState<Record<string, string>>({})
   const [confirming, setConfirming] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
-  const leads = Array.isArray(detail.data?.leads) ? detail.data.leads : []
+  const leads = snapshot?.leads || (Array.isArray(detail.data?.leads) ? detail.data.leads : [])
   const pending = leads.filter(lead => lead.approval_status === 'pendente')
   const toSend = pending.filter(lead => !excluded[lead.id])
   const reviewable = canReview && wave.status === 'pendente'
+  const startReview = async (action: 'aprovar' | 'rejeitar') => {
+    setBusy(true)
+    try {
+      // Expansion is a preview; only an explicit review seals a partial intake wave.
+      const opened = await arenaRpc<WaveDetail>('meta_wave_begin_review', { p_wave: wave.id })
+      setSnapshot(opened); requestId.current = crypto.randomUUID()
+      setConfirming(action === 'aprovar'); setRejecting(action === 'rejeitar')
+    } catch (cause) { toast.error(errorMessage(cause)); await detail.refetch() }
+    finally { setBusy(false) }
+  }
   const run = async (work: () => Promise<void>) => {
     setBusy(true)
     try { await work() }
     catch (cause) {
       toast.error(stale(cause) ? 'A leva mudou enquanto você conferia (chegou ou saiu um lead). Recarregamos: confira e decida de novo.' : errorMessage(cause))
+      if (stale(cause)) { setSnapshot(null); requestId.current = null; setConfirming(false); setRejecting(false) }
     } finally {
       // Qualquer resultado exige nova confirmação: a leva recarregada pode ter mudado.
-      setBusy(false); setConfirming(false)
+      setBusy(false)
       await refresh().catch(() => undefined)
       await detail.refetch().catch(() => undefined)
     }
   }
   const decide = (action: 'aprovar' | 'rejeitar') => run(async () => {
-    const result = await arenaRpc<WaveDecision>('meta_wave_decide', {
-      p_wave: wave.id, p_action: action, p_lead_ids: pending.map(lead => lead.id),
-      p_excluded: (action === 'aprovar' ? Object.entries(excluded).map(([id, reason]) => ({ id, reason })) : []) as unknown as Json,
-      p_note: action === 'rejeitar' ? note.trim() : '',
-    })
+    if (!snapshot || !requestId.current) return
+    const result = await arenaRpc<WaveDecision>('meta_wave_decide_versioned', waveDecisionPayload(snapshot, action,
+      action === 'aprovar' ? Object.entries(excluded).map(([id, reason]) => ({ id, reason })) : [], action === 'rejeitar' ? note.trim() : '', requestId.current))
     toast.success(decisionMessage(result, action))
     if (action === 'aprovar' && result.failed) toast.warning(`${result.failed} ${result.failed === 1 ? 'lead não foi' : 'leads não foram'} ao CRM. Corrija os dados e use "Tentar de novo" na leva.`)
     setExcluded({}); setConfirming(false); setRejecting(false); setNote('')
+    setSnapshot(null); requestId.current = null
   })
   const retry = (lead?: WaveLead) => run(async () => {
     const result = await arenaRpc<WaveRetry>('meta_wave_retry', { p_wave: wave.id, p_lead: lead?.id ?? null })
@@ -190,7 +202,7 @@ function WavePanel({ wave, active, canReview, refresh }: { wave: WaveSummary; ac
       <Button size="sm" variant="outline" disabled={busy} onClick={() => void reopen()}><Undo2 className="h-4 w-4" />Reabrir leva</Button>
     </div>}
     <ol className="space-y-2" aria-label={`Leads da leva ${wave.number}, do mais recente para o mais antigo`}>
-      {leads.map(lead => <li key={lead.id}><LeadCard lead={lead} canReview={canReview} reviewable={reviewable} busy={busy} excludedReason={excluded[lead.id]}
+      {leads.map((lead, index) => <li key={lead.id}><LeadCard lead={lead} newest={index === 0} canReview={canReview} reviewable={reviewable && !snapshot} busy={busy || !!snapshot} excludedReason={excluded[lead.id]}
         onExclude={reason => setExcluded(current => ({ ...current, [lead.id]: reason }))}
         onInclude={() => setExcluded(current => { const next = { ...current }; delete next[lead.id]; return next })}
         onRetry={() => void retry(lead)} onReopen={() => void reopen(lead)} refresh={async () => { await detail.refetch(); await refresh() }} /></li>)}
@@ -199,23 +211,23 @@ function WavePanel({ wave, active, canReview, refresh }: { wave: WaveSummary; ac
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm"><strong>{toSend.length}</strong> {toSend.length === 1 ? 'lead será enviado' : 'leads serão enviados'} ao CRM{Object.keys(excluded).length ? <> · <span className="text-muted-foreground">{Object.keys(excluded).length} tirados da leva (ficam guardados)</span></> : null}</p>
         <div className="flex flex-wrap gap-2">
-          {!confirming ? <Button className="bg-gradient-ember text-white hover:opacity-90" disabled={busy || !toSend.length} onClick={() => { setConfirming(true); setRejecting(false) }}><Send className="h-4 w-4" />Aprovar leva #{wave.number}</Button>
+          {!confirming ? <Button className="bg-gradient-ember text-white hover:opacity-90" disabled={busy || !toSend.length || !detail.data} onClick={() => void startReview('aprovar')}><Send className="h-4 w-4" />Aprovar leva #{wave.number}</Button>
             : <><Button className="bg-gradient-ember text-white hover:opacity-90" disabled={busy || !toSend.length} onClick={() => void decide('aprovar')}>{busy ? 'Enviando…' : `Confirmar envio de ${toSend.length} ${toSend.length === 1 ? 'lead' : 'leads'} ao CRM`}</Button>
-              <Button variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>Cancelar</Button></>}
-          {!rejecting && <Button variant="outline" disabled={busy} onClick={() => { setRejecting(true); setConfirming(false) }}><XCircle className="h-4 w-4" />Rejeitar leva</Button>}
+              <Button variant="ghost" disabled={busy} onClick={() => { setConfirming(false); setSnapshot(null); requestId.current = null }}>Cancelar</Button></>}
+          {!rejecting && <Button variant="outline" disabled={busy || !detail.data} onClick={() => void startReview('rejeitar')}><XCircle className="h-4 w-4" />Rejeitar leva</Button>}
         </div>
       </div>
       {rejecting && <div className="flex flex-col gap-2 sm:flex-row">
         <Input aria-label={`Motivo da rejeição da leva ${wave.number}`} maxLength={500} value={note} onChange={event => setNote(event.target.value)} placeholder="Motivo obrigatório (os leads ficam guardados e podem ser reabertos)" />
         <Button variant="destructive" disabled={busy || note.trim().length < 3} onClick={() => void decide('rejeitar')}>Confirmar rejeição</Button>
-        <Button variant="ghost" disabled={busy} onClick={() => { setRejecting(false); setNote('') }}>Cancelar</Button>
+        <Button variant="ghost" disabled={busy} onClick={() => { setRejecting(false); setNote(''); setSnapshot(null); requestId.current = null }}>Cancelar</Button>
       </div>}
     </div>}
   </div>
 }
 
-function LeadCard({ lead, canReview, reviewable, busy, excludedReason, onExclude, onInclude, onRetry, onReopen, refresh }: {
-  lead: WaveLead; canReview: boolean; reviewable: boolean; busy: boolean; excludedReason?: string
+function LeadCard({ lead, newest, canReview, reviewable, busy, excludedReason, onExclude, onInclude, onRetry, onReopen, refresh }: {
+  lead: WaveLead; newest: boolean; canReview: boolean; reviewable: boolean; busy: boolean; excludedReason?: string
   onExclude: (reason: string) => void; onInclude: () => void; onRetry: () => void; onReopen: () => void; refresh: () => Promise<unknown>
 }) {
   const [excluding, setExcluding] = useState(false)
@@ -223,26 +235,31 @@ function LeadCard({ lead, canReview, reviewable, busy, excludedReason, onExclude
   const sync = leadSyncView(lead)
   const pending = lead.approval_status === 'pendente'
   const name = lead.full_name || 'Nome não informado'
+  const received = lead.first_received_at || lead.received_at
   const syncTone = sync.key === 'enviado' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : sync.key === 'falhou' ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
     : sync.key === 'rejeitado' ? 'border-white/15 text-muted-foreground' : 'border-ember/40 bg-ember/10 text-ember'
-  return <article aria-label={`${name}, caiu em ${leadDay(lead.created_time)} às ${leadClock(lead.created_time)}`}
+  return <article data-wave-member={lead.id} aria-label={`${name}, recebido em ${leadDateTime(received)}`}
     className={`grid gap-4 rounded-xl border p-4 transition-opacity sm:grid-cols-[9.5rem_minmax(0,1fr)_auto] ${excludedReason ? 'border-dashed border-white/10 opacity-60' : 'border-white/[0.06] bg-white/[0.02]'}`}>
     <div className="space-y-1">
-      <time dateTime={lead.created_time} className="block text-2xl font-light leading-none tabular-nums tracking-tight text-white">{leadClock(lead.created_time)}</time>
-      <p className="text-xs tabular-nums text-muted-foreground">{leadDay(lead.created_time)}</p>
-      <Elapsed at={lead.created_time} live={pending} />
+      <p className="text-[11px] text-muted-foreground">Recebido no sistema</p>
+      <time dateTime={received} className="block text-2xl font-light leading-none tabular-nums tracking-tight text-white">{leadClock(received)}</time>
+      <p className="text-xs tabular-nums text-muted-foreground">{leadDay(received)}</p>
+      {newest && <Chip className="border-ember/40 text-ember">Mais recente da leva</Chip>}
+      <Elapsed at={received} live={pending} />
+      <p className="pt-1 text-[11px] tabular-nums text-muted-foreground">Formulário: {lead.time_known ? leadDateTime(lead.created_time) : `${leadDay(lead.created_time)} · horário não informado`}</p>
       {!lead.time_known && <p className="text-[11px] text-amber-300" title={lead.import_warning || undefined}>Horário aproximado (planilha)</p>}
     </div>
     <div className="min-w-0 space-y-1.5">
       <div className="flex flex-wrap items-center gap-2"><h4 className="font-medium">{name}</h4><Chip className={syncTone}>{sync.key === 'enviado' && <CheckCircle2 className="h-3 w-3" />}{sync.label}</Chip>
-        <Chip className="border-white/10 text-muted-foreground">{lead.source === 'planilha' ? <><FileSpreadsheet className="h-3 w-3" />Planilha{lead.batch_filename ? ` · ${lead.batch_filename}` : ''}</> : <><RadioTower className="h-3 w-3" />Formulário Meta</>}</Chip></div>
+        <Chip className="border-white/10 text-muted-foreground">{lead.source === 'planilha' ? <><FileSpreadsheet className="h-3 w-3" />Manual{lead.batch_filename ? ` · ${lead.batch_filename}` : ''}</> : <><RadioTower className="h-3 w-3" />Automática</>}</Chip>
+        <Chip className="border-white/10 text-muted-foreground">{lead.entry_channel === 'website' ? 'Site / conversão direta' : 'Formulário'}</Chip></div>
       <p className="break-words text-sm tabular-nums">{lead.phone || 'Sem WhatsApp'}{lead.email ? ` · ${lead.email}` : ''}</p>
       <p className="break-words text-xs text-muted-foreground">{lead.campaign_name || lead.campaign_id || 'Campanha não informada'}{lead.form_name ? ` · ${lead.form_name}` : ''}</p>
       {sync.detail && <p className={`break-words text-xs ${sync.key === 'falhou' ? 'text-rose-300' : 'text-muted-foreground'}`}>{sync.key === 'rejeitado' ? 'Motivo: ' : ''}{sync.detail}</p>}
       {excludedReason && <p className="text-xs text-amber-300">Será tirado da leva: {excludedReason}</p>}
       {lead.import_warning && sync.key !== 'falhou' && <p className="break-words text-xs text-muted-foreground">{lead.import_warning}</p>}
       <details className="pt-1"><summary className="cursor-pointer text-sm text-ash">Respostas do formulário</summary><FormAnswers fields={lead.field_data} />
-        <p className="mt-2 break-words text-[11px] text-muted-foreground">ID {lead.meta_lead_id}{lead.received_at ? ` · recebido em ${leadDateTimeShort(lead.received_at)}` : ''}</p></details>
+        <p className="mt-2 break-words text-[11px] text-muted-foreground">ID {lead.meta_lead_id}{received ? ` · recebido em ${leadDateTime(received)}` : ''}</p></details>
       {excluding && <div className="flex flex-col gap-2 pt-1 sm:flex-row"><Input aria-label={`Motivo para tirar ${name} da leva`} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo (ex.: lead de teste, número inválido)" />
         <Button size="sm" disabled={reason.trim().length < 3} onClick={() => { onExclude(reason.trim()); setExcluding(false); setReason('') }}>Confirmar</Button>
         <Button size="sm" variant="ghost" onClick={() => { setExcluding(false); setReason('') }}>Cancelar</Button></div>}

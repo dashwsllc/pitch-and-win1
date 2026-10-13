@@ -1,5 +1,6 @@
 import { CRMCalendarStatus } from './CRMCalendarStatus';
 import { CRMLeadArrival } from './CRMLeadArrival';
+import { importChannelLabels, importMethodLabels } from '@/lib/crm-imports';
 import {
   BookOpen,
   Pencil,
@@ -277,6 +278,7 @@ export function CRMLeadCard({
       </div>
       <div className="flex flex-wrap gap-1">
         <CRMLeadArrival lead={lead} />
+        {lead.import_channel && <Badge variant="outline" className="h-auto px-2 py-0.5 text-[10px]">{importChannelLabels[lead.import_channel]}{lead.import_method ? ` · ${importMethodLabels[lead.import_method]}` : ''}</Badge>}
         <Badge className={`h-5 px-2 text-[10px] ${tempColor}`}>
           {{ frio: "Frio", morno: "Morno", quente: "Quente" }[lead.temperature]}
         </Badge>

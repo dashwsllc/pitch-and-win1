@@ -42,8 +42,12 @@ async function makeContext(role) {
     else if (name === 'profiles') data = { id: actor, user_id: actor, display_name: 'QA Tráfego', suspended: false }
     else if (name === 'user_roles') data = [{ id: actor, user_id: actor, role }]
     else if (name === 'meta_wave_list') data = list(args)
-    else if (name === 'meta_wave_leads') { const number = numberOf(args.p_wave); data = { wave: state.waves.find(item => item.id === args.p_wave), leads: state.leads[number] } }
-    else if (name === 'meta_wave_decide') {
+    else if (name === 'meta_wave_leads' || name === 'meta_wave_begin_review') {
+      const number = numberOf(args.p_wave), target = state.waves.find(item => item.id === args.p_wave)
+      if (name === 'meta_wave_begin_review' && target.is_open) Object.assign(target, { is_open: false, version: target.version + 1 })
+      data = { wave: target, leads: state.leads[number] }
+    }
+    else if (name === 'meta_wave_decide_versioned') {
       if (state.staleOnce) { state.staleOnce = false; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: '40001', message: 'A leva mudou; recarregue antes de decidir' }) }) }
       const target = state.waves.find(item => item.id === args.p_wave), excluded = new Map(args.p_excluded.map(item => [item.id, item.reason]))
       for (const item of state.leads[target.number]) {
@@ -84,13 +88,13 @@ try {
   await expect(newest.getByText('Mais recente')).toBeVisible()
   await expect(newest.getByText('Recebendo leads')).toBeVisible()
   // A leva mais recente abre sozinha, com o lead mais novo no topo e o horário exato de cada um.
-  const leads = newest.getByRole('article', { name: /caiu em/ })
+  const leads = newest.getByRole('article', { name: /recebido em/ })
   await expect(leads).toHaveCount(3)
   assert.deepEqual(await leads.evaluateAll(items => items.map(item => item.getAttribute('aria-label').split(',')[0])), ['Ana Recente', 'Bruno Meio', 'Carla Planilha'])
-  await expect(leads.nth(0).locator('time')).toHaveText(clock(ago(4)))
+  await expect(leads.nth(0).locator('time')).toHaveText(clock(ago(3)))
   await expect(leads.nth(2).getByText('Horário aproximado (planilha)')).toBeVisible()
-  await expect(leads.nth(2).getByText('Planilha · export.csv')).toBeVisible()
-  await expect(leads.nth(0).getByText('há 4 min')).toBeVisible()
+  await expect(leads.nth(2).getByText('Manual · export.csv')).toBeVisible()
+  await expect(leads.nth(0).getByText('há 3 min')).toBeVisible()
   // TRAFFIC_SCREENSHOTS=<pasta> grava a tela das levas em desktop e celular para revisão visual.
   if (process.env.TRAFFIC_SCREENSHOTS) {
     await page.screenshot({ path: process.env.TRAFFIC_SCREENSHOTS + '/levas-desktop.png', fullPage: true })
@@ -104,13 +108,20 @@ try {
   await expect(newest.getByText('2 leads serão enviados', { exact: false })).toBeVisible()
   // Aprovação em dois passos; leva alterada no meio do caminho é recarregada sem decidir nada.
   await newest.getByRole('button', { name: 'Aprovar leva #22' }).click()
+  await expect(newest.getByRole('button', { name: 'Confirmar envio de 2 leads ao CRM' })).toBeEnabled()
+  await expect(leads.nth(0).getByRole('button', { name: /Editar/ })).toBeDisabled()
   await newest.getByRole('button', { name: 'Confirmar envio de 2 leads ao CRM' }).click()
   await expect(page.getByText('A leva mudou enquanto você conferia', { exact: false })).toBeVisible()
   await newest.getByRole('button', { name: 'Aprovar leva #22' }).click()
   await newest.getByRole('button', { name: 'Confirmar envio de 2 leads ao CRM' }).click()
   await expect(page.getByText('Leva #22 aprovada: 1 enviados ao CRM · 1 com falha · 1 rejeitados.')).toBeVisible()
-  const decision = calls.filter(call => call.name === 'meta_wave_decide').at(-1).args
-  assert.deepEqual(decision, { p_wave: state.waves[0].id, p_action: 'aprovar', p_lead_ids: ['l1', 'l2', 'l3'], p_excluded: [{ id: 'l2', reason: 'Lead de teste' }], p_note: '' })
+  const decision = calls.filter(call => call.name === 'meta_wave_decide_versioned').at(-1).args
+  assert.equal(decision.p_wave, state.waves[0].id)
+  assert.equal(decision.p_expected_version, 2)
+  assert.deepEqual(decision.p_members.map(item => item.id), ['l1','l2','l3'])
+  assert.deepEqual(decision.p_excluded, [{ id: 'l2', reason: 'Lead de teste' }])
+  assert(decision.p_members.every(item => item.updated_at === ago(1)))
+  assert.match(decision.p_request_id,/^[0-9a-f-]{36}$/)
   // A próxima pendente vira a mais recente.
   await expect(page.getByRole('article', { name: 'Leva 21' }).getByText('Mais recente')).toBeVisible()
   // Falha visível e reenvio; lead rejeitado pode ser reaberto.

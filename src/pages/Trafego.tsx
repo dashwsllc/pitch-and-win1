@@ -126,6 +126,7 @@ function LeadResult({ outcome, onOpenWaves }: { outcome: LeadImportOutcome; onOp
 }
 
 function LeadImportPanel({ onSubmitted, onOpenWaves }: { onSubmitted: () => Promise<unknown>; onOpenWaves: () => void }) {
+  const [leadChannel, setLeadChannel] = useState<'form' | 'website'>('form')
   const [fileName, setFileName] = useState('')
   const [headers, setHeaders] = useState<string[]>([])
   const [values, setValues] = useState<string[][]>([])
@@ -136,17 +137,17 @@ function LeadImportPanel({ onSubmitted, onOpenWaves }: { onSubmitted: () => Prom
   const [outcome, setOutcome] = useState<LeadImportOutcome | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const loadVersion = useRef(0)
-  const [previewState, setPreviewState] = useState<{ mapping: LeadCsvMapping; values: string[][]; data: LeadImportRow[] | string } | null>(null)
+  const [previewState, setPreviewState] = useState<{ mapping: LeadCsvMapping; values: string[][]; channel: 'form' | 'website'; data: LeadImportRow[] | string } | null>(null)
   useEffect(() => {
     if (!mapping || !values.length) return
     let cancelled = false
-    void buildLeadImportRows(values, headers, mapping).then(
-      data => { if (!cancelled) setPreviewState({ mapping, values, data }) },
-      cause => { if (!cancelled) setPreviewState({ mapping, values, data: errorMessage(cause) }) },
+    void buildLeadImportRows(values, headers, mapping, fileName, leadChannel).then(
+      data => { if (!cancelled) setPreviewState({ mapping, values, channel: leadChannel, data }) },
+      cause => { if (!cancelled) setPreviewState({ mapping, values, channel: leadChannel, data: errorMessage(cause) }) },
     )
     return () => { cancelled = true }
-  }, [values, headers, mapping])
-  const preview = previewState?.mapping === mapping && previewState?.values === values ? previewState.data : null
+  }, [values, headers, mapping, fileName, leadChannel])
+  const preview = previewState?.mapping === mapping && previewState?.values === values && previewState.channel === leadChannel ? previewState.data : null
   const summary = Array.isArray(preview) ? summarizeLeadImport(preview) : null
   const load = async (file?: File) => {
     if (!file || busy) return
@@ -179,7 +180,7 @@ function LeadImportPanel({ onSubmitted, onOpenWaves }: { onSubmitted: () => Prom
     setOutcome({ fileName: name, result: total, sent, total: rows.length, error: failure })
     if (failure) toast.error(`Envio interrompido em ${sent} de ${rows.length} linhas. Reenvie o arquivo: nada será duplicado.`)
     else {
-      setValues([]); setMapping(null); setFileName('')
+      if (!total.failed) { setValues([]); setMapping(null); setFileName('') }
       const message = `${total.received} leads nas levas · ${total.duplicates} já recebidos · ${total.failed} recusados`
       if (total.failed) toast.warning(message)
       else toast.success(message)
@@ -188,7 +189,10 @@ function LeadImportPanel({ onSubmitted, onOpenWaves }: { onSubmitted: () => Prom
     try { await onSubmitted() } catch { toast.warning('Importação registrada. Atualize a página para conferir os dados.') }
   }
   return <section className="surface-panel space-y-5 rounded-2xl p-5 sm:p-6">
-    <div><h2 className="text-lg font-medium">Importar leads (planilha)</h2><p className="mt-1 text-sm text-muted-foreground">Importe os leads exportados dos formulários da Meta (ou de outra origem). Cada linha entra nas mesmas levas dos leads automáticos, na posição da data e hora em que o lead caiu, com todas as respostas preservadas. Na aprovação da leva, o lead vai para o CRM do SDR com o horário em que caiu. Reenviar o mesmo arquivo não duplica leads.</p></div>
+    <div><h2 className="text-lg font-medium">Importar leads (planilha)</h2><p className="mt-1 text-sm text-muted-foreground">Cada linha entra nas mesmas levas dos leads automáticos, com o conteúdo original preservado. Escolha a origem para encaminhar à seção correta em Importações do SDR. Recebimentos mais recentes têm prioridade; a data e hora informadas na planilha ficam identificadas separadamente. Reenviar o mesmo arquivo não duplica leads.</p></div>
+    <div><Label htmlFor="lead-import-channel">Origem dos contatos</Label><select id="lead-import-channel" className={selectClass} disabled={busy} value={leadChannel} onChange={event => setLeadChannel(event.target.value as 'form' | 'website')}>
+      <option value="form">Formulários</option><option value="website">Site / conversão direta</option>
+    </select></div>
     {outcome && <div className="space-y-3 rounded-lg border border-border/60 p-4"><h3 className="font-medium">{outcome.error ? 'Importação interrompida' : 'Importação recebida'} · {outcome.fileName}</h3><LeadResult outcome={outcome} onOpenWaves={onOpenWaves} /></div>}
     {progress && <div role="status" className="space-y-2"><div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-ember transition-all" style={{ width: `${Math.round(progress.done / Math.max(1, progress.total) * 100)}%` }} /></div><p className="text-xs text-muted-foreground">Enviando {progress.done} de {progress.total} linhas…</p></div>}
     <div>

@@ -29,8 +29,10 @@ import type { Json } from "@/integrations/supabase/types";
 import { paymentStateValue } from "@/lib/crm-payments";
 import { outcomeLabel } from "@/lib/crm-stages";
 import { CRMContextPanel } from "./CRMContextPanel";
+import { CRMImportDetails } from './CRMImportDetails';
 import { CRMLeadArrival } from "./CRMLeadArrival";
 import { leadArrivedAt, leadDateTime } from "@/lib/meta-waves";
+import { importChannelLabels } from '@/lib/crm-imports';
 
 const stateLabels: Record<string, string> = {
   temperature: "Aquecimento",
@@ -88,7 +90,7 @@ export function CRMLeadDetail({
     ["Posição", lead.athlete_position],
     ["Altura (cm)", lead.athlete_height_cm],
     ["Peso (kg)", lead.athlete_weight_kg],
-    ["Origem", lead.lead_source ? (LEAD_SOURCE_LABELS[lead.lead_source] || lead.lead_source) : null],
+    ["Origem", lead.import_channel ? importChannelLabels[lead.import_channel] : lead.lead_source ? (LEAD_SOURCE_LABELS[lead.lead_source] || lead.lead_source) : null],
     ["Caiu em (horário de Brasília)", leadArrivedAt(lead) ? leadDateTime(leadArrivedAt(lead)) : null],
     ["Valor estimado", lead.estimated_deal_value],
     ["Prioridade", lead.priority],
@@ -172,6 +174,7 @@ export function CRMLeadDetail({
                 ?.label || lead.pipeline_stage}
             </Badge>
           </div>
+          <CRMImportDetails lead={lead} />
           <CRMContextPanel lead={lead} />
           <dl className="grid gap-x-3 gap-y-2 sm:grid-cols-3">
             {fields.map(([label, value]) => (

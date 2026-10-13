@@ -17,6 +17,8 @@ type ExtraFunctions = {
   // Levas de 20 leads (formulários da Meta e planilhas), envio ao CRM e conferência de leads.
   meta_wave_list: FunctionDef<{ p_status: 'pendente' | 'aprovada' | 'rejeitada' | null; p_limit: number; p_offset: number }>;
   meta_wave_leads: FunctionDef<{ p_wave: string }>;
+  meta_wave_begin_review: FunctionDef<{ p_wave: string }>;
+  meta_wave_decide_versioned: FunctionDef<{ p_wave: string; p_expected_version: number; p_members: Json; p_action: 'aprovar' | 'rejeitar'; p_excluded: Json; p_note: string; p_request_id: string }>;
   meta_wave_decide: FunctionDef<{ p_wave: string; p_action: 'aprovar' | 'rejeitar'; p_lead_ids: string[]; p_excluded: Json; p_note: string }>;
   meta_wave_retry: FunctionDef<{ p_wave: string; p_lead: string | null }>;
   meta_wave_rebuild: FunctionDef<Record<string, never>>;

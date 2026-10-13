@@ -4,6 +4,9 @@ import { brasiliaDateKey, isValidDateKey } from './brasilia-time.ts'
 export type FieldAnswer = { name: string; values: string[] }
 
 export type LeadImportRow = {
+  entry_channel?: 'form' | 'website'
+  raw_cells?: { header: string; value: string }[]
+  source_file?: string
   meta_lead_id: string
   campaign_id: string
   campaign_name: string
@@ -39,7 +42,7 @@ export type LeadImportResult = {
 // Formato dos lotes antigos, quando a aprovação enviava direto ao CRM.
 export type LegacyLeadImportResult = { crm: number; queued: number; duplicates: number; failed: number; issues: { row: number; kind: 'queued' | 'failed'; reason: string }[] }
 export type LeadImportResponse = { batch_id: string; rows: number; status: 'recebido' | 'pendente' | 'aprovado'; result: LeadImportResult }
-export type LeadCsvField = keyof Omit<LeadImportRow, 'complete' | 'field_data' | 'raw_notes' | 'source_row' | 'warnings' | 'time_known'>
+export type LeadCsvField = keyof Omit<LeadImportRow, 'complete' | 'field_data' | 'raw_notes' | 'source_row' | 'warnings' | 'time_known' | 'entry_channel' | 'raw_cells' | 'source_file'>
 export type LeadCsvMapping = Record<LeadCsvField, string>
 
 export const athletePositions = ['Goleiro', 'Zagueiro', 'Lateral', 'Volante', 'Meia', 'Atacante']
@@ -137,7 +140,7 @@ function readyForCRM(row: LeadImportRow) {
       (row.performance_report_url.length <= 2048 && /^https:\/\/[^/\s]+/.test(row.performance_report_url)))
 }
 
-export async function buildLeadImportRows(values: string[][], headers: string[], mapping: LeadCsvMapping): Promise<LeadImportRow[]> {
+export async function buildLeadImportRows(values: string[][], headers: string[], mapping: LeadCsvMapping, filename = '', channel: 'form' | 'website' = 'form'): Promise<LeadImportRow[]> {
   if (values.length > 2000) throw new Error('Importe até 2.000 linhas por arquivo.')
   const numbered = values.map((line, index) => ({ line, index })).filter(({ line }) => line.some(value => value.trim()))
   return Promise.all(numbered.map(async ({ line, index }) => {
@@ -152,11 +155,14 @@ export async function buildLeadImportRows(values: string[][], headers: string[],
       const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity))
       meta_lead_id = 'csv:' + Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')
     }
+    if (channel === 'website' && !meta_lead_id.startsWith('site:zyron:')) meta_lead_id = 'site:zyron:' + meta_lead_id
     const athlete_position = get('athlete_position').trim()
     const email = get('email').trim()
     const athlete_name = get('athlete_name').trim()
     const athlete_birth_date = parseBirthDate(get('athlete_birth_date'))
     const row: LeadImportRow = {
+      entry_channel: channel, source_file: filename,
+      raw_cells: headers.map((header, column) => ({ header, value: line[column] ?? '' })),
       meta_lead_id, campaign_id: get('campaign_id').trim(), campaign_name: get('campaign_name').trim(),
       ad_id: get('ad_id').trim(), form_id: get('form_id').trim(), form_name: get('form_name').trim(),
       created_time: created.value, full_name, phone, email, athlete_name, athlete_birth_date, athlete_position,
