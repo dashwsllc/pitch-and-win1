@@ -39,7 +39,8 @@ BEGIN
   PERFORM pg_temp.mk_lead('qa-w-61',timestamptz '2026-10-08 13:01:00-03');
   PERFORM pg_temp.assert((SELECT is_open FROM public.meta_lead_waves WHERE number=4) AND (SELECT count(*) FROM public.meta_form_leads WHERE wave_id=(SELECT id FROM public.meta_lead_waves WHERE number=4))=1,'wave 4 must open with the 21st lead of wave 3');
   -- Grants: only authenticated users reach the wave contract, only the service publishes captures.
-  PERFORM pg_temp.assert(has_function_privilege('authenticated','public.meta_wave_decide(uuid,text,uuid[],jsonb,text)','EXECUTE')
+  PERFORM pg_temp.assert(has_function_privilege('authenticated','public.meta_wave_decide_versioned(uuid,bigint,jsonb,text,jsonb,text,uuid)','EXECUTE')
+    AND NOT has_function_privilege('authenticated','public.meta_wave_decide(uuid,text,uuid[],jsonb,text)','EXECUTE')
     AND NOT has_function_privilege('anon','public.meta_wave_decide(uuid,text,uuid[],jsonb,text)','EXECUTE')
     AND NOT has_function_privilege('service_role','public.meta_wave_decide(uuid,text,uuid[],jsonb,text)','EXECUTE'),'wave decision grants');
   PERFORM pg_temp.assert(NOT has_function_privilege('authenticated','public.meta_capture_publish_system(uuid)','EXECUTE')
@@ -149,7 +150,7 @@ BEGIN
   PERFORM pg_temp.expect_error(format('SELECT public.meta_wave_decide(%L,%L,%L::uuid[])',w3,'aprovar',ids),'22023');
 END $$;
 
--- 4. Leads antigos recuperados depois: as levas pendentes voltam à ordem cronológica, as decididas não mudam.
+-- 4. Historical arrivals preserve all existing memberships; receipt time determines priority.
 DO $$
 DECLARE exec uuid:=(SELECT id FROM t_actor WHERE name='exec'); i integer; before_sizes text; after_ok boolean; w1_before text; w1_after text; pending_before integer;
 BEGIN
@@ -160,8 +161,8 @@ BEGIN
   SELECT count(*) INTO pending_before FROM public.meta_form_leads WHERE approval_status='pendente' AND lead_import_batch_id IS NULL;
   -- Older leads (before everything else) are found late and fall into the newest wave.
   FOR i IN 1..7 LOOP PERFORM pg_temp.mk_lead('qa-old-'||i,timestamptz '2026-10-07 09:00:00-03'+(i||' minutes')::interval); END LOOP;
-  PERFORM pg_temp.assert(public.meta_wave_needs_rebuild(),'late old leads must be detected as out of order');
-  -- A completed discovery reorders them by itself.
+  PERFORM pg_temp.assert(NOT public.meta_wave_needs_rebuild(),'dated historical leads with assigned waves must not trigger regrouping');
+  -- Completed discovery keeps the distribution stable.
   INSERT INTO public.meta_lead_discovery_state(page_id,window_since,window_until,last_completed_until) VALUES('qa-page',now()-interval '1 day',now()-interval '1 hour',now()-interval '2 hours');
   UPDATE public.meta_lead_discovery_state SET last_completed_until=now()-interval '1 hour' WHERE page_id='qa-page';
   PERFORM pg_temp.assert(NOT public.meta_wave_needs_rebuild(),'completed discovery must restore chronological waves');
@@ -169,10 +170,10 @@ BEGIN
     AND NOT EXISTS(SELECT 1 FROM public.meta_form_leads WHERE approval_status='pendente' AND lead_import_batch_id IS NULL AND wave_id IS NULL),'every pending lead must keep a wave');
   SELECT string_agg(l.id::text||l.wave_id::text,',' ORDER BY l.id) INTO w1_after FROM public.meta_form_leads l WHERE l.wave_id IN (SELECT id FROM public.meta_lead_waves WHERE status<>'pendente');
   PERFORM pg_temp.assert(w1_before=w1_after,'decided waves must never be reorganized');
-  PERFORM pg_temp.assert(NOT EXISTS(SELECT 1 FROM (SELECT w.number,min(l.created_time) mn,max(l.created_time) mx FROM public.meta_lead_waves w JOIN public.meta_form_leads l ON l.wave_id=w.id WHERE w.status='pendente' GROUP BY w.number) a
-    JOIN (SELECT w.number,min(l.created_time) mn FROM public.meta_lead_waves w JOIN public.meta_form_leads l ON l.wave_id=w.id WHERE w.status='pendente' GROUP BY w.number) b ON b.number>a.number AND b.mn<a.mx),'pending waves must be in time order');
+  PERFORM pg_temp.assert((SELECT max(first_received_at) FROM public.meta_form_leads WHERE meta_lead_id LIKE 'qa-old-%') >=
+    (SELECT max(first_received_at) FROM public.meta_form_leads WHERE meta_lead_id LIKE 'qa-w-%'),'new historical receipts must preserve current arrival priority');
   PERFORM pg_temp.assert((SELECT count(*) FROM public.meta_lead_waves WHERE is_open)=1 AND NOT EXISTS(SELECT 1 FROM public.meta_form_leads WHERE wave_id IS NOT NULL GROUP BY wave_id HAVING count(*)>20),'one open wave and at most 20 leads per wave');
-  PERFORM pg_temp.assert((SELECT min(created_time) FROM public.meta_form_leads WHERE wave_id=(SELECT id FROM public.meta_lead_waves WHERE status='pendente' ORDER BY number LIMIT 1))=timestamptz '2026-10-07 09:01:00-03','oldest pending lead must open the first pending wave');
+  PERFORM pg_temp.assert(EXISTS(SELECT FROM public.meta_form_leads WHERE meta_lead_id='qa-old-1' AND created_time=timestamptz '2026-10-07 09:01:00-03'),'historical generation must remain distinct from receipt time');
   -- The manual fallback does nothing when there is nothing to reorganize.
   PERFORM set_config('request.jwt.claim.role','authenticated',true);
   PERFORM set_config('request.jwt.claim.sub',exec::text,true);
@@ -218,7 +219,7 @@ BEGIN
   PERFORM pg_temp.assert(EXISTS(SELECT 1 FROM public.meta_audit_events WHERE entity_id=lead5 AND action='lead.reopened' AND actor_id=exec)
     AND (SELECT count(*) FROM public.meta_audit_events WHERE entity_id=lead5 AND action='lead.rejected')=1,'reopening must be audited as a reopening');
   r:=public.meta_wave_reopen(w3);
-  PERFORM pg_temp.assert((r->>'reopened')::int=20 AND NOT EXISTS(SELECT 1 FROM public.meta_lead_waves WHERE id=w3),'a rejected wave returns all its leads and disappears when empty');
+  PERFORM pg_temp.assert((r->>'reopened')::int=20 AND EXISTS(SELECT 1 FROM public.meta_lead_waves WHERE id=w3),'reopening must preserve the original wave record');
   PERFORM pg_temp.assert(EXISTS(SELECT 1 FROM public.meta_audit_events WHERE entity_id=w3 AND action='wave.reopened'),'wave reopening must be audited');
   PERFORM pg_temp.assert(NOT EXISTS(SELECT 1 FROM public.meta_form_leads WHERE approval_status='pendente' AND wave_id IS NULL)
     AND NOT EXISTS(SELECT 1 FROM public.meta_form_leads l JOIN public.meta_lead_waves w ON w.id=l.wave_id WHERE l.approval_status='pendente' AND w.status<>'pendente')
@@ -348,9 +349,9 @@ BEGIN
     (SELECT number FROM public.meta_lead_waves WHERE id=recent_wave),'backfill must reproduce a newer wave number');
   PERFORM set_config('request.jwt.claim.role','authenticated',true);
   page:=public.meta_wave_list(NULL,1,0);
-  PERFORM pg_temp.assert(page->'waves'->0->>'id'=recent_wave::text,'wave list must paginate by lead time, not wave number');
+  PERFORM pg_temp.assert(page->'waves'->0->>'id'=old_wave::text,'wave list must prioritize the latest receipt even for old generation');
   page:=public.meta_wave_list(NULL,1,1);
-  PERFORM pg_temp.assert(page->'waves'->0->>'id'<>recent_wave::text,'pagination must not repeat the newest wave');
+  PERFORM pg_temp.assert(page->'waves'->0->>'id'<>old_wave::text,'pagination must not repeat the latest received wave');
 END $$;
 SELECT 'PASS: waves, minimal CRM sync with context, idempotence, visible failures and retry, chronological rebuild, automatic metric publication and conference' AS verification;
 ROLLBACK;

@@ -73,10 +73,10 @@ test('the CRM shows exactly when a form lead arrived, only for form leads', () =
   const { CRMLeadArrival } = load('src/components/crm/CRMLeadArrival.tsx')
   const form = { lead_source: 'meta_ads_form', lead_generated_at: '2026-10-11T13:43:52Z', approach_stage: 'nao_abordado' }
   const html = renderToStaticMarkup(React.createElement(CRMLeadArrival, { lead: form }))
-  assert.match(html, /Caiu em 11\/10 às 10:43/)
+  assert.match(html, /Formulário enviado em 11\/10\/2026 10:43:52/)
   assert.match(html, /há \d+ (min|h|dias?)|agora/)
   const approached = renderToStaticMarkup(React.createElement(CRMLeadArrival, { lead: { ...form, approach_stage: 'abordado' } }))
-  assert.match(approached, /Caiu em 11\/10 às 10:43/); assert.doesNotMatch(approached, /há /)
+  assert.match(approached, /Formulário enviado em 11\/10\/2026 10:43:52/); assert.doesNotMatch(approached, /há /)
   assert.equal(renderToStaticMarkup(React.createElement(CRMLeadArrival, { lead: { ...form, lead_source: null } })), '')
   assert.equal(waves.leadArrivedAt({ lead_source: 'manual', lead_generated_at: '2026-10-11T13:43:52Z' }), null)
 })

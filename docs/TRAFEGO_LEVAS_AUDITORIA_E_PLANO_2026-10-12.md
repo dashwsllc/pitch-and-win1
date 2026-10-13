@@ -417,6 +417,37 @@ Validação repetida: 100 testes Node, 8 Deno, 2 de concorrência em PostgreSQL 
 
 O check de segurança do GitHub já falhava no commit base por dependências de ferramentas de desenvolvimento (13 avisos altos e 5 moderados). Esta entrega não altera dependências nem desativa esse check.
 
+## 15. Validação em produção (12/10, 19:20)
+
+Todas as consultas foram somente leitura (`npx supabase db query --linked --project-ref mbzwchnxtskysqplqiyy`), sem nomes, telefones nem e-mails na saída.
+
+**A publicação foi concluída em 12/10 às 14:41 (Brasília) por outra sessão, depois do limite de uso desta.** Estado conferido: commit `640450f` na `main` e em `origin/main`, árvore limpa; as três funções Edge (`meta-insights-sync`, `meta-lead-worker`, `meta-leads-reconciliation`) com o mesmo `updated_at` de 14:41:18; deploy de produção da Vercel criado às 14:41:55; migrations `20261012150000` e `20261012173955` registradas em `schema_migrations`. O site publicado carrega o código novo: o chunk `Trafego-*.js` contém `meta_wave_list`, `meta_traffic_conference`, "Lead mais recente aguardando", "Abrir leva", "Confirmar envio", "Tentar de novo" e "Horário aproximado".
+
+| Verificação | Resultado |
+| --- | --- |
+| Levas | 22, todas pendentes: 21 com 20 leads e a aberta (nº 22) com 6; nenhuma leva decidida |
+| Leads | 426 pendentes; 0 sem leva; 0 aprovados; 0 no CRM; 0 com falha de envio |
+| Ordem | levas 1 a 22 em ordem cronológica estrita, sem sobreposição (leva 1: 07/10 03:57:40 a 06:36:19; leva 22: 11/10 09:25:35 a 10:43:52) |
+| Listagem | `meta_wave_list` já com a ordenação da migration `20261012173955` |
+| Busca de leads | `last_completed_until` = 12/10 19:15, sem erro; jobs `meta-lead-worker` (1 min) e `meta-leads-reconciliation-hourly` (5 min) com todas as rodadas `succeeded`; 426 recibos de webhook `processed`, nenhum lead sem recibo |
+| Leads por dia (Brasília) | 07/10: 114 · 08/10: 123 · 09/10: 80 · 10/10: 83 · 11/10: 26 |
+| Leads informados pela Meta | 113 · 123 · 80 · 83 · 26 |
+| Gasto publicado | R$ 117,65 · 92,97 · 39,45 · 46,82 · 15,09 (total R$ 311,98), idêntico à captura da Meta |
+| Métricas por nível | campanha, conjunto e anúncio com gasto, leads, impressões e cliques idênticos em todos os dias; sem chaves duplicadas, sem linha editada à mão, sem linha sem captura |
+| Publicação automática | capturas de 18:00, 18:30 e 19:00 aprovadas sozinhas ("captura completa da API, sem conflitos") |
+| Funil de Vendas | zero em todas as linhas: não há campanha de Vendas ativa; não foi validado com dados reais |
+
+**Conferência de 07 a 11/10.** O total recebido (426) menos 1 lead de teste da Meta dá 425, igual ao total informado pela Meta (425). Por campanha e dia restam duas diferenças de 1 lead: 07/10, campanha TST 04 (painel 23, Meta 22), e 09/10, campanha TST 03 (painel 37, Meta 38). As duas aparecem na tela de conferência. Todos os leads vêm de um único formulário ("FORMULÁRIO ZYRON"), então nenhum formulário ficou sem cobertura. A causa provável é a atribuição da Meta, mas isso não foi provado.
+
+**O que o usuário precisa saber antes de aprovar**
+
+1. O lead de teste da Meta (09/10 12:51:01, sem campanha nem anúncio, nome e telefone "dummy") está na leva 14. Deve ser tirado da leva com o motivo "lead de teste". O telefone dele tem 40 caracteres, então o CRM o recusaria de qualquer forma.
+2. Oito leads reais têm contato que o CRM recusa: 3 com nome de menos de 2 caracteres e 5 com WhatsApp fora de 8 a 32 caracteres (levas 1, 2, 3 com dois, 12, 13, 16 e 19). Ao aprovar, cada um fica como "falhou" com o motivo na tela; corrija em Editar e use "Tentar de novo". Os outros leads da leva são enviados normalmente.
+3. O estado do webhook continua "não verificado": a consulta `subscribed_apps` não gravou resultado (a Meta provavelmente nega a leitura com o token atual, e o código foi feito para seguir sem a informação). Conferir no painel de desenvolvedores da Meta se o app está assinado no campo `leadgen` da Página. Sem webhook, a busca de 5 em 5 minutos ainda traz o lead em até cerca de 5 minutos. O recibo `ignored` de 09/10 12:55:47 (`page_id` "0", `form_id` "444444444444") é o evento do botão de teste do painel de webhooks da Meta, não um lead.
+4. A velocidade de chegada ao vivo ainda não foi medida: os 148 leads anteriores chegaram em 11/10 por busca retroativa (mediana de 24 horas) e os 278 de 12/10 também (277 reais mais o lead de teste). O último lead é de 11/10 10:43:52 e não houve gasto em 12/10 até 13:30. O primeiro lead novo (ou um lead criado na ferramenta de teste de leads da Meta) mostra o tempo real: deve aparecer na leva aberta em segundos pelo webhook ou em até cerca de 6 minutos pela busca.
+5. Não foi validado em produção: o envio ao CRM e o campo "Caiu em" (exige aprovar uma leva real, o que depende do OK do usuário) e a tela autenticada com dados reais (a sessão do navegador embutido estava na tela de login).
+6. A branch `codex/traffic-lead-waves` (worktree `.worktrees/traffic-lead-waves`) tem outra especificação, com as mesmas tabelas. Ela não deve ser publicada; recomenda-se encerrar aquela sessão.
+
 ## Apêndice A — consultas usadas
 
 Todas são somente leitura e foram executadas no projeto `mbzwchnxtskysqplqiyy`.

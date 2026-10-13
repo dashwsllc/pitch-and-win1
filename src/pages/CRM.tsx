@@ -49,6 +49,8 @@ import { useToast } from "@/hooks/use-toast";
 import { errorMessage } from "@/lib/sales";
 import type { Json } from "@/integrations/supabase/types";
 import { CRMLeadDetail } from "@/components/crm/CRMLeadDetail";
+import { CRMImportsSection } from '@/components/crm/CRMImportsSection';
+import { compareCRMImportRecency, matchesCRMImport, type ImportSection, type ImportMethodFilter } from '@/lib/crm-imports';
 import { CRMLeadEditor } from "@/components/crm/CRMLeadEditor";
 import { CRMLeadCard } from "@/components/crm/CRMLeadCard";
 import { CRMActionDialog } from "@/components/crm/CRMActionDialog";
@@ -189,7 +191,12 @@ export default function CRM() {
   const [params, setParams] = useSearchParams();
   const requestedTab = params.get("tab") || "leads";
   // Favoritos e links antigos da aba Remarketing (?tab=remarketing) abrem o Follow-up.
-  const tab = requestedTab === "remarketing" ? "followup" : requestedTab;
+  const tab = requestedTab === "remarketing" ? "followup" : requestedTab === 'importacoes' ? 'importados' : requestedTab;
+  const importSection: ImportSection = params.get('origem') === 'form' ? 'form' : params.get('origem') === 'website' ? 'website' : 'all';
+  const importMethod: ImportMethodFilter = params.get('entrada') === 'manual' ? 'manual' : params.get('entrada') === 'automatic' ? 'automatic' : 'all';
+  const setImportFilter = (key: string, value: string) => setParams(previous => {
+    const next = new URLSearchParams(previous); next.set(key, value); return next;
+  });
   useEffect(() => {
     if (requestedTab === "remarketing") setParams(previous => { const next = new URLSearchParams(previous); next.set("tab", "followup"); return next; }, { replace: true });
   }, [requestedTab, setParams]);
@@ -316,7 +323,7 @@ export default function CRM() {
     if (tab === "leads") return !isClosedStage(lead.pipeline_stage);
     if (tab === "closer") return inQueue(lead, queue);
     if (tab === "sdr") return inSdrQueue(lead, sdrQueue);
-    if (tab === "importados") return lead.lead_source === "meta_ads_form";
+    if (tab === "importados") return matchesCRMImport(lead, importSection, importMethod);
     if (tab === "followup") return negative(lead);
     return true;
   };
@@ -379,10 +386,7 @@ export default function CRM() {
           : callDateFilter === "all" || callMatchesDateKey(openCalls.get(lead.id), selectedCallDateKey),
     )
     .sort((a, b) => {
-      // Importados (formulários da Meta): o lead que caiu mais recentemente fica no topo, pela hora real do formulário.
-      if (tab === "importados" && order === "newest") {
-        return Date.parse(b.lead_generated_at || "") - Date.parse(a.lead_generated_at || "") || compareLeadRecency(a, b);
-      }
+      if (tab === 'importados') return compareCRMImportRecency(a, b);
       if (dailyPipeline && order === "newest") {
         return Date.parse(leadApproachReference(b) || "") - Date.parse(leadApproachReference(a) || "") || compareLeadRecency(a, b);
       }
@@ -648,7 +652,7 @@ export default function CRM() {
         >
           <TabsList className="h-auto flex flex-wrap justify-start gap-1 w-fit max-w-full">
             <TabsTrigger className="h-8 px-3 text-xs" value="leads">Leads</TabsTrigger>
-            <TabsTrigger className="h-8 px-3 text-xs" value="importados">Importados</TabsTrigger>
+            <TabsTrigger className="h-8 px-3 text-xs" value="importados">Importações</TabsTrigger>
             {capabilities.sdr && <TabsTrigger className="h-8 px-3 text-xs" value="sdr">SDR</TabsTrigger>}
             {capabilities.closer && (
               <TabsTrigger className="h-8 px-3 text-xs" value="closer">Closer</TabsTrigger>
@@ -782,6 +786,8 @@ export default function CRM() {
                   onRead={lead => setReadId(lead.id)} onReturn={(lead, target) => setReturning({ lead, target })} onManageFollowup={setFollowupLead} />
                   : showFollowup ? <CRMFollowupBoard leads={crm.leads} names={names} now={now} busy={busy} onRead={lead => setReadId(lead.id)} onManage={setFollowupLead} />
                   : <>
+                {tab === 'importados' && <CRMImportsSection leads={crm.leads} section={importSection} method={importMethod}
+                  onSection={value => setImportFilter('origem', value)} onMethod={value => setImportFilter('entrada', value)} />}
                 {dailyPipeline && <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
                   <div>
                     <h2 className="font-semibold">Esteira do LEAD</h2>
@@ -846,14 +852,14 @@ export default function CRM() {
                     <select
                       className={selectClass}
                       aria-label="Ordenar leads"
-                      value={callDateFilter === "all" || dailyPipeline ? order : "calls"}
+                      value={tab === 'importados' ? 'newest' : callDateFilter === "all" || dailyPipeline ? order : "calls"}
                       onChange={(e) => setOrder(e.target.value)}
-                      disabled={callDateFilter !== "all" && !dailyPipeline}
+                      disabled={tab === 'importados' || (callDateFilter !== "all" && !dailyPipeline)}
                     >
                       {callDateFilter !== "all" && !dailyPipeline && (
                         <option value="calls">Horário mais próximo</option>
                       )}
-                      <option value="newest">Mais recentes</option>
+                      <option value="newest">{tab === 'importados' ? 'Recebimentos mais recentes' : 'Mais recentes'}</option>
                       <option value="automatic">Calls e retornos prioritários</option>
                       <option value="name">Nome A–Z</option>
                       <option value="hot">Mais quentes</option>

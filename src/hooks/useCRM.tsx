@@ -1,4 +1,5 @@
 import type { CRMLeadInsert } from '@/integrations/supabase/application-types'
+import { CRM_LEAD_LIST_COLUMNS, type CRMImportMetadata } from '@/lib/crm-imports'
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +14,7 @@ import { refreshDashboardData } from "@/lib/sync";
 import type { CRMResultSale } from "@/lib/crm-results";
 import type { CRMReturnData } from "@/components/crm/CRMReturnDialog";
 
-export type CRMLead = Tables<"crm_leads">;
+export type CRMLead = Tables<"crm_leads"> & CRMImportMetadata;
 export type CRMActivity = Tables<"crm_activities"> & {duration_minutes?:number};
 export type CRMLeadContext = Tables<"crm_lead_contexts">;
 export const PIPELINE_STAGES = [
@@ -148,12 +149,12 @@ export function useCRMLeads() {
       for (let from = 0; ; from += 500) {
         const { data, error } = await supabase
           .from("crm_leads")
-          .select("*")
+          .select(CRM_LEAD_LIST_COLUMNS)
           .order("created_at", { ascending: false })
           .order("id")
           .range(from, from + 499);
         if (error) throw error;
-        rows.push(...data);
+        rows.push(...data as unknown as CRMLead[]);
         if (data.length < 500) return rows;
       }
     },

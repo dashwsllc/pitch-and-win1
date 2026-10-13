@@ -42,8 +42,12 @@ async function makeContext(role) {
     else if (name === 'profiles') data = { id: actor, user_id: actor, display_name: 'QA Tráfego', suspended: false }
     else if (name === 'user_roles') data = [{ id: actor, user_id: actor, role }]
     else if (name === 'meta_wave_list') data = list(args)
-    else if (name === 'meta_wave_leads') { const number = numberOf(args.p_wave); data = { wave: state.waves.find(item => item.id === args.p_wave), leads: state.leads[number] } }
-    else if (name === 'meta_wave_decide') {
+    else if (name === 'meta_wave_leads' || name === 'meta_wave_begin_review') {
+      const number = numberOf(args.p_wave), target = state.waves.find(item => item.id === args.p_wave)
+      if (name === 'meta_wave_begin_review' && target.is_open) Object.assign(target, { is_open: false, version: target.version + 1 })
+      data = { wave: target, leads: state.leads[number] }
+    }
+    else if (name === 'meta_wave_decide_versioned') {
       if (state.staleOnce) { state.staleOnce = false; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: '40001', message: 'A leva mudou; recarregue antes de decidir' }) }) }
       const target = state.waves.find(item => item.id === args.p_wave), excluded = new Map(args.p_excluded.map(item => [item.id, item.reason]))
       for (const item of state.leads[target.number]) {
@@ -84,13 +88,13 @@ try {
   await expect(newest.getByText('Mais recente')).toBeVisible()
   await expect(newest.getByText('Recebendo leads')).toBeVisible()
   // A leva mais recente abre sozinha, com o lead mais novo no topo e o horário exato de cada um.
-  const leads = newest.getByRole('article', { name: /caiu em/ })
+  const leads = newest.getByRole('article', { name: /recebido em/ })
   await expect(leads).toHaveCount(3)
   assert.deepEqual(await leads.evaluateAll(items => items.map(item => item.getAttribute('aria-label').split(',')[0])), ['Ana Recente', 'Bruno Meio', 'Carla Planilha'])
-  await expect(leads.nth(0).locator('time')).toHaveText(clock(ago(4)))
+  await expect(leads.nth(0).locator('time')).toHaveText(clock(ago(3)))
   await expect(leads.nth(2).getByText('Horário aproximado (planilha)')).toBeVisible()
-  await expect(leads.nth(2).getByText('Planilha · export.csv')).toBeVisible()
-  await expect(leads.nth(0).getByText('há 4 min')).toBeVisible()
+  await expect(leads.nth(2).getByText('Manual · export.csv')).toBeVisible()
+  await expect(leads.nth(0).getByText('há 3 min')).toBeVisible()
   // TRAFFIC_SCREENSHOTS=<pasta> grava a tela das levas em desktop e celular para revisão visual.
   if (process.env.TRAFFIC_SCREENSHOTS) {
     await page.screenshot({ path: process.env.TRAFFIC_SCREENSHOTS + '/levas-desktop.png', fullPage: true })
@@ -104,13 +108,20 @@ try {
   await expect(newest.getByText('2 leads serão enviados', { exact: false })).toBeVisible()
   // Aprovação em dois passos; leva alterada no meio do caminho é recarregada sem decidir nada.
   await newest.getByRole('button', { name: 'Aprovar leva #22' }).click()
+  await expect(newest.getByRole('button', { name: 'Confirmar envio de 2 leads ao CRM' })).toBeEnabled()
+  await expect(leads.nth(0).getByRole('button', { name: /Editar/ })).toBeDisabled()
   await newest.getByRole('button', { name: 'Confirmar envio de 2 leads ao CRM' }).click()
   await expect(page.getByText('A leva mudou enquanto você conferia', { exact: false })).toBeVisible()
   await newest.getByRole('button', { name: 'Aprovar leva #22' }).click()
   await newest.getByRole('button', { name: 'Confirmar envio de 2 leads ao CRM' }).click()
   await expect(page.getByText('Leva #22 aprovada: 1 enviados ao CRM · 1 com falha · 1 rejeitados.')).toBeVisible()
-  const decision = calls.filter(call => call.name === 'meta_wave_decide').at(-1).args
-  assert.deepEqual(decision, { p_wave: state.waves[0].id, p_action: 'aprovar', p_lead_ids: ['l1', 'l2', 'l3'], p_excluded: [{ id: 'l2', reason: 'Lead de teste' }], p_note: '' })
+  const decision = calls.filter(call => call.name === 'meta_wave_decide_versioned').at(-1).args
+  assert.equal(decision.p_wave, state.waves[0].id)
+  assert.equal(decision.p_expected_version, 2)
+  assert.deepEqual(decision.p_members.map(item => item.id), ['l1','l2','l3'])
+  assert.deepEqual(decision.p_excluded, [{ id: 'l2', reason: 'Lead de teste' }])
+  assert(decision.p_members.every(item => item.updated_at === ago(1)))
+  assert.match(decision.p_request_id,/^[0-9a-f-]{36}$/)
   // A próxima pendente vira a mais recente.
   await expect(page.getByRole('article', { name: 'Leva 21' }).getByText('Mais recente')).toBeVisible()
   // Falha visível e reenvio; lead rejeitado pode ser reaberto.
@@ -132,7 +143,7 @@ try {
   assert.deepEqual(calls.filter(call => call.name === 'meta_wave_reopen').at(-1).args, { p_wave: state.waves[2].id, p_lead: null })
   // Importação manual em blocos de 200 linhas, sem perder nenhuma.
   await page.getByRole('tab', { name: /Importar/ }).click()
-  const csv = ['Created time,Full name,Phone number', ...Array.from({ length: 450 }, (_, index) => `11/10/2026 ${String(8 + Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}:00,Lead ${index},1199${String(index).padStart(7, '0')}`)].join('\n')
+  const csv = ['Created time,Full name,Phone number,Contexto', ...Array.from({ length: 450 }, (_, index) => `11/10/2026 ${String(8 + Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}:00,Lead ${index},1199${String(index).padStart(7, '0')},"  resposta ${index}  "`)].join('\n')
   await page.locator('#lead-file').setInputFiles({ name: 'export-meta.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
   await expect(page.getByText('450 linhas para envio.')).toBeVisible()
   await page.getByRole('button', { name: 'Enviar para as levas de aprovação' }).click()
@@ -141,6 +152,7 @@ try {
   assert.deepEqual(imports.map(call => [call.args.p_filename, call.args.p_rows.length]), [['export-meta.csv (parte 1 de 3)', 200], ['export-meta.csv (parte 2 de 3)', 200], ['export-meta.csv (parte 3 de 3)', 50]])
   assert.equal(new Set(imports.flatMap(call => call.args.p_rows.map(row => row.meta_lead_id))).size, 450)
   assert(imports.every(call => call.args.p_rows.every(row => row.time_known === true)))
+  assert.equal(imports[0].args.p_rows[0].raw_cells[3].value,'  resposta 0  ')
   assert.deepEqual(errors, [])
   console.log('PASS: newest wave first and auto-opened, exact lead times, approximate-time marker, exclusion with reason, two-step approval, stale reload, visible failure and retry, lead and wave reopening, chunked manual import without losing rows')
 } finally { await browser.close() }

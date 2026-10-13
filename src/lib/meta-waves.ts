@@ -27,6 +27,8 @@ export interface WaveSummary {
   failed: number
   first_lead_at: string | null
   last_lead_at: string | null
+  first_received_at?: string | null
+  last_received_at?: string | null
 }
 
 export interface WaveLead {
@@ -40,6 +42,8 @@ export interface WaveLead {
   ad_id: string
   created_time: string
   received_at: string
+  first_received_at?: string | null
+  entry_channel?: 'form' | 'website'
   updated_at: string
   full_name: string
   phone: string
@@ -60,6 +64,7 @@ export interface WaveLead {
   source: 'api' | 'planilha'
   batch_filename: string | null
   time_known: boolean
+  date_known?: boolean
 }
 
 export interface WaveList {
