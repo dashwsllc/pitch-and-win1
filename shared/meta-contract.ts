@@ -22,11 +22,16 @@ export interface MetaDailyRow {
   reach: number
   link_clicks: number
   messaging_conversations_started: number
+  // Funil de campanhas de Vendas (site). Ausentes em linhas antigas: aparecem como indisponíveis, nunca como zero.
+  landing_page_views?: number
+  adds_to_cart?: number
+  checkouts_initiated?: number
   objective: string
   source: 'csv' | 'api' | 'manual_legacy'
   updated_at: string
   available_metrics?: string[] | null
-  metric_metadata?: { version?: number; definition_version?: string; account_timezone?: string; graph_version?: string; lead_action?: string | null; purchase_action?: string | null; messaging_action?: string | null; manual_metrics?: string[] } | null
+  metric_metadata?: { version?: number; definition_version?: string; account_timezone?: string; graph_version?: string; lead_action?: string | null; purchase_action?: string | null; messaging_action?: string | null; manual_metrics?: string[]
+    landing_page_view_action?: string | null; add_to_cart_action?: string | null; checkout_action?: string | null; attribution_setting?: 'unified' } | null
 }
 
 export type ImportRow = Omit<MetaDailyRow, 'id' | 'updated_at' | 'source'> & { present_metrics?: string[] }
@@ -46,6 +51,7 @@ export interface CapturedTrafficRow extends ImportRow {
   available_metrics: string[]
   metric_metadata: {
     version: 1; definition_version: 'canonical-v1'; lead_action: string | null; purchase_action: string | null; messaging_action?: string | null; manual_metrics?: string[]
+    landing_page_view_action?: string | null; add_to_cart_action?: string | null; checkout_action?: string | null; attribution_setting?: 'unified'
     raw_actions: MetaAction[]; raw_action_values: MetaAction[]; account_timezone: string; graph_version: string
     request_params: Record<string, string>
   }

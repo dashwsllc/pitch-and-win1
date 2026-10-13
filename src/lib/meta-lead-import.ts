@@ -25,16 +25,21 @@ export type LeadImportRow = {
   field_data: FieldAnswer[]
   raw_notes: string
   complete: boolean
+  // false quando a planilha não traz horário (ou data) confiável: o horário é só uma referência para ordenar.
+  time_known: boolean
   source_row?: number
   warnings?: string[]
 }
 
+// Cada linha aceita vira um lead pendente numa leva (received); repetidas e recusadas ficam explicadas com o número da linha.
 export type LeadImportResult = {
-  crm: number; queued: number; duplicates: number; failed: number
-  issues: { row: number; kind: 'queued' | 'failed'; reason: string }[]
+  received: number; duplicates: number; failed: number
+  issues: { row: number; kind: 'duplicate' | 'failed'; reason: string }[]
 }
-export type LeadImportResponse = { batch_id: string; rows: number; status: 'pendente' | 'aprovado'; result: LeadImportResult | null }
-export type LeadCsvField = keyof Omit<LeadImportRow, 'complete' | 'field_data' | 'raw_notes' | 'source_row' | 'warnings'>
+// Formato dos lotes antigos, quando a aprovação enviava direto ao CRM.
+export type LegacyLeadImportResult = { crm: number; queued: number; duplicates: number; failed: number; issues: { row: number; kind: 'queued' | 'failed'; reason: string }[] }
+export type LeadImportResponse = { batch_id: string; rows: number; status: 'recebido' | 'pendente' | 'aprovado'; result: LeadImportResult }
+export type LeadCsvField = keyof Omit<LeadImportRow, 'complete' | 'field_data' | 'raw_notes' | 'source_row' | 'warnings' | 'time_known'>
 export type LeadCsvMapping = Record<LeadCsvField, string>
 
 export const athletePositions = ['Goleiro', 'Zagueiro', 'Lateral', 'Volante', 'Meia', 'Atacante']
@@ -98,7 +103,9 @@ function parseDateTime(value: string) {
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(source)) source += '-03:00'
   const date = new Date(source)
   const fallback = !trimmed || invalidCalendar || invalidClock || Number.isNaN(date.valueOf())
-  return { value: fallback ? new Date().toISOString() : date.toISOString(), fallback }
+  // Data sem hora: o horário (12:00) é só uma referência e a leva avisa que ele é aproximado.
+  const hasTime = br ? br[4] !== undefined : !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+  return { value: fallback ? new Date().toISOString() : date.toISOString(), fallback, hasTime }
 }
 
 function parseBirthDate(value: string) {
@@ -157,8 +164,9 @@ export async function buildLeadImportRows(values: string[][], headers: string[],
       athlete_weight_kg: get('athlete_weight_kg').trim(), city_state: get('city_state').trim(),
       performance_report_url: get('performance_report_url').trim(),
       field_data, raw_notes: field_data.map(item => `${item.name}: ${item.values[0]}`).join('\n'),
-      complete: false, source_row: index + 2,
-      warnings: created.fallback ? ['Data do lead ausente ou inválida; o recebimento será usado para ordenar a fila.'] : [],
+      complete: false, source_row: index + 2, time_known: !created.fallback && created.hasTime,
+      warnings: created.fallback ? ['Data do lead ausente ou inválida; usamos o horário do recebimento da planilha.']
+        : created.hasTime ? [] : ['Planilha sem horário; usamos 12:00 só como referência para ordenar.'],
     }
     row.complete = readyForCRM(row)
     return row
@@ -173,5 +181,6 @@ export function summarizeLeadImport(rows: LeadImportRow[]) {
     return true
   })
   const complete = unique.filter(row => row.complete).length
-  return { total: rows.length, complete, manual: unique.length - complete, duplicates: rows.length - unique.length }
+  const approximateTime = unique.filter(row => !row.time_known).length
+  return { total: rows.length, unique: unique.length, complete, manual: unique.length - complete, duplicates: rows.length - unique.length, approximateTime }
 }

@@ -24,6 +24,44 @@ test('worker recovers an old pending receipt without discovery and reports page 
   assert.equal(admin.events.get('lead1').error_class, 'permission')
   assert.equal(admin.events.get('lead1').status, 'error')
 })
+test('realtime subscription is recorded at most once an hour and never blocks discovery', async () => {
+  const admin = leadDatabase(); let subscribedCalls = 0
+  const fetch = address => {
+    const url = new URL(address)
+    if (url.pathname.endsWith('/subscribed_apps')) { subscribedCalls++; return json({ data: [{ id: 'app1', subscribed_fields: ['messages', 'leadgen'] }] }) }
+    if (url.pathname.endsWith('/leadgen_forms')) return json({ data: [] })
+    return leadsGraph(address)
+  }
+  const { exports } = await loadHandler('_shared/meta-lead-worker.ts', { admin, fetch })
+  const input = { pageIds: ['page1'], token: 'test-token', deadlineMs: Date.now() + 45000, discover: true }
+  const first = await exports.runLeadWorker(admin, input)
+  assert.equal(first.partial, false)
+  assert.deepEqual(JSON.parse(JSON.stringify(admin.webhooks)), [{ p_page_id: 'page1', p_subscribed: true }])
+  await exports.runLeadWorker(admin, { ...input, deadlineMs: Date.now() + 45000 })
+  assert.equal(subscribedCalls, 1, 'the diagnostic must not run on every five-minute discovery')
+  assert.equal(admin.webhooks.length, 1)
+})
+test('a Page not subscribed to leadgen is reported, and a permission error is ignored', async () => {
+  const none = leadDatabase()
+  const { exports: a } = await loadHandler('_shared/meta-lead-worker.ts', { admin: none, fetch: address => {
+    const url = new URL(address)
+    if (url.pathname.endsWith('/subscribed_apps')) return json({ data: [{ id: 'app1', subscribed_fields: ['messages'] }] })
+    if (url.pathname.endsWith('/leadgen_forms')) return json({ data: [] })
+    return leadsGraph(address)
+  } })
+  await a.runLeadWorker(none, { pageIds: ['page1'], token: 'test-token', deadlineMs: Date.now() + 45000, discover: true })
+  assert.deepEqual(JSON.parse(JSON.stringify(none.webhooks)), [{ p_page_id: 'page1', p_subscribed: false }])
+  const denied = leadDatabase()
+  const { exports: b } = await loadHandler('_shared/meta-lead-worker.ts', { admin: denied, fetch: address => {
+    const url = new URL(address)
+    if (url.pathname.endsWith('/subscribed_apps')) return json({ error: { code: 200, message: 'Requires pages_manage_metadata' } }, 403)
+    if (url.pathname.endsWith('/leadgen_forms')) return json({ data: [] })
+    return leadsGraph(address)
+  } })
+  const result = await b.runLeadWorker(denied, { pageIds: ['page1'], token: 'test-token', deadlineMs: Date.now() + 45000, discover: true })
+  assert.equal(result.partial, false); assert.equal(result.errors.length, 0); assert.equal(denied.webhooks.length, 0)
+  assert(denied.discoveries.get('page1').last_completed_until, 'discovery must still complete')
+})
 test('discovery persists whole receipts before advancing and resumes saved forms/leads cursor', async () => {
   const admin = leadDatabase(); let now = Date.now(), leadPages = 0
   class Clock extends Date { static now() { return now } }

@@ -49,4 +49,14 @@ export function trafficRunSummary(runs: MetaSyncRun[], accountId: string | null)
     partial: scoped.find(run => run.status === 'partial' || run.coverage_state === 'partial') || null,
     error: trafficOperationError(lastAttempt?.error_message) }
 }
-export type TrafficOperation = { runs: MetaSyncRun[]; published: { account_id: string; level: string; window_start: string; window_end: string; reviewed_at: string }[]; pending: Record<string, Record<string, number>> }
+export type TrafficWebhookState = { page_id: string; leadgen_subscribed: boolean | null; checked_at: string | null }
+// Falha prolongada: o último sucesso tem mais de 1 hora e houve erro depois dele.
+export type TrafficAlert = { kind: 'insights' | 'leads_reconciliation'; last_success_at: string | null; last_error_at: string }
+export type TrafficOperation = { runs: MetaSyncRun[]; published: { account_id: string; level: string; window_start: string; window_end: string; reviewed_at: string }[]; pending: Record<string, Record<string, number>>
+  webhook?: TrafficWebhookState[]; alerts?: TrafficAlert[] }
+export function trafficAlertMessage(alert: TrafficAlert, format: (value: string) => string) {
+  const since = alert.last_success_at ? `desde ${format(alert.last_success_at)}` : 'sem nenhum sucesso registrado'
+  return alert.kind === 'insights'
+    ? `A captura de métricas da Meta está falhando ${since}. Gasto e resultados em Desempenho podem estar desatualizados.`
+    : `A busca de leads da Meta está falhando ${since}. Leads novos podem não estar chegando; nenhum lead já recebido se perde.`
+}

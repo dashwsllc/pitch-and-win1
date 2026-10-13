@@ -1,16 +1,16 @@
-import type { LeadImportResult } from './meta-lead-import'
+import type { LeadImportResult, LegacyLeadImportResult } from './meta-lead-import'
 
 export interface MetaAuditEvent {
   id: string
   created_at: string
-  entity_type: 'lead' | 'lead_batch' | 'metrics_batch' | 'metrics_row' | 'capture_review'
+  entity_type: 'lead' | 'lead_batch' | 'metrics_batch' | 'metrics_row' | 'capture_review' | 'lead_wave'
   entity_id: string
   action: string
   origin: 'api' | 'csv'
   actor_id: string | null
   actor_name: string | null
   actor_roles: string[]
-  summary: { inserted?: number; updated?: number; removed?: number; before?: unknown; after?: unknown; filename?: string; rows?: number; row?: number; status?: string; note?: string; warning?: string; reason?: string; crm_lead_id?: string; result?: LeadImportResult; changes?: { field: string; before: unknown; after: unknown }[] }
+  summary: { inserted?: number; updated?: number; removed?: number; before?: unknown; after?: unknown; filename?: string; rows?: number; row?: number; status?: string; note?: string; warning?: string; reason?: string; crm_lead_id?: string; result?: LeadImportResult | LegacyLeadImportResult; changes?: { field: string; before: unknown; after: unknown }[]; number?: number; decided?: number; excluded?: number; sent?: number; failed?: number; retried?: number; recovered?: number; reopened?: number; automatic?: boolean; moved_to_next?: number }
 }
 
 export interface MetaFormLead {
@@ -42,6 +42,20 @@ export interface MetaFormLead {
   lead_import_batch_id: string | null
   import_contact?: Record<string, unknown> | null
   import_warning?: string | null
+  wave_id?: string | null
+  crm_sync_status?: 'enviado' | 'falhou' | null
+  crm_sync_error?: string | null
+}
+
+// A Meta devolve perguntas e opções como identificadores (quais_sao_as_3_..., sou_o_atleta). Aqui viram texto legível;
+// o que já está escrito com espaços ou maiúsculas (por exemplo, colunas de planilha) fica como veio.
+export function prettyQuestion(name: string) {
+  if (!name.includes('_') || name !== name.toLowerCase()) return name
+  const text = name.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim()
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+export function prettyAnswer(value: string) {
+  return /^\S+$/.test(value) && value === value.toLowerCase() && value.includes('_') ? value.replace(/_/g, ' ') : value
 }
 
 export function metaAnswers(fieldData: unknown) {

@@ -379,6 +379,10 @@ export default function CRM() {
           : callDateFilter === "all" || callMatchesDateKey(openCalls.get(lead.id), selectedCallDateKey),
     )
     .sort((a, b) => {
+      // Importados (formulários da Meta): o lead que caiu mais recentemente fica no topo, pela hora real do formulário.
+      if (tab === "importados" && order === "newest") {
+        return Date.parse(b.lead_generated_at || "") - Date.parse(a.lead_generated_at || "") || compareLeadRecency(a, b);
+      }
       if (dailyPipeline && order === "newest") {
         return Date.parse(leadApproachReference(b) || "") - Date.parse(leadApproachReference(a) || "") || compareLeadRecency(a, b);
       }

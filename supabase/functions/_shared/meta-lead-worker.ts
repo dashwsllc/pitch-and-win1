@@ -1,5 +1,5 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0'
-import { fetchGraphPage, MetaGraphError, type MetaGraphRequest } from './meta-graph.ts'
+import { fetchGraphPage, metaGraphGet, MetaGraphError, type MetaGraphRequest } from './meta-graph.ts'
 import { leadRpc, leadErrorMessage, processClaimedLead, receiveLeadgenEvent, type ClaimedLeadEvent } from './meta-lead-ingest.ts'
 import type { LeadPageTokenResolver } from './meta-page-token.ts'
 
@@ -7,13 +7,25 @@ interface Form { id: string; name?: string }
 interface DiscoveryState {
   page_id: string; version: number; claim_token: string; window_since: string; window_until: string
   forms_next: MetaGraphRequest | null; form_id: string | null; leads_next: MetaGraphRequest | null
-  form_queue: Form[]; active_form_name: string | null; last_completed_until?: string
+  form_queue: Form[]; active_form_name: string | null; last_completed_until?: string; webhook_checked_at?: string | null
 }
 export interface LeadWorkerResult {
   processed: number; failed: number; ignored: number; discovered: number; partial: boolean; errors: string[]
 }
 function requireIds(rows: Form[]) {
   if (rows.length > 500 || rows.some(row => !/^[A-Za-z0-9_-]{1,100}$/.test(row.id))) throw new Error('Página de descoberta inválida')
+}
+// Diagnóstico: a Página está assinada para receber leads em tempo real? Consultado no máximo uma vez por
+// hora e nunca interrompe a busca (sem a permissão, o estado fica como "não verificado").
+async function noteWebhookSubscription(admin: SupabaseClient, state: DiscoveryState, pageId: string, token: string, deadlineMs: number) {
+  const checkedAt = state.webhook_checked_at ? Date.parse(state.webhook_checked_at) : 0
+  if (Number.isFinite(checkedAt) && Date.now() - checkedAt < 60 * 60 * 1000) return
+  try {
+    const apps = await metaGraphGet<{ data?: { subscribed_fields?: string[] }[] }>(`/${pageId}/subscribed_apps`, { fields: 'subscribed_fields' }, token,
+      { deadlineMs: Math.min(deadlineMs, Date.now() + 5000) })
+    const subscribed = (apps.data ?? []).some(app => Array.isArray(app.subscribed_fields) && app.subscribed_fields.includes('leadgen'))
+    await leadRpc(admin, 'meta_lead_discovery_note_webhook', { p_page_id: pageId, p_subscribed: subscribed })
+  } catch { /* diagnóstico opcional */ }
 }
 async function discoverPage(admin: SupabaseClient, pageId: string, token: string, deadlineMs: number, result: LeadWorkerResult, resolveToken?: LeadPageTokenResolver) {
   const state = await leadRpc<DiscoveryState | null>(admin, 'meta_lead_discovery_claim', { p_page_id: pageId, p_lease_seconds: 60 })
@@ -28,6 +40,7 @@ async function discoverPage(admin: SupabaseClient, pageId: string, token: string
   }
   try {
     if (resolveToken) token = await resolveToken(pageId, { deadlineMs })
+    await noteWebhookSubscription(admin, state, pageId, token, deadlineMs)
     while (Date.now() + 2000 < deadlineMs) {
       if (!state.form_id && state.form_queue.length) {
         const [form, ...rest] = state.form_queue

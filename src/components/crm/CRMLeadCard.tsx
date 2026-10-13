@@ -1,4 +1,5 @@
 import { CRMCalendarStatus } from './CRMCalendarStatus';
+import { CRMLeadArrival } from './CRMLeadArrival';
 import {
   BookOpen,
   Pencil,
@@ -275,6 +276,7 @@ export function CRMLeadCard({
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
+        <CRMLeadArrival lead={lead} />
         <Badge className={`h-5 px-2 text-[10px] ${tempColor}`}>
           {{ frio: "Frio", morno: "Morno", quente: "Quente" }[lead.temperature]}
         </Badge>

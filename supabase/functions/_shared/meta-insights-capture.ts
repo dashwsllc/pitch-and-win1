@@ -48,7 +48,8 @@ export async function captureAccountLevel(admin: SupabaseClient, input: CaptureI
   try {
     const account = await readMetaAccount(admin, input.accountId, token, networkDeadline)
     const params = { level: input.level, time_increment: '1', time_range: JSON.stringify({ since: input.since, until: input.until }),
-      fields: 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,inline_link_clicks,actions,action_values', limit: '500' }
+      fields: 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,inline_link_clicks,actions,action_values', limit: '500',
+      use_unified_attribution_setting: 'true' }
     runId = await rpc<string>(admin, 'meta_capture_open', { p_account_id: account.id, p_level: input.level, p_start: input.since, p_end: input.until,
       p_params: params, p_metadata: account, p_triggered_by: input.triggeredBy, p_actor: input.actor })
     run = await rpc<CaptureRun | null>(admin, 'meta_capture_claim', { p_id: runId, p_lease_seconds: 60 })

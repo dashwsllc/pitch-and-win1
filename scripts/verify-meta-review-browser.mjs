@@ -22,6 +22,8 @@ await context.route('https://**/*',async route=>{
  else if(name==='meta_traffic_review_list')data={rows:reviews.slice(args.p_offset,args.p_offset+args.p_limit),count:reviews.length}
  else if(name==='dashboard_events')data=[{topic:'arena',revision}]
  else if(name==='meta_traffic_operation')data={runs:[],published:[],pending:{}}
+ else if(name==='meta_wave_list')data={count:0,pending_waves:0,pending_leads:0,failed_leads:0,newest_pending_lead_at:null,needs_rebuild:false,waves:[]}
+ else if(name==='meta_traffic_conference')data=[]
  else if(name==='meta_traffic_cohort')data={state:'insufficient',campaigns:[],reasons:[],unattributed_contacts:0}
  else if(name==='meta_capture_review_part'){
   const s=reviews.find(s=>s.id===args.p_id)

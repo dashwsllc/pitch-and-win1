@@ -7,8 +7,10 @@ export interface TrafficScope {
 export interface TrafficMetricTotals {
   spend: number | null; leads: number | null; purchases: number | null; purchaseValue: number | null
   impressions: number | null; linkClicks: number | null; messagesStarted: number | null
+  landingPageViews: number | null; addsToCart: number | null; checkoutsInitiated: number | null
   cpl: number | null; cpa: number | null; roas: number | null; cpm: number | null; cpc: number | null
   costPerMessage: number | null; ctr: number | null
+  costPerLandingPageView: number | null; costPerCheckout: number | null; viewToPurchaseRate: number | null
 }
 export interface TrafficGroup {
   key: string; account_id: string; campaign_id: string; campaign_name: string
@@ -37,6 +39,9 @@ export function selectTrafficRows(rows: MetaDailyRow[], scope: TrafficScope): Me
 }
 const metricFields = { spend: 'spend', leads: 'leads', purchases: 'purchases', purchaseValue: 'purchase_value',
   impressions: 'impressions', linkClicks: 'link_clicks', messagesStarted: 'messaging_conversations_started' } as const
+// Funil de Vendas: no fim da exportação, para não mudar a posição das colunas existentes.
+const funnelFields = { landingPageViews: 'landing_page_views', addsToCart: 'adds_to_cart', checkoutsInitiated: 'checkouts_initiated' } as const
+const allMetricFields = { ...metricFields, ...funnelFields }
 function knownValue(row: MetaDailyRow, field: string): number | null {
   if (row.available_metrics && !row.available_metrics.includes(field)) return null
   const value = row[field as keyof MetaDailyRow]
@@ -58,7 +63,10 @@ function metricDefinition(row: MetaDailyRow, field: string): string | null {
   if (row.source === 'csv') return base
   const action = field === 'leads' ? row.metric_metadata?.lead_action
     : ['purchases', 'purchase_value'].includes(field) ? row.metric_metadata?.purchase_action
-    : field === 'messaging_conversations_started' ? row.metric_metadata?.messaging_action : 'direct-field'
+    : field === 'messaging_conversations_started' ? row.metric_metadata?.messaging_action
+    : field === 'landing_page_views' ? row.metric_metadata?.landing_page_view_action
+    : field === 'adds_to_cart' ? row.metric_metadata?.add_to_cart_action
+    : field === 'checkouts_initiated' ? row.metric_metadata?.checkout_action : 'direct-field'
   return action ? JSON.stringify([base, action]) : null
 }
 function compatibleDefinitions(rows: MetaDailyRow[], field?: string): boolean {
@@ -66,13 +74,17 @@ function compatibleDefinitions(rows: MetaDailyRow[], field?: string): boolean {
   return rows.length > 0 && !definitions.has(null) && definitions.size === 1 && rows.every(row => row.currency === 'BRL')
 }
 function aggregate(rows: MetaDailyRow[]): TrafficMetricTotals {
-  const values = Object.fromEntries(Object.entries(metricFields).map(([key, field]) => {
+  const values = Object.fromEntries(Object.entries(allMetricFields).map(([key, field]) => {
     const numbers = rows.map(row => knownValue(row, field))
     return [key, numbers.some(value => value === null) ? null : numbers.reduce<number>((sum, value) => sum + value!, 0)]
-  })) as Pick<TrafficMetricTotals, keyof typeof metricFields>
+  })) as Pick<TrafficMetricTotals, keyof typeof allMetricFields>
   const divide = (numerator: number | null, denominator: number | null, scale = 1, field?: string) => compatibleDefinitions(rows, field) && numerator !== null && denominator !== null && denominator > 0 ? numerator * scale / denominator : null
   return { ...values, cpl: divide(values.spend, values.leads, 1, 'leads'), cpa: divide(values.spend, values.purchases, 1, 'purchases'), roas: divide(values.purchaseValue, values.spend, 1, 'purchase_value'),
-    cpm: divide(values.spend, values.impressions, 1000), cpc: divide(values.spend, values.linkClicks), costPerMessage: divide(values.spend, values.messagesStarted, 1, 'messaging_conversations_started'), ctr: divide(values.linkClicks, values.impressions, 100) }
+    cpm: divide(values.spend, values.impressions, 1000), cpc: divide(values.spend, values.linkClicks), costPerMessage: divide(values.spend, values.messagesStarted, 1, 'messaging_conversations_started'), ctr: divide(values.linkClicks, values.impressions, 100),
+    costPerLandingPageView: divide(values.spend, values.landingPageViews, 1, 'landing_page_views'),
+    costPerCheckout: divide(values.spend, values.checkoutsInitiated, 1, 'checkouts_initiated'),
+    // Compras ÷ visualizações da página: as duas definições precisam ser comparáveis no recorte.
+    viewToPurchaseRate: compatibleDefinitions(rows, 'purchases') ? divide(values.purchases, values.landingPageViews, 100, 'landing_page_views') : null }
 }
 export function buildTrafficView(input: MetaDailyRow[], scope: TrafficScope): TrafficView {
   const rows = selectTrafficRows(input, scope), days = new Map<string, MetaDailyRow[]>(), entities = new Map<string, MetaDailyRow[]>()
@@ -109,11 +121,14 @@ export function crmTrafficRates(cohort: TrafficCohortResult, view: TrafficView):
   return { cpa: sales > 0 ? view.total.spend / sales : null, roas: view.total.spend > 0 ? revenue / view.total.spend : null, reason: null }
 }
 export function buildTrafficCsv(view: TrafficView): { headers: string[]; rows: (string | number)[][] } {
-  return { headers: ['Período inicial', 'Período final', 'Data', 'Conta ID', 'Campanha ID', 'Campanha', 'Conjunto ID', 'Conjunto', 'Anúncio ID', 'Anúncio', 'Nível', 'Origem', 'Definição', 'Atribuição', 'Gasto BRL', 'Leads', 'Compras', 'Receita Meta BRL', 'Impressões', 'Cliques', 'Conversas', 'Ação de leads', 'Ação de compras', 'Ação de conversas', 'Métricas manuais', 'Fuso da conta', 'Versão Graph'],
+  return { headers: ['Período inicial', 'Período final', 'Data', 'Conta ID', 'Campanha ID', 'Campanha', 'Conjunto ID', 'Conjunto', 'Anúncio ID', 'Anúncio', 'Nível', 'Origem', 'Definição', 'Atribuição', 'Gasto BRL', 'Leads', 'Compras', 'Receita Meta BRL', 'Impressões', 'Cliques', 'Conversas', 'Ação de leads', 'Ação de compras', 'Ação de conversas', 'Métricas manuais', 'Fuso da conta', 'Versão Graph',
+    'Visualizações da página', 'Adições ao carrinho', 'Finalizações iniciadas', 'Ação de página', 'Ação de carrinho', 'Ação de finalização'],
     rows: view.rows.map(row => [view.scope.start, view.scope.end, row.date, row.account_id, row.campaign_id, row.campaign_name, row.adset_id, row.adset_name,
       row.ad_id, row.ad_name, row.level, row.source, row.metric_metadata?.definition_version || (row.available_metrics ? 'csv-declared' : 'legado'), row.attribution_window,
       ...Object.values(metricFields).map(field => knownValue(row, field) ?? ''), row.metric_metadata?.lead_action || '', row.metric_metadata?.purchase_action || '',
-      row.metric_metadata?.messaging_action || '', (row.metric_metadata?.manual_metrics || []).join(','), row.metric_metadata?.account_timezone || '', row.metric_metadata?.graph_version || '']) }
+      row.metric_metadata?.messaging_action || '', (row.metric_metadata?.manual_metrics || []).join(','), row.metric_metadata?.account_timezone || '', row.metric_metadata?.graph_version || '',
+      ...Object.values(funnelFields).map(field => knownValue(row, field) ?? ''), row.metric_metadata?.landing_page_view_action || '', row.metric_metadata?.add_to_cart_action || '',
+      row.metric_metadata?.checkout_action || '']) }
 }
 export function trafficCsvText(csv: { headers: string[]; rows: (string | number)[][] }) {
   const cell = (value: string | number) => { const text = String(value); return /[";\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text }

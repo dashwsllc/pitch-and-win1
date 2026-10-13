@@ -10,7 +10,7 @@ Retomada em 12/10: o token de Página do Explorer expirou em 11/10 às 16h de Br
 
 ## Fluxo implementado
 
-1. Insights captura páginas duráveis por conta/nível/janela, com lease, cursor sem token e prazo limitado. Retomada não abre capturas novas. Resposta parcial é HTTP 202; falha é 502. Nenhuma página publica métricas diretamente.
+1. Insights captura páginas duráveis por conta/nível/janela, com lease, cursor sem token e prazo limitado. Retomada não abre capturas novas. Resposta parcial é HTTP 202; falha é 502. Nenhuma página publica métricas diretamente; desde 12/10 a captura completa e sem conflito é publicada automaticamente ao terminar (ver `TRAFEGO_LEVAS_AUDITORIA_E_PLANO_2026-10-12.md`, seção 13).
 2. A captura completa prepara uma revisão lógica versionada. As partes de 500 linhas servem para conferência; a decisão abrange a revisão inteira. Remoções propostas aparecem explicitamente. Recapturas preservam edições e evidências, expondo conflitos para resolução com motivo. Decisão concorrente ou versão antiga falha inteira.
 3. Webhook verifica HMAC sobre o corpo original, grava o recibo antes do ACK e deixa Graph/extração para o worker. Falha de persistência responde 503. Recibos repetidos não reabrem processados nem apagam decisões.
 4. Worker consome recibos antigos, recupera leases vencidos e aplica backoff. Descoberta tem janela congelada e checkpoint de formulários/páginas; 48 horas só delimitam a varredura inicial, não a validade dos recibos. Páginas alternam prioridade entre minutos na drenagem e entre horas na descoberta. Descoberta e drenagem têm registros separados, mantendo erros de autorização visíveis.
@@ -52,10 +52,10 @@ Após banco → Edge → front, preflight aprovado e conferência de permissões
 
 | Job | Agenda (conferir fuso do pg_cron) | Corpo |
 | --- | --- | --- |
-| meta-insights-sync-frequent | */30 * * * * | `{}` |
+| meta-insights-sync-frequent | */30 * * * * | `{"days":8}` (desde 12/10) |
 | meta-insights-sync-deep | 0 3 * * * | `{"days":8}` |
 | meta-insights-resume | * * * * * | `{"resumeOnly":true}` |
-| meta-leads-reconciliation-hourly | 15 * * * * | `{"discover":true}` |
+| meta-leads-reconciliation-hourly | */5 * * * * (desde 12/10; o nome foi mantido) | `{"discover":true}` |
 | meta-lead-worker | * * * * * | `{"discover":false}` |
 
 Conferir exatamente cinco nomes únicos, agendas e o fuso configurado do pg_cron no destino. O transporte tem timeout de 60 segundos, acima do orçamento Edge escolhido de 45 segundos/reserva de 5. É uma escolha operacional dentro dos [limites oficiais](https://supabase.com/docs/guides/functions/limits); contas grandes retomam em vários ciclos. Secret Vault ausente impede enviar requisição. Agendas reais, execução pg_net, latência e limites do plano precisam de smoke test após publicação.
