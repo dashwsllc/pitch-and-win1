@@ -1,6 +1,6 @@
 # Leads do site no setor Importações do SDR
 
-Estado: desenho da integração aprovado pelo usuário em 13/10/2026; revisão desta especificação pendente. Complementa o plano de levas já autorizado.
+Estado: desenho e especificação escrita aprovados pelo usuário nesta conversa em 13/10/2026. Próxima etapa: revisão do plano escrito, preservando a execução nativa escolhida. Complementa o plano de levas já publicado.
 
 ## Resultado e origem
 
