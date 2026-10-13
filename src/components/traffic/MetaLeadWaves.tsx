@@ -15,6 +15,7 @@ import {
   waveRangeLabel, waveStatusLabel, type WaveDecision, type WaveDetail, type WaveLead, type WaveList, type WaveRetry, type WaveStatus, type WaveSummary,
 } from '@/lib/meta-waves'
 import { FormAnswers } from './FormAnswers'
+import { CRMSiteSourceUpdates } from '@/components/crm/CRMSiteSourceUpdates'
 import { MetaEditButton } from './MetaEditDialog'
 
 type Filter = WaveStatus | 'todas'
@@ -259,6 +260,7 @@ function LeadCard({ lead, newest, canReview, reviewable, busy, excludedReason, o
       {sync.detail && <p className={`break-words text-xs ${sync.key === 'falhou' ? 'text-rose-300' : 'text-muted-foreground'}`}>{sync.key === 'rejeitado' ? 'Motivo: ' : ''}{sync.detail}</p>}
       {excludedReason && <p className="text-xs text-amber-300">Será tirado da leva: {excludedReason}</p>}
       {lead.import_warning && sync.key !== 'falhou' && <p className="break-words text-xs text-muted-foreground">{lead.import_warning}</p>}
+      {lead.entry_channel === 'website' && <CRMSiteSourceUpdates formLeadId={lead.id} />}
       <details className="pt-1"><summary className="cursor-pointer text-sm text-ash">Respostas do formulário</summary><FormAnswers fields={lead.field_data} />
         <p className="mt-2 break-words text-[11px] text-muted-foreground">ID {lead.meta_lead_id}{received ? ` · recebido em ${leadDateTime(received)}` : ''}</p></details>
       {excluding && <div className="flex flex-col gap-2 pt-1 sm:flex-row"><Input aria-label={`Motivo para tirar ${name} da leva`} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo (ex.: lead de teste, número inválido)" />

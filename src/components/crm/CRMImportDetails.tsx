@@ -6,11 +6,13 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
+import { CRMSiteSourceUpdates } from './CRMSiteSourceUpdates'
 
 /** Complete source snapshot, separate from the SDR's editable current contact. */
 export function CRMImportDetails({ lead }: { lead: CRMLead }) {
   if (!importChannel(lead)) return null
-  return lead.import_snapshot === undefined ? <RemoteImportDetails lead={lead} /> : <ImportDetailsContent lead={lead} />
+  return <>{lead.import_snapshot === undefined ? <RemoteImportDetails lead={lead} /> : <ImportDetailsContent lead={lead} />}
+    {importChannel(lead) === 'website' && lead.meta_form_lead_id && <CRMSiteSourceUpdates formLeadId={lead.meta_form_lead_id} />}</>
 }
 
 function RemoteImportDetails({ lead }: { lead: CRMLead }) {
