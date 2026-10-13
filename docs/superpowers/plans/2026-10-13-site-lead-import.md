@@ -52,14 +52,14 @@ Os caminhos seguintes são relativos ao repositório indicado. Criar migrations 
 | Dashboard | `src/components/crm/CRMSiteSourceUpdates.tsx` | Eventos completos da origem, posteriores à captura aprovada |
 | Dashboard | `src/components/traffic/SiteBridgeStatus.tsx` | Último sinal, pendências, quarentena e atraso |
 | Dashboard | `src/components/crm/CRMImportDetails.tsx`, `src/components/traffic/MetaLeadWaves.tsx`, `src/components/traffic/MetaTrafficConnection.tsx` | Composição da origem Site e estados operacionais |
-| Dashboard | `scripts/verify-site-receiver.mjs`, `verify-site-import-db.sql`, `verify-site-bridge-integrated.mjs`, `verify-site-import-browser.mjs` | Protocolo, banco real, entrega e duas sessões |
+| Dashboard | `scripts/verify-site-receiver.mjs`, `verify-site-import-db.sql`, `verify-site-import-ui.mjs`, `verify-site-bridge-integrated.mjs`, `verify-site-import-browser.mjs` | Protocolo, banco real, contexto, entrega e duas sessões |
 | Site | migration CLI `funnel_lead_outbox` | Histórico atômico, captura v2, claims e ACKs |
 | Site | migration CLI `funnel_lead_delivery_cron` | pg_net/pg_cron, Vault e agendamento desativado até a ativação |
 | Site | `supabase/functions/_shared/funnel-lead-delivery.ts`, `supabase/functions/funnel-lead-delivery/index.ts` | Worker autenticado, assinatura, repetição e heartbeat |
 | Site | `src/lib/funnel-capture-queue.ts`, `src/lib/funnel.ts` | Capturas locais pendentes, confirmação e envio do perfil inteiro |
 | Site | `src/pages/funnel/FunnelProfile.tsx`, `src/pages/jogador/JogadorProfile.tsx` | Captura na etapa de contato e confirmação da versão final |
 | Site | `src/pages/funnel/FunnelResult.tsx`, `src/pages/jogador/JogadorResult.tsx` | Captura do relatório já produzido, com sua procedência identificada |
-| Site | `scripts/verify-funnel-outbox-db.sql`, `verify-funnel-delivery.mjs`, `verify-funnel-capture.mjs` | Atomicidade, lease, recuperação e captura do cliente |
+| Site | `scripts/verify-funnel-outbox-db.sql`, `verify-funnel-delivery.mjs`, `verify-funnel-capture.mjs`, `verify-funnel-capture-browser.mjs` | Atomicidade, lease, recuperação e captura do cliente |
 | Ambos | `supabase/config.toml` | Novas funções com autenticação própria explícita |
 
 ## Contrato de entrega
@@ -118,24 +118,24 @@ Heartbeat assinado: `{ schema_version:1, kind:'heartbeat', source_project, obser
 
 ### Task 4: Capturar o perfil completo e recuperar falhas do navegador
 
-**Files:** `src/lib/funnel-capture-queue.ts`, `src/lib/funnel.ts`, os dois `FunnelProfile.tsx`/`JogadorProfile.tsx`, `FunnelResult.tsx`/`JogadorResult.tsx`, `scripts/verify-funnel-capture.mjs` no site.
+**Files:** `src/lib/funnel-capture-queue.ts`, `src/lib/funnel.ts`, os dois `FunnelProfile.tsx`/`JogadorProfile.tsx`, `FunnelResult.tsx`/`JogadorResult.tsx`, `scripts/verify-funnel-capture.mjs` e `verify-funnel-capture-browser.mjs` no site.
 
 **Interfaces:** `queueFunnelCapture(input)`, `flushFunnelCaptures()`, `syncFunnelLead(PlayerData,report?:{overall:number,stats:StatResult[],method:'deterministic-profile-v1'})` conservando retorno do ID do contato. Fila IndexedDB local guarda a captura antes do envio e remove somente a versão confirmada. Retoma na abertura do funil e evento online. Falha de armazenamento deixa aviso; confirmação exige ACK da RPC. O relatório é o já produzido pelo site, identificado como cálculo determinístico do navegador, sem inventar avaliação ou tratá-lo como métrica de campanha.
 
 - [ ] Escrever regressão: contato confirmado na etapa2, completar nacionalidade/posição/localização/foto depois e avançar ao upload deve enviar a nova captura; abrir resultado registra o relatório existente; reabrir resultado idêntico não cria versões artificiais. Resultado de uma chamada antiga não apaga versão local mais recente. Todas as chaves de `PlayerData` e oito campos de atribuição permanecem no payload; campos vazios não inventam dados. Queda de rede conserva pendência e online retoma com identidade estável.
 - [ ] Executar `node --experimental-vm-modules --experimental-strip-types --test scripts/verify-funnel-capture.mjs`. Expected: FAIL porque o booleano atual impede a captura final e não há fila persistente.
 - [ ] Implementar envio à RPCv2 e fila local. Capturar contato imediatamente; sempre confirmar a captura atual no final. Conservar `playerData` e pendência em falha, com erro/repetição visíveis. Preservar a experiência de `/avaliacao` e `/jogador`; não enviar segredos ou chamar o worker pelo navegador.
-- [ ] Reexecutar testes, TypeScript e lint dos arquivos alterados. Conferir no Chromium os dois funis, offline/online e avançar/voltar. Expected: PASS, contato inicial preservado e perfil final efetivamente capturado.
+- [ ] Reexecutar testes, TypeScript e lint dos arquivos alterados. Executar `node scripts/verify-funnel-capture-browser.mjs` com `SITE_TEST_ORIGIN` apontando exclusivamente ao Vite local e `PLAYWRIGHT_MODULE` à instalação de ensaio disponível, sem acrescentar dependência de produto. Conferir os dois funis, offline/online e avançar/voltar. Expected: PASS, contato inicial preservado e perfil final efetivamente capturado.
 - [ ] Commit: `feat(funnel): synchronize complete profile captures and recover offline submissions`.
 
 ### Task 5: Contexto posterior no SDR e operação visível
 
-**Files:** `CRMSiteSourceUpdates.tsx`, `SiteBridgeStatus.tsx`, composição de CRM/levas/Conexão, contratos em `src/lib/arena-api.ts` e testes de interface no dashboard.
+**Files:** `CRMSiteSourceUpdates.tsx`, `SiteBridgeStatus.tsx`, composição de CRM/levas/Conexão, contratos em `src/lib/arena-api.ts` e `scripts/verify-site-import-ui.mjs` no dashboard.
 
 **Interfaces:** consultas por usuário/contato, eventos paginados20por página em recebimento decrescente, payload integral carregado ao abrir um evento. `site_bridge_operation() → {last_heartbeat,last_received_at,pending_count,quarantined_count,oldest_pending_at}` autorizado somente a Tráfego. Inserções/atualizações em eventos emitem os sinais `crm`/`arena` existentes.
 
 - [ ] Escrever teste: aprovar um contato, editar WhatsApp no SDR, receber novo perfil e depois uma revisão antiga; ficha mantém WhatsApp e snapshot aprovados, mostra os dois eventos e datas ao segundo, com texto HTML escapado e sem truncamento do original. SDR não lê eventos pendentes de outro contato. Heartbeat antigo não diz que fila está atualizada.
-- [ ] Executar testes Node/UI antes dos componentes. Expected: FAIL por histórico Site/estado operacional ausentes.
+- [ ] Executar `node --experimental-vm-modules --experimental-strip-types --test scripts/verify-site-import-ui.mjs` antes dos componentes. Expected: FAIL por histórico Site/estado operacional ausentes.
 - [ ] Implementar histórico separado do cadastro e da captura aprovada; mostrar fonte/versão/horários/contexto completos, erro visível e nova tentativa. Conexão mostra quarentena, atraso e ausência de sinal; não confundir volume de visitas, contatos e métricas da Meta. Preservar filtros e ordenação por primeiro recebimento já publicados.
 - [ ] Reexecutar UI e navegador com duas sessões SDR, inclusive fallback sem Realtime. Expected: PASS, eventos aparecem sem sobrescrever trabalho do SDR e sem baixar todo o histórico na lista.
 - [ ] Commit: `feat(crm): show complete site source updates and bridge health`.
@@ -146,7 +146,7 @@ Heartbeat assinado: `{ schema_version:1, kind:'heartbeat', source_project, obser
 
 - [ ] Ensaiar dois bancos locais descartáveis com as funções reais e handlers de produção: captura → outbox → assinatura → inbox → leva → aprovação sintética → CRM → perfil posterior. Injetar falhas e perda de ACK. Expected: um contato/CRM por identidade, todas as versões preservadas, nenhuma decisão comercial e histórico do SDR intacto.
 - [ ] Ensaiar um ID do site importado manualmente antes da entrega automática: manter vínculo; ID desconhecido com contato parecido fica sinalizado, sem fusão automática. Conferir recuperação de316contatos históricos por conjuntos de IDs, recalculando a quantidade na ativação. Expected: conjuntos reconciliados; nenhum campo histórico inventado e nenhum lead aprovado automaticamente.
-- [ ] Rodar as regressões de tráfego/importações, seis ensaios novos, TypeScript/lint/build nos dois repositórios, `deno check`, varredura de segredos e Advisor. Fazer uma revisão independente do conjunto, conforme execução nativa; corrigir achados importantes com RED→GREEN. Expected: gates verdes ou limitação preexistente identificada com evidência, sem ocultar falhas.
+- [ ] Rodar as regressões de tráfego/importações, todos os ensaios novos listados neste plano, TypeScript/lint/build nos dois repositórios, `deno check`, varredura de segredos e Advisor. Fazer uma revisão independente do conjunto, conforme execução nativa; corrigir achados importantes com RED→GREEN. Expected: gates verdes ou limitação preexistente identificada com evidência, sem ocultar falhas.
 - [ ] Conferir novamente refs, histórico remoto, funções e triggers dos dois projetos. Instalar somente migrations novas; configurar segredo privado igual nos dois servidores e cron secret separado; publicar receptor, worker e clientes. Ativar job/nudge por último, após verificar receptor e preservação de dados. Expected: destino comercial permanece `dash`; nenhum segredo público e nenhuma alteração de aprovação.
 - [ ] Rodar backfill idempotente em páginas de200, registrar recibos e reconciliar IDs originais da fonte com outbox/inbox/projeção. Confirmar uma captura sintética medida até a leva e uma atualização posterior; não aprovar um lead real para testar. Expected: fila recuperada, estados conferidos e atraso medido, sem chamar a integração de ativa antes dessa prova.
 - [ ] Registrar release, versões, contagens, falhas recuperáveis e limites de prova. Reversão: desativar job/nudge e emissão, mantendo eventos e filas; cliente anterior pode usar RPC antiga. Commit: `docs(traffic): record verified site lead delivery and recovery`.
