@@ -190,7 +190,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
             <div className="min-w-0">
               <Badge variant="outline" className="h-5 px-2 text-[10px]">{contextLabels[entry.context_type] || entry.context_type}</Badge>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                {safePlainText(entry.author_name, 160)} · {entry.author_role === 'closer' ? 'Closer' : 'SDR'} · {callDate(entry.created_at)}
+                {safePlainText(entry.author_name, 160)} · {entry.author_role === 'trafego' ? 'Tráfego' : entry.author_role === 'closer' ? 'Closer' : 'SDR'} · {callDate(entry.created_at)}
               </p>
               {entry.updated_by && (
                 <p className="text-[11px] text-muted-foreground">Editado por {safePlainText(entry.updated_by_name, 160) || 'usuário CRM'} em {callDate(entry.updated_at)}</p>
@@ -208,7 +208,11 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
               <ExternalLink className="mr-2 h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="truncate">Abrir mídia no Google Drive</span>
             </a>
           </Button>}
-          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5">{entry.file_name ? entry.content : safePlainText(entry.content, MAX_CONTEXT_LENGTH)}</p>
+          {entry.context_type === 'meta_form' ? <details className="mt-2">
+            <summary className="cursor-pointer text-xs">Resumo gerado na importação (pode ser abreviado)</summary>
+            <p className="mt-2 text-xs text-muted-foreground">As respostas completas e categorizadas estão em Dados e contexto da importação, acima.</p>
+            <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5">{entry.content}</p>
+          </details> : <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5">{entry.file_name ? entry.content : safePlainText(entry.content, MAX_CONTEXT_LENGTH)}</p>}
         </article>
       ))}
 

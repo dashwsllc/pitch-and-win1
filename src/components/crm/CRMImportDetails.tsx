@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { CRMSiteSourceUpdates } from './CRMSiteSourceUpdates'
+import { completeSourceFields, siteCaptureAvailability } from '@/lib/lead-source-context'
 
 /** Complete source snapshot, separate from the SDR's editable current contact. */
 export function CRMImportDetails({ lead }: { lead: CRMLead }) {
@@ -32,6 +33,7 @@ function ImportDetailsContent({ lead }: { lead: CRMLead }) {
   const channel = importChannel(lead)
   if (!channel) return null
   const source = importSnapshot(lead)
+  const availability = siteCaptureAvailability(source)
   const contact = source.import_contact && typeof source.import_contact === 'object' ? source.import_contact as Record<string, unknown> : {}
   const generated = typeof source.created_time === 'string' ? source.created_time : lead.lead_generated_at
   const knownTime = contact.time_known !== false
@@ -52,7 +54,12 @@ function ImportDetailsContent({ lead }: { lead: CRMLead }) {
       <div key={label}><dt className="text-[11px] text-muted-foreground">{label}</dt><dd className="break-words text-xs tabular-nums">{value}</dd></div>)}</dl>
     {Object.keys(source).length ? <>
       <h3 className="text-xs font-semibold">Respostas e informações da origem</h3>
-      <FormAnswers fields={source.field_data} />
+      {availability && (!availability.profile || !availability.report) && <p role="status" className="rounded border border-border p-2 text-xs text-muted-foreground">
+        {!availability.profile && 'A origem ainda não enviou o perfil do atleta. '}
+        {!availability.report && 'A origem ainda não enviou um relatório. '}
+        Consulte as atualizações do site abaixo para conferir envios posteriores.
+      </p>}
+      <FormAnswers fields={completeSourceFields(source)} />
       {source.custom_disclaimer_responses != null && <details><summary className="cursor-pointer text-xs">Consentimentos completos</summary>
         <pre className="mt-2 whitespace-pre-wrap break-words rounded bg-background/50 p-2 text-xs">{JSON.stringify(source.custom_disclaimer_responses, null, 2)}</pre></details>}
       <details><summary className="cursor-pointer text-xs">Consultar registro integral, atribuição e dados adicionais</summary>

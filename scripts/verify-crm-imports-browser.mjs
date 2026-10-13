@@ -85,7 +85,7 @@ try {
   await detail.getByText('Consentimentos completos', { exact: true }).click()
   await expect(detail.locator('details').nth(0).locator('pre')).toContainText('CONSENTIMENTO INTEGRAL QA')
   await detail.getByText('Consultar registro integral, atribuição e dados adicionais', { exact: true }).click()
-  await expect(detail.getByText(/DADO NÃO MAPEADO PRESERVADO/)).toBeVisible()
+  await expect(detail.getByText('DADO NÃO MAPEADO PRESERVADO',{exact:true})).toBeVisible()
   await expect(detail.getByText(/campaign-qa/)).toBeVisible()
   await first.keyboard.press('Escape')
   await section.getByRole('button', { name: 'Todas · 3', exact: true }).click()

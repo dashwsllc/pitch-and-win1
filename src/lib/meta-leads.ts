@@ -64,7 +64,7 @@ export function metaAnswers(fieldData: unknown) {
     if (!item || typeof item !== 'object') return []
     const answer = item as { name?: unknown; values?: unknown }
     const label = typeof answer.name === 'string' ? answer.name : ''
-    const values = Array.isArray(answer.values) ? answer.values.filter(value => typeof value === 'string') : []
+    const values = Array.isArray(answer.values) ? answer.values.flatMap(value => typeof value === 'string' ? [value] : typeof value === 'number' ? [String(value)] : typeof value === 'boolean' ? [value ? 'Sim' : 'Não'] : []) : []
     return label ? [{ label, value: values.join(', ') }] : []
   })
 }

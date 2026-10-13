@@ -4,6 +4,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { arenaClient } from '@/lib/arena-api'
 import { leadDateTime } from '@/lib/meta-waves'
 import { Button } from '@/components/ui/button'
+import { FormAnswers } from '@/components/traffic/FormAnswers'
+import { completeSourceFields } from '@/lib/lead-source-context'
 
 export const siteEventListColumns = 'event_id,source_lead_id,source_revision,received_at,status,error_code,meta_form_lead_id'
 interface SiteEvent { event_id: string; source_revision: number; received_at: string; status: string; error_code: string | null; event?: Record<string, unknown> }
@@ -18,7 +20,8 @@ export function SiteEventContent({ event }: { event: SiteEvent }) {
       <div><dt>Atualizado na origem</dt><dd>{leadDateTime(typeof raw.source_updated_at === 'string' ? raw.source_updated_at : null)}</dd></div>
     </dl>
     <p className="text-muted-foreground">Este registro preserva o contexto da origem. O cadastro corrigido pelo SDR e a captura aprovada permanecem separados.</p>
-    <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-background/50 p-2">{JSON.stringify(raw, null, 2)}</pre>
+    <FormAnswers fields={completeSourceFields({ source_snapshot: { site_event: raw } })} />
+    <details><summary className="cursor-pointer">Registro técnico integral</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-background/50 p-2">{JSON.stringify(raw, null, 2)}</pre></details>
   </div>
 }
 export function SiteEventDetail({ id }: { id: string }) {
@@ -62,10 +65,29 @@ function EventHistory({ formLeadId }: { formLeadId: string }) {
     </div>}
   </div>
 }
+function LatestSiteContext({ formLeadId }: { formLeadId: string }) {
+  const { user } = useAuth()
+  const query = useQuery({ queryKey: ['crm', 'site-latest', user?.id, formLeadId], enabled: !!user,
+    staleTime: 5_000, retry: 1, queryFn: async () => {
+      const { data, error } = await arenaClient.from('site_import_events').select('event_id,source_revision,received_at')
+        .eq('meta_form_lead_id', formLeadId).in('status', ['pending_review', 'context_only', 'superseded'])
+        .order('source_revision', { ascending: false }).limit(1)
+      if (error) throw error
+      return data?.[0] as SiteEvent | undefined
+    } })
+  return <section aria-label="Contexto mais recente do site" className="space-y-2">
+    <h2 className="text-sm font-semibold">Contexto mais recente do site</h2>
+    {query.isError ? <div role="alert" className="text-xs">Não foi possível conferir a versão mais recente. <Button size="sm" onClick={() => void query.refetch()}>Tentar novamente</Button></div>
+      : query.isPending ? <p role="status" className="text-xs">Conferindo o contexto atual do site…</p>
+        : query.data ? <SiteEventDetail key={query.data.event_id} id={query.data.event_id} />
+          : <p className="text-xs text-muted-foreground">Nenhum envio automático vinculado. Os dados da captura aprovada estão acima.</p>}
+  </section>
+}
 export function CRMSiteSourceUpdates({ formLeadId }: { formLeadId: string }) {
   const [expanded, setExpanded] = useState(false)
   return <section aria-label="Atualizações do site" className="rounded-lg border border-primary/20 p-3">
-    <button className="text-sm font-semibold" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>Atualizações e contexto completo do site</button>
+    <LatestSiteContext formLeadId={formLeadId} />
+    <button className="mt-4 text-sm font-semibold" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>Atualizações e contexto completo do site</button>
     {expanded && <EventHistory key={formLeadId} formLeadId={formLeadId} />}
   </section>
 }
