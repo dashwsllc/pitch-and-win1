@@ -58,7 +58,7 @@ A migration final deste recurso será `supabase/migrations/20261012160000_meta_l
 | `src/components/crm/CRMLeadCard.tsx`, `CRMLeadDetail.tsx`, `CRMContextPanel.tsx` | Horários e contexto na ficha do SDR |
 | `src/lib/meta-leads.ts`, `src/lib/sync.ts` | Campos novos e atualização entre sessões |
 
-### Tarefa 1: Agrupamento estável e revisão versionada no banco
+### Task 1: Agrupamento estável e revisão versionada no banco
 
 **Files:** Create a migration final e os dois testes `verify-meta-waves-db.sql` e `verify-meta-waves-concurrency.mjs` da tabela acima. Consultar as funções atuais de aprovação em `20261009160000_meta_traffic_manual_approval.sql` e os sinais em `20261011161000_meta_traffic_signals.sql`.
 
@@ -86,7 +86,7 @@ END IF;
 - [ ] Executar novamente o SQL e o teste concorrente com `node --test scripts/verify-meta-waves-concurrency.mjs`, usando o mesmo isolamento local de `verify-meta-lead-queue-concurrency.mjs`. Provar que dois recebimentos na fronteira 19/20 não excedem a capacidade e que apenas uma de duas decisões diferentes se aplica.
 - [ ] Commitar somente a tarefa: `feat(traffic): persist stable lead waves and versioned reviews`.
 
-### Tarefa 2: Envio mínimo ao CRM, contexto e horários preservados
+### Task 2: Envio mínimo ao CRM, contexto e horários preservados
 
 **Files:** Modify a migration final. Create `scripts/verify-meta-wave-crm-db.sql`. Adjust os testes existentes `scripts/verify-meta-approval-db.sql` e `scripts/verify-meta-lead-import-db.sql` apenas onde o comportamento aprovado mudou.
 
@@ -115,7 +115,7 @@ END IF;
 - [ ] Executar SQL de falha, correção e nova tentativa; provar que um SDR não aprova leads privados e que Gestor de Tráfego, Executive e Super Admin aprovam com autoria correta. Repetir as verificações de aprovação/importação existentes, preservando a aprovação manual de planilhas.
 - [ ] Commitar: `feat(crm): accept approved form contacts and preserve arrival`.
 
-### Tarefa 3: Contrato TypeScript e consultas das levas
+### Task 3: Contrato TypeScript e consultas das levas
 
 **Files:** Create `src/lib/meta-lead-waves.ts`, `scripts/verify-meta-wave-queries.mjs`. Modify `src/lib/meta-leads.ts`, `src/integrations/supabase/types.ts` e `src/lib/sync.ts`.
 
@@ -140,7 +140,7 @@ assert.equal(calls.at(-1).args.p_request_id, requestId)
 - [ ] Reexecutar o teste e `npx tsc --noEmit`; erros `40001` devem produzir recarregamento e mensagem de alteração, sem aprovação automática de uma versão nova.
 - [ ] Commitar: `feat(traffic): add typed wave queries and safe decision retries`.
 
-### Tarefa 4: Levas na tela de Aprovações
+### Task 4: Levas na tela de Aprovações
 
 **Files:** Create `MetaLeadWaves.tsx`, `MetaLeadWaveDetail.tsx` nos caminhos da tabela; create `scripts/verify-meta-wave-ui.mjs`. Modify `src/pages/Trafego.tsx`; preservar `MetaLeadApprovals.tsx` como fallback durante a transição e reutilizar `FormAnswers`.
 
@@ -162,7 +162,7 @@ assert.match(resultHtml, /1 rejeitado/)
 - [ ] Reexecutar regressão e conferir no navegador em ambiente de desenvolvimento: teclado, abertura, todos os membros, avanço de página e falhas de carregamento/decisão. O mecanismo de fallback só é ativado para contrato indisponível; falha de permissão não troca para uma operação menos protegida.
 - [ ] Commitar: `feat(traffic): review recent form leads in waves`.
 
-### Tarefa 5: Horários e prioridade no CRM do SDR
+### Task 5: Horários e prioridade no CRM do SDR
 
 **Files:** Create `src/lib/meta-lead-time.ts`, `src/components/crm/CRMLeadArrival.tsx`, `scripts/verify-meta-lead-time.mjs`. Modify os componentes CRM, `src/lib/crm-order.ts` e `src/pages/CRM.tsx` da tabela.
 
@@ -187,7 +187,7 @@ assert.deepEqual([oldRecovered, fresh].sort(compareImportedLeadRecency).map(x =>
 - [ ] Reexecutar os testes nos dois fusos, tipo e lint dos arquivos alterados. Conferir cartão, ficha, contexto e cadastro incompleto no navegador; o SDR deve conseguir atender e completar o cadastro sem confundir aprovação com primeiro contato.
 - [ ] Commitar: `feat(crm): show form arrival and prioritize recent imports`.
 
-### Tarefa 6: Integração, publicação seletiva e prova final
+### Task 6: Integração, publicação seletiva e prova final
 
 **Files:** Create `docs/TRAFEGO_LEVAS_VALIDACAO_2026-10-12.md`. Atualizar a especificação e este plano com resultados, versões e limitações verificadas.
 
@@ -204,4 +204,4 @@ assert.deepEqual([oldRecovered, fresh].sort(compareImportedLeadRecency).map(x =>
 
 O plano cobre as dez seções da especificação. O envio e os horários foram incluídos porque agrupar os 148 leads sem mudar o bloqueio de cadastro não atenderia à chegada útil ao SDR. A auditoria de gastos, métricas e campanhas para o site permanece ativa em uma frente própria; este plano não afirma que ela esteja concluída.
 
-Método recomendado: **execução nativa**, com implementação nesta conversa em checkout isolado e uma revisão independente do conjunto ao final. As tarefas compartilham contratos de banco e CRM, e há um rascunho concorrente que precisa ser reconciliado antes da integração. A implementação começa depois da revisão do plano e escolha do método pelo usuário.
+Método escolhido pelo usuário em 12/10/2026: **execução nativa**, com implementação nesta conversa em checkout isolado e uma revisão independente do conjunto ao final. As tarefas compartilham contratos de banco e CRM, e há um rascunho concorrente que precisa ser reconciliado antes da integração. Plano aprovado para execução nesta conversa.
