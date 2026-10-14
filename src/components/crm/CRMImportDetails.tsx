@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { CRMSiteSourceUpdates } from './CRMSiteSourceUpdates'
-import { completeSourceFields, siteCaptureAvailability } from '@/lib/lead-source-context'
+import { completeSourceFields, formAnswersPresent, siteCaptureAvailability } from '@/lib/lead-source-context'
 
 /** Complete source snapshot, separate from the SDR's editable current contact. */
 export function CRMImportDetails({ lead }: { lead: CRMLead }) {
@@ -51,6 +51,9 @@ function ImportDetailsContent({ lead }: { lead: CRMLead }) {
     <dl className="grid gap-2 sm:grid-cols-2">{fields.filter(([, value]) => value).map(([label, value]) =>
       <div key={label}><dt className="text-[11px] text-muted-foreground">{label}</dt><dd className="break-words text-xs tabular-nums">{value}</dd></div>)}</dl>
     {Object.keys(source).length ? <>
+      {channel === 'form' && !formAnswersPresent(source) && <p role="status" className="rounded border border-border p-2 text-xs text-muted-foreground">
+        As respostas de qualificação deste formulário ainda não estão disponíveis no CRM.
+      </p>}
       {availability && (!availability.profile || !availability.report) && <p role="status" className="rounded border border-border p-2 text-xs text-muted-foreground">
         {!availability.profile && 'A origem ainda não enviou o perfil do atleta. '}
         {!availability.report && 'A origem ainda não enviou um relatório. '}
