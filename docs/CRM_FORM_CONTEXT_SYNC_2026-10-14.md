@@ -8,7 +8,7 @@ A planilha foi usada somente como referência, sem importação. Foram encontrad
 
 ## Correção delimitada
 
-- Respostas categorizadas ficam dentro de Contexto para o contato, compartilhado por SDR e closer. Dados operacionais, IDs de operadores e JSON bruto saem dessa apresentação; permanecem preservados no banco e na auditoria.
+- Respostas categorizadas ficam dentro de Contexto para o contato, compartilhado por SDR e closer. Os nomes técnicos recebem rótulos legíveis; informações da entrada e revisão continuam acessíveis em seu detalhe próprio. JSON bruto não é necessário para consultar respostas completas.
 - O site possui sua seção própria e informa quando a origem só enviou contato. A mensagem vazia não afirma que o usuário deixou de responder.
 - `crm_context_summary` considera respostas no snapshot aprovado, originais preservados, colunas manuais e contexto posterior do site, além de anotações do atendimento. Retorna somente IDs visíveis pelas permissões existentes, em páginas de até 500. Campos vazios e registros técnicos não acionam o amarelo.
 - A captura Meta sem `field_data` permanece em erro transitório e é tentada novamente. Não se confirma processamento de uma resposta vazia.
@@ -37,3 +37,11 @@ O ensaio executa o gatilho de produção `crm_preserve_import_origin`, copiado d
 A nova migration `20261014154738` modifica somente funções de leitura. Nenhuma resposta, horário, lead ou decisão é alterado. O RPC mantém parâmetros, retorno e RLS; o cliente anterior continua compatível. Para reversão do critério, reinstalar a definição de leitura anterior, preservando as funções e todos os dados. A interpretação de “todas as respostas” é todas as respostas recebidas daquela captura, sem limitar futuros formulários às 11 perguntas deste exemplo e sem inventar respostas opcionais vazias.
 
 A revisão independente encontrou divergência entre a normalização SQL e a da tela: `CreatedTime`, `created_time ` e consentimento isolado podiam ativar o resumo de formulário sem respostas de qualificação. Os três casos foram reproduzidos (RED) e corrigidos com a mesma normalização antes de excluir campos técnicos (GREEN), incluindo testes pareados SQL e da ficha. A revisão não avaliou o deploy, captura upstream ou aprovação comercial; o executor verifica o domínio e a integridade dos registros separadamente, mantendo as decisões humanas intactas. A aprovação real não foi exercida sobre leads de produção; o ensaio do gatilho usa exclusivamente PostgreSQL descartável.
+
+## Nomes claros sem esconder informações
+
+Os exemplos `imported_by` e `reviewed_by` representam todos os rótulos técnicos. A apresentação traduz campos como posição, idade, origem do acesso, detalhes das notas, importação e revisão. Todas as colunas respondidas continuam acessíveis, inclusive nomes que também parecem administrativos, como `status`. A seção principal mantém perguntas, respostas completas e valores originais; os dados de entrada e revisão da captura aparecem em um detalhe separado, dentro do mesmo Contexto.
+
+Os nomes da equipe usam o mapa já disponível no CRM e os autores do histórico acessível do próprio lead. Isso inclui o revisor de Tráfego, que pode não estar na lista de responsáveis por calls, sem ampliar permissões. Quando o código de um revisor também consta de uma coluna original, preserva-se essa coluna e a identidade legível no detalhe administrativo. A revisão independente apontou ambos os casos; o ensaio do navegador usa um revisor de Tráfego distinto do SDR/closer e ausente dos responsáveis por calls.
+
+Esta mudança atua somente na apresentação: sem migration, importação de arquivo, modificação de respostas, cadastro ou aprovação comercial. O horário de geração no detalhe respeita os mesmos indicadores de precisão da importação manual. Os ensaios conferem posição, idade, nascimento, perguntas futuras, identidade do revisor, respostas longas e cor laranja, nas entradas automática e manual e nas fichas de SDR e closer.

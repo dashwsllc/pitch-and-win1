@@ -173,7 +173,7 @@ export function CRMLeadDetail({
                 ?.label || lead.pipeline_stage}
             </Badge>
           </div>
-          <CRMContextPanel lead={lead} />
+          <CRMContextPanel lead={lead} names={names} />
           <dl className="grid gap-x-3 gap-y-2 sm:grid-cols-3">
             {fields.map(([label, value]) => (
               <div key={label} className="min-w-0">

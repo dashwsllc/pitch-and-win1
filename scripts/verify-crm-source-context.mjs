@@ -115,12 +115,33 @@ test('readability must not change emails, campaign attribution or literal report
  assert.match(html,/<dd[^>]*>campanha_teste<\/dd>/)
  assert.match(html,/<dd[^>]*>relatorio_teste<\/dd>/)
 })
-test('CRM context contains answers and readable consent without operational JSON or staff metadata', () => {
- const html=render('crm/CRMImportDetails.tsx',{lead:{import_channel:'form',import_method:'automatic',import_snapshot:{
-  imported_by:'PRIVATE-OPERATOR',reviewed_by:'PRIVATE-REVIEWER',crm_sync_status:'enviado',
-  field_data:[question('Objetivo do atleta?','Ser profissional'),question('imported_by','PRIVATE-OPERATOR'),question('reviewed_by','PRIVATE-REVIEWER')],
+test('CRM preserves entry and review information under readable names rather than dropping it', () => {
+ const html=render('crm/CRMImportDetails.tsx',{names:{'11111111-1111-4111-8111-111111111111':'Pessoa que revisou'},lead:{import_channel:'form',import_method:'automatic',import_snapshot:{
+  imported_by:'Equipe de tráfego',reviewed_by:'11111111-1111-4111-8111-111111111111',crm_sync_status:'enviado',
+  field_data:[question('Objetivo do atleta?','Ser profissional'),question('imported_by','Equipe de tráfego'),question('status','Buscando oportunidade')],
   custom_disclaimer_responses:[{title:'Contato autorizado',accepted:true}]
  }}})
  assert.match(html,/Ser profissional/);assert.match(html,/Contato autorizado/)
- assert.doesNotMatch(html,/PRIVATE-OPERATOR|PRIVATE-REVIEWER|imported_by|reviewed_by|crm_sync_status|<pre/)
+ for(const text of ['Importado por','Revisado por','Pessoa que revisou','Equipe de tráfego','Buscando oportunidade','Dados de entrada e revisão','Enviado ao CRM'])assert(html.includes(text),text+' was hidden instead of relabeled')
+ assert.doesNotMatch(html,/>imported_by<|>reviewed_by<|>crm_sync_status<|<pre/)
+})
+
+test('every supplied form field remains visible including position age and additional unfamiliar answers', () => {
+ const fields=[...qualification,question('position','Ponta direita'),question('age','17'),question('date_of_birth','2008-01-01'),
+  question('status','Treinando em clube'),question('Pergunta nova da campanha?','RESPOSTA NOVA INTEGRAL')]
+ const html=render('crm/CRMImportDetails.tsx',{lead:{import_channel:'form',import_snapshot:{field_data:fields}}})
+ for(const text of ['Ponta direita','17','2008-01-01','Treinando em clube','RESPOSTA NOVA INTEGRAL'])assert(html.includes('>'+text+'</dd>'),text+' must stay in Contexto')
+ assert.equal((html.match(/<dt/g)??[]).length,fields.length+3,'all supplied fields plus three receipt fields must remain readable')
+ const {sourceQuestionLabel}=load('src/lib/lead-source-context.ts')
+ assert.equal(sourceQuestionLabel('STAT_DETAILS / overall'),'Detalhes das notas / Nota geral')
+ assert.equal(sourceQuestionLabel('UTM_SOURCE'),'Origem do acesso')
+})
+
+test('a reviewer also present in the original fields retains both the source value and readable identity', () => {
+ const reviewer='11111111-1111-4111-8111-111111111111'
+ const html=render('crm/CRMImportDetails.tsx',{names:{[reviewer]:'Equipe de tráfego'},lead:{import_channel:'form',import_snapshot:{
+  reviewed_by:reviewer,field_data:[question('reviewed_by',reviewer),question('position','Meia')]
+ }}})
+ assert.match(html,/>11111111-1111-4111-8111-111111111111<\/dd>/,'the original column value must remain intact')
+ assert.match(html,/>Equipe de tráfego<\/dd>/,'repeating the original column must not discard readable reviewer identity')
 })

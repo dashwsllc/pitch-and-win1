@@ -5,6 +5,7 @@ import { buildFixtures, fakeSession, USER_ID } from './perf/mock.mjs'
 const expect = baseExpect.configure({ timeout: 20000 }), origin = process.env.TRAFFIC_TEST_ORIGIN
 assert(origin && new URL(origin).hostname === '127.0.0.1')
 const id = 'ce120000-0000-4000-8000-000000000099', errors = [], writes = []
+const reviewerId='ce120000-0000-4000-8000-000000000098'
 const questions = [
  ['quem_está_preenchendo_este_formulário?', 'sou_o_atleta'],
  ['atualmente,_o_atleta_está_vinculado_a_algum_clube?', 'Não'],
@@ -20,7 +21,10 @@ const questions = [
 ]
 const long = 'Resposta livre integral '.repeat(100) + 'FIM <script>não executar</script>'
 const contactFields=[{name:'full_name',values:['Contato sintético']},{name:'phone_number',values:['11988887777']},{name:'date_of_birth',values:['2008-01-01']},{name:'state',values:['SP']}]
-const capture = { field_data: [...questions.map(([name,value]) => ({name,values:[value]})),...contactFields], created_time:'2026-10-12T12:32:15Z',
+const capture = { field_data: [...questions.map(([name,value]) => ({name,values:[value]})),...contactFields,
+ {name:'position',values:['Ponta direita']},{name:'age',values:['17']},{name:'status',values:['Treinando em clube']},
+ {name:'reviewed_by',values:[reviewerId]}], created_time:'2026-10-12T12:32:15Z',
+ reviewed_by:reviewerId,reviewed_at:'2026-10-13T14:33:00Z',crm_sync_status:'enviado',
  import_contact:{time_known:true,source_has_date:true}, source_snapshot:{manual_row:{raw_cells:[
   ...questions.map(([header,value])=>({header,value})),{header:'Resposta livre adicional',value:long},{header:'Observação sem resposta',value:''}
  ]}} }
@@ -43,8 +47,9 @@ try {
    else if(name==='get_my_registration_status')data={status:'approved'}
    else if(name==='dashboard_events')data=[{topic:'crm',revision:1}]
    else if(name==='crm_context_summary')data=[{lead_id:id}]
+   else if(name==='crm_call_assignees')data=[{user_id:USER_ID,display_name:role+' QA',role}]
    else if(name==='crm_leads')data=url.searchParams.get('select')==='id,import_snapshot'?{id,import_snapshot:capture}:[completeLead]
-   else if(name==='crm_lead_contexts')data=url.searchParams.get('select')==='lead_id'?[{lead_id:id}]:[{id:'qa-summary',lead_id:id,author_name:'Tráfego QA',author_role:'trafego',context_type:'meta_form',created_at:lead.created_at,content:'RESUMO ANTIGO ABREVIADO',file_name:null}]
+   else if(name==='crm_lead_contexts')data=url.searchParams.get('select')==='lead_id'?[{lead_id:id}]:[{id:'qa-summary',lead_id:id,author_id:reviewerId,author_name:'Tráfego QA',author_role:'trafego',context_type:'meta_form',created_at:lead.created_at,content:'RESUMO ANTIGO ABREVIADO',file_name:null}]
    else if(fixture.rpc[name])data=fixture.rpc[name](request.postDataJSON()??{})
    else if(name.startsWith('get_'))data=0
    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)})
@@ -59,12 +64,20 @@ try {
   await expect(source.locator('pre')).toHaveCount(0)
   await expect(page.getByText('Sem contexto importado.',{exact:false})).toHaveCount(0)
   for(const category of ['Contato e identificação','Perfil do atleta','Histórico no futebol','Objetivos e dificuldades','Comprometimento','Outras respostas'])await expect(source.getByRole('heading',{name:category,exact:true})).toBeVisible()
-  assert.equal(await source.locator('section dl dt').count(),17,'all eleven questions, four contact fields and two manual extras; repeated raw columns must not duplicate answers')
+  assert.equal(await source.locator('section dl dt').count(),21,'all eleven questions, four contact fields, position, age, status, original reviewer and two manual extras remain accessible')
   for(const [,answer]of questions.slice(1))await expect(source.getByText(answer,{exact:true}).first()).toBeVisible()
   await expect(source.getByText('Não',{exact:true})).toHaveCount(2)
   await expect(source.getByText(long,{exact:true})).toBeVisible()
   await expect(source.getByText('Não informado na origem',{exact:true})).toBeVisible()
   await expect(source.getByText('13/10/2026 11:32:15',{exact:true})).toBeVisible()
+  for(const value of ['Ponta direita','17','Treinando em clube'])await expect(source.getByText(value,{exact:true})).toBeVisible()
+  await source.locator('summary').filter({hasText:'Dados de entrada e revisão'}).click()
+  await expect(source.getByText('Revisado por',{exact:true}).last()).toBeVisible()
+  await expect(source.getByText('Tráfego QA',{exact:true})).toBeVisible()
+  await expect(source.getByText(reviewerId,{exact:true})).toBeVisible()
+  await expect(source.getByText('Enviado ao CRM',{exact:true})).toBeVisible()
+  await expect(source.getByText('13/10/2026 11:33:00',{exact:true}).last()).toBeVisible()
+  for(const key of ['reviewed_by','reviewed_at','crm_sync_status','date_of_birth','phone_number','utm_source'])await expect(source.getByText(key,{exact:true})).toHaveCount(0)
   await expect(source.getByText('As respostas de qualificação deste formulário ainda não estão disponíveis no CRM.',{exact:true})).toHaveCount(0)
   await expect(page.getByText('RESUMO ANTIGO ABREVIADO',{exact:true})).toBeHidden()
   await expect(page.locator('script').filter({hasText:'não executar'})).toHaveCount(0)

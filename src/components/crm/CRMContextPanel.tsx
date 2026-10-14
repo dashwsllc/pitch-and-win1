@@ -24,8 +24,10 @@ const contextLabels: Record<string, string> = {
   meta_form: 'Respostas do formulário',
 }
 
-export function CRMContextPanel({ lead }: { lead: CRMLead }) {
+export function CRMContextPanel({ lead, names = {} }: { lead: CRMLead; names?: Record<string,string> }) {
   const context = useCRMContexts(lead.id)
+  const entryNames = { ...names, ...Object.fromEntries(context.contexts.filter(entry => entry.author_id && entry.author_name)
+    .map(entry => [entry.author_id,entry.author_name])) }
   const { toast } = useToast()
   const { capabilities } = useRoles()
   const canWrite = capabilities.sdr || capabilities.closer
@@ -173,7 +175,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
           Importar conversa/transcrição
         </Button>}
       </div>
-      <CRMImportDetails lead={lead} />
+      <CRMImportDetails lead={lead} names={entryNames} />
       {context.loading && <p role="status" className="text-xs text-muted-foreground">Carregando contexto...</p>}
       {context.error && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 text-xs text-destructive">
