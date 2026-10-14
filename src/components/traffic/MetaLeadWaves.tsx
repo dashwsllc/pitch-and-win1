@@ -261,8 +261,8 @@ function LeadCard({ lead, newest, canReview, reviewable, busy, excludedReason, o
       {excludedReason && <p className="text-xs text-amber-300">Será tirado da leva: {excludedReason}</p>}
       {lead.import_warning && sync.key !== 'falhou' && <p className="break-words text-xs text-muted-foreground">{lead.import_warning}</p>}
       {lead.entry_channel === 'website' && <CRMSiteSourceUpdates formLeadId={lead.id} />}
-      <details className="pt-1"><summary className="cursor-pointer text-sm text-ash">Respostas do formulário</summary><FormAnswers fields={lead.field_data} />
-        <p className="mt-2 break-words text-[11px] text-muted-foreground">ID {lead.meta_lead_id}{received ? ` · recebido em ${leadDateTime(received)}` : ''}</p></details>
+      {lead.entry_channel !== 'website' && <details className="pt-1"><summary className="cursor-pointer text-sm text-ash">Respostas do formulário</summary><FormAnswers fields={lead.field_data} />
+        <p className="mt-2 break-words text-[11px] text-muted-foreground">{received ? `Recebido em ${leadDateTime(received)}` : ''}</p></details>}
       {excluding && <div className="flex flex-col gap-2 pt-1 sm:flex-row"><Input aria-label={`Motivo para tirar ${name} da leva`} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo (ex.: lead de teste, número inválido)" />
         <Button size="sm" disabled={reason.trim().length < 3} onClick={() => { onExclude(reason.trim()); setExcluding(false); setReason('') }}>Confirmar</Button>
         <Button size="sm" variant="ghost" onClick={() => { setExcluding(false); setReason('') }}>Cancelar</Button></div>}

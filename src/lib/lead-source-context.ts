@@ -1,6 +1,6 @@
 import { metaAnswers, prettyQuestion } from './meta-leads'
 
-export const sourceContextCategories = ['Contato e identificação', 'Perfil do atleta', 'Histórico no futebol', 'Objetivos e dificuldades', 'Comprometimento', 'Relatório do site', 'Origem da campanha', 'Outras respostas'] as const
+export const sourceContextCategories = ['Contato e identificação', 'Perfil do atleta', 'Histórico no futebol', 'Objetivos e dificuldades', 'Comprometimento', 'Relatório do site', 'Consentimentos', 'Origem da campanha', 'Outras respostas'] as const
 export type SourceContextCategory = typeof sourceContextCategories[number]
 const normalized = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_?.,/]+/g, ' ').toLowerCase().replace(/\s+/g, ' ').trim()
 const labels: Record<string, string> = {
@@ -23,8 +23,9 @@ export function sourceQuestionLabel(name: string) {
 export function sourceAnswerCategory(name: string): SourceContextCategory {
  const key = normalized(name).replace(/^(registro original|dados revisados) /, '')
  if (/^(relatorio|report)\b/.test(key)) return 'Relatório do site'
+ if (/^consentimentos\b/.test(key)) return 'Consentimentos'
  if (/^perfil do atleta\b/.test(key)) return 'Perfil do atleta'
- if (/^(origem|attribution)\b/.test(key) || /^(utm |ad |adset |campaign |form |platform$|is organic$|gclid$|fbclid$|ttclid$|created time$|lead status$|id$)/.test(key)) return 'Origem da campanha'
+ if (/^(origem|attribution)\b/.test(key) || /^utm /.test(key)) return 'Origem da campanha'
  if (/quem .*preenchendo|^(full name|name|nome|phone|telefone|whatsapp|email|e mail|date of birth|data de nascimento|state|estado|city|cidade|contato)\b/.test(key)) return 'Contato e identificação'
  if (/compromet|compromisso|de 0 a 10/.test(key)) return 'Comprometimento'
  if (/objetivo|impedindo|dificuldade|obstaculo|goal|objective/.test(key)) return 'Objetivos e dificuldades'
@@ -33,8 +34,13 @@ export function sourceAnswerCategory(name: string): SourceContextCategory {
  return 'Outras respostas'
 }
 export function categorizedSourceAnswers(fields: unknown) {
- const answers = metaAnswers(fields)
+ const answers = metaAnswers(fields).filter(answer => !isTechnicalSourceField(answer.label))
  return sourceContextCategories.map(category => ({ category, answers: answers.filter(answer => sourceAnswerCategory(answer.label) === category) })).filter(group => group.answers.length)
+}
+/** Operational metadata stays preserved in storage, outside the sales conversation. */
+export function isTechnicalSourceField(name: string) {
+ const key = normalized(name.split(' / ').at(-1) ?? name)
+ return /^(id|.* id|imported by|imported at|reviewed by|reviewed at|review note|received at|first received at|created at|created time|updated at|source revision|schema version|approval status|status|lead status|crm sync.*|traffic edited at|source file|source row|batch filename|entry channel|import method|time known|source has date|raw notes|complete|warnings|.*count|gclid|fbclid|ttclid|ad name|adset name|campaign name|form name|platform|is organic)$/.test(key)
 }
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 type Field = { name: string; values: string[] }
@@ -44,6 +50,7 @@ const scalarText = (value: unknown): string => value == null ? '' : typeof value
 export function completeSourceFields(source: Record<string, unknown>): Field[] {
  const result: Field[] = [], seen = new Set<string>()
  const add = (name: string, values: string[]) => {
+  if (isTechnicalSourceField(name)) return
   const identity = JSON.stringify([normalized(name), values])
   if (!seen.has(identity)) { seen.add(identity); result.push({ name, values }) }
  }
@@ -86,6 +93,8 @@ export function completeSourceFields(source: Record<string, unknown>): Field[] {
   })
   else Object.entries(record(cells)).forEach(([key, value]) => walk(value, [key]))
  }
+ if (source.custom_disclaimer_responses != null) walk(source.custom_disclaimer_responses, ['Consentimentos'])
+ if (!Object.keys(payload).length) Object.entries(saved).filter(([key]) => key.startsWith('utm_') && saved[key] != null && saved[key] !== '').forEach(([key,value]) => walk(value,['Origem',key]))
  return result
 }
 

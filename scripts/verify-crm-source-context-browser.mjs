@@ -40,6 +40,7 @@ try {
    else if(name==='user_roles')data=[{user_id:USER_ID,role,crm_access:true,crm_closer_access:role==='closer'}]
    else if(name==='get_my_registration_status')data={status:'approved'}
    else if(name==='dashboard_events')data=[{topic:'crm',revision:1}]
+   else if(name==='crm_context_summary')data=[{lead_id:id}]
    else if(name==='crm_leads')data=url.searchParams.get('select')==='id,import_snapshot'?{id,import_snapshot:capture}:[lead]
    else if(name==='crm_lead_contexts')data=url.searchParams.get('select')==='lead_id'?[{lead_id:id}]:[{id:'qa-summary',lead_id:id,author_name:'Tráfego QA',author_role:'trafego',context_type:'meta_form',created_at:lead.created_at,content:'RESUMO ANTIGO ABREVIADO',file_name:null}]
    else if(fixture.rpc[name])data=fixture.rpc[name](request.postDataJSON()??{})
@@ -50,6 +51,10 @@ try {
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message))
   await page.goto(origin+`/crm?tab=${role==='closer'?'closer':'importacoes'}&lead=${id}`)
   const source=page.getByRole('region',{name:'Dados completos da importação'})
+  await expect(page.locator('button[aria-label="Contexto de Contato sintético"]')).toHaveClass(/bg-primary\/10/)
+  await expect(page.getByRole('region',{name:'Contexto para o contato'}).getByRole('heading',{name:'Respostas do formulário',exact:true})).toBeVisible()
+  await expect(source.locator('pre')).toHaveCount(0)
+  await expect(page.getByText('Sem contexto importado.',{exact:false})).toHaveCount(0)
   for(const category of ['Contato e identificação','Perfil do atleta','Histórico no futebol','Objetivos e dificuldades','Comprometimento','Outras respostas'])await expect(source.getByRole('heading',{name:category,exact:true})).toBeVisible()
   assert.equal(await source.locator('section dl dt').count(),13,'one readable card per original question; repeated raw columns must not duplicate answers')
   for(const [,answer]of questions.slice(1))await expect(source.getByText(answer,{exact:true}).first()).toBeVisible()

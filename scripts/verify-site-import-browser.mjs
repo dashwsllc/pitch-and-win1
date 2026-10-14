@@ -15,6 +15,7 @@ async function session(n){const context=await browser.newContext({viewport:{widt
  else if(name==='user_roles')data=[{user_id:USER_ID,role:'sdr',crm_access:true}]
  else if(name==='get_my_registration_status')data={status:'approved'}
  else if(name==='dashboard_events')data=[{topic:'crm',revision:state.revision}]
+ else if(name==='crm_context_summary')data=[{lead_id:leadId}]
  else if(name==='crm_leads')data=select==='id,import_snapshot'?{id:lead.id,import_snapshot:lead.import_snapshot}:[(({import_snapshot,...row})=>row)(lead)]
  else if(name==='site_import_events'){if(select==='*')data=state.events.find(e=>'eq.'+e.event_id===url.searchParams.get('event_id'));else if(url.searchParams.get('limit')==='1'){data=state.events.toSorted((a,b)=>b.source_revision-a.source_revision).slice(0,1).map(({event,...row})=>row)}else{data=state.events.map(({event,...row})=>row);headers={'content-range':`0-${data.length-1}/${data.length}`,'access-control-expose-headers':'content-range'}}}
  else if(fixture.rpc[name])data=fixture.rpc[name](request.postDataJSON()??{})
@@ -28,7 +29,7 @@ try{const pages=[await session(1),await session(2)];
  assert.equal(calls.filter(c=>c.name==='site_import_events'&&c.select==='*').length,2)
  const raw='NEW COMPLETE CONTEXT '.repeat(250)+'<script>escaped</script>'
  state.events.unshift({...state.events[0],event_id:'ce140000-0000-4000-8000-000000000003',source_revision:3,status:'context_only',received_at:'2026-10-13T14:36:25Z',event:{source_updated_at:'2026-10-13T14:36:01Z',generated_at:'2026-09-10T13:04:05Z',payload:{profile:{context:raw},contact:{phone:'11900000000'}}}}, {...state.events[0],event_id:'ce140000-0000-4000-8000-000000000002',source_revision:2,status:'superseded',received_at:'2026-10-13T14:36:24Z'});state.revision++
- for(const page of pages){await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('region',{name:'Contexto mais recente do site'}).getByText(raw,{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/Versão 3 · 13\/10\/2026 11:36:25/})).toBeVisible();await page.getByRole('button',{name:/Versão 3 ·/}).click();await expect(page.getByRole('button',{name:/Versão 3 ·/}).locator('..').locator('pre')).toContainText(raw);await expect(page.getByText('11988887777',{exact:false}).first()).toBeVisible()}
+ for(const page of pages){await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('region',{name:'Contexto mais recente do site'}).getByText(raw,{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/Versão 3 · 13\/10\/2026 11:36:25/})).toBeVisible();await page.getByRole('button',{name:/Versão 3 ·/}).click();await expect(page.getByRole('button',{name:/Versão 3 ·/}).locator('..').getByText(raw,{exact:true})).toBeVisible();await expect(page.getByText('11988887777',{exact:false}).first()).toBeVisible()}
  assert.equal(lead.import_snapshot.source_snapshot.approved,'APPROVED ORIGINAL');assert(calls.filter(c=>c.name==='site_import_events'&&c.select==='*').length>=4);assert.deepEqual(errors,[])
  console.log('PASS: two SDR sessions without Realtime show categorized latest context automatically, exact seconds, intact SDR phone and immutable approved snapshot; history remains lazy')
 }finally{await browser.close()}

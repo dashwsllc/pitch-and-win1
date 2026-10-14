@@ -3,6 +3,17 @@ import test from 'node:test'
 import { loadHandler } from './helpers/meta-edge-harness.mjs'
 import { leadDatabase, leadsGraph, json } from './helpers/meta-lead-fixtures.mjs'
 
+test('Meta lead detail without answers remains retryable instead of being marked synchronized', async () => {
+ const admin=leadDatabase()
+ const {exports}=await loadHandler('_shared/meta-lead-ingest.ts',{admin,fetch:address=>new URL(address).pathname.endsWith('/lead1')?
+  json({id:'lead1',created_time:'2026-10-11T12:00:00Z',form_id:'form1',field_data:[]}):leadsGraph(address)})
+ const result=await exports.ingestLeadgenId(admin,'lead1','page1','form1','test-token')
+ assert.equal(result.status,'error')
+ assert.equal(admin.calls.filter(call=>call.name==='meta_lead_event_ingest').length,0)
+ assert.equal(admin.events.get('lead1').status,'error')
+ assert.equal(admin.events.get('lead1').error_class,'transient')
+})
+
 test('compatibility ingestion uses atomic claimed completion and never refetches a processed event', async () => {
   const admin = leadDatabase(); let fetched = 0
   const { exports } = await loadHandler('_shared/meta-lead-ingest.ts', { admin, fetch: address => { fetched++; return leadsGraph(address) } })

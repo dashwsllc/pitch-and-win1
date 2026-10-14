@@ -1,5 +1,6 @@
 import type { CRMLeadInsert } from '@/integrations/supabase/application-types'
 import { CRM_LEAD_LIST_COLUMNS, type CRMImportMetadata } from '@/lib/crm-imports'
+import { arenaRpc } from '@/lib/arena-api'
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -319,13 +320,7 @@ export function useCRMContextSummary() {
     queryFn: async () => {
       const leadIds = new Set<string>();
       for (let from = 0; ; from += 500) {
-        const { data, error } = await supabase
-          .from("crm_lead_contexts")
-          .select("lead_id")
-          .order("lead_id")
-          .order("id")
-          .range(from, from + 499);
-        if (error) throw error;
+        const data = await arenaRpc<{ lead_id: string }[]>('crm_context_summary', { p_offset: from, p_limit: 500 });
         data.forEach((row) => leadIds.add(row.lead_id));
         if (data.length < 500) return leadIds;
       }

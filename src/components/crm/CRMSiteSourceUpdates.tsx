@@ -5,13 +5,14 @@ import { arenaClient } from '@/lib/arena-api'
 import { leadDateTime } from '@/lib/meta-waves'
 import { Button } from '@/components/ui/button'
 import { FormAnswers } from '@/components/traffic/FormAnswers'
-import { completeSourceFields } from '@/lib/lead-source-context'
+import { completeSourceFields, siteCaptureAvailability } from '@/lib/lead-source-context'
 
 export const siteEventListColumns = 'event_id,source_lead_id,source_revision,received_at,status,error_code,meta_form_lead_id'
 interface SiteEvent { event_id: string; source_revision: number; received_at: string; status: string; error_code: string | null; event?: Record<string, unknown> }
 const labels: Record<string, string> = { pending_review: 'Captura para revisão', context_only: 'Atualização da origem', superseded: 'Versão anterior recebida depois', quarantined: 'Evento preservado para conferência' }
 export function SiteEventContent({ event }: { event: SiteEvent }) {
   const raw = event.event ?? {}
+  const availability = siteCaptureAvailability({ source_snapshot: { site_event: raw } })
   return <div className="space-y-2 text-xs">
     <p>{labels[event.status] ?? event.status} · versão {event.source_revision}</p>
     <dl className="space-y-1">
@@ -19,9 +20,8 @@ export function SiteEventContent({ event }: { event: SiteEvent }) {
       <div><dt>Geração original</dt><dd>{leadDateTime(typeof raw.generated_at === 'string' ? raw.generated_at : null)}</dd></div>
       <div><dt>Atualizado na origem</dt><dd>{leadDateTime(typeof raw.source_updated_at === 'string' ? raw.source_updated_at : null)}</dd></div>
     </dl>
-    <p className="text-muted-foreground">Este registro preserva o contexto da origem. O cadastro corrigido pelo SDR e a captura aprovada permanecem separados.</p>
+    {availability && !availability.profile && <p className="text-muted-foreground">Este envio contém o contato. O site ainda não enviou as respostas do perfil do atleta.</p>}
     <FormAnswers fields={completeSourceFields({ source_snapshot: { site_event: raw } })} />
-    <details><summary className="cursor-pointer">Registro técnico integral</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-background/50 p-2">{JSON.stringify(raw, null, 2)}</pre></details>
   </div>
 }
 export function SiteEventDetail({ id }: { id: string }) {

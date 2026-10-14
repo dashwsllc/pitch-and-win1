@@ -48,6 +48,7 @@ export async function processClaimedLead(admin: SupabaseClient, event: ClaimedLe
       fields: 'id,created_time,form_id,ad_id,campaign_id,campaign_name,field_data,custom_disclaimer_responses',
     }, token, budget)
     if (detail.id !== event.leadgen_id || detail.form_id !== event.form_id || !Number.isFinite(Date.parse(detail.created_time))) throw new Error('Identidade ou data de lead divergente')
+    if (!Array.isArray(detail.field_data) || detail.field_data.length === 0) throw new Error('Respostas do formulário ainda não recebidas da Meta; a captura será tentada novamente')
     let formName = ''
     if (Date.now() + 4000 < budget.deadlineMs) {
       try { formName = (await metaGraphGet<{ name?: string }>(`/${event.form_id}`, { fields: 'name' }, token,

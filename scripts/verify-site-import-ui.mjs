@@ -11,7 +11,7 @@ test('site history separates source versions from SDR data and escapes the compl
  assert.match(html,/13\/10\/2026.*11:32:15/);assert.match(html,/10\/09\/2026.*10:04:05/);assert.match(html,/11:30:12/)
  assert.match(html,/&lt;script&gt;never execute&lt;\/script&gt;/);assert.equal((html.match(/<dd[^>]*>(.*?)<\/dd>/gs).join('').match(/Valuable context /g)??[]).length,1000)
  assert(!siteEventListColumns.split(',').includes('event'),'list eagerly downloads complete payload')
- assert.match(html,/cadastro.*SDR|SDR.*cadastro/)
+ assert.doesNotMatch(html,/<pre|imported_by|reviewed_by/)
 })
 test('bridge health never describes an old heartbeat or missing health as synchronized',()=>{
  const {SiteBridgeHealth,siteBridgeFresh}=load('src/components/traffic/SiteBridgeStatus.tsx')
