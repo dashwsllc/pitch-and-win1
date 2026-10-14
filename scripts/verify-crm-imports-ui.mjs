@@ -44,7 +44,7 @@ test('CRM source details preserve long answers, complete consent data and origin
  assert.match(html,/&lt;script&gt;não executar&lt;\/script&gt;/)
  assert.match(html,/Autorização/)
  assert.match(html,/Campanha site/)
- assert.match(html,/site.csv/)
+ assert.doesNotMatch(html,/<pre|imported_by|reviewed_by/)
  assert.match(html,/07\/10\/2026.*08:00:00/)
 })
 

@@ -14,6 +14,8 @@ import { safePlainText, sanitizePlainText, validatePlainText } from '@/lib/plain
 import { errorMessage } from '@/lib/sales'
 import { CONTEXT_FILE_TYPE_ERROR, convertContextTxt, downloadContextMarkdown, MAX_CONTEXT_LENGTH, validateContextFileText, type CRMContextFile } from '@/lib/crm-context-file'
 import { MAX_CONTEXT_MEDIA_URL_LENGTH, normalizeContextMediaUrl } from '@/lib/crm-context-media'
+import { CRMImportDetails } from './CRMImportDetails'
+import { importChannel } from '@/lib/crm-imports'
 
 const contextLabels: Record<string, string> = {
   whatsapp_summary: 'Resumo de WhatsApp',
@@ -171,7 +173,7 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
           Importar conversa/transcrição
         </Button>}
       </div>
-
+      <CRMImportDetails lead={lead} />
       {context.loading && <p role="status" className="text-xs text-muted-foreground">Carregando contexto...</p>}
       {context.error && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 text-xs text-destructive">
@@ -179,12 +181,12 @@ export function CRMContextPanel({ lead }: { lead: CRMLead }) {
           <Button size="sm" variant="outline" onClick={() => void context.refetch()}>Tentar novamente</Button>
         </div>
       )}
-      {!context.loading && !context.error && !context.contexts.length && (
+      {!importChannel(lead) && !context.loading && !context.error && !context.contexts.length && (
         <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
           Sem contexto importado. Use o botão acima para colar ou anexar o bloco completo.
         </p>
       )}
-      {context.contexts.map((entry) => (
+      {context.contexts.filter(entry => entry.context_type !== 'meta_form' || !importChannel(lead)).map((entry) => (
         <article key={entry.id} className="rounded-md border border-border/50 p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">

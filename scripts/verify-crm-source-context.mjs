@@ -92,9 +92,18 @@ test('site contact and athlete profile keep separate identities even when names 
  assert.match(html,/<dt[^>]*>Contato \/ Nome informado<\/dt>/)
  assert.match(html,/<dt[^>]*>Perfil do atleta \/ Nome informado<\/dt>/)
 })
-test('readability must not change emails, click attribution or literal report identifiers', () => {
- const html=render('traffic/FormAnswers.tsx',{fields:[question('email','nome_sobrenome@example.invalid'),question('utm_campaign','campanha_teste'),question('Relatório / id','relatorio_teste')]})
+test('readability must not change emails, campaign attribution or literal report references', () => {
+ const html=render('traffic/FormAnswers.tsx',{fields:[question('email','nome_sobrenome@example.invalid'),question('utm_campaign','campanha_teste'),question('Relatório / Referência','relatorio_teste')]})
  assert.match(html,/<dd[^>]*>nome_sobrenome@example.invalid<\/dd>/)
  assert.match(html,/<dd[^>]*>campanha_teste<\/dd>/)
  assert.match(html,/<dd[^>]*>relatorio_teste<\/dd>/)
+})
+test('CRM context contains answers and readable consent without operational JSON or staff metadata', () => {
+ const html=render('crm/CRMImportDetails.tsx',{lead:{import_channel:'form',import_method:'automatic',import_snapshot:{
+  imported_by:'PRIVATE-OPERATOR',reviewed_by:'PRIVATE-REVIEWER',crm_sync_status:'enviado',
+  field_data:[question('Objetivo do atleta?','Ser profissional'),question('imported_by','PRIVATE-OPERATOR'),question('reviewed_by','PRIVATE-REVIEWER')],
+  custom_disclaimer_responses:[{title:'Contato autorizado',accepted:true}]
+ }}})
+ assert.match(html,/Ser profissional/);assert.match(html,/Contato autorizado/)
+ assert.doesNotMatch(html,/PRIVATE-OPERATOR|PRIVATE-REVIEWER|imported_by|reviewed_by|crm_sync_status|<pre/)
 })

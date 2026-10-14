@@ -44,27 +44,19 @@ function ImportDetailsContent({ lead }: { lead: CRMLead }) {
     ['Disponível no CRM em', leadDateTime(lead.created_at)],
     ['Campanha', text(source.campaign_name) || text(source.campaign_id)],
     ['Formulário', text(source.form_name) || text(source.form_id)],
-    ['Anúncio', text(source.ad_id)], ['Identificador na origem', text(source.meta_lead_id)],
-    ['Arquivo importado', text(source.batch_filename)],
   ]
   return <section className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3" aria-label="Dados completos da importação">
-    <div><h2 className="text-sm font-semibold">Dados e contexto da importação</h2>
+    <div><h2 className="text-sm font-semibold">{channel === 'form' ? 'Respostas do formulário' : 'Dados informados no site'}</h2>
       <p className="mt-1 text-xs text-muted-foreground">{importChannelLabels[channel]} · {lead.import_method ? importMethodLabels[lead.import_method] : 'Forma de entrada não informada'} · horários de Brasília</p></div>
     <dl className="grid gap-2 sm:grid-cols-2">{fields.filter(([, value]) => value).map(([label, value]) =>
       <div key={label}><dt className="text-[11px] text-muted-foreground">{label}</dt><dd className="break-words text-xs tabular-nums">{value}</dd></div>)}</dl>
     {Object.keys(source).length ? <>
-      <h3 className="text-xs font-semibold">Respostas e informações da origem</h3>
       {availability && (!availability.profile || !availability.report) && <p role="status" className="rounded border border-border p-2 text-xs text-muted-foreground">
         {!availability.profile && 'A origem ainda não enviou o perfil do atleta. '}
         {!availability.report && 'A origem ainda não enviou um relatório. '}
         Consulte as atualizações do site abaixo para conferir envios posteriores.
       </p>}
       <FormAnswers fields={completeSourceFields(source)} />
-      {source.custom_disclaimer_responses != null && <details><summary className="cursor-pointer text-xs">Consentimentos completos</summary>
-        <pre className="mt-2 whitespace-pre-wrap break-words rounded bg-background/50 p-2 text-xs">{JSON.stringify(source.custom_disclaimer_responses, null, 2)}</pre></details>}
-      <details><summary className="cursor-pointer text-xs">Consultar registro integral, atribuição e dados adicionais</summary>
-        <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-background/50 p-2 text-xs">{JSON.stringify(source, null, 2)}</pre></details>
-      <p className="text-[11px] text-muted-foreground">A captura aprovada permanece preservada. O cadastro e o histórico abaixo mostram as alterações feitas no atendimento.</p>
     </> : <p role="status" className="text-xs text-amber-300">O registro integral desta importação ainda não foi sincronizado. Atualize para conferir; não há confirmação de contexto completo.</p>}
   </section>
 }

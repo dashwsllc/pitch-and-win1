@@ -43,6 +43,7 @@ async function session(index) {
     else if (name === 'user_roles') data = [{ user_id: USER_ID, role: 'sdr', crm_access: true }]
     else if (name === 'get_my_registration_status') data = { status: 'approved' }
     else if (name === 'dashboard_events') data = [{ topic: 'crm', revision: state.revision }]
+    else if (name === 'crm_context_summary') data = state.leads.map(row => ({ lead_id: row.id }))
     else if (name === 'crm_leads') {
       if (url.searchParams.get('select') === 'id,import_snapshot') {
         const match = state.leads.find(row => 'eq.' + row.id === url.searchParams.get('id'))
@@ -82,11 +83,10 @@ try {
   await expect(detail.getByText(longAnswer, { exact: true })).toBeVisible()
   await expect(detail.getByText('Data e horário não informados na origem',{exact:true})).toBeVisible()
   await expect(first.getByText('Caiu em (horário de Brasília)',{exact:true})).toHaveCount(0)
-  await detail.getByText('Consentimentos completos', { exact: true }).click()
-  await expect(detail.locator('details').nth(0).locator('pre')).toContainText('CONSENTIMENTO INTEGRAL QA')
-  await detail.getByText('Consultar registro integral, atribuição e dados adicionais', { exact: true }).click()
+  await expect(detail.getByRole('heading',{name:'Consentimentos',exact:true})).toBeVisible()
+  await expect(detail.getByText('CONSENTIMENTO INTEGRAL QA',{exact:true})).toBeVisible()
   await expect(detail.getByText('DADO NÃO MAPEADO PRESERVADO',{exact:true})).toBeVisible()
-  await expect(detail.getByText(/campaign-qa/)).toBeVisible()
+  await expect(detail.locator('pre')).toHaveCount(0)
   await first.keyboard.press('Escape')
   await section.getByRole('button', { name: 'Todas · 3', exact: true }).click()
   await section.getByRole('button', { name: 'Automáticas e manuais', exact: true }).click()

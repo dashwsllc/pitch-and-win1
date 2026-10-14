@@ -11,6 +11,7 @@ import type { LeadImportRow, LeadImportResult } from "./meta-lead-import";
 // migration. This is the SAME authenticated Supabase client and auth session.
 type FunctionDef<Args> = { Args: Args; Returns: Json };
 type ExtraFunctions = {
+  crm_context_summary: FunctionDef<{ p_offset: number; p_limit: number }>;
   site_bridge_operation: FunctionDef<Record<string, never>>;
   // Legacy ranking contract may be deployed separately from the traffic schema.
   get_daily_call_ranking: FunctionDef<Record<string, never>>;

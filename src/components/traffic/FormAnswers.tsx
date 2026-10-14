@@ -11,5 +11,5 @@ export function FormAnswers({ fields }: { fields: unknown }) {
         <div key={index} className="min-w-0 rounded-lg bg-muted/40 p-3"><dt className="text-xs leading-5 text-muted-foreground">{sourceQuestionLabel(answer.label)}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{answer.value ? (answer.label.includes('?') && !/[@/:]/.test(answer.value) ? prettyAnswer(answer.value) : answer.value) : 'Não informado na origem'}</dd></div>,
       )}</dl>
     </section>,
-  )}</div> : <p className="mt-3 text-sm text-muted-foreground">Nenhuma resposta adicional.</p>
+  )}</div> : <p role="status" className="mt-3 text-sm text-muted-foreground">Respostas não disponíveis nesta captura.</p>
 }
