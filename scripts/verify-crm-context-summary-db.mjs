@@ -31,6 +31,11 @@ try {
  public.crm_source_context_present('{"source_snapshot":{"field_data":[{"name":"Objetivo?","values":["Original"]}]}}') as original,
  public.crm_source_context_present('{"source_snapshot":{"manual_row":{"raw_cells":[{"header":"Objetivo?","value":"Manual"}]}}}') as manual`)
  assert.deepEqual(cases.rows[0],{contact_only:false,false_and_zero:true,original:true,manual:true})
+ const siteCases=await db.query(`select public.crm_source_context_present('{"source_snapshot":{"site_event":{"payload":{"profile":{"id":"technical-id"}}}}}') as technical_only,
+ public.crm_source_context_present('{"source_snapshot":{"site_event":{"payload":{"profile":{"notes":"   "}}}}}') as whitespace_only,
+ public.crm_source_context_present('{"source_snapshot":{"site_event":{"payload":{"source_record":{"notes":"Completed assessment from source"}}}}}') as source_only,
+ public.crm_source_context_present('{"source_snapshot":{"site_event":{"payload":{"source_record":{"name":"Only contact","phone":"11999990000"}}}}}') as source_contact_only`)
+ assert.deepEqual(siteCases.rows[0],{technical_only:false,whitespace_only:false,source_only:true,source_contact_only:false})
  await db.exec(`set role authenticated;set request.jwt.claim.sub='00000000-0000-4000-8000-000000000777'`)
  const result=await db.query('select lead_id from public.crm_context_summary() order by lead_id')
  assert.deepEqual(result.rows.map(x=>x.lead_id),['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003'])

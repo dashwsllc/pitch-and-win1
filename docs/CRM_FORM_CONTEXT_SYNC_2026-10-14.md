@@ -22,4 +22,8 @@ A migration acrescenta funções de leitura, sem atualizar leads, snapshots, eve
 
 Testes RED→GREEN reproduziram JSON/metadata na ficha, ausência do resumo de respostas e confirmação de captura vazia. SQL PostgreSQL via PGlite verificou RLS entre usuários, bloqueio de anon, respostas originais/manuais, perfil posterior, paginação, vazio e valores false/zero. Os ensaios Chromium verificaram SDR, closer, amarelo, respostas completas, ausência de JSON e sincronização em duas sessões sem Realtime. TypeScript, lint, build, Deno e varredura de segredos integram o gate.
 
+A revisão independente encontrou uma divergência no indicador do site: IDs técnicos e espaços podiam ativá-lo, enquanto observações do registro original não eram contadas. Os três cenários foram reproduzidos em SQL (RED) e corrigidos em uma passagem (GREEN); passaram novamente os testes de permissões e as 127 regressões. A primeira tentativa de revisão estava indisponível por limite de uso, sem avaliar o código; um revisor disponível concluiu a revisão. Não houve achado crítico ou minor pendente.
+
+As aprovações comerciais, importação do arquivo e fusão de identidades ficaram fora da revisão porque não foram autorizadas; permaneceram intactas. A revisão do diff não certifica o deploy: instalação, preservação e confirmação no domínio são verificadas separadamente.
+
 Ruling: reparo delimitado do contrato de contexto completo já aprovado, com execução nativa no checkout isolado existente. Não iniciar outro desenho nem importar o arquivo de referência. Testes de permissões e preservação antecedem a instalação seletiva; não usar db push ou reaplicar migrations anteriores.
