@@ -27,6 +27,23 @@ test('campaign qualification appears in useful categories with all eleven answer
  assert.match(html,/Ala, sub-17/)
  assert.match(html,/Avaliação sintética sem aprovação/)
 })
+
+test('a form containing only contact fields explicitly reports missing qualification answers', () => {
+ const html = render('crm/CRMImportDetails.tsx', { lead: { import_channel:'form',import_snapshot:{
+  field_data:[question('full_name','Contato sintético'),question('phone_number','11999990000'),question('date_of_birth','2008-01-01'),question('state','SP')]
+ } } })
+ assert.match(html,/As respostas de qualificação deste formulário ainda não estão disponíveis no CRM/)
+})
+
+test('technical column spellings and consent cannot replace submitted qualification answers', () => {
+ const {formAnswersPresent}=load('src/lib/lead-source-context.ts')
+ for(const name of ['CreatedTime','created_time ','Consentimentos']) {
+  const source={field_data:[question('full_name','Contato sintético'),question(name,'Meta')]}
+  assert.equal(formAnswersPresent(source),false,name+' must not count as qualification')
+  const html=render('crm/CRMImportDetails.tsx',{lead:{import_channel:'form',import_snapshot:source}})
+  assert.match(html,/As respostas de qualificação deste formulário ainda não estão disponíveis no CRM/)
+ }
+})
 test('manual raw columns missing from field_data are readable without opening JSON', () => {
  const html = render('crm/CRMImportDetails.tsx', { lead: { import_channel:'form', import_method:'manual',import_snapshot:{
   field_data:[question('full_name','Contato sintético')], source_snapshot:{manual_row:{raw_cells:[

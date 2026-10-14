@@ -102,3 +102,14 @@ export function siteCaptureAvailability(source: Record<string, unknown>) {
  const payload = record(record(record(source.source_snapshot).site_event).payload)
  return Object.keys(payload).length ? { profile: Object.keys(record(payload.profile)).length > 0, report: payload.report != null } : null
 }
+
+/** A contact record or operator note cannot stand in for the lead's form responses. */
+export function formAnswersPresent(source: Record<string, unknown>) {
+ const contactKeys = new Set(['full name','name','nome','nome completo','phone','phone number','telefone','whatsapp',
+  'email','email address','e mail','date of birth','data de nascimento','state','estado','uf','city','cidade'])
+ return completeSourceFields(source).some(field => {
+  const key = normalized(field.name.split(' / ').at(-1) ?? field.name)
+  return !contactKeys.has(key) && sourceAnswerCategory(field.name) !== 'Origem da campanha'
+   && sourceAnswerCategory(field.name) !== 'Consentimentos' && field.values.some(value => value.trim() !== '')
+ })
+}
