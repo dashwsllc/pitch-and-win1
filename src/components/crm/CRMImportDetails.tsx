@@ -7,16 +7,16 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { CRMSiteSourceUpdates } from './CRMSiteSourceUpdates'
-import { completeSourceFields, formAnswersPresent, siteCaptureAvailability } from '@/lib/lead-source-context'
+import { completeSourceFields, formAnswersPresent, siteCaptureAvailability, sourceEntryFields, sourceEntryValue, sourceQuestionLabel } from '@/lib/lead-source-context'
 
 /** Complete source snapshot, separate from the SDR's editable current contact. */
-export function CRMImportDetails({ lead }: { lead: CRMLead }) {
+export function CRMImportDetails({ lead, names = {} }: { lead: CRMLead; names?: Record<string,string> }) {
   if (!importChannel(lead)) return null
-  return <>{lead.import_snapshot === undefined ? <RemoteImportDetails lead={lead} /> : <ImportDetailsContent lead={lead} />}
+  return <>{lead.import_snapshot === undefined ? <RemoteImportDetails lead={lead} names={names} /> : <ImportDetailsContent lead={lead} names={names} />}
     {importChannel(lead) === 'website' && lead.meta_form_lead_id && <CRMSiteSourceUpdates formLeadId={lead.meta_form_lead_id} />}</>
 }
 
-function RemoteImportDetails({ lead }: { lead: CRMLead }) {
+function RemoteImportDetails({ lead, names }: { lead: CRMLead; names: Record<string,string> }) {
   const { user } = useAuth()
   const query = useQuery({ queryKey: ['crm', 'import-source', user?.id, lead.id], enabled: !!user,
     staleTime: 5_000, retry: 1, queryFn: async () => {
@@ -26,13 +26,14 @@ function RemoteImportDetails({ lead }: { lead: CRMLead }) {
     } })
   if (query.isPending) return <p role="status" className="text-xs text-muted-foreground">Sincronizando o contexto completo da importação…</p>
   if (query.isError) return <div role="alert" className="space-y-2 text-xs text-destructive">O contexto integral não foi carregado. <Button size="sm" variant="outline" onClick={() => void query.refetch()}>Tentar novamente</Button></div>
-  return <ImportDetailsContent lead={{ ...lead, import_snapshot: query.data }} />
+  return <ImportDetailsContent lead={{ ...lead, import_snapshot: query.data }} names={names} />
 }
 
-function ImportDetailsContent({ lead }: { lead: CRMLead }) {
+function ImportDetailsContent({ lead, names }: { lead: CRMLead; names: Record<string,string> }) {
   const channel = importChannel(lead)
   if (!channel) return null
   const source = importSnapshot(lead)
+  const entryFields = sourceEntryFields(source)
   const availability = siteCaptureAvailability(source)
   const contact = source.import_contact && typeof source.import_contact === 'object' ? source.import_contact as Record<string, unknown> : {}
   const generated = typeof source.created_time === 'string' ? source.created_time : lead.lead_generated_at
@@ -60,6 +61,14 @@ function ImportDetailsContent({ lead }: { lead: CRMLead }) {
         Consulte as atualizações do site abaixo para conferir envios posteriores.
       </p>}
       <FormAnswers fields={completeSourceFields(source)} />
+      {entryFields.length > 0 && <details className="rounded-lg border border-border p-3">
+        <summary className="cursor-pointer text-sm font-medium">Dados de entrada e revisão</summary>
+        <p className="mt-2 text-xs text-muted-foreground">Informações registradas na entrada deste contato. Os dados abaixo correspondem à captura original.</p>
+        <dl className="mt-2 grid gap-2 sm:grid-cols-2">{entryFields.map(field => <div key={field.name}>
+          <dt className="text-xs text-muted-foreground">{sourceQuestionLabel(field.name)}</dt>
+          <dd className="break-words text-xs">{sourceEntryValue(field.name,field.values.join(', '),names,source)}</dd>
+        </div>)}</dl>
+      </details>}
     </> : <p role="status" className="text-xs text-amber-300">O registro integral desta importação ainda não foi sincronizado. Atualize para conferir; não há confirmação de contexto completo.</p>}
   </section>
 }
