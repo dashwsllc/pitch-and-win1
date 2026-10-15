@@ -18,7 +18,7 @@ Números no momento da auditoria: 140 leads do site desde 07/10; 82 pares inequ�
 | Peça | Arquivo | O que faz |
 |---|---|---|
 | Migration | `supabase/migrations/20261015021500_site_form_answers_link.sql` | Liga site↔formulário (`answers_form_lead_id`). Copia **todas** as perguntas e respostas exatas para o Contexto do lead do CRM. Na aprovação reaproveita o lead do par, sem duplicar. O indicador de contexto passa a contar essas respostas. Só substitui as duas funções se forem idênticas às auditadas (guarda md5). |
-| Aquecimento | `supabase/migrations/20261015030000_form_temperature.sql` | Sugere e marca **frio / morno / quente** pelas respostas, com o motivo em palavras (ver "Aquecimento pelas respostas"). |
+| Aquecimento | `supabase/migrations/20261015030000_form_temperature.sql` | Sugere e marca **frio / morno / quente** pelo DDD (Norte e Nordeste = frio) e pelas respostas, com o motivo em palavras (ver "Aquecimento pelas respostas"). |
 | Agendamento | `supabase/migrations/20261015021600_site_form_answers_link_cron.sql` | A cada 5 min vincula leads futuros. Separado, para ligar depois de conferir a simulação. |
 | Tela | `src/components/crm/CRMContextPanel.tsx` | "Respostas do formulário Meta" aparece aberta, antes dos dados do site, nas fichas de leads do site e criados à mão (SDR e Closer). |
 | Aplicar | `scripts/apply-site-form-answers-link-migration.mjs` | `preflight` (ensaio no banco real, desfaz tudo), `apply`, `cron-preflight`, `cron`. |
@@ -38,7 +38,7 @@ Rode na pasta `pitch-and-win1`, no seu terminal (já autenticado no Supabase).
 
 1. **Ensaio no banco real das duas migrations (nada é gravado):**
    `node scripts/apply-site-form-answers-link-migration.mjs preflight`
-   Resultado obtido em 15/10 (muda conforme chegam leads): `ENSAIO CONCLUIDO … pares_inequivocos=82 ambiguos=2 leads_do_crm_que_ganham_contexto=12 leads_manuais_com_formulario_do_mesmo_whatsapp=3 | aquecimento nos formularios: quente=128 morno=272 frio=25 sem_classificacao=1`. Se aparecer "mudou desde a auditoria", pare e me chame.
+   Resultado obtido em 15/10 (muda conforme chegam leads): `ENSAIO CONCLUIDO … pares_inequivocos=82 ambiguos=2 leads_do_crm_que_ganham_contexto=12 leads_manuais_com_formulario_do_mesmo_whatsapp=3 | aquecimento nos formularios: quente=85 morno=162 frio=178 sem_classificacao=1`. Se aparecer "mudou desde a auditoria", pare e me chame.
 2. **Instalar as duas:** `node scripts/apply-site-form-answers-link-migration.mjs apply`
 3. **Ver o que será ligado:** `node scripts/site-form-link.mjs preview` (confira os `revisar (ambíguo)`).
 4. **Ligar:** `node scripts/site-form-link.mjs apply`
@@ -53,19 +53,31 @@ Ao aprovar uma leva: se o par já está no CRM, o sistema reaproveita esse lead 
 
 É um **ponto de partida para o SDR escolher quem abordar**; o SDR continua dono do campo e pode mudar a qualquer momento. Nada aprova, repassa ou abre lead. "Quente + abordado" continua sendo o que sinaliza pronto para o Closer.
 
-| Aquecimento | Critério (tudo precisa valer) |
+**Primeiro vem o DDD** do telefone informado no formulário (a distância do local de atendimento):
+
+| DDD | Resultado |
+|---|---|
+| **Norte** (63, 68, 69, 91 a 97) ou **Nordeste** (71, 73 a 77, 79, 81 a 89, 98, 99) | **sempre Frio**, qualquer que seja o resto. O motivo mostra o que as respostas indicariam ("pelas respostas seria Quente") para o SDR decidir se vale exceção |
+| **Demais regiões** (Sudeste, Sul, Centro-Oeste) | **Quente ou Morno** conforme as respostas; o mínimo é Morno |
+| **Não identificado** (telefone sem DDD ou estrangeiro) | vale só o que as respostas dizem (Frio, Morno ou Quente) |
+
+O DDD é lido em "+5511…", "5581…", "(71) 98356-5093", "11999998888", com zero na frente, e também no número brasileiro escrito "+62983319848" (sem o 55; é Goiás, não estrangeiro).
+
+| Pelas respostas | Critério |
 |---|---|
 | **Quente** | compromisso ≥ 9 · objetivo ligado a clube/carreira (jogador profissional, oportunidade em clube, clube de maior nível, visibilidade, direcionamento) · impedimento que a oferta resolve (falta de oportunidades ou de visibilidade, dificuldade de chegar aos clubes, já tentei, direcionamento, acompanhamento, não sei o caminho) · **pelo menos 2 sinais de movimento**: já fez avaliações/peneiras, já recebeu convite/proposta/contrato, respostas detalhadas (clubes, resultado de avaliação, características) |
 | **Morno** | compromisso ≥ 7 e objetivo **ou** impedimento alinhado |
 | **Frio** | o resto: compromisso baixo, ou objetivo e impedimento sem ligação com entrar em clube (por exemplo, só quer evoluir fisicamente) |
 
+Fora do Norte e do Nordeste, quem as respostas deixariam frio vira Morno (regra do piso), e o motivo avisa isso. Resultado previsto em 15/10 nos 426 formulários: **85 quentes, 162 mornos, 178 frios** (172 por DDD do Norte/Nordeste e 6 de DDD desconhecido com respostas fracas).
+
 Como cada resposta é entendida: a nota de compromisso é lida mesmo dentro do texto ("8/10", "Acho que us 8/10", "Sim 8", "9. estou focado"); sem número, "muito/total/sempre" vale 8 e "pouco/nada" vale 4; nota ilegível ("19", "ANDREY") vale 7 e **nunca chega a quente sozinha**. As opções de múltipla escolha são comparadas pelo sentido, com ou sem sublinhado, acento ou maiúscula, então formulários importados de planilha funcionam igual. O lead de teste da Meta e formulários sem as perguntas conhecidas **não são classificados**.
 
 Quando é marcado: o lead **novo** nasce já com o aquecimento (e, se veio do site, usa as respostas do formulário ligado). O lead que **já estava** no CRM só é marcado **uma vez** e **só se ninguém mexeu nele** (aquecimento padrão, não abordado, sem Closer); se o SDR já trabalhou o lead, ele recebe apenas a sugestão com o motivo, sem alteração. Depois disso nada refaz a escolha do SDR. A alteração em lead antigo aparece no histórico como "Lead atualizado", atribuída a quem aprovou o lead (os gatilhos do CRM exigem um usuário).
 
-O SDR vê no Contexto: "Aquecimento sugerido pelo formulário: Quente · já marcado no lead; o SDR pode alterar", com o motivo, por exemplo: *Quente: compromisso 10/10; objetivo: "Tornar-se jogador profissional"; impedimento: "Falta de oportunidades"; sinais de movimento: já participou de avaliações ou peneiras, já recebeu convite ou proposta.*
+O SDR vê no Contexto: "Aquecimento sugerido pelo formulário: Quente · já marcado no lead; o SDR pode alterar", com o motivo, por exemplo: *Quente: DDD 11 (fora do Norte e do Nordeste); compromisso 10/10; objetivo: "Tornar-se jogador profissional"; impedimento: "Falta de oportunidades"; sinais de movimento: já participou de avaliações ou peneiras, já recebeu convite ou proposta.*
 
-Conferir antes de confiar: `node scripts/site-form-link.mjs temperature` (contagem e 3 exemplos de cada, sem nomes). Depois de instalar: `node scripts/site-form-link.mjs hints`. Se a distribuição não servir ao time, ajuste os critérios em `meta_form_temperature` (uma função) e reinstale-a; nada fica gravado além da sugestão e do campo do lead.
+Conferir antes de confiar: `node scripts/site-form-link.mjs temperature` (contagem e 3 exemplos de cada, sem nomes). Depois de instalar: `node scripts/site-form-link.mjs hints`. Se a distribuição não servir ao time, ajuste os critérios em `meta_form_temperature` e `meta_ddd_info` (duas funções) e reinstale-a; nada fica gravado além da sugestão e do campo do lead.
 
 ## O que já existia (não foi recriado)
 

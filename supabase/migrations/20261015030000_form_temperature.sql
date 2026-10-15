@@ -1,9 +1,12 @@
 -- Pre-classifica o aquecimento (frio / morno / quente) pelas respostas do formulario Meta, para o SDR saber
 -- quem abordar primeiro. E um PONTO DE PARTIDA: o SDR continua dono do campo e pode mudar a qualquer momento.
+--   DDD do Norte ou do Nordeste (longe do local de atendimento): SEMPRE frio.
+--   Demais DDDs: quente ou morno conforme as respostas (o minimo e morno):
 --   quente  compromisso >= 9, objetivo ligado a clube/carreira, impedimento que a oferta resolve e
 --           pelo menos 2 sinais de movimento (fez avaliacoes, recebeu proposta/contrato, respostas detalhadas)
---   morno   compromisso >= 7 e objetivo OU impedimento alinhado
---   frio    o resto (compromisso baixo ou objetivo/impedimento sem ligacao com entrar em clube)
+--   morno   o resto
+--   DDD nao identificado (telefone sem DDD ou estrangeiro): vale so o que as respostas dizem (frio, morno ou quente):
+--           morno = compromisso >= 7 e objetivo OU impedimento alinhado; frio = o resto.
 -- Compromisso ilegivel conta como 7 (nunca chega a quente sozinho). Formularios que nao tem as perguntas
 -- conhecidas (menos de 4 reconhecidas) nao sao classificados. Nada aqui aprova, repassa ou abre lead.
 -- Depende de 20261015021500_site_form_answers_link.sql.
@@ -37,12 +40,38 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,public AS $$
   'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ','aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')),'[^a-z0-9 ]',' ','g'),'\s+',' ','g'))
 $$;
 
--- 3. A classificacao. Pura: so le as respostas (field_data) e explica o motivo com as palavras do proprio atleta.
+-- 3. Regiao pelo DDD do telefone informado no formulario. Aceita +55..., 55..., DDD+numero, "(81) 98888-7777",
+-- zero na frente e o numero brasileiro escrito "+DD9XXXXXXXX" (sem o 55). Fora disso o DDD fica nao identificado.
+CREATE OR REPLACE FUNCTION public.meta_ddd_info(p_phone text) RETURNS TABLE(ddd text,region text)
+LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public AS $$
+DECLARE dig text; code text; plus boolean;
+ north constant text[]:=ARRAY['68','69','91','92','93','94','95','96','97','63'];
+ northeast constant text[]:=ARRAY['71','73','74','75','77','79','81','82','83','84','85','86','87','88','89','98','99'];
+ others constant text[]:=ARRAY['11','12','13','14','15','16','17','18','19','21','22','24','27','28','31','32','33','34','35','37','38',
+  '41','42','43','44','45','46','47','48','49','51','53','54','55','61','62','64','65','66','67'];
+BEGIN
+ dig:=regexp_replace(coalesce(p_phone,''),'\D','','g'); plus:=coalesce(p_phone,'') ~ '^\s*\+';
+ IF NOT plus THEN dig:=regexp_replace(dig,'^0+',''); END IF;
+ IF length(dig) IN(12,13) AND dig LIKE '55%' THEN code:=substr(dig,3,2);
+ ELSIF length(dig)=11 AND (NOT plus OR substr(dig,3,1)='9') THEN code:=substr(dig,1,2);
+ ELSIF length(dig)=10 AND NOT plus THEN code:=substr(dig,1,2);
+ END IF;
+ IF code=ANY(north) THEN ddd:=code; region:='Norte'; RETURN NEXT;
+ ELSIF code=ANY(northeast) THEN ddd:=code; region:='Nordeste'; RETURN NEXT;
+ ELSIF code=ANY(others) THEN ddd:=code; region:='Demais regiões'; RETURN NEXT;
+ END IF;
+END $$;
+
+-- 3b. A classificacao. Pura: so le as respostas (field_data) e explica o motivo com as palavras do proprio atleta.
+--   DDD do Norte ou do Nordeste (longe do local de atendimento): sempre frio, qualquer que seja o resto.
+--   Demais DDDs: quente ou morno conforme as respostas (o minimo e morno).
+--   DDD nao identificado: vale so o que as respostas dizem (frio, morno ou quente).
 CREATE OR REPLACE FUNCTION public.meta_form_temperature(p_fields jsonb) RETURNS TABLE(temperature text,reasons text)
 LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public AS $$
 DECLARE a jsonb; k text; v text; n text;
- linked text; evals text; opp text; goal text; block text; clubs text; judged text; traits text; raw text;
- recognized int:=0; score_c int; score_text text; goal_ok boolean; block_ok boolean; detail int:=0; signals text[]:='{}'; tier text; parts text[];
+ linked text; evals text; opp text; goal text; block text; clubs text; judged text; traits text; raw text; phone text;
+ recognized int:=0; score_c int; score_text text; goal_ok boolean; block_ok boolean; detail int:=0; signals text[]:='{}';
+ by_answers text; tier text; parts text[]; region text; code text;
  empty_re constant text:='^(nenhum|nenhuma|nao|nunca|0|n a|ninguem|nada)$';
 BEGIN
  IF jsonb_typeof(p_fields)<>'array' THEN RETURN; END IF;
@@ -58,6 +87,7 @@ BEGIN
   ELSIF k LIKE '%quais clubes avaliou%' THEN judged:=v;
   ELSIF k LIKE '%3 principais caracteristicas%' THEN traits:=v;
   ELSIF k LIKE 'de 0 a 10%' THEN raw:=v;
+  ELSIF k IN('phone number','telefone','whatsapp','celular') AND phone IS NULL THEN phone:=v;
   END IF;
  END LOOP;
  recognized:=(linked IS NOT NULL)::int+(evals IS NOT NULL)::int+(opp IS NOT NULL)::int+(goal IS NOT NULL)::int+(block IS NOT NULL)::int+(raw IS NOT NULL)::int;
@@ -80,9 +110,17 @@ BEGIN
  IF length(coalesce(clubs,''))>2 AND public.meta_match_text(clubs)!~empty_re THEN detail:=detail+1; END IF;
  IF length(coalesce(judged,''))>2 AND public.meta_match_text(judged)!~empty_re THEN detail:=detail+1; END IF;
  IF detail>=2 THEN signals:=array_append(signals,'respostas detalhadas sobre clubes e características'::text); END IF;
- tier:=CASE WHEN score_c>=9 AND goal_ok AND block_ok AND cardinality(signals)>=2 THEN 'quente'
-            WHEN score_c>=7 AND (goal_ok OR block_ok) THEN 'morno' ELSE 'frio' END;
- parts:=ARRAY[score_text,
+ by_answers:=CASE WHEN score_c>=9 AND goal_ok AND block_ok AND cardinality(signals)>=2 THEN 'quente'
+                  WHEN score_c>=7 AND (goal_ok OR block_ok) THEN 'morno' ELSE 'frio' END;
+ SELECT i.ddd,i.region INTO code,region FROM public.meta_ddd_info(phone) i;
+ tier:=CASE WHEN region IN('Norte','Nordeste') THEN 'frio'
+            WHEN region IS NOT NULL THEN CASE WHEN by_answers='quente' THEN 'quente' ELSE 'morno' END
+            ELSE by_answers END;
+ parts:=ARRAY[
+  CASE WHEN region IN('Norte','Nordeste') THEN 'DDD '||code||' ('||region||'), longe do local de atendimento'||CASE WHEN by_answers<>'frio' THEN '; pelas respostas seria '||upper(left(by_answers,1))||substr(by_answers,2) ELSE '' END
+       WHEN region IS NOT NULL THEN 'DDD '||code||' (fora do Norte e do Nordeste)'||CASE WHEN by_answers='frio' THEN '; as respostas sozinhas indicariam Frio, mas aqui o mínimo é Morno' ELSE '' END
+       ELSE 'DDD não identificado no telefone informado' END,
+  score_text,
   'objetivo: “'||upper(left(replace(goal,'_',' '),1))||substr(replace(goal,'_',' '),2)||'”'||CASE WHEN goal_ok THEN '' ELSE ' (pouco ligado a entrar em clube)' END,
   'impedimento: “'||upper(left(replace(block,'_',' '),1))||substr(replace(block,'_',' '),2)||'”'||CASE WHEN block_ok THEN '' ELSE ' (menos ligado à entrada em clubes)' END,
   CASE WHEN cardinality(signals)>0 THEN 'sinais de movimento: '||array_to_string(signals,', ') ELSE 'sem avaliações, propostas nem respostas detalhadas' END];
@@ -186,7 +224,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public AS $$
  CROSS JOIN LATERAL public.meta_form_temperature(public.crm_form_temperature_fields(f.id)) x WHERE f.entry_channel='form'
 $$;
 
-REVOKE ALL ON FUNCTION public.meta_match_text(text),public.meta_form_temperature(jsonb),public.crm_form_temperature_fields(uuid),
+REVOKE ALL ON FUNCTION public.meta_match_text(text),public.meta_ddd_info(text),public.meta_form_temperature(jsonb),public.crm_form_temperature_fields(uuid),
  public.crm_form_temperature_before(),public.crm_form_temperature_after(),public.meta_apply_form_temperature(uuid,uuid,uuid),
  public.meta_attach_form_answers_core(uuid,uuid,uuid,uuid),public.meta_attach_form_answers(uuid,uuid,uuid,uuid),
  public.meta_temperature_preview() FROM PUBLIC,anon,authenticated,service_role;

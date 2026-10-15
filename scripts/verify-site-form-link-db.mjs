@@ -174,8 +174,8 @@ const S6 = await site('s6', { name: 'Lucas Gabriel', phone: '61900000006', ad: '
 const F7 = await form('f7', { name: 'Rafael Lima', phone: '+5571900000007', ad: 'AD7', at: '2026-10-10T11:00:00Z', approved: true })
 const S7 = await site('s7', { name: 'Rafael Lima', phone: '71900000007', ad: 'AD7', at: '2026-10-10T11:01:00Z' })
 // 8) Site ja no CRM com contexto do proprio site (perfil); o formulario chega depois (mescla).
-const F8 = await form('f8', { name: 'Bruno Costa', phone: '+5581900000008', ad: 'AD8', at: '2026-10-10T12:00:00Z' })
-const S8 = await site('s8', { name: 'Bruno Costa', phone: '81900000008', ad: 'AD8', at: '2026-10-10T12:03:00Z', approved: true, profile: { position: 'Atacante', age: 17 } })
+const F8 = await form('f8', { name: 'Bruno Costa', phone: '+5512900000008', ad: 'AD8', at: '2026-10-10T12:00:00Z' })
+const S8 = await site('s8', { name: 'Bruno Costa', phone: '12900000008', ad: 'AD8', at: '2026-10-10T12:03:00Z', approved: true, profile: { position: 'Atacante', age: 17 } })
 // 9) Formulario sem respostas nunca vira par.
 const F9 = await form('f9', { name: 'Vazio Silva', phone: '+5591900000009', ad: 'AD9Z', at: '2026-10-10T13:00:00Z', answers: false })
 const S9 = await site('s9', { name: 'Vazio Silva', phone: '91900000009', ad: 'AD9Z', at: '2026-10-10T13:01:00Z' })
@@ -286,30 +286,52 @@ assert.equal((await sync(F11)).ok, true, 'com autor valido a nova tentativa conc
 // ---------- aquecimento (frio / morno / quente) ----------
 const answersOf = (o = {}) => {
   const v = { who: 'sou_o_atleta', linked: 'não', evals: 'sim', opp: 'sim,_convite_ou_proposta', goal: 'tornar-se_jogador_profissional', block: 'falta_de_oportunidades',
-    clubs: 'Santos e Palmeiras', judged: 'Fui aprovado na peneira do Santos mas faltou vaga', traits: 'Velocidade, finalização e muita determinação dentro de campo', commit: '10', ...o }
+    clubs: 'Santos e Palmeiras', judged: 'Fui aprovado na peneira do Santos mas faltou vaga', traits: 'Velocidade, finalização e muita determinação dentro de campo', commit: '10', phone: '+5511948173104', ...o }
   return [['quem_está_preenchendo_este_formulário?', v.who], ['atualmente,_o_atleta_está_vinculado_a_algum_clube?', v.linked],
     ['o_atleta_já_participou_de_avaliações_ou_peneiras_em_clubes?', v.evals], ['o_atleta_já_recebeu_alguma_oportunidade_relevante_de_um_clube?', v.opp],
     ['qual_é_o_principal_objetivo_do_atleta_no_futebol_hoje?', v.goal], ['o_que_mais_está_impedindo_o_atleta_de_chegar_onde_deseja_hoje?', v.block],
     ['quais_são_os_principais_clubes_que_o_atleta_já_representou?', v.clubs], ['quais_clubes_avaliou_e_qual_foi_o_resultado?', v.judged],
     ['quais_são_as_3_principais_características_do_atleta_como_jogador_e_o_que_ele_mais_precisa_melhorar?', v.traits],
     ['de_0_a_10,_quanto_o_atleta_está_comprometido_em_buscar_seu_objetivo_no_futebol?__escala_de_0_a_10', v.commit]].map(([name, value]) => ({ name, values: [value] }))
+    .concat(v.phone === null ? [] : [{ name: 'phone_number', values: [v.phone] }])
 }
 const classify = async fields => (await q('select * from public.meta_form_temperature($1::jsonb)', [JSON.stringify(fields)]))[0]
 const hot = await classify(answersOf())
 assert.equal(hot.temperature, 'quente')
-assert.equal(hot.reasons, 'Quente: compromisso 10/10; objetivo: “Tornar-se jogador profissional”; impedimento: “Falta de oportunidades”; sinais de movimento: já participou de avaliações ou peneiras, já recebeu convite ou proposta, respostas detalhadas sobre clubes e características.')
+assert.equal(hot.reasons, 'Quente: DDD 11 (fora do Norte e do Nordeste); compromisso 10/10; objetivo: “Tornar-se jogador profissional”; impedimento: “Falta de oportunidades”; sinais de movimento: já participou de avaliações ou peneiras, já recebeu convite ou proposta, respostas detalhadas sobre clubes e características.')
 for (const [label, override, expected] of [
   ['só 1 sinal de movimento não basta para quente', { opp: 'não', clubs: 'nenhum', judged: 'nenhum', traits: 'curto' }, 'morno'],
   ['nota 9 com 2 sinais é quente', { commit: '9', judged: 'nenhum', traits: 'curto', clubs: 'nenhum' }, 'quente'],
   ['nota 8/10 é morno', { commit: '8/10' }, 'morno'],
   ['nota escrita no meio do texto', { commit: 'Acho que us 8/10' }, 'morno'],
-  ['nota 4 é frio', { commit: '4' }, 'frio'],
+  ['nota 4 com DDD desconhecido é frio', { commit: '4', phone: null }, 'frio'],
+  ['nota 4 fora do Norte/Nordeste vira morno (piso)', { commit: '4' }, 'morno'],
   ['nota ilegível nunca chega a quente', { commit: '19' }, 'morno'],
   ['"Muitos" descreve compromisso alto sem nota', { commit: 'Muitos' }, 'morno'],
-  ['"pouco" é compromisso baixo', { commit: 'pouco' }, 'frio'],
-  ['quem só quer evoluir fisicamente é frio', { goal: 'evoluir_e_se_preparar_melhor_como_atleta', block: 'preciso_evoluir_fisicamente' }, 'frio'],
+  ['"pouco" com DDD desconhecido é frio', { commit: 'pouco', phone: null }, 'frio'],
+  ['quem só quer evoluir fisicamente, DDD desconhecido, é frio', { goal: 'evoluir_e_se_preparar_melhor_como_atleta', block: 'preciso_evoluir_fisicamente', phone: null }, 'frio'],
+  ['quem só quer evoluir fisicamente, fora do Norte/Nordeste, é morno', { goal: 'evoluir_e_se_preparar_melhor_como_atleta', block: 'preciso_evoluir_fisicamente' }, 'morno'],
+  ['Nordeste (PE) é sempre frio, mesmo com tudo certo', { phone: '+5581988887777' }, 'frio'],
+  ['Nordeste (BA) escrito com parênteses', { phone: '(71) 98888-7777' }, 'frio'],
+  ['Norte (AM) é frio', { phone: '+5592988887777' }, 'frio'],
+  ['Norte (TO) é frio', { phone: '63988887777' }, 'frio'],
+  ['Centro-Oeste (DF) com tudo certo é quente', { phone: '+5561988887777' }, 'quente'],
+  ['Goiás escrito +DD9… (sem o 55) não é estrangeiro', { phone: '+62983319848' }, 'quente'],
+  ['Nordeste escrito +DD9… (sem o 55) é frio', { phone: '+81988887777' }, 'frio'],
+  ['zero na frente do DDD', { phone: '011988887777' }, 'quente'],
+  ['número estrangeiro (Portugal) não tem DDD: vale a resposta', { phone: '+351912345678' }, 'quente'],
+  ['telefone sem DDD: vale a resposta', { phone: '982405584' }, 'quente'],
+  ['sem telefone no formulário: vale a resposta', { phone: null }, 'quente'],
   ['pai ou mãe preenchendo continua classificado', { who: 'sou_pai/mãe_ou_responsável' }, 'quente'],
 ]) assert.equal((await classify(answersOf(override))).temperature, expected, label)
+assert.match((await classify(answersOf({ phone: '+5571988887777' }))).reasons, /^Frio: DDD 71 \(Nordeste\), longe do local de atendimento; pelas respostas seria Quente; compromisso 10\/10;/)
+assert.match((await classify(answersOf({ commit: '4' }))).reasons, /^Morno: DDD 11 \(fora do Norte e do Nordeste\); as respostas sozinhas indicariam Frio, mas aqui o mínimo é Morno; descreve|^Morno: DDD 11 \(fora do Norte e do Nordeste\); as respostas sozinhas indicariam Frio, mas aqui o mínimo é Morno; compromisso 4\/10/)
+assert.match((await classify(answersOf({ phone: '982405584' }))).reasons, /^Quente: DDD não identificado no telefone informado; compromisso 10\/10;/)
+for (const [phone, ddd, region] of [['+5511948173104', '11', 'Demais regiões'], ['5581989730863', '81', 'Nordeste'], ['71 98356-5093', '71', 'Nordeste'], ['(92) 99999-8888', '92', 'Norte'],
+  ['+62983319848', '62', 'Demais regiões'], ['011 98888-7777', '11', 'Demais regiões'], ['2133334444', '21', 'Demais regiões'], ['+5563991227924', '63', 'Norte']])
+  assert.deepEqual((await q('select * from public.meta_ddd_info($1)', [phone]))[0], { ddd, region }, phone)
+for (const phone of ['982405584', '+351912345678', '+13055551234', '12345', '', '+5500988887777', '(00) 98888-7777', null])
+  assert.equal((await q('select * from public.meta_ddd_info($1)', [phone])).length, 0, 'DDD nao identificado: ' + phone)
 assert.match((await classify(answersOf({ commit: '19' }))).reasons, /nota de compromisso não informada de forma legível/)
 assert.match((await classify(answersOf({ commit: 'Muitos' }))).reasons, /descreve compromisso alto, sem dar nota/)
 assert.match((await classify(answersOf({ goal: 'evoluir_e_se_preparar_melhor_como_atleta', block: 'preciso_evoluir_fisicamente' }))).reasons, /\(pouco ligado a entrar em clube\).*\(menos ligado à entrada em clubes\)/)
@@ -325,10 +347,10 @@ assert.equal((await q(`select count(*) n from public.meta_form_temperature('{}':
 const FH = await form('fh', { name: 'Hot Lead', phone: '+5511900002222', ad: 'ADH', at: '2026-10-11T14:00:00Z', approved: true, commitment: '10' })
 assert.equal((await sync(FH)).ok, true); const crmH = await crmOf(FH)
 assert.equal(await temperatureOf(crmH), 'quente'); const hH = await hintOf(crmH)
-assert(hH.applied && hH.reasons.startsWith('Quente: compromisso 10/10') && hH.temperature === 'quente')
+assert(hH.applied && hH.reasons.startsWith('Quente: DDD 11 (fora do Norte e do Nordeste); compromisso 10/10') && hH.temperature === 'quente')
 assert.equal(await temperatureOf(await crmOf(F10)), 'morno', 'nota 8 = morno')
 assert.equal(await temperatureOf(crm6), 'morno', 'lead nascido do site ja usa o formulario ligado'); assert.equal((await hintOf(crm6)).applied, true)
-assert.equal(await temperatureOf(crm7), 'morno')
+assert.equal(await temperatureOf(crm7), 'frio', 'DDD 71 (Nordeste) nasce frio'); assert.match((await hintOf(crm7)).reasons, /^Frio: DDD 71 \(Nordeste\)/)
 // Lead que ja estava no CRM: so marca quem ninguem abordou; o ja trabalhado recebe apenas a sugestao.
 assert.deepEqual([await temperatureOf(crm1), await temperatureOf(crm2), await temperatureOf(crm3)], ['morno', 'morno', 'morno'])
 assert.equal((await hintOf(crm1)).applied, true)
