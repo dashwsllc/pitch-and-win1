@@ -94,6 +94,23 @@ Instalar (na pasta `pitch-and-win1`):
 
 Reversão: `DROP TABLE public.crm_form_answer_links;` (as respostas já anexadas ficam) e reinstalar `meta_site_form_pairs` / `meta_link_site_answers` do arquivo `20261015031000…`/`20261015021500…` e `meta_sync_form_lead_to_crm` do arquivo `20261015021500…`.
 
+## Quinta migration: ordem das perguntas, respostas em Tráfego, duplicados e confirmação humana (`20261015040000_form_answers_order_and_traffic_link`)
+
+Conferência feita em 15/10 (banco e tela reais, e as planilhas da Meta no Downloads) mostrou o que faltava para o Contexto ficar completo:
+
+1. **Ordem das perguntas.** A Meta entrega os campos em 6 ordens diferentes (546 formulários na ordem do formulário, 125 com nome/telefone primeiro e outras embaralhadas). O Contexto copiava a ordem recebida. Agora sai **sempre**: as 11 perguntas na ordem do formulário, depois nome, telefone, nascimento e estado. Os 21 contextos que estavam fora de ordem são reescritos (mesmo texto, outra ordem; a migration confere que o tamanho não muda e preserva id, autor e datas); os 30 que já estavam certos não são tocados.
+2. **Rodapé.** Dizia "registrado por <quem criou o lead>", mas quem anexou foi o sistema. Passou a dizer "anexado automaticamente do formulário Meta em <data>".
+3. **Tráfego.** A linha do registro do **site** só mostrava dados do site. Agora traz "Respostas do formulário Meta (ligado a este envio do site)" (recolhido, com o motivo do vínculo) ou diz "Nenhum formulário da Meta ligado a este envio do site". `meta_wave_leads` devolve o formulário ligado em `linked_form`; só o front lê.
+4. **WhatsApp diferente.** Em 9 dos 15 leads do site o número digitado no site difere do telefone do formulário (erro de digitação é o provável). O Contexto (CRM) e a linha do site (Tráfego) mostram o aviso "Confira o WhatsApp antes de ligar" com os dois números. **Nada é corrigido sozinho**: não há como saber qual dos dois está certo.
+5. **Lead criado à mão duplicado.** Dois leads com o mesmo WhatsApp e um formulário não é mais dúvida: os dois recebem as respostas e a aprovação reaproveita o mais antigo. Continua em dúvida o lead com mais de um formulário.
+6. **Decisão humana.** Para o que as regras não resolvem (nome de perfil diferente e telefone diferente, por exemplo):
+   - `node scripts/site-form-link.mjs ambiguous` lista os casos com os identificadores.
+   - `node scripts/site-form-link.mjs confirm-site <id_do_site> <id_do_formulario> "<motivo>"` e `confirm-manual <id_do_lead> <id_do_formulario> "<motivo>"` ligam o par e gravam o motivo no vínculo (aparece no Contexto).
+
+Instalar (na pasta `pitch-and-win1`): `node scripts/apply-site-form-answers-link-migration.mjs order-preflight` (nada é gravado; deve terminar em `ENSAIO CONCLUIDO … contextos_do_formulario=51 reescritos_na_nova_ordem=21 ja_na_ordem=30 ignorados=0 | leads_manuais_a_vincular=2 para_revisar=0`), depois `order`, depois `node scripts/site-form-link.mjs apply`.
+
+Reversão: reinstalar `meta_form_answers_text` de `20261015021500…` (os contextos reescritos continuam completos, só na nova ordem), `meta_wave_leads` de `20261013165410…` e `meta_manual_twin_pairs`/`meta_link_manual_answers` de `20261015032000…`; `DROP FUNCTION meta_confirm_site_form_link(uuid,uuid,text), meta_confirm_manual_form_link(uuid,uuid,text), meta_form_field_rank(text);`.
+
 ## O que já existia (não foi recriado)
 
 A aba **Importações** do CRM já tem as seções de origem (Todas / Formulários / Site), os filtros Automáticas e Manuais e as visões Lista, Aquecimento, Abordagem e **Esteira do LEAD**, com a mesma lógica da aba Leads. O ícone do livro fica **laranja** quando o lead tem contexto de verdade: respostas do formulário (próprias ou ligadas) ou anotações do atendimento; só contato e dados técnicos não acendem.
@@ -110,7 +127,7 @@ A aba **Importações** do CRM já tem as seções de origem (Todas / Formulári
 
 ## Limites conhecidos
 
-- **Leads criados à mão pelo SDR** com o WhatsApp de um formulário: até a quarta migration eram só aviso (`twins`) e aprovar o formulário criava um lead novo. Depois dela, o caso sem ambiguidade é ligado e reaproveitado; com dois leads ou dois formulários para o mesmo número fica para decisão humana. Se o lead manual foi criado para **outro** atleta que usa o mesmo número (pai com dois filhos), confira o nome do formulário no Contexto.
+- **Leads criados à mão pelo SDR** com o WhatsApp de um formulário: até a quarta migration eram só aviso (`twins`) e aprovar o formulário criava um lead novo. Depois dela, o caso sem ambiguidade é ligado e reaproveitado; com dois leads para o mesmo número os dois recebem as respostas; um lead com dois formulários fica para decisão humana (quinta migration). Se o lead manual foi criado para **outro** atleta que usa o mesmo número (pai com dois filhos), confira o nome do formulário no Contexto.
 - **Registros do site sem formulário na Meta:** 42 são anteriores a 17/09 (o formulário mais antigo da Meta é dessa data) e os demais não têm nenhum formulário com o mesmo WhatsApp nos minutos anteriores (pode ser conversão direta no site, ou número digitado diferente no formulário). Seguem sem respostas: não há resposta autêntica para mostrar.
 - **Pares ambíguos** ficam sem vínculo até alguém decidir.
 - **Atletas sem registro do site e fora do sistema** (133 anteriores a 07/10) só aparecem depois do `backfill`.

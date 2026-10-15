@@ -17,6 +17,7 @@ import {
 import { FormAnswers } from './FormAnswers'
 import { CRMSiteSourceUpdates } from '@/components/crm/CRMSiteSourceUpdates'
 import { MetaEditButton } from './MetaEditDialog'
+import { formPhoneFromFields, phonesDiffer } from '@/lib/form-phone'
 
 type Filter = WaveStatus | 'todas'
 const PAGE = 10
@@ -261,6 +262,13 @@ function LeadCard({ lead, newest, canReview, reviewable, busy, excludedReason, o
       {excludedReason && <p className="text-xs text-amber-300">Será tirado da leva: {excludedReason}</p>}
       {lead.import_warning && sync.key !== 'falhou' && <p className="break-words text-xs text-muted-foreground">{lead.import_warning}</p>}
       {lead.entry_channel === 'website' && <CRMSiteSourceUpdates formLeadId={lead.id} />}
+      {lead.entry_channel === 'website' && (lead.linked_form
+        ? <details className="pt-1"><summary className="cursor-pointer text-sm text-ash">Respostas do formulário Meta (ligado a este envio do site)</summary>
+          {phonesDiffer(lead.phone, formPhoneFromFields(lead.linked_form.field_data)) && <p role="alert" className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs leading-5">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" /><span><strong>Confira o WhatsApp.</strong> O número do site ({lead.phone}) é diferente do telefone informado no formulário ({formPhoneFromFields(lead.linked_form.field_data)}).</span></p>}
+          <p className="mt-2 break-words text-[11px] text-muted-foreground">Formulário preenchido em {leadDateTime(lead.linked_form.created_time)}{lead.linked_form.form_name ? ` · ${lead.linked_form.form_name}` : ''}{lead.linked_form.basis ? ` · vínculo: ${lead.linked_form.basis}` : ''}</p>
+          <FormAnswers fields={lead.linked_form.field_data} /></details>
+        : <p className="pt-1 text-xs text-muted-foreground">Nenhum formulário da Meta ligado a este envio do site.</p>)}
       {lead.entry_channel !== 'website' && <details className="pt-1"><summary className="cursor-pointer text-sm text-ash">Respostas do formulário</summary><FormAnswers fields={lead.field_data} />
         <p className="mt-2 break-words text-[11px] text-muted-foreground">{received ? `Recebido em ${leadDateTime(received)}` : ''}</p></details>}
       {excluding && <div className="flex flex-col gap-2 pt-1 sm:flex-row"><Input aria-label={`Motivo para tirar ${name} da leva`} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Motivo (ex.: lead de teste, número inválido)" />

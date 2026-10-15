@@ -31,6 +31,16 @@ export interface WaveSummary {
   last_received_at?: string | null
 }
 
+/** Formulário da Meta ligado a um registro do site (só leitura; vem de meta_wave_leads). */
+export interface WaveLinkedForm {
+  id: string
+  created_time: string
+  form_name: string | null
+  campaign_name: string | null
+  field_data: unknown
+  basis: string | null
+}
+
 export interface WaveLead {
   id: string
   meta_lead_id: string
@@ -65,6 +75,7 @@ export interface WaveLead {
   batch_filename: string | null
   time_known: boolean
   date_known?: boolean
+  linked_form?: WaveLinkedForm | null
 }
 
 export interface WaveList {

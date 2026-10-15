@@ -45,6 +45,9 @@ create table public.crm_lead_contexts(id uuid primary key default gen_random_uui
  content text not null check(char_length(content) between 1 and 50000),created_at timestamptz default now(),updated_at timestamptz default now(),updated_by uuid,version bigint default 1);
 create unique index crm_lead_contexts_meta_form_once on public.crm_lead_contexts(lead_id) where context_type='meta_form';
 create table public.site_import_events(meta_form_lead_id uuid,event jsonb,status text,source_revision bigint);
+create table public.meta_lead_waves(id uuid primary key default gen_random_uuid(),number integer,status text default 'pendente');
+create function public.traffic_has_access() returns boolean language sql stable as $$select true$$;
+create function public.meta_wave_summary(p uuid) returns jsonb language sql stable as $$select jsonb_build_object('id',p)$$;
 grant usage on schema auth to authenticated; grant select on all tables in schema public to authenticated;
 create function public.crm_can(p text) returns boolean language sql stable as $$select auth.uid() is not null$$;
 -- Trava real do CRM (producao): qualquer insert/update em crm_leads exige usuario autenticado.
@@ -62,7 +65,7 @@ create trigger security_guard_crm_lead before insert or update on public.crm_lea
 for (const [file, names] of [
   ['20261009160000_meta_traffic_manual_approval.sql', ['meta_answer_text', 'meta_contact_from_form', 'meta_crm_approval_guard', 'meta_crm_link_form']],
   ['20261012150000_meta_lead_waves_crm_sync_auto_publish.sql', ['meta_form_context_text', 'crm_protect_meta_form_context', 'meta_crm_approval_guard']],
-  ['20261013165410_crm_import_integrity.sql', ['crm_preserve_import_origin', 'crm_check_import_phone']],
+  ['20261013165410_crm_import_integrity.sql', ['crm_preserve_import_origin', 'crm_check_import_phone', 'meta_wave_leads']],
 ]) for (const name of names) await db.exec(extractFunction(file, name))
 await db.exec(read('20261014141350_crm_import_context_summary.sql'))
 await db.exec(read('20261014154738_crm_form_context_integrity.sql'))
@@ -147,14 +150,18 @@ const QUESTIONS = [
   ['de_0_a_10,_quanto_o_atleta_está_comprometido_em_buscar_seu_objetivo_no_futebol?__escala_de_0_a_10', 'Acho que us 8/10'],
 ]
 const LONG = QUESTIONS[9][1]
-const fieldData = (name, phone, commitment = 'Acho que us 8/10') => JSON.stringify([...QUESTIONS.map(([n, v], i) => ({ name: n, values: [i === 10 ? commitment : v] })),
-  { name: 'full_name', values: [name] }, { name: 'phone_number', values: [phone] }, { name: 'date_of_birth', values: ['2008-09-06'] }, { name: 'state', values: ['SP'] }])
+const fieldData = (name, phone, commitment = 'Acho que us 8/10', order) => {
+  const all = [...QUESTIONS.map(([n, v], i) => ({ name: n, values: [i === 10 ? commitment : v] })),
+    { name: 'full_name', values: [name] }, { name: 'phone_number', values: [phone] }, { name: 'date_of_birth', values: ['2008-09-06'] }, { name: 'state', values: ['SP'] }]
+  const contact = all.slice(-4), questions = all.slice(0, -4)
+  return JSON.stringify(order === 'contact-first' ? [...contact, ...questions] : order === 'reverse' ? [...all].reverse() : all)
+}
 let seq = 0
-async function form(key, { name, phone, ad, at, approved = false, answers = true, commitment }) {
+async function form(key, { name, phone, ad, at, approved = false, answers = true, commitment, order }) {
   const id = U(1000 + ++seq)
   await db.query(`insert into public.meta_form_leads(id,meta_lead_id,campaign_name,ad_id,form_name,created_time,field_data,full_name,phone,entry_channel,approval_status,reviewed_by,first_received_at)
    values($1,$2,'FORMULARIO ZYRON TST 04',$3,'FORMULÁRIO ZYRON',$4,$5::jsonb,$6,$7,'form',$8,$9,$4)`,
-  [id, 'form:' + key, ad, at, answers ? fieldData(name, phone, commitment) : '[]', name, phone, approved ? 'aprovado' : 'pendente', approved ? APROVADOR : null])
+  [id, 'form:' + key, ad, at, answers ? fieldData(name, phone, commitment, order) : '[]', name, phone, approved ? 'aprovado' : 'pendente', approved ? APROVADOR : null])
   return id
 }
 async function site(key, { name, phone, ad, at, approved = false, profile = null }) {
@@ -455,6 +462,147 @@ await assert.rejects(db.query('select * from public.crm_form_answer_links'), /pe
 await db.exec('reset role; set role anon')
 await assert.rejects(db.query('select * from public.crm_form_answer_links'), /permission denied/)
 await db.exec('reset role')
+
+// ---------- migration 5: ordem das perguntas, respostas na linha do site, leads duplicados, confirmacao humana ----------
+const FQ = ['Quem está preenchendo este formulário?', 'Atualmente, o atleta está vinculado a algum clube?', 'O atleta já participou de avaliações ou peneiras em clubes?',
+  'O atleta já recebeu alguma oportunidade relevante de um clube?', 'Qual é o principal objetivo do atleta no futebol hoje?', 'O que mais está impedindo o atleta de chegar onde deseja hoje?',
+  'Qual é a posição e a categoria atual do atleta?', 'Quais são os principais clubes que o atleta já representou?', 'Quais clubes avaliou e qual foi o resultado?',
+  'Quais são as 3 principais características do atleta como jogador e o que ele mais precisa melhorar?', 'De 0 a 10, quanto o atleta está comprometido em buscar seu objetivo no futebol? escala de 0 a 10',
+  'Nome completo', 'Telefone', 'Data de nascimento', 'Estado']
+const inOrder = text => { const pos = FQ.map(q => text.indexOf(q + '\n→ ')); return pos.every((x, i) => x >= 0 && (i === 0 || x > pos[i - 1])) }
+const sortedChars = t => [...t].sort().join('')
+// Contextos gravados ANTES da migration, na ordem em que a Meta entregou os campos.
+const FO1 = await form('fo1', { name: 'Ordem Site', phone: '+5511961222001', ad: 'ADO1', at: '2026-10-14T16:00:00Z', order: 'contact-first' })
+const SO1 = await site('fo1', { name: 'Ordem Site', phone: '11961222001', ad: 'ADO1', at: '2026-10-14T16:02:00Z', approved: true })
+assert.equal((await sync(SO1)).ok, true); const crmO1 = await crmOf(SO1)
+const FO2 = await form('fo2', { name: 'Ordem Manual', phone: '+5511961222002', ad: 'ADO2', at: '2026-10-14T16:10:00Z', order: 'reverse' }); const MO2 = await manualLead('Ordem Manual (pai)', '11961222002')
+const FO3 = await form('fo3', { name: 'Ordem Certa', phone: '+5511961222003', ad: 'ADO3', at: '2026-10-14T16:20:00Z' }); const MO3 = await manualLead('Ordem Certa', '11961222003')
+const FO4 = await form('fo4', { name: 'Ordem Ignorada', phone: '+5511961222004', ad: 'ADO4', at: '2026-10-14T16:30:00Z', order: 'reverse' }); const MO4 = await manualLead('Ordem Ignorada', '11961222004')
+await db.query(`insert into public.crm_lead_contexts(lead_id,author_id,author_name,author_role,context_type,content) values($1,$2,'QA','trafego','meta_form','Texto que o SDR já tinha')`, [MO4, ATOR])
+await db.query(`insert into public.crm_form_answer_links(crm_lead_id,form_lead_id,basis) values($1,$2,'teste')`, [MO4, FO4])
+await link(true)
+const idsO = [crmO1, MO2, MO3, MO4]
+const ctxRows = async () => q(`select * from public.crm_lead_contexts where context_type='meta_form' and lead_id=any($1) order by lead_id`, [idsO])
+const ctxBefore = await ctxRows(), ctxOf = (rows, lead) => rows.find(r => r.lead_id === lead)
+assert.equal(ctxBefore.length, 4)
+assert(!inOrder(ctxOf(ctxBefore, crmO1).content) && !inOrder(ctxOf(ctxBefore, MO2).content), 'antes da migration o contexto segue a ordem recebida')
+assert(inOrder(ctxOf(ctxBefore, MO3).content), 'formulario ja na ordem')
+assert.match(ctxOf(ctxBefore, crmO1).content, /Ligado ao envio do site de/, 'contexto do site: texto do site + respostas ligadas')
+
+await assert.rejects(q('select public.meta_form_field_rank($1)', ['x']), /does not exist/, 'a funcao de posicao so existe depois da migration 5')
+
+// Guard: as duas funcoes substituidas precisam ser as auditadas.
+const PROD = { answersText: '97a5df974c5f85d7a9de99d897595b37', waveLeads: '85e899b9ea495e80214333e25257352e', manual: '61616422495140f24959903b9215419c' }
+const mdA = await md5('public.meta_form_answers_text(public.meta_form_leads,public.meta_form_leads)'), mdW = await md5('public.meta_wave_leads(uuid)'), mdM = await md5('public.meta_link_manual_answers(boolean)')
+assert.equal(mdA, PROD.answersText, 'meta_form_answers_text do teste e identica (md5) a de producao'); // meta_wave_leads: em producao a migration antiga ficou com quebras de linha mistas (CRLF), entao o md5 de la nao e comparavel com o texto normalizado; o guard usa o md5 real.
+assert.equal(mdM, PROD.manual, 'meta_link_manual_answers do teste e identica (md5) a de producao')
+const withOrderMd5 = sql => sql.replaceAll(PROD.answersText, mdA).replaceAll(PROD.waveLeads, mdW).replaceAll(PROD.manual, mdM)
+const defA = (await q(`select pg_get_functiondef('public.meta_form_answers_text(public.meta_form_leads,public.meta_form_leads)'::regprocedure) d`))[0].d
+await db.exec(defA.replace('\nAS $function$', '\nAS $function$ -- alterada'))
+await assert.rejects(db.exec(generated('order')), /meta_form_answers_text mudou desde a auditoria/); await db.exec('ROLLBACK'); await db.exec(defA)
+const defW = (await q(`select pg_get_functiondef('public.meta_wave_leads(uuid)'::regprocedure) d`))[0].d
+await db.exec(defW.replace('\nBEGIN\n', '\nBEGIN\n  -- alterada\n'))
+await assert.rejects(db.exec(generated('order')), /meta_wave_leads mudou desde a auditoria/); await db.exec('ROLLBACK'); await db.exec(defW)
+
+// Ensaio: relata o que faria e nao deixa nada.
+const pre = await db.exec(withOrderMd5(generated('order-preflight'))).then(() => '', e => e.message); await db.exec('ROLLBACK')
+const rep = pre.match(/PREFLIGHT_OK contextos_do_formulario=(\d+) reescritos_na_nova_ordem=(\d+) ja_na_ordem=(\d+) ignorados=(\d+) \| leads_manuais_a_vincular=(\d+) para_revisar=(\d+)/)
+assert(rep, 'relatorio do ensaio: ' + pre)
+assert.equal(Number(rep[2]), 2, 'dois contextos mudam de ordem (site e manual)'); assert(Number(rep[4]) >= 1, 'o contexto de texto diferente e ignorado')
+assert.equal(Number(rep[2]) + Number(rep[3]) + Number(rep[4]), Number(rep[1]), 'todo contexto do formulario e reescrito, ja esta na ordem ou e ignorado')
+assert.equal((await q(`select to_regprocedure('public.meta_form_field_rank(text)') r`))[0].r, null, 'o ensaio nao instala nada')
+assert.deepEqual((await ctxRows()).map(r => r.content), ctxBefore.map(r => r.content), 'o ensaio nao reescreve contexto')
+
+// Instalacao.
+const orderSql = withOrderMd5(generated('order'))
+await db.exec(orderSql)
+assert.deepEqual(await q(`select version,name from supabase_migrations.schema_migrations where version='20261015040000'`), [{ version: '20261015040000', name: 'form_answers_order_and_traffic_link' }])
+await assert.rejects(db.exec(orderSql), /ja instalada/); await db.exec('ROLLBACK')
+for (const [name, rank] of [['quem_está_preenchendo_este_formulário?', 1], ['Quem está preenchendo este formulário?', 1], ['atualmente,_o_atleta_está_vinculado_a_algum_clube?', 2],
+  ['o_atleta_já_participou_de_avaliações_ou_peneiras_em_clubes?', 3], ['o_atleta_já_recebeu_alguma_oportunidade_relevante_de_um_clube?', 4], ['qual_é_o_principal_objetivo_do_atleta_no_futebol_hoje?', 5],
+  ['o_que_mais_está_impedindo_o_atleta_de_chegar_onde_deseja_hoje?', 6], ['qual_é_a_posição_e_a_categoria_atual_do_atleta?', 7], ['quais_são_os_principais_clubes_que_o_atleta_já_representou?', 8],
+  ['quais_clubes_avaliou_e_qual_foi_o_resultado?', 9], ['quais_são_as_3_principais_características_do_atleta_como_jogador_e_o_que_ele_mais_precisa_melhorar?', 10],
+  ['de_0_a_10,_quanto_o_atleta_está_comprometido_em_buscar_seu_objetivo_no_futebol?__escala_de_0_a_10', 11], ['full_name', 20], ['phone_number', 21], ['date_of_birth', 22], ['state', 23], ['campo_novo_da_meta', 100], ['', 100]])
+  assert.equal((await q('select public.meta_form_field_rank($1) r', [name]))[0].r, rank, name)
+const ctxAfter = await ctxRows()
+for (const lead of [crmO1, MO2, MO3]) {
+  const b = ctxOf(ctxBefore, lead), a = ctxOf(ctxAfter, lead)
+  assert.deepEqual([a.id, a.created_at, a.author_id, a.author_name, a.author_role, a.version, a.context_type], [b.id, b.created_at, b.author_id, b.author_name, b.author_role, b.version, b.context_type], 'identidade do contexto preservada')
+  assert(inOrder(a.content), 'na ordem do formulario'); assert.equal(sortedChars(a.content), sortedChars(b.content), 'mesmos caracteres: nada perdido, nada acrescentado')
+}
+assert.notEqual(ctxOf(ctxAfter, crmO1).content, ctxOf(ctxBefore, crmO1).content); assert.notEqual(ctxOf(ctxAfter, MO2).content, ctxOf(ctxBefore, MO2).content)
+assert.equal(ctxOf(ctxAfter, MO3).content, ctxOf(ctxBefore, MO3).content, 'o que ja estava na ordem nao e mexido')
+assert.equal(ctxOf(ctxAfter, MO4).content, 'Texto que o SDR já tinha', 'contexto com texto diferente do gerado nao e tocado')
+assert(ctxOf(ctxAfter, crmO1).content.includes('Ligado ao envio do site de'), 'o resto do texto do contexto do site continua')
+assert.equal((await q(`select public.meta_attach_form_answers($1,$2,$3,$4) r`, [crmO1, FO1, ATOR, SO1]))[0].r, 'igual', 'o texto novo e o que a funcao gera hoje')
+assert.equal((await q(`select public.meta_attach_form_answers($1,$2,$3) r`, [MO2, FO2, ATOR]))[0].r, 'igual')
+// Novos anexos ja saem na ordem do formulario, qualquer que seja a ordem recebida.
+for (const [i, order] of ['reverse', 'contact-first'].entries()) {
+  const num = '1196144440' + i, f = await form('fn' + order, { name: 'Novo ' + order, phone: '+55' + num, ad: 'ADN' + order, at: '2026-10-14T17:30:00Z', order })
+  const m = await manualLead('Novo ' + order, num)
+  await link(true); const c = await metaCtx(m); assert.equal(c.length, 1); assert(inOrder(c[0].content), 'novo anexo na ordem do formulario (' + order + ')')
+  assert.equal(c[0].content.split('\n→ ').length - 1, 15, 'as 15 respostas')
+}
+
+// Trafego: o registro do SITE traz as respostas do formulario ligado (e o formulario nao).
+const WAVE = U(7001)
+await db.query(`insert into public.meta_lead_waves(id,number) values($1,1)`, [WAVE])
+const lone = await site('wavelone', { name: 'Site Sem Formulario', phone: '11961999000', ad: 'ADWL', at: '2026-10-14T18:00:00Z' })
+await db.query(`update public.meta_form_leads set wave_id=$1 where id=any($2)`, [WAVE, [SO1, FO1, lone]])
+const wl = (await q('select public.meta_wave_leads($1) r', [WAVE]))[0].r, wrow = id => wl.leads.find(l => l.id === id)
+assert.equal(wl.leads.length, 3)
+assert.equal(wrow(SO1).linked_form.id, FO1); assert.equal(wrow(SO1).linked_form.form_name, 'FORMULÁRIO ZYRON'); assert.equal(wrow(SO1).linked_form.field_data.length, 15)
+assert.match(wrow(SO1).linked_form.basis, /mesmo anúncio, nome completo igual/); assert(wrow(SO1).linked_form.created_time)
+assert.equal(wrow(FO1).linked_form, null); assert.equal(wrow(lone).linked_form, null)
+for (const key of ['id', 'meta_lead_id', 'page_id', 'form_id', 'form_name', 'campaign_id', 'campaign_name', 'ad_id', 'created_time', 'received_at', 'first_received_at', 'entry_channel', 'updated_at',
+  'full_name', 'phone', 'email', 'field_data', 'custom_disclaimer_responses', 'approval_status', 'status', 'review_note', 'reviewed_at', 'import_warning', 'crm_lead_id', 'crm_sync_status',
+  'crm_sync_error', 'crm_sync_attempts', 'crm_sync_last_at', 'traffic_edited_at', 'source', 'batch_filename', 'time_known', 'date_known']) assert(key in wrow(SO1), 'chave original preservada: ' + key)
+assert.deepEqual(wl.leads.map(l => l.id), [lone, SO1, FO1], 'a ordem da leva continua do mais recente para o mais antigo')
+
+// Lead criado a mao duplicado (mesmo WhatsApp): os dois recebem as respostas; a aprovacao reaproveita o mais antigo.
+const FD = await form('fd', { name: 'Dup Perfil', phone: '+5511961333001', ad: 'ADD1', at: '2026-10-14T19:00:00Z' })
+const MD1 = await manualLead('Dup Um', '11961333001'), MD2 = await manualLead('Dup Dois', '(11) 96133-3001')
+const pairsD = await q('select * from public.meta_manual_twin_pairs() where form_id=$1', [FD])
+assert.equal(pairsD.length, 2); assert(pairsD.every(x => !x.ambiguous), 'dois leads para um formulario nao e duvida')
+// Um lead com DOIS formularios continua em duvida.
+const FE1 = await form('fe1', { name: 'Dois Forms', phone: '+5511961333002', ad: 'ADE1', at: '2026-10-14T19:10:00Z' }), FE2 = await form('fe2', { name: 'Dois Forms', phone: '+5511961333002', ad: 'ADE2', at: '2026-10-14T19:20:00Z' })
+const ME = await manualLead('Dois Forms', '11961333002')
+assert((await q('select * from public.meta_manual_twin_pairs() where crm_lead_id=$1', [ME])).every(x => x.ambiguous) && (await q('select * from public.meta_manual_twin_pairs() where crm_lead_id=$1', [ME])).length === 2)
+await link(true)
+assert.equal((await metaCtx(MD1)).length, 1); assert.equal((await metaCtx(MD2)).length, 1); assert.equal((await metaCtx(ME)).length, 0, 'lead com dois formularios espera decisao')
+assert.deepEqual((await q('select crm_lead_id from public.crm_form_answer_links where form_lead_id=$1 order by linked_at,crm_lead_id', [FD])).map(r => r.crm_lead_id).sort(), [MD1, MD2].sort())
+await approve(FD); const leadsD = await countCrm(), okD = await sync(FD)
+assert.deepEqual([okD.ok, okD.crm_lead_id], [true, MD1], 'reaproveita o lead mais antigo, sem criar outro'); assert.equal(await countCrm(), leadsD)
+
+// Confirmacao humana: site (nomes e telefones diferentes) e lead manual (telefone diferente).
+const FC1 = await form('fc1', { name: 'EMANUEL GTN', phone: '+5564993203682', ad: 'ADC1', at: '2026-10-14T20:00:00Z' })
+const SC1 = await site('fc1', { name: 'Emanuel de souza costa', phone: '11111118679', ad: 'ADC1', at: '2026-10-14T20:05:00Z', approved: true })
+assert.equal((await sync(SC1)).ok, true); const crmC1 = await crmOf(SC1)
+await link(true); assert.equal((await q('select answers_form_lead_id a from public.meta_form_leads where id=$1', [SC1]))[0].a, null, 'as regras automaticas deixam em duvida')
+const confirmSite = (site, form, note) => q('select public.meta_confirm_site_form_link($1,$2,$3) r', [site, form, note])
+await assert.rejects(confirmSite(SC1, FC1, '  '), /Informe o motivo/)
+await assert.rejects(confirmSite(FC1, FC1, 'x'), /registro do site/); await assert.rejects(confirmSite(SC1, SC1, 'x'), /formulário com respostas/)
+const confirmed = (await confirmSite(SC1, FC1, 'primeiro nome e anúncio iguais; o nome do perfil é apelido'))[0].r
+assert.match(confirmed, /^vinculado; contexto (inserido|mesclado)$/)
+const rowC1 = (await q('select answers_form_lead_id a,answers_link_basis b,answers_linked_at t from public.meta_form_leads where id=$1', [SC1]))[0]
+assert.equal(rowC1.a, FC1); assert.match(rowC1.b, /^confirmado manualmente \(primeiro nome e anúncio iguais; o nome do perfil é apelido\), 300 s depois do formulário$/); assert(rowC1.t)
+const ctxC1 = await metaCtx(crmC1); assert.equal(ctxC1.length, 1); assert(inOrder(ctxC1[0].content)); assert(ctxC1[0].content.includes('confirmado manualmente'), 'o motivo aparece no Contexto')
+await assert.rejects(confirmSite(SC1, FC1, 'de novo'), /já está ligado/)
+const SC1b = await site('fc1b', { name: 'Outro Site', phone: '11111110000', ad: 'ADC1', at: '2026-10-14T20:06:00Z' })
+await assert.rejects(confirmSite(SC1b, FC1, 'mesmo formulário'), /já está ligado a outro registro do site/)
+const FC2 = await form('fc2', { name: 'Jhan Marcos', phone: '+5541998077760', ad: 'ADC2', at: '2026-10-14T21:00:00Z' }), MC2 = await manualLead('Jhan Marcos', '41 9149-2428')
+assert.equal((await q('select count(*) n from public.meta_manual_twin_pairs() where crm_lead_id=$1', [MC2]))[0].n, 0, 'telefone diferente: a regra nao liga')
+const confirmManual = (crm, form, note) => q('select public.meta_confirm_manual_form_link($1,$2,$3) r', [crm, form, note])
+await assert.rejects(confirmManual(MC2, FC2, ''), /Informe o motivo/); await assert.rejects(confirmManual(crmC1, FC2, 'x'), /lead criado à mão/)
+assert.equal((await confirmManual(MC2, FC2, 'mesmo nome completo (nome raro), um dia depois'))[0].r, 'vinculado; contexto inserido')
+assert.match((await q('select basis from public.crm_form_answer_links where crm_lead_id=$1', [MC2]))[0].basis, /^confirmado manualmente \(mesmo nome completo \(nome raro\), um dia depois\)$/)
+assert((await metaCtx(MC2))[0].content.includes('Telefone\n→ +5541998077760')); await assert.rejects(confirmManual(MC2, FC2, 'de novo'), /já está ligado/)
+await approve(FC2); const leadsC = await countCrm(); assert.equal((await sync(FC2)).crm_lead_id, MC2); assert.equal(await countCrm(), leadsC, 'a aprovacao reaproveita o lead confirmado')
+// Permissoes das funcoes novas
+await db.exec('set role authenticated')
+for (const sql of ['select public.meta_confirm_site_form_link(null,null,null)', 'select public.meta_confirm_manual_form_link(null,null,null)', 'select public.meta_form_field_rank($$x$$)',
+  'select * from public.meta_manual_twin_pairs()', 'select public.meta_form_answers_text(null,null)']) await assert.rejects(db.query(sql), /permission denied/, sql)
+await db.exec('reset role; set role anon'); await assert.rejects(db.query('select public.meta_confirm_site_form_link(null,null,null)'), /permission denied/); await db.exec('reset role')
 
 // ---------- aquecimento (frio / morno / quente) ----------
 const answersOf = (o = {}) => {

@@ -13,6 +13,9 @@ import { resolve } from 'node:path'
 //   node scripts/apply-site-form-answers-link-migration.mjs fix              instala so a terceira
 //   node scripts/apply-site-form-answers-link-migration.mjs whatsapp-preflight  ensaio so da quarta (as tres primeiras ja instaladas)
 //   node scripts/apply-site-form-answers-link-migration.mjs whatsapp         instala so a quarta
+//   20261015040000_form_answers_order_and_traffic_link  perguntas na ordem do formulario (reescreve os contextos), respostas na linha do site em Trafego, leads manuais duplicados, confirmacao humana
+//   node scripts/apply-site-form-answers-link-migration.mjs order-preflight  ensaio so da quinta (as quatro primeiras ja instaladas)
+//   node scripts/apply-site-form-answers-link-migration.mjs order            instala so a quinta
 //   node scripts/apply-site-form-answers-link-migration.mjs cron-preflight   ensaio do agendamento automatico
 //   node scripts/apply-site-form-answers-link-migration.mjs cron             liga o vinculo automatico a cada 5 min (so depois de conferir a simulacao)
 const root = resolve(import.meta.dirname, '..')
@@ -21,6 +24,7 @@ const link = { version: '20261015021500', name: 'site_form_answers_link' }
 const temperature = { version: '20261015030000', name: 'form_temperature' }
 const namefix = { version: '20261015031000', name: 'site_form_pairs_name_compat' }
 const whatsapp = { version: '20261015032000', name: 'whatsapp_answer_links' }
+const order = { version: '20261015040000', name: 'form_answers_order_and_traffic_link' }
 const cron = { version: '20261015021600', name: 'site_form_answers_link_cron' }
 const modes = {
   preflight: { chain: [link, temperature, namefix], install: false },
@@ -29,11 +33,13 @@ const modes = {
   fix: { chain: [namefix], install: true },
   'whatsapp-preflight': { chain: [whatsapp], install: false },
   whatsapp: { chain: [whatsapp], install: true },
+  'order-preflight': { chain: [order], install: false },
+  order: { chain: [order], install: true },
   'cron-preflight': { chain: [cron], install: false },
   cron: { chain: [cron], install: true },
 }
 const job = modes[mode]
-if (!job) { console.error('Use: preflight | apply | fix-preflight | fix | whatsapp-preflight | whatsapp | cron-preflight | cron'); process.exit(2) }
+if (!job) { console.error('Use: preflight | apply | fix-preflight | fix | whatsapp-preflight | whatsapp | order-preflight | order | cron-preflight | cron'); process.exit(2) }
 const { chain, install } = job
 const sources = chain.map(m => ({ ...m, source: readFileSync(resolve(root, `supabase/migrations/${m.version}_${m.name}.sql`), 'utf8') }))
 const bodyOf = source => source.replace(/^BEGIN;\s*/m, '').replace(/COMMIT;\s*$/m, '')
@@ -62,7 +68,16 @@ if (install) {
       SELECT count(*) FILTER (WHERE NOT ambiguous),count(*) FILTER (WHERE ambiguous) INTO man_ok,man_amb FROM public.meta_link_manual_answers(false);
       RAISE EXCEPTION 'PREFLIGHT_OK site_x_formulario: inequivocos=% (pela regra do WhatsApp=%) para_revisar=% leads_do_crm_que_ganham_contexto=% | leads_manuais_x_formulario: inequivocos=% para_revisar=%',pares,regra4,ambiguos,no_crm,man_ok,man_amb USING ERRCODE='P0001';
     END $preflight$;`
-  const report = chain[0].version === whatsapp.version ? whatsappReport : chain[0].version === namefix.version ? pairsOnly : chain[0].version === link.version ? `
+  const orderReport = `
+    DO $preflight$
+    DECLARE r record; man_ok int; man_amb int; cont int; semlink int;
+    BEGIN
+      SELECT * INTO r FROM _form_answers_reorder_report;
+      SELECT count(*) FILTER (WHERE NOT ambiguous),count(*) FILTER (WHERE ambiguous) INTO man_ok,man_amb FROM public.meta_link_manual_answers(false);
+      SELECT count(*) INTO cont FROM public.crm_lead_contexts WHERE context_type='meta_form';
+      RAISE EXCEPTION 'PREFLIGHT_OK contextos_do_formulario=% reescritos_na_nova_ordem=% ja_na_ordem=% ignorados=% | leads_manuais_a_vincular=% para_revisar=%',cont,r.reescritos,r.ja_na_ordem,r.ignorados,man_ok,man_amb USING ERRCODE='P0001';
+    END $preflight$;`
+  const report = chain[0].version === order.version ? orderReport : chain[0].version === whatsapp.version ? whatsappReport : chain[0].version === namefix.version ? pairsOnly : chain[0].version === link.version ? `
     DO $preflight$
     DECLARE pares int; ambiguos int; no_crm int; gemeos int; quente int; morno int; frio int; sem int;
     BEGIN

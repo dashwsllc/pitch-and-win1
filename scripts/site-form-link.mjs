@@ -7,12 +7,15 @@ import { resolve } from 'node:path'
 //   preview          o que seria vinculado, SEM gravar nada (revise a lista, principalmente "revisar (ambiguo)")
 //   apply            vincula os pares inequivocos e leva as respostas ao Contexto dos leads que ja estao no CRM
 //   twins            leads criados a mao no CRM com formulario do mesmo WhatsApp e primeiro nome (so aviso)
+//   ambiguous        (depois da migration 20261015040000) os casos que as regras deixam para decisao humana, COM os identificadores
+//   confirm-site <id_do_site> <id_do_formulario> <motivo>     liga um registro do site a um formulario que voce confirmou ser da mesma pessoa
+//   confirm-manual <id_do_lead> <id_do_formulario> <motivo>   idem para um lead criado a mao (o WhatsApp pode ser diferente)
 //   manual           (depois da migration 20261015032000) leads criados a mao que receberao as respostas do formulario de mesmo WhatsApp, SEM gravar
 //   backfill [data]  busca na Meta os formularios anteriores a 07/10 (data inicial, padrao 2026-09-01)
 //   backfill-status  acompanha a busca
 //   temperature      confere a classificacao frio/morno/quente (contagem e 3 exemplos de cada, sem nomes)
 const root = resolve(import.meta.dirname, '..')
-const [command, arg] = process.argv.slice(2)
+const [command, arg, arg2, ...rest] = process.argv.slice(2)
 const PAGE = '1161109683744531'
 function run(sql) {
   mkdirSync(resolve(root, '.verification.local'), { recursive: true })
@@ -39,6 +42,22 @@ if (command === 'status') show(run(`SELECT
   (SELECT count(*) FROM public.meta_site_form_pairs() WHERE ambiguous) AS pares_para_revisar;`))
 else if (command === 'preview') show(run(`SELECT situacao, rule AS regra, delta_seconds AS segundos_depois_do_formulario, nome_site, nome_formulario, crm_lead_id IS NOT NULL AS site_ja_no_crm
   FROM public.meta_link_site_answers(false) ORDER BY ambiguous DESC, rule, delta_seconds;`))
+else if (command === 'ambiguous') {
+  console.log('Site x formulario (as regras nao decidem; confira nomes, telefones e horarios):')
+  show(run(`SELECT p.site_id, p.form_id, s.full_name AS nome_site, f.full_name AS nome_formulario, round(p.delta_seconds) AS segundos_depois,
+    public.meta_phone_tail(s.phone)=public.meta_phone_tail(f.phone) AS mesmo_telefone FROM public.meta_site_form_pairs() p
+    JOIN public.meta_form_leads s ON s.id=p.site_id JOIN public.meta_form_leads f ON f.id=p.form_id WHERE p.ambiguous ORDER BY f.full_name, p.delta_seconds;`))
+  console.log('Leads criados a mao com mais de um formulario do mesmo WhatsApp:')
+  show(run(`SELECT t.crm_lead_id, t.form_id, t.nome_crm, t.nome_formulario FROM public.meta_manual_twin_pairs() t WHERE t.ambiguous ORDER BY t.nome_crm;`))
+}
+else if (command === 'confirm-site' || command === 'confirm-manual') {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, note = rest.join(' ').trim()
+  if (!uuid.test(arg ?? '') || !uuid.test(arg2 ?? '') || note.length < 5) {
+    console.error(`Use: node scripts/site-form-link.mjs ${command} <id> <id_do_formulario> <motivo (minimo 5 letras)>`); process.exit(2)
+  }
+  const fn = command === 'confirm-site' ? 'meta_confirm_site_form_link' : 'meta_confirm_manual_form_link'
+  show(run(`SELECT public.${fn}('${arg}'::uuid,'${arg2}'::uuid,'${note.replace(/'/g, "''")}') AS resultado;`))
+}
 else if (command === 'manual') show(run(`SELECT situacao, nome_crm, nome_formulario, crm_lead_id FROM public.meta_link_manual_answers(false) ORDER BY ambiguous DESC, nome_crm;`))
 else if (command === 'apply') {
   // Leads criados a mao (so existe depois da migration 20261015032000): mostra o que foi vinculado antes do restante.
@@ -76,4 +95,4 @@ else if (command === 'backfill-status') show(run(`SELECT
   (SELECT count(*) FROM public.meta_webhook_events WHERE status NOT IN ('processed','ignored')) AS eventos_na_fila,
   (SELECT count(*) FROM public.meta_form_leads WHERE entry_channel='form' AND created_time < '2026-10-07') AS formularios_antes_de_07_10,
   (SELECT count(*) FROM public.meta_form_leads WHERE entry_channel='form') AS formularios_total;`))
-else { console.error('Use: status | preview | apply | twins | manual | temperature | hints | backfill [AAAA-MM-DD] | backfill-status'); process.exit(2) }
+else { console.error('Use: status | preview | apply | twins | manual | ambiguous | confirm-site | confirm-manual | temperature | hints | backfill [AAAA-MM-DD] | backfill-status'); process.exit(2) }

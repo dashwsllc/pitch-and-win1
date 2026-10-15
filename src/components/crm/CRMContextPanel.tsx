@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Download, ExternalLink, FileText, Link2, Loader2, MessageSquareText, Pencil, Upload } from 'lucide-react'
+import { AlertTriangle, Download, ExternalLink, FileText, Link2, Loader2, MessageSquareText, Pencil, Upload } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -16,6 +16,7 @@ import { CONTEXT_FILE_TYPE_ERROR, convertContextTxt, downloadContextMarkdown, MA
 import { MAX_CONTEXT_MEDIA_URL_LENGTH, normalizeContextMediaUrl } from '@/lib/crm-context-media'
 import { CRMImportDetails } from './CRMImportDetails'
 import { importChannel } from '@/lib/crm-imports'
+import { formPhoneFromContext, phonesDiffer } from '@/lib/form-phone'
 
 const contextLabels: Record<string, string> = {
   whatsapp_summary: 'Resumo de WhatsApp',
@@ -36,6 +37,8 @@ export function CRMContextPanel({ lead, names = {} }: { lead: CRMLead; names?: R
   // Nos demais (site, criados à mão) as respostas do formulário Meta ligadas ao lead ficam aqui, abertas.
   const formAnswers = importChannel(lead) === 'form' ? [] : context.contexts.filter(entry => entry.context_type === 'meta_form')
   const notes = context.contexts.filter(entry => entry.context_type !== 'meta_form')
+  // O WhatsApp digitado no site pode diferir do telefone do formulário (erro de digitação): avisa antes de ligar.
+  const formPhone = formAnswers.map(entry => formPhoneFromContext(entry.content)).find(phone => phonesDiffer(phone, lead.phone)) ?? null
   const { toast } = useToast()
   const { capabilities } = useRoles()
   const canWrite = capabilities.sdr || capabilities.closer
@@ -190,10 +193,14 @@ export function CRMContextPanel({ lead, names = {} }: { lead: CRMLead; names?: R
         </p>
         <p className="leading-5 text-muted-foreground">{hint.reasons}</p>
       </div>}
+      {formPhone && <div role="alert" aria-label="WhatsApp diferente do formulário" className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-5">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+        <p><strong>Confira o WhatsApp antes de ligar.</strong> O número deste lead ({safePlainText(lead.phone, 40)}) é diferente do telefone que o atleta informou no formulário ({safePlainText(formPhone, 40)}).</p>
+      </div>}
       {formAnswers.map(entry => (
         <section key={entry.id} aria-label="Respostas do formulário Meta" className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
           <h3 className="text-sm font-semibold">Respostas do formulário Meta</h3>
-          <p className="text-[11px] text-muted-foreground">Perguntas e respostas exatamente como o atleta enviou · registrado por {safePlainText(entry.author_name, 160)} · {callDate(entry.created_at)}</p>
+          <p className="text-[11px] text-muted-foreground">Perguntas e respostas exatamente como o atleta enviou · anexado automaticamente do formulário Meta em {callDate(entry.created_at)}</p>
           <p className="whitespace-pre-wrap break-words text-sm leading-6">{entry.content}</p>
         </section>
       ))}

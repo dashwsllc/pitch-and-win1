@@ -29,6 +29,7 @@ const cases = [
   { name: 'site', lead: { ...base, id: 'ce120000-0000-4000-8000-0000000000a1', name: 'Joao Pedro de Andrade Santana', phone: '11918173104', lead_source: 'meta_ads_form',
     meta_form_lead_id: 'ce130000-0000-4000-8000-0000000000a1', import_channel: 'website', import_method: 'automatic', lead_received_at: '2026-10-13T21:46:38Z', lead_generated_at: '2026-10-09T16:10:33Z' }, snapshot: siteSnapshot },
   { name: 'manual', lead: { ...base, id: 'ce120000-0000-4000-8000-0000000000a2', name: 'Atleta Criado Pelo SDR', phone: '11900000000', lead_source: null }, snapshot: undefined },
+  { name: 'manual-igual', lead: { ...base, id: 'ce120000-0000-4000-8000-0000000000a3', name: 'Atleta Mesmo Numero', phone: '(11) 94817-3104', lead_source: null }, snapshot: undefined },
 ]
 const browser = await chromium.launch({ headless: true })
 try {
@@ -67,6 +68,12 @@ try {
     await expect(section).toContainText(LONG)
     await expect(section).toContainText('Ligado ao envio do site de 09/10/2026 13:10:33')
     await expect(section).toContainText('Telefone\n→ +5511948173104')
+    // O rodapé não atribui a uma pessoa o que o sistema anexou sozinho.
+    await expect(section).toContainText('anexado automaticamente do formulário Meta em'); await expect(section).not.toContainText('registrado por')
+    // WhatsApp do lead diferente do telefone do formulário: aviso com os dois números; mesmo número em outro formato: sem aviso.
+    const phoneWarning = panel.getByRole('alert', { name: 'WhatsApp diferente do formulário' })
+    if (c.name === 'manual-igual') await expect(phoneWarning).toHaveCount(0)
+    else { await expect(phoneWarning).toBeVisible(); await expect(phoneWarning).toContainText('Confira o WhatsApp antes de ligar'); await expect(phoneWarning).toContainText(lead.phone); await expect(phoneWarning).toContainText('+5511948173104') }
     await expect(page.getByText('Sem contexto importado.', { exact: false })).toHaveCount(0)
     await expect(section.locator('details')).toHaveCount(0)
     const hint = panel.getByRole('status', { name: 'Aquecimento sugerido pelo formulário' })
