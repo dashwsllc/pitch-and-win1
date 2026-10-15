@@ -76,6 +76,8 @@ export interface WaveLead {
   time_known: boolean
   date_known?: boolean
   linked_form?: WaveLinkedForm | null
+  /** Dados que a Meta enviou além das respostas (anúncio, conjunto, plataforma…); só leitura. */
+  meta_extra?: Record<string, unknown> | null
 }
 
 export interface WaveList {

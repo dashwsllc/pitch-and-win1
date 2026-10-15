@@ -24,7 +24,7 @@ const lead = (id, name, minutes, extra = {}) => ({ id, meta_lead_id: `meta-${id}
   crm_sync_error: null, crm_sync_attempts: 0, crm_sync_last_at: null, traffic_edited_at: null, source: 'api', batch_filename: null, time_known: true, date_known: true, linked_form: null, ...extra })
 const linked = (phone, basis) => ({ id: 'ce110000-0000-4000-8000-0000000000f1', created_time: ago(30), form_name: 'FORMULÁRIO ZYRON', campaign_name: 'FORMULARIO ZYRON TST 04', field_data: answers(phone), basis })
 wave.lead_list = [
-  lead('s1', 'Site Com Telefone Diferente', 5, { entry_channel: 'website', phone: '11918173104', linked_form: linked('+5511948173104', 'mesmo anúncio, nome completo igual, 61 s depois do formulário') }),
+  lead('s1', 'Site Com Telefone Diferente', 5, { entry_channel: 'website', phone: '11918173104', meta_extra: { ad_name: 'Anúncio Reels 3', adset_name: 'Conjunto Brasil', platform: 'ig', is_organic: false, campo_novo_da_meta: 'valor novo', objeto: { a: 1 }, vazio: '' }, linked_form: linked('+5511948173104', 'mesmo anúncio, nome completo igual, 61 s depois do formulário') }),
   lead('s2', 'Site Com Telefone Igual', 8, { entry_channel: 'website', phone: '(11) 94817-3104', linked_form: linked('+5511948173104', 'mesmo WhatsApp e mesmo anúncio, nome diferente, 120 s depois do formulário') }),
   lead('s3', 'Site Sem Formulario', 12, { entry_channel: 'website', phone: '11900000000' }),
   lead('f1', 'Formulario Direto', 20, { entry_channel: 'form', field_data: answers('+5511911112222') }),
@@ -62,6 +62,12 @@ try {
   await expect(rows).toHaveCount(4)
   const row = name => newest.getByRole('article', { name: new RegExp(name) })
 
+  // Dados da Meta além das respostas: tudo que a Meta enviou aparece, inclusive campos que o sistema nunca viu.
+  const extra = row('Site Com Telefone Diferente').locator('summary', { hasText: 'Dados do anúncio na Meta' })
+  await expect(extra).toBeVisible(); await extra.click()
+  for (const text of ['Anúncio Reels 3', 'Conjunto Brasil', 'Instagram', 'não', 'valor novo', '{"a":1}']) await expect(row('Site Com Telefone Diferente').getByText(text, { exact: true }).first()).toBeVisible()
+  await expect(row('Site Com Telefone Diferente').getByText('Anúncio', { exact: true }).first()).toBeVisible(); await expect(row('Site Com Telefone Diferente').getByText('Conjunto de anúncios', { exact: true })).toBeVisible()
+  await expect(row('Site Sem Formulario').locator('summary', { hasText: 'Dados do anúncio na Meta' })).toHaveCount(0)
   // Site com formulário ligado: as respostas vêm do formulário, recolhidas como nas linhas de formulário.
   const s1 = row('Site Com Telefone Diferente')
   const summary = s1.locator('summary', { hasText: 'Respostas do formulário Meta (ligado a este envio do site)' })

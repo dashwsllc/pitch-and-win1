@@ -1,6 +1,7 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0'
 import { metaGraphGet, MetaGraphError, describeMetaGraphError, isAuthError, isPermissionError, type GraphBudget } from './meta-graph.ts'
 import { extractLeadFields, type FieldAnswer } from './meta-lead-extract.ts'
+import { fetchLeadRaw, storeLeadRaw } from './meta-lead-raw.ts'
 
 import { callJev } from './meta-typesafe.ts'
 import type { LeadPageTokenResolver } from './meta-page-token.ts'
@@ -44,9 +45,8 @@ export async function receiveLeadgenEvent(admin: SupabaseClient, event: { leadge
 export async function processClaimedLead(admin: SupabaseClient, event: ClaimedLeadEvent, token: string, budget: GraphBudget, resolveToken?: LeadPageTokenResolver): Promise<LeadIngestOutcome> {
   try {
     if (resolveToken) token = await resolveToken(event.page_id, budget)
-    const detail = await metaGraphGet<LeadDetail>(`/${event.leadgen_id}`, {
-      fields: 'id,created_time,form_id,ad_id,campaign_id,campaign_name,field_data,custom_disclaimer_responses',
-    }, token, budget)
+    const fetched = await fetchLeadRaw(event.leadgen_id, token, budget)
+    const detail = fetched.raw as unknown as LeadDetail
     if (detail.id !== event.leadgen_id || detail.form_id !== event.form_id || !Number.isFinite(Date.parse(detail.created_time))) throw new Error('Identidade ou data de lead divergente')
     if (!Array.isArray(detail.field_data) || detail.field_data.length === 0) throw new Error('Respostas do formulário ainda não recebidas da Meta; a captura será tentada novamente')
     let formName = ''
@@ -62,6 +62,8 @@ export async function processClaimedLead(admin: SupabaseClient, event: ClaimedLe
       form_name: formName.slice(0, 160), created_time: detail.created_time,
       field_data: detail.field_data || [], custom_disclaimer_responses: detail.custom_disclaimer_responses || [], ...extracted,
     } })
+    // Retorno completo da Meta (todos os campos devolvidos). Se falhar, a recuperação automática do worker repõe depois; a captura não é desfeita.
+    try { await storeLeadRaw(admin, { id: detail.id, pageId: event.page_id, formId: detail.form_id }, fetched.raw, fetched.fields) } catch { /* recuperado no próximo ciclo */ }
     return { status: 'processed' }
   } catch (error) {
     const message = leadErrorMessage(error, token)

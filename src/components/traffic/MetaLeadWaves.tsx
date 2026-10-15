@@ -18,6 +18,7 @@ import { FormAnswers } from './FormAnswers'
 import { CRMSiteSourceUpdates } from '@/components/crm/CRMSiteSourceUpdates'
 import { MetaEditButton } from './MetaEditDialog'
 import { formPhoneFromFields, phonesDiffer } from '@/lib/form-phone'
+import { sourceQuestionLabel } from '@/lib/lead-source-context'
 
 type Filter = WaveStatus | 'todas'
 const PAGE = 10
@@ -229,6 +230,17 @@ function WavePanel({ wave, active, canReview, refresh }: { wave: WaveSummary; ac
   </div>
 }
 
+/** Dados da Meta além das respostas, prontos para exibir (nada é descartado; vazio some, objeto vira texto). */
+function metaExtra(extra: WaveLead['meta_extra']): [string, string][] {
+  if (!extra || typeof extra !== 'object') return []
+  const platforms: Record<string, string> = { fb: 'Facebook', facebook: 'Facebook', ig: 'Instagram', instagram: 'Instagram' }
+  return Object.entries(extra).flatMap(([key, value]) => {
+    if (value === null || value === undefined || value === '') return []
+    const text = typeof value === 'boolean' ? (value ? 'sim' : 'não') : typeof value === 'string' ? (key === 'platform' ? platforms[value.toLowerCase()] ?? value : value) : JSON.stringify(value)
+    return [[key, text] as [string, string]]
+  })
+}
+
 function LeadCard({ lead, newest, canReview, reviewable, busy, excludedReason, onExclude, onInclude, onRetry, onReopen, refresh }: {
   lead: WaveLead; newest: boolean; canReview: boolean; reviewable: boolean; busy: boolean; excludedReason?: string
   onExclude: (reason: string) => void; onInclude: () => void; onRetry: () => void; onReopen: () => void; refresh: () => Promise<unknown>
@@ -261,6 +273,9 @@ function LeadCard({ lead, newest, canReview, reviewable, busy, excludedReason, o
       {sync.detail && <p className={`break-words text-xs ${sync.key === 'falhou' ? 'text-rose-300' : 'text-muted-foreground'}`}>{sync.key === 'rejeitado' ? 'Motivo: ' : ''}{sync.detail}</p>}
       {excludedReason && <p className="text-xs text-amber-300">Será tirado da leva: {excludedReason}</p>}
       {lead.import_warning && sync.key !== 'falhou' && <p className="break-words text-xs text-muted-foreground">{lead.import_warning}</p>}
+      {metaExtra(lead.meta_extra).length > 0 && <details className="pt-1"><summary className="cursor-pointer text-sm text-ash">Dados do anúncio na Meta</summary>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-2">{metaExtra(lead.meta_extra).map(([key, value]) =>
+          <div key={key} className="min-w-0 rounded-lg bg-muted/40 p-3"><dt className="text-xs leading-5 text-muted-foreground">{sourceQuestionLabel(key)}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{value}</dd></div>)}</dl></details>}
       {lead.entry_channel === 'website' && <CRMSiteSourceUpdates formLeadId={lead.id} />}
       {lead.entry_channel === 'website' && (lead.linked_form
         ? <details className="pt-1"><summary className="cursor-pointer text-sm text-ash">Respostas do formulário Meta (ligado a este envio do site)</summary>

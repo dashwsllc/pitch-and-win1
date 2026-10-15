@@ -111,6 +111,22 @@ Instalar (na pasta `pitch-and-win1`): `node scripts/apply-site-form-answers-link
 
 Reversão: reinstalar `meta_form_answers_text` de `20261015021500…` (os contextos reescritos continuam completos, só na nova ordem), `meta_wave_leads` de `20261013165410…` e `meta_manual_twin_pairs`/`meta_link_manual_answers` de `20261015032000…`; `DROP FUNCTION meta_confirm_site_form_link(uuid,uuid,text), meta_confirm_manual_form_link(uuid,uuid,text), meta_form_field_rank(text);`.
 
+## Sexta migration: captura sem perdas e formulários de outras campanhas (`20261015050000_meta_raw_capture_and_form_definitions`)
+
+Regra: **nada que a Meta envia pode se perder**, mesmo de um formulário novo, de outra campanha, com perguntas que o sistema nunca viu.
+
+O que se perdia antes: a integração pedia à Meta só 8 campos do lead (sem anúncio, conjunto, plataforma, orgânico…) e não guardava o retorno bruto; o texto das perguntas/opções vinha só da chave técnica (`sou_o_atleta`); os consentimentos (`custom_disclaimer_responses`) estavam gravados mas nunca apareciam.
+
+Agora:
+- **Retorno completo.** A função `meta-lead-worker` (e o webhook) pedem todos os campos do lead (`ad_name, adset_id, adset_name, is_organic, platform, partner_name`…). Se a Meta recusar algum campo (erro 100), cai para a lista anterior e a captura **nunca** é interrompida. O JSON inteiro vai para `meta_lead_raw`; uma busca nova mescla chaves e nunca apaga o que veio antes.
+- **Definição do formulário** (`meta_form_definitions`): texto exato de cada pergunta e de cada opção, buscado uma vez por formulário (renovado a cada 7 dias).
+- **Recuperação do que já foi recebido.** A cada ciclo do worker (com o tempo que sobra) ele busca o retorno bruto de até 25 leads antigos e 5 formulários; para em erro de credencial/limite; lead que a Meta não devolve fica marcado e é tentado de novo em 7 dias.
+- **Contexto.** Texto exato da pergunta/opção quando a definição existe; pergunta nova aparece depois das conhecidas e antes do contato, na ordem do formulário; sempre mostra consentimentos e **todos os dados da Meta** (Anúncio, Conjunto de anúncios, Plataforma, Lead orgânico, e qualquer campo novo que a Meta passe a enviar). `meta_refresh_form_contexts()` (a cada 10 min) atualiza os contextos já gravados quando esses dados chegam.
+- **Tráfego.** Bloco "Dados do anúncio na Meta" em cada lead.
+- **Acompanhar:** `node scripts/site-form-link.mjs capture` (leads com retorno bruto × leads da API, formulários com perguntas, campos aceitos pela Meta).
+- **Instalar:** `node scripts/apply-site-form-answers-link-migration.mjs raw-preflight`, depois `raw`; **depois** `npx supabase functions deploy meta-lead-worker meta-lead-webhook --project-ref mbzwchnxtskysqplqiyy` (o banco primeiro: as funções novas chamam as RPCs novas).
+- **Limites reais:** só entram leads das páginas em `META_PAGE_IDS` (outra página precisa ser incluída lá) e a Meta guarda leads por ~90 dias.
+
 ## O que já existia (não foi recriado)
 
 A aba **Importações** do CRM já tem as seções de origem (Todas / Formulários / Site), os filtros Automáticas e Manuais e as visões Lista, Aquecimento, Abordagem e **Esteira do LEAD**, com a mesma lógica da aba Leads. O ícone do livro fica **laranja** quando o lead tem contexto de verdade: respostas do formulário (próprias ou ligadas) ou anotações do atendimento; só contato e dados técnicos não acendem.

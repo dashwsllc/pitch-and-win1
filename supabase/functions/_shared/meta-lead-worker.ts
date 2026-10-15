@@ -2,6 +2,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.
 import { fetchGraphPage, metaGraphGet, MetaGraphError, type MetaGraphRequest } from './meta-graph.ts'
 import { leadRpc, leadErrorMessage, processClaimedLead, receiveLeadgenEvent, type ClaimedLeadEvent } from './meta-lead-ingest.ts'
 import type { LeadPageTokenResolver } from './meta-page-token.ts'
+import { enrichMetaCapture } from './meta-lead-raw.ts'
 
 interface Form { id: string; name?: string }
 interface DiscoveryState {
@@ -123,6 +124,13 @@ export async function runLeadWorker(admin: SupabaseClient, input: { pageIds: str
       await discoverPage(admin, pageId, token, networkDeadline, result, input.resolveToken)
     }
     if (input.discover && Date.now() + 4000 < networkDeadline) await drain(networkDeadline)
+    // Com o tempo que sobrar: recupera o retorno completo da Meta dos leads já recebidos e a definição dos formulários (perguntas e opções).
+    if (Date.now() + 6000 < networkDeadline) {
+      try {
+        const enriched = await enrichMetaCapture(admin, pageId => input.resolveToken ? input.resolveToken(pageId, { deadlineMs: networkDeadline }) : Promise.resolve(token), networkDeadline)
+        for (const note of enriched.attention.slice(0, 3)) result.errors.push(`Recuperação de dados da Meta: ${note}`)
+      } catch (error) { if (result.errors.length < 10) result.errors.push('Recuperação de dados da Meta: ' + leadErrorMessage(error, token)) }
+    }
   } catch (error) { result.errors.push(leadErrorMessage(error, token)); result.partial = true }
   return result
 }

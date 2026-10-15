@@ -10,6 +10,7 @@ import { resolve } from 'node:path'
 //   ambiguous        (depois da migration 20261015040000) os casos que as regras deixam para decisao humana, COM os identificadores
 //   confirm-site <id_do_site> <id_do_formulario> <motivo>     liga um registro do site a um formulario que voce confirmou ser da mesma pessoa
 //   confirm-manual <id_do_lead> <id_do_formulario> <motivo>   idem para um lead criado a mao (o WhatsApp pode ser diferente)
+//   capture          (depois da migration 20261015050000) cobertura da captura completa: leads com retorno bruto da Meta e formularios com definicao
 //   manual           (depois da migration 20261015032000) leads criados a mao que receberao as respostas do formulario de mesmo WhatsApp, SEM gravar
 //   backfill [data]  busca na Meta os formularios anteriores a 07/10 (data inicial, padrao 2026-09-01)
 //   backfill-status  acompanha a busca
@@ -42,6 +43,14 @@ if (command === 'status') show(run(`SELECT
   (SELECT count(*) FROM public.meta_site_form_pairs() WHERE ambiguous) AS pares_para_revisar;`))
 else if (command === 'preview') show(run(`SELECT situacao, rule AS regra, delta_seconds AS segundos_depois_do_formulario, nome_site, nome_formulario, crm_lead_id IS NOT NULL AS site_ja_no_crm
   FROM public.meta_link_site_answers(false) ORDER BY ambiguous DESC, rule, delta_seconds;`))
+else if (command === 'capture') show(run(`SELECT
+  (SELECT count(*) FROM public.meta_form_leads WHERE entry_channel='form' AND lead_import_batch_id IS NULL AND meta_lead_id ~ '^[0-9]+$') AS leads_da_api,
+  (SELECT count(*) FROM public.meta_lead_raw WHERE fields_requested<>'unavailable') AS com_retorno_bruto,
+  (SELECT count(*) FROM public.meta_lead_raw WHERE fields_requested='unavailable') AS meta_nao_devolveu,
+  (SELECT count(DISTINCT form_id) FROM public.meta_form_leads WHERE entry_channel='form' AND lead_import_batch_id IS NULL AND meta_lead_id ~ '^[0-9]+$') AS formularios,
+  (SELECT count(*) FROM public.meta_form_definitions WHERE jsonb_array_length(questions)>0) AS formularios_com_perguntas,
+  (SELECT string_agg(DISTINCT fields_requested, ' || ') FROM public.meta_lead_raw WHERE fields_requested<>'unavailable') AS campos_aceitos_pela_meta,
+  (SELECT max(fetched_at) FROM public.meta_lead_raw) AS ultimo_retorno;`))
 else if (command === 'ambiguous') {
   console.log('Site x formulario (as regras nao decidem; confira nomes, telefones e horarios):')
   show(run(`SELECT p.site_id, p.form_id, s.full_name AS nome_site, f.full_name AS nome_formulario, round(p.delta_seconds) AS segundos_depois,
@@ -95,4 +104,4 @@ else if (command === 'backfill-status') show(run(`SELECT
   (SELECT count(*) FROM public.meta_webhook_events WHERE status NOT IN ('processed','ignored')) AS eventos_na_fila,
   (SELECT count(*) FROM public.meta_form_leads WHERE entry_channel='form' AND created_time < '2026-10-07') AS formularios_antes_de_07_10,
   (SELECT count(*) FROM public.meta_form_leads WHERE entry_channel='form') AS formularios_total;`))
-else { console.error('Use: status | preview | apply | twins | manual | ambiguous | confirm-site | confirm-manual | temperature | hints | backfill [AAAA-MM-DD] | backfill-status'); process.exit(2) }
+else { console.error('Use: status | preview | apply | twins | manual | capture | ambiguous | confirm-site | confirm-manual | temperature | hints | backfill [AAAA-MM-DD] | backfill-status'); process.exit(2) }

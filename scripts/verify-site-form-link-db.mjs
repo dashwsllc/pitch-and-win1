@@ -604,6 +604,114 @@ for (const sql of ['select public.meta_confirm_site_form_link(null,null,null)', 
   'select * from public.meta_manual_twin_pairs()', 'select public.meta_form_answers_text(null,null)']) await assert.rejects(db.query(sql), /permission denied/, sql)
 await db.exec('reset role; set role anon'); await assert.rejects(db.query('select public.meta_confirm_site_form_link(null,null,null)'), /permission denied/); await db.exec('reset role')
 
+// ---------- migration 6: retorno bruto da Meta, definicao do formulario, consentimentos e formularios de outras campanhas ----------
+const PROD6 = { answers: 'ba074624074c20a17c9eb0db431ebd2a', wave: 'b2a65c25c50a80891903c4c2468826d9', rank: '2a06572c5a8b7c5c92cf84f14f95ea0b' }
+const md6 = { answers: await md5('public.meta_form_answers_text(public.meta_form_leads,public.meta_form_leads)'), wave: await md5('public.meta_wave_leads(uuid)'), rank: await md5('public.meta_form_field_rank(text)') }
+assert.deepEqual(md6, PROD6, 'as tres funcoes substituidas sao identicas (md5) as de producao')
+const withMd6 = sql => sql.replaceAll(PROD6.answers, md6.answers).replaceAll(PROD6.wave, md6.wave).replaceAll(PROD6.rank, md6.rank)
+const defRank = (await q(`select pg_get_functiondef('public.meta_form_field_rank(text)'::regprocedure) d`))[0].d
+await db.exec(defRank.replace('\nAS $function$', '\nAS $function$ -- alterada'))
+await assert.rejects(db.exec(generated('raw')), /meta_form_field_rank mudou desde a auditoria/); await db.exec('ROLLBACK'); await db.exec(defRank)
+const allCtx = async () => q(`select id,lead_id,content from public.crm_lead_contexts where context_type='meta_form' order by id`)
+const ctx6before = await allCtx()
+await assert.rejects(db.exec(withMd6(generated('raw-preflight'))), /PREFLIGHT_OK contextos_atualizados_agora=0 \| jobs_de_atualizacao=1/); await db.exec('ROLLBACK')
+assert.equal((await q(`select to_regclass('public.meta_lead_raw') r`))[0].r, null, 'o ensaio nao instala nada')
+const rawSql = withMd6(generated('raw'))
+await db.exec(rawSql)
+await assert.rejects(db.exec(rawSql), /ja instalada/); await db.exec('ROLLBACK')
+assert.deepEqual(await allCtx(), ctx6before, 'sem dados novos da Meta, nenhum contexto muda')
+assert.equal((await q(`select count(*) n from cron.job where jobname='meta-form-context-refresh'`))[0].n, 1)
+
+// Formulario de OUTRA campanha, com perguntas que o sistema nunca viu, consentimentos e contato fora de ordem.
+const NF = U(8001), NF2 = U(8002)
+const newForm = (id, metaId, phone, order) => db.query(`insert into public.meta_form_leads(id,meta_lead_id,page_id,form_id,campaign_name,ad_id,form_name,created_time,field_data,custom_disclaimer_responses,full_name,phone,entry_channel,approval_status,first_received_at)
+ values($1,$2,'PAGE1','FORM900','CAMPANHA NOVA','AD900','FORMULÁRIO NOVO','2026-10-20T12:00:00Z',$3::jsonb,$4::jsonb,'Outra Campanha',$5,'form','pendente','2026-10-20T12:00:00Z')`,
+ [id, metaId, JSON.stringify(order), JSON.stringify([{ checkbox_key: 'aceito_contato', is_checked: 'true' }, { checkbox_key: 'aceito_newsletter', is_checked: 'false' }]), phone])
+const newAnswers = phone => [{ name: 'qual_o_seu_orçamento_mensal?', values: ['ate_r$_500'] }, { name: 'você_já_investiu_antes?', values: ['sim'] }, { name: 'full_name', values: ['Outra Campanha'] },
+  { name: 'phone_number', values: [phone] }, { name: 'cidade_onde_mora', values: ['Curitiba'] }]
+await newForm(NF, '900000000000001', '+5511961555001', newAnswers('+5511961555001'))
+await newForm(NF2, '900000000000002', '+5511961555002', newAnswers('+5511961555002'))
+const MN = await manualLead('Outra Campanha (pai)', '11961555001')
+await link(true)
+let cn = (await metaCtx(MN))[0].content
+const at = t => cn.indexOf(t)
+assert(at('Qual o seu orçamento mensal?\n→ Ate r$ 500') >= 0 && at('Você já investiu antes?\n→ sim') >= 0 && at('Cidade onde mora\n→ Curitiba') >= 0, 'todas as respostas de um formulario novo aparecem, mesmo sem a definicao')
+assert(at('Consentimento: aceito_contato\n→ marcado') >= 0 && at('Consentimento: aceito_newsletter\n→ não marcado') >= 0, 'consentimentos nao se perdem')
+assert(at('Qual o seu orçamento mensal?') < at('Você já investiu antes?') && at('Você já investiu antes?') < at('Cidade onde mora') && at('Cidade onde mora') < at('Nome completo') && at('Nome completo') < at('Telefone'), 'perguntas novas antes do contato')
+
+// Retorno bruto e definicao chegam depois: nada do que a Meta enviou fica de fora.
+const missing0 = (await q('select * from public.meta_lead_raw_missing(10)')).map(r => r.meta_lead_id)
+assert.deepEqual(missing0.sort(), ['900000000000001', '900000000000002'], 'so leads da API (id numerico) entram na fila de recuperacao')
+assert.deepEqual((await q('select form_id from public.meta_form_definition_missing(5)')).map(r => r.form_id), ['FORM900'])
+const raw1 = { id: '900000000000001', created_time: '2026-10-20T12:00:00+0000', form_id: 'FORM900', campaign_id: 'C1', campaign_name: 'CAMPANHA NOVA', ad_id: 'AD900', ad_name: 'Anúncio Teste',
+  adset_id: 'AS1', adset_name: 'Conjunto Teste', platform: 'ig', is_organic: false, partner_name: '', campo_novo: 'valor novo', objeto: { a: 1 }, field_data: [], custom_disclaimer_responses: [] }
+const store = (id, raw, fields = 'id,ad_name') => q('select public.meta_lead_raw_store($1,$2,$3,$4::jsonb,$5)', [id, 'PAGE1', 'FORM900', JSON.stringify(raw), fields])
+await assert.rejects(store('900000000000001', { ...raw1, id: '123' }), /Retorno de outro lead/)
+await assert.rejects(q('select public.meta_lead_raw_store($1,$2,$3,$4::jsonb,$5)', ['999', 'PAGE1', 'FORM900', JSON.stringify({ id: '999' }), 'id']), /Lead não recebido/)
+await assert.rejects(q('select public.meta_lead_raw_store($1,$2,$3,$4::jsonb,$5)', ['900000000000001', 'PAGE1', 'FORM900', '[]', 'id']), /Retorno da Meta inválido/)
+await store('900000000000001', raw1)
+await store('900000000000001', { id: '900000000000001', ad_name: 'Anúncio Renomeado' }, 'id,ad_name')
+const kept = (await q(`select raw from public.meta_lead_raw where meta_lead_id='900000000000001'`))[0].raw
+assert.equal(kept.ad_name, 'Anúncio Renomeado'); assert.equal(kept.adset_name, 'Conjunto Teste', 'uma busca com menos campos nao apaga o que ja tinha'); assert.equal(kept.campo_novo, 'valor novo')
+assert.deepEqual((await q('select * from public.meta_lead_raw_missing(10)')).map(r => r.meta_lead_id), ['900000000000002'])
+// lead que a Meta nao devolveu: marca, nao tenta de novo por 7 dias, depois volta para a fila; um retorno real substitui a marca
+await store('900000000000002', { id: '900000000000002', _unavailable: 'objeto inexistente' }, 'unavailable')
+assert.deepEqual(await q('select * from public.meta_lead_raw_missing(10)'), [])
+await db.query(`update public.meta_lead_raw set fetched_at=clock_timestamp()-interval '8 days' where meta_lead_id='900000000000002'`)
+assert.deepEqual((await q('select * from public.meta_lead_raw_missing(10)')).map(r => r.meta_lead_id), ['900000000000002'])
+await store('900000000000002', { id: '900000000000002', ad_name: 'Outro anuncio' }, 'id,ad_name')
+assert.equal((await q(`select raw from public.meta_lead_raw where meta_lead_id='900000000000002'`))[0].raw._unavailable, undefined, 'o retorno real substitui a marca')
+// definicao do formulario (aceita as duas formas do retorno da Graph API)
+const defRaw = { id: 'FORM900', name: 'FORMULÁRIO NOVO', status: 'ACTIVE', locale: 'pt_BR', questions: [
+  { key: 'qual_o_seu_orçamento_mensal?', label: 'Qual o seu orçamento mensal?', type: 'CUSTOM', options: [{ key: 'ate_r$_500', value: 'Até R$ 500' }] },
+  { key: 'você_já_investiu_antes?', label: 'Você já investiu antes?', type: 'CUSTOM' }, { key: 'cidade_onde_mora', label: 'Em qual cidade você mora?', type: 'CUSTOM' },
+  { key: 'full_name', label: 'Full name', type: 'FULL_NAME' }] }
+await assert.rejects(q('select public.meta_form_definition_store($1,$2,$3,$4::jsonb)', ['FORM900', 'PAGE1', 'x', JSON.stringify({ ...defRaw, id: 'OUTRO' })]), /outro formulário/)
+await assert.rejects(q('select public.meta_form_definition_store($1,$2,$3,$4::jsonb)', ['SEMLEADS', 'PAGE1', 'x', JSON.stringify({ id: 'SEMLEADS' })]), /sem leads recebidos/)
+await q('select public.meta_form_definition_store($1,$2,$3,$4::jsonb)', ['FORM900', 'PAGE1', 'FORMULÁRIO NOVO', JSON.stringify({ ...defRaw, questions: { data: defRaw.questions } })])
+assert.equal((await q(`select jsonb_array_length(questions) n from public.meta_form_definitions where form_id='FORM900'`))[0].n, 4)
+await q('select public.meta_form_definition_store($1,$2,$3,$4::jsonb)', ['FORM900', 'PAGE1', 'FORMULÁRIO NOVO', JSON.stringify({ id: 'FORM900', name: 'FORMULÁRIO NOVO', questions: [] })])
+assert.equal((await q(`select jsonb_array_length(questions) n from public.meta_form_definitions where form_id='FORM900'`))[0].n, 4, 'uma busca sem perguntas nao apaga a definicao')
+assert.deepEqual(await q('select * from public.meta_form_definition_missing(5)'), [])
+await db.query(`update public.meta_form_definitions set fetched_at=clock_timestamp()-interval '8 days'`)
+assert.equal((await q('select * from public.meta_form_definition_missing(5)')).length, 1, 'definicao velha volta para a fila'); await db.query(`update public.meta_form_definitions set fetched_at=clock_timestamp()`)
+
+// Atualiza o contexto ja gravado: texto exato da pergunta e da opcao, ordem da definicao, consentimentos e TODOS os dados da Meta.
+assert.equal((await q('select public.meta_refresh_form_contexts() n'))[0].n, 1, 'so o lead com dados novos da Meta e atualizado')
+cn = (await metaCtx(MN))[0].content
+for (const line of ['Qual o seu orçamento mensal?\n→ Até R$ 500', 'Você já investiu antes?\n→ sim', 'Em qual cidade você mora?\n→ Curitiba', 'Nome completo\n→ Outra Campanha',
+  'Consentimento: aceito_contato\n→ marcado', 'Consentimento: aceito_newsletter\n→ não marcado', 'Anúncio\n→ Anúncio Renomeado', 'Conjunto de anúncios\n→ Conjunto Teste', 'ID do anúncio\n→ AD900',
+  'ID do conjunto de anúncios\n→ AS1', 'Plataforma\n→ Instagram', 'Lead orgânico\n→ não', 'Campo novo\n→ valor novo', 'Objeto\n→ {"a": 1}'])
+  assert(cn.includes(line), 'aparece no Contexto: ' + line.replace('\n', ' | '))
+assert(!cn.includes('Parceiro'), 'dado vazio da Meta nao vira linha'); assert(!cn.includes('Full name'), 'contato usa o rotulo fixo')
+assert(at('Qual o seu orçamento mensal?') < at('Você já investiu antes?') && at('Você já investiu antes?') < at('Em qual cidade') && at('Nome completo') < at('Consentimento: aceito_contato'), 'ordem: perguntas da definicao, contato, consentimentos, dados da Meta')
+assert.equal((await q('select public.meta_refresh_form_contexts() n'))[0].n, 0, 'idempotente')
+assert.equal((await metaCtx(MN))[0].content, cn)
+// Formulario conhecido: o texto exato da opcao vem da definicao.
+await db.query(`update public.meta_form_leads set form_id='F11',page_id='PAGE1' where id=$1`, [FO3])
+await q('select public.meta_form_definition_store($1,$2,$3,$4::jsonb)', ['F11', 'PAGE1', 'F11', JSON.stringify({ id: 'F11', questions: [{ key: 'quem_está_preenchendo_este_formulário?', label: 'Quem está preenchendo este formulário?', options: [{ key: 'sou_o_atleta', value: 'Sou o atleta (jogador)' }] }] })])
+assert.equal((await q('select public.meta_refresh_form_contexts() n'))[0].n, 1)
+const c3 = (await metaCtx(MO3))[0].content
+assert(c3.includes('Quem está preenchendo este formulário?\n→ Sou o atleta (jogador)')); assert(inOrder(c3)); assert.equal(c3.split('\n→ ').length - 1, 15)
+// Tráfego: dados da Meta alem das respostas (sem repetir respostas nem identificadores internos).
+const WAVE2 = U(7002)
+await db.query(`insert into public.meta_lead_waves(id,number) values($1,2)`, [WAVE2]); await db.query(`update public.meta_form_leads set wave_id=$1 where id=any($2)`, [WAVE2, [NF, NF2, FO1]])
+const wl2 = (await q('select public.meta_wave_leads($1) r', [WAVE2]))[0].r, w2 = id => wl2.leads.find(l => l.id === id)
+assert.deepEqual([w2(NF).meta_extra.ad_name, w2(NF).meta_extra.adset_name, w2(NF).meta_extra.platform, w2(NF).meta_extra.campo_novo], ['Anúncio Renomeado', 'Conjunto Teste', 'ig', 'valor novo'])
+for (const key of ['id', 'field_data', 'custom_disclaimer_responses', 'created_time', 'form_id', 'campaign_id', 'campaign_name']) assert(!(key in w2(NF).meta_extra), 'nao repete: ' + key)
+assert.equal(w2(FO1).meta_extra, null); assert.equal(Object.keys(wl2.leads[0]).length, 35)
+// Permissoes: so a chave de servico da funcao de captura; ninguem le as tabelas.
+await db.exec('set role service_role')
+assert.equal((await q('select * from public.meta_lead_raw_missing(1)')).length, 0); await q('select * from public.meta_form_definition_missing(1)')
+await assert.rejects(db.query('select public.meta_refresh_form_contexts()'), /permission denied/); await assert.rejects(db.query('select * from public.meta_lead_raw'), /permission denied/)
+await assert.rejects(db.query('select * from public.meta_form_definitions'), /permission denied/); await db.exec('reset role')
+for (const role of ['authenticated', 'anon']) {
+  await db.exec('set role ' + role)
+  for (const sql of ['select * from public.meta_lead_raw_missing(1)', 'select public.meta_lead_raw_store($$1$$,$$p$$,$$f$$,$${}$$::jsonb,$$id$$)', 'select * from public.meta_form_definition_missing(1)',
+    'select public.meta_form_definition_store($$f$$,$$p$$,$$n$$,$${}$$::jsonb)', 'select public.meta_refresh_form_contexts()', 'select * from public.meta_lead_raw', 'select * from public.meta_form_definitions']) await assert.rejects(db.query(sql), /permission denied/, role + ': ' + sql)
+  await db.exec('reset role')
+}
+
 // ---------- aquecimento (frio / morno / quente) ----------
 const answersOf = (o = {}) => {
   const v = { who: 'sou_o_atleta', linked: 'não', evals: 'sim', opp: 'sim,_convite_ou_proposta', goal: 'tornar-se_jogador_profissional', block: 'falta_de_oportunidades',
@@ -729,10 +837,10 @@ assert.equal((await ctx(U(3001))).length, 0, 'aviso nao altera o lead manual')
 
 // Agendamento automatico (fica para o final: so liga depois da simulacao).
 await assert.rejects(db.exec(generated('cron-preflight')), /PREFLIGHT_OK agendamento valido: 1 job/); await db.exec('ROLLBACK')
-assert.equal((await q(`select count(*) n from cron.job`))[0].n, 0, 'o ensaio do agendamento nao deixa job')
+assert.equal((await q(`select count(*) n from cron.job where jobname='meta-site-form-link'`))[0].n, 0, 'o ensaio do agendamento nao deixa job')
 await db.exec(generated('cron'))
 await db.exec(generated('cron').replaceAll('20261015021600', '20261015021601')) // segunda execucao (outra versao): continua um unico job
-const jobs = await q(`select jobname,schedule,command from cron.job`)
+const jobs = await q(`select jobname,schedule,command from cron.job where jobname='meta-site-form-link'`)
 assert.deepEqual(jobs, [{ jobname: 'meta-site-form-link', schedule: '*/5 * * * *', command: 'SELECT public.meta_link_site_answers(true)' }], 'um unico job, mesmo se o script rodar de novo')
 console.log('PASS: aquecimento frio/morno/quente pelas respostas (borda, lead novo, lead antigo so se intocado, escolha do SDR preservada, falha nao bloqueia) + vinculo site<->formulario (anuncio+horario+nome / telefone), contexto completo no lead do CRM, aprovacao sem duplicar, indicador, falha visivel, idempotencia e permissoes')
 await db.close()
