@@ -75,9 +75,10 @@ try {
     await expect(cards(page).first().getByText(new RegExp(clock(state.leads[2].lead_received_at)))).toBeVisible()
   }
   const section = first.getByRole('region', { name: 'Importações do SDR' })
-  await section.getByRole('button', { name: 'Formulários · 2', exact: true }).click()
+  await expect(section.getByRole('button', { name: 'Formulários · 2' })).toHaveCount(0) // so existe "Todas"
+  await expect(section.getByRole('button', { name: /^Site \/ conversão direta/ })).toHaveCount(0)
   await section.getByRole('button', { name: 'Manuais', exact: true }).click()
-  await expect(cards(first)).toHaveCount(1)
+  await expect(cards(first)).toHaveCount(2)
   await first.getByRole('button', { name: 'Contexto de Formulário Recuperado', exact: true }).click()
   const detail = first.getByRole('region', { name: 'Dados completos da importação' })
   await expect(detail.getByText(longAnswer, { exact: true })).toBeVisible()
@@ -88,12 +89,8 @@ try {
   await expect(detail.getByText('DADO NÃO MAPEADO PRESERVADO',{exact:true})).toBeVisible()
   await expect(detail.locator('pre')).toHaveCount(0)
   await first.keyboard.press('Escape')
-  await section.getByRole('button', { name: 'Todas · 3', exact: true }).click()
   await section.getByRole('button', { name: 'Automáticas e manuais', exact: true }).click()
   await expect(cards(first)).toHaveCount(3)
-  await section.getByRole('button', { name: 'Site / conversão direta · 1', exact: true }).click()
-  await expect(cards(first)).toHaveCount(1)
-  await section.getByRole('button', { name: 'Todas · 3', exact: true }).click()
   // Realtime is deliberately unavailable. The real dashboard revision fallback catches both sessions up.
   state.leads.push(lead(4, 'Novo Recebimento', 'website', 'automatic', ago(1), ago(3)))
   state.revision++
@@ -107,5 +104,5 @@ try {
   assert.equal(calls.filter(call => call.name === 'crm_leads' && call.select === 'id,import_snapshot').length, 1)
   assert(calls.filter(call => call.method !== 'GET').every(call => !['crm_leads','crm_lead_contexts'].includes(call.name)))
   assert.deepEqual(errors, [])
-  console.log('PASS: two SDR sessions synchronize new arrivals; receipt priority, exact seconds, origin/method filters and complete lazy-loaded source context')
+  console.log('PASS: two SDR sessions synchronize new arrivals; receipt priority, exact seconds, method filters (only "Todas" as origin) and complete lazy-loaded source context')
 } finally { await browser.close() }

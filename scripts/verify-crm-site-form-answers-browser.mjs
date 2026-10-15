@@ -73,7 +73,9 @@ try {
     await expect(hint).toContainText('Quente'); await expect(hint).toContainText(HINT)
     await expect(hint).toContainText(c.name === 'site' ? 'já marcado no lead; o SDR pode alterar' : 'sugestão; o aquecimento do lead não foi alterado')
     if (c.name === 'site') await expect(page.locator('button[aria-label^="Contexto de "]').first()).toHaveCSS('color', 'rgb(253, 135, 38)')
+    await expect(panel.getByRole('region', { name: 'Dados completos da importação' })).toBeHidden() // recolhido: so as respostas aparecem de cara
     if (c.name === 'site') {
+      await panel.locator('summary').filter({ hasText: 'Dados do site e da campanha' }).click()
       const sectionBox = await section.boundingBox(), siteBox = await panel.getByRole('region', { name: 'Dados completos da importação' }).boundingBox()
       assert(sectionBox.y < siteBox.y, 'as respostas do formulario aparecem antes dos dados do site')
       await expect(panel.getByRole('heading', { name: 'Dados informados no site', exact: true })).toBeVisible()

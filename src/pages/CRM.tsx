@@ -192,7 +192,7 @@ export default function CRM() {
   const requestedTab = params.get("tab") || "leads";
   // Favoritos e links antigos da aba Remarketing (?tab=remarketing) abrem o Follow-up.
   const tab = requestedTab === "remarketing" ? "followup" : requestedTab === 'importacoes' ? 'importados' : requestedTab;
-  const importSection: ImportSection = params.get('origem') === 'form' ? 'form' : params.get('origem') === 'website' ? 'website' : 'all';
+  const importSection: ImportSection = 'all'; // a origem (formulário/site) deixou de ser filtro: a lista mostra todas
   const importMethod: ImportMethodFilter = params.get('entrada') === 'manual' ? 'manual' : params.get('entrada') === 'automatic' ? 'automatic' : 'all';
   const setImportFilter = (key: string, value: string) => setParams(previous => {
     const next = new URLSearchParams(previous); next.set(key, value); return next;

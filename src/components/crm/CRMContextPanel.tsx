@@ -197,7 +197,12 @@ export function CRMContextPanel({ lead, names = {} }: { lead: CRMLead; names?: R
           <p className="whitespace-pre-wrap break-words text-sm leading-6">{entry.content}</p>
         </section>
       ))}
-      <CRMImportDetails lead={lead} names={entryNames} />
+      {formAnswers.length > 0
+        ? <details className="rounded-lg border border-border/60 p-3">
+            <summary className="cursor-pointer text-sm font-medium">Dados do site e da campanha</summary>
+            <div className="mt-3"><CRMImportDetails lead={lead} names={entryNames} /></div>
+          </details>
+        : <CRMImportDetails lead={lead} names={entryNames} />}
       {context.loading && <p role="status" className="text-xs text-muted-foreground">Carregando contexto...</p>}
       {context.error && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 text-xs text-destructive">
