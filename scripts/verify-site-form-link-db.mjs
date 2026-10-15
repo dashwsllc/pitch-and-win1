@@ -712,6 +712,45 @@ for (const role of ['authenticated', 'anon']) {
   await db.exec('reset role')
 }
 
+// ---------- migration 7: a atualizacao reconhece o bloco de respostas em QUALQUER versao (dados chegam em momentos diferentes) ----------
+const PROD7 = '4cac492e56b4fd4e6523b81fc499d896'
+assert.equal(await md5('public.meta_refresh_form_contexts()'), PROD7, 'meta_refresh_form_contexts do teste e identica (md5) a de producao')
+const storeRaw = (id, raw, fields = 'id,ad_name') => q('select public.meta_lead_raw_store($1,$2,$3,$4::jsonb,$5)', [id, 'PAGE1', 'F11', JSON.stringify(raw), fields])
+// O contexto de FO3 ja esta no estado "so definicao" (sem dados do anuncio). Chegam os dados do anuncio DEPOIS.
+await storeRaw('form:fo3', { id: 'form:fo3', ad_name: 'Anúncio MO3', platform: 'fb' })
+assert.equal((await q('select public.meta_refresh_form_contexts() n'))[0].n, 0, 'defeito da migration 6: nao reconhecia o estado intermediario')
+assert(!(await metaCtx(MO3))[0].content.includes('Anúncio MO3'))
+const FOX = U(8101), MOX = await manualLead('Bloco de outro formulario', '11961666001')
+const blockOfFO3 = (await q('select public.meta_form_answers_text(f,null) t from public.meta_form_leads f where f.id=$1', [FO3]))[0].t
+await db.query(`insert into public.crm_lead_contexts(lead_id,author_id,author_name,author_role,context_type,content) values($1,$2,'QA','trafego','meta_form',$3)`, [MOX, ATOR, blockOfFO3])
+await db.query(`insert into public.crm_form_answer_links(crm_lead_id,form_lead_id,basis) values($1,$2,'teste')`, [MOX, FO2])
+const mdR = await md5('public.meta_refresh_form_contexts()')
+const defRefresh = (await q(`select pg_get_functiondef('public.meta_refresh_form_contexts()'::regprocedure) d`))[0].d
+await db.exec(defRefresh.replace('\nBEGIN\n', '\nBEGIN\n  -- alterada\n'))
+await assert.rejects(db.exec(generated('refresh')), /meta_refresh_form_contexts mudou desde a auditoria/); await db.exec('ROLLBACK'); await db.exec(defRefresh)
+const pre7 = await db.exec(generated('refresh-preflight').replaceAll(PROD7, mdR)).then(() => '', e => e.message); await db.exec('ROLLBACK')
+assert.match(pre7, /PREFLIGHT_OK contextos_atualizados_agora=(\d+) de (\d+) contextos do formulario/); assert(Number(pre7.match(/agora=(\d+)/)[1]) >= 1, 'o ensaio ve o que atualizaria')
+assert(!(await metaCtx(MO3))[0].content.includes('Anúncio MO3'), 'o ensaio nao grava')
+await db.exec(generated('refresh').replaceAll(PROD7, mdR))
+const ctx7a = (await metaCtx(MO3))[0].content
+assert(ctx7a.includes('Anúncio\n→ Anúncio MO3') && ctx7a.includes('Plataforma\n→ Facebook') && inOrder(ctx7a) && ctx7a.includes('Quem está preenchendo este formulário?\n→ Sou o atleta (jogador)'), 'dados do anuncio entram no contexto')
+assert.equal((await q('select public.meta_refresh_form_contexts() n'))[0].n, 0, 'idempotente')
+// Mais dados chegam depois, de novo: continua atualizando (o estado anterior nao precisa ser reconhecido por texto fixo)
+await storeRaw('form:fo3', { id: 'form:fo3', campo_tardio: 'chegou depois' })
+assert.equal((await q('select public.meta_refresh_form_contexts() n'))[0].n, 1)
+const ctx7b = (await metaCtx(MO3))[0].content
+assert(ctx7b.includes('Campo tardio\n→ chegou depois') && ctx7b.includes('Anúncio\n→ Anúncio MO3'), 'nada do que ja chegou se perde')
+// Lead do site: o texto do site que vem ANTES do bloco nao e tocado.
+const siteCtxBefore = (await metaCtx(crmO1))[0].content, cut = siteCtxBefore.lastIndexOf('Respostas do formulário Meta')
+await q('select public.meta_lead_raw_store($1,$2,$3,$4::jsonb,$5)', ['form:fo1', 'p', 'f', JSON.stringify({ id: 'form:fo1', ad_name: 'Anúncio do site' }), 'id,ad_name'])
+assert.equal((await q('select public.meta_refresh_form_contexts() n'))[0].n, 1)
+const siteCtxAfter = (await metaCtx(crmO1))[0].content
+assert(siteCtxAfter.startsWith(siteCtxBefore.slice(0, cut)) && siteCtxAfter.includes('Anúncio\n→ Anúncio do site') && inOrder(siteCtxAfter) && siteCtxAfter.includes('Ligado ao envio do site de'))
+// Seguranca: bloco de OUTRO formulario e texto sem bloco nunca sao tocados.
+assert.equal((await metaCtx(MOX))[0].content, blockOfFO3, 'bloco de outro formulario nao e reescrito')
+assert.equal((await metaCtx(MO4))[0].content, 'Texto que o SDR já tinha')
+for (const c of [ctx7b, siteCtxAfter]) assert(c.length < 50000)
+
 // ---------- aquecimento (frio / morno / quente) ----------
 const answersOf = (o = {}) => {
   const v = { who: 'sou_o_atleta', linked: 'não', evals: 'sim', opp: 'sim,_convite_ou_proposta', goal: 'tornar-se_jogador_profissional', block: 'falta_de_oportunidades',

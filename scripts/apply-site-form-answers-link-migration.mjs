@@ -29,6 +29,7 @@ const namefix = { version: '20261015031000', name: 'site_form_pairs_name_compat'
 const whatsapp = { version: '20261015032000', name: 'whatsapp_answer_links' }
 const order = { version: '20261015040000', name: 'form_answers_order_and_traffic_link' }
 const raw = { version: '20261015050000', name: 'meta_raw_capture_and_form_definitions' }
+const refresh = { version: '20261015051000', name: 'refresh_any_previous_version' }
 const cron = { version: '20261015021600', name: 'site_form_answers_link_cron' }
 const modes = {
   preflight: { chain: [link, temperature, namefix], install: false },
@@ -41,11 +42,13 @@ const modes = {
   order: { chain: [order], install: true },
   'raw-preflight': { chain: [raw], install: false },
   raw: { chain: [raw], install: true },
+  'refresh-preflight': { chain: [refresh], install: false },
+  refresh: { chain: [refresh], install: true },
   'cron-preflight': { chain: [cron], install: false },
   cron: { chain: [cron], install: true },
 }
 const job = modes[mode]
-if (!job) { console.error('Use: preflight | apply | fix-preflight | fix | whatsapp-preflight | whatsapp | order-preflight | order | raw-preflight | raw | cron-preflight | cron'); process.exit(2) }
+if (!job) { console.error('Use: preflight | apply | fix-preflight | fix | whatsapp-preflight | whatsapp | order-preflight | order | raw-preflight | raw | refresh-preflight | refresh | cron-preflight | cron'); process.exit(2) }
 const { chain, install } = job
 const sources = chain.map(m => ({ ...m, source: readFileSync(resolve(root, `supabase/migrations/${m.version}_${m.name}.sql`), 'utf8') }))
 const bodyOf = source => source.replace(/^BEGIN;\s*/m, '').replace(/COMMIT;\s*$/m, '')
@@ -90,7 +93,14 @@ if (install) {
       SELECT atualizados INTO n FROM _form_refresh_report;
       RAISE EXCEPTION 'PREFLIGHT_OK contextos_atualizados_agora=% | jobs_de_atualizacao=%',n,(SELECT count(*) FROM cron.job WHERE jobname='meta-form-context-refresh') USING ERRCODE='P0001';
     END $preflight$;`
-  const report = chain[0].version === raw.version ? rawReport : chain[0].version === order.version ? orderReport : chain[0].version === whatsapp.version ? whatsappReport : chain[0].version === namefix.version ? pairsOnly : chain[0].version === link.version ? `
+  const refreshReport = `
+    DO $preflight$
+    DECLARE n int;
+    BEGIN
+      SELECT atualizados INTO n FROM _form_refresh2_report;
+      RAISE EXCEPTION 'PREFLIGHT_OK contextos_atualizados_agora=% de % contextos do formulario',n,(SELECT count(*) FROM public.crm_lead_contexts WHERE context_type='meta_form') USING ERRCODE='P0001';
+    END $preflight$;`
+  const report = chain[0].version === refresh.version ? refreshReport : chain[0].version === raw.version ? rawReport : chain[0].version === order.version ? orderReport : chain[0].version === whatsapp.version ? whatsappReport : chain[0].version === namefix.version ? pairsOnly : chain[0].version === link.version ? `
     DO $preflight$
     DECLARE pares int; ambiguos int; no_crm int; gemeos int; quente int; morno int; frio int; sem int;
     BEGIN
