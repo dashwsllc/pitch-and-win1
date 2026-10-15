@@ -79,6 +79,21 @@ O SDR vê no Contexto: "Aquecimento sugerido pelo formulário: Quente · já mar
 
 Conferir antes de confiar: `node scripts/site-form-link.mjs temperature` (contagem e 3 exemplos de cada, sem nomes). Depois de instalar: `node scripts/site-form-link.mjs hints`. Se a distribuição não servir ao time, ajuste os critérios em `meta_form_temperature` e `meta_ddd_info` (duas funções) e reinstale-a; nada fica gravado além da sugestão e do campo do lead.
 
+## Quarta migration: WhatsApp igual e leads criados à mão (`20261015032000_whatsapp_answer_links`)
+
+Depois do `backfill` (de 426 para 729 formulários) apareceram dois buracos reais, verificados no banco:
+
+1. **Nome diferente, mesma pessoa.** 49 registros do site tinham o **mesmo WhatsApp**, o **mesmo anúncio** e chegaram de 1 a 7 minutos depois do formulário, mas o nome do perfil da Meta era outro ("Silvazs", "jonaslevyr_", "P10", letras estilizadas, nome de um parente). As regras 1 a 3 exigem nome parecido e os deixavam sem respostas. **Regra 4:** mesmo WhatsApp (8 últimos dígitos) + mesmo anúncio (ou site sem anúncio identificado), site de 2 min antes a 15 min depois do formulário, qualquer nome. Anúncios diferentes dos dois lados **não** ligam. Mais de um candidato = "revisar (ambíguo)". Ensaio no banco real: 57 pares inequívocos (56 pela regra 4) e 6 para revisar.
+2. **Leads criados à mão (72 no CRM).** 36 deles têm exatamente **um** formulário com o mesmo WhatsApp (2 ficam para revisão por terem dois leads ou dois formulários para o mesmo número) e continuavam sem contexto. A migration anexa as respostas ao Contexto desse lead (o ícone laranja acende), guarda o vínculo em `crm_form_answer_links` e, **na aprovação, o formulário reaproveita o lead que já existe em vez de criar outro** (sem isso, aprovar as levas duplicaria esses 36). Lead que ninguém abordou também recebe o aquecimento; o já trabalhado recebe só a sugestão. O vínculo é permanente: se o SDR apagar o contexto, ele não volta sozinho.
+
+Instalar (na pasta `pitch-and-win1`):
+
+1. Ensaio, nada é gravado: `node scripts/apply-site-form-answers-link-migration.mjs whatsapp-preflight` → deve terminar em `ENSAIO CONCLUIDO … site_x_formulario: inequivocos=57 … | leads_manuais_x_formulario: inequivocos=36 para_revisar=2`. Se aparecer "mudou desde a auditoria", pare.
+2. Instalar: `node scripts/apply-site-form-answers-link-migration.mjs whatsapp`
+3. Em até 5 minutos o agendamento liga tudo; para ver na hora: `node scripts/site-form-link.mjs apply` (mostra primeiro os leads manuais, depois site x formulário). Antes de instalar, `node scripts/site-form-link.mjs manual` mostra quem seria ligado (só a partir da instalação).
+
+Reversão: `DROP TABLE public.crm_form_answer_links;` (as respostas já anexadas ficam) e reinstalar `meta_site_form_pairs` / `meta_link_site_answers` do arquivo `20261015031000…`/`20261015021500…` e `meta_sync_form_lead_to_crm` do arquivo `20261015021500…`.
+
 ## O que já existia (não foi recriado)
 
 A aba **Importações** do CRM já tem as seções de origem (Todas / Formulários / Site), os filtros Automáticas e Manuais e as visões Lista, Aquecimento, Abordagem e **Esteira do LEAD**, com a mesma lógica da aba Leads. O ícone do livro fica **laranja** quando o lead tem contexto de verdade: respostas do formulário (próprias ou ligadas) ou anotações do atendimento; só contato e dados técnicos não acendem.
@@ -95,7 +110,8 @@ A aba **Importações** do CRM já tem as seções de origem (Todas / Formulári
 
 ## Limites conhecidos
 
-- **Leads criados à mão pelo SDR** com o WhatsApp de um formulário: só aviso (`twins`). Aprovar esse formulário cria um lead novo; unifique antes de aprovar.
+- **Leads criados à mão pelo SDR** com o WhatsApp de um formulário: até a quarta migration eram só aviso (`twins`) e aprovar o formulário criava um lead novo. Depois dela, o caso sem ambiguidade é ligado e reaproveitado; com dois leads ou dois formulários para o mesmo número fica para decisão humana. Se o lead manual foi criado para **outro** atleta que usa o mesmo número (pai com dois filhos), confira o nome do formulário no Contexto.
+- **Registros do site sem formulário na Meta:** 42 são anteriores a 17/09 (o formulário mais antigo da Meta é dessa data) e os demais não têm nenhum formulário com o mesmo WhatsApp nos minutos anteriores (pode ser conversão direta no site, ou número digitado diferente no formulário). Seguem sem respostas: não há resposta autêntica para mostrar.
 - **Pares ambíguos** ficam sem vínculo até alguém decidir.
 - **Atletas sem registro do site e fora do sistema** (133 anteriores a 07/10) só aparecem depois do `backfill`.
 - O texto das respostas troca `_` por espaço e põe maiúscula só nas opções de múltipla escolha que a Meta entrega como identificador (`sou_o_atleta` → `Sou o atleta`). Respostas digitadas pelo atleta ficam exatamente como vieram.

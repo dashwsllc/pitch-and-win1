@@ -16,6 +16,7 @@ function extractFunction(file, name) {
   return src.slice(start, src.indexOf(';', end + tag[1].length) + 1)
 }
 const U = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+const norm0 = s => s.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(Boolean)
 const db = new PGlite()
 const q = async (sql, params) => (await db.query(sql, params)).rows
 
@@ -101,9 +102,32 @@ await db.exec(installSql)
 assert.deepEqual((await q(`select version,name,(statements[1] like '%meta_link_site_answers%' or statements[1] like '%meta_form_temperature%' or statements[1] like '%meta_names_compatible%') ok from supabase_migrations.schema_migrations order by version`)),
   [{ version: '20261015021500', name: 'site_form_answers_link', ok: true }, { version: '20261015030000', name: 'form_temperature', ok: true }, { version: '20261015031000', name: 'site_form_pairs_name_compat', ok: true }])
 await assert.rejects(db.exec(installSql), /ja instalada/); await db.exec('ROLLBACK')
+// Migration 4 (regra 4 por WhatsApp + leads criados a mao): o guard barra aprovacao diferente da auditada; o ensaio nao instala; a instalacao registra e nao repete.
+const SYNC_MD5_PROD = '859776b0667bb818db018d026e04475c'
+const syncDef = async () => (await q(`select pg_get_functiondef('public.meta_sync_form_lead_to_crm(uuid,uuid)'::regprocedure) d`))[0].d
+const syncBeforeWa = await syncDef(), m3 = await md5('public.meta_sync_form_lead_to_crm(uuid,uuid)')
+assert.equal(m3, SYNC_MD5_PROD, 'a aprovacao instalada no teste e identica (md5) a que esta em producao')
+await db.exec(syncBeforeWa.replace('\nBEGIN\n', '\nBEGIN\n  -- alterada\n'))
+await assert.rejects(db.exec(generated('whatsapp')), /mudou desde a auditoria/, 'o guard deve barrar a aprovacao diferente da auditada'); await db.exec('ROLLBACK')
+assert.notEqual(await md5('public.meta_sync_form_lead_to_crm(uuid,uuid)'), m3); await db.exec(syncBeforeWa)
+assert.equal(await md5('public.meta_sync_form_lead_to_crm(uuid,uuid)'), m3, 'funcao restaurada')
+const withSyncMd5 = sql => sql.replaceAll(SYNC_MD5_PROD, m3)
+await assert.rejects(db.exec(withSyncMd5(generated('whatsapp-preflight'))), /PREFLIGHT_OK site_x_formulario: inequivocos=0 \(pela regra do WhatsApp=0\) para_revisar=0 leads_do_crm_que_ganham_contexto=0 \| leads_manuais_x_formulario: inequivocos=0 para_revisar=0/); await db.exec('ROLLBACK')
+assert.equal((await q(`select count(*) n from supabase_migrations.schema_migrations where version='20261015032000'`))[0].n, 0, 'o ensaio da migration 4 nao registra nada')
+assert.equal((await q(`select to_regclass('public.crm_form_answer_links') r`))[0].r, null, 'o ensaio nao cria a tabela de vinculos')
+const whatsappSql = withSyncMd5(generated('whatsapp'))
+await db.exec(whatsappSql)
+assert.deepEqual(await q(`select version,name,(statements[1] like '%crm_form_answer_links%') ok from supabase_migrations.schema_migrations where version='20261015032000'`), [{ version: '20261015032000', name: 'whatsapp_answer_links', ok: true }])
+await assert.rejects(db.exec(whatsappSql), /ja instalada/); await db.exec('ROLLBACK')
+{ // a aprovacao so ganha os trechos NOVO da migration 4
+  const prev = new Set(norm0(syncBeforeWa)), now = norm0(await syncDef())
+  const removed = [...prev].filter(l => !now.includes(l)), added = now.filter(l => !prev.has(l))
+  assert.deepEqual(removed, [], 'a migration 4 nao pode perder nenhuma linha da aprovacao: ' + removed.join(' | '))
+  assert(added.length >= 4 && added.length <= 12 && added.some(l => /crm_form_answer_links/.test(l)), 'diff inesperado na aprovacao: ' + added.join(' | '))
+}
 
 // A funcao de aprovacao so pode diferir da original nos trechos marcados NOVO.
-const norm = s => s.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(Boolean)
+const norm = norm0
 const before = new Set(norm(original[0].d)), after = norm((await q(`select pg_get_functiondef('public.meta_sync_form_lead_to_crm(uuid,uuid)'::regprocedure) d`))[0].d)
 const removed = [...before].filter(l => !after.includes(l)), added = after.filter(l => !before.has(l))
 assert.deepEqual(removed.filter(l => !/^(IF crm IS NULL THEN|BEGIN|DECLARE|v_age smallint)/.test(l)), [], 'a aprovacao nao pode perder nenhuma linha original: ' + removed.join(' | '))
@@ -311,6 +335,126 @@ for (const [sid, fid, shouldLink, label] of compatCases)
   assert.equal((await q('select answers_form_lead_id a from public.meta_form_leads where id=$1', [sid]))[0].a, shouldLink ? fid : null, 'vinculo de ' + label)
 const dry2 = await q('select * from public.meta_link_site_answers(false)')
 assert(dry2.some(r => r.nome_formulario === 'Carlos Alberto' && r.situacao === 'revisar (ambíguo)'), 'nomes incompativeis ficam para revisao')
+
+// ---------- regra 4: mesmo WhatsApp + mesmo anuncio, nome do perfil diferente ----------
+let adW = 300
+const waCases = []
+for (const [label, formName, siteName, o] of [
+  ['apelido de usuario', 'Silvazs', 'Davi Silva', {}],
+  ['letras estilizadas', '𝒩𝒾𝒸ℴ𝓁𝒶𝓈', 'Nicolas Vicente Vieira da Silva', {}],
+  ['nome de um parente no perfil', 'Cledson Barretto', 'Cauã Jesus Barretto', {}],
+  ['site sem anuncio identificado', 'Pousada Xandu', 'Diego Tardelli Souza Santos', { siteAd: null, minutes: 6 }],
+  ['formato do telefone diferente (parenteses, 55)', 'mk calçados', 'Mikael Vinicius', { formPhone: '(11) 96736-8604', sitePhone: '5511967368604' }],
+]) {
+  const ad = 'ADW' + (++adW), n = adW, phone = '1196' + String(1000000 + n)
+  const fid = await form('w' + n, { name: formName, phone: o.formPhone || '+55' + phone, ad, at: '2026-10-14T10:00:00Z' })
+  const sid = await site('w' + n, { name: siteName, phone: o.sitePhone || phone, ad: o.siteAd === null ? null : ad, at: new Date(Date.parse('2026-10-14T10:00:00Z') + (o.minutes || 2) * 60000).toISOString() })
+  waCases.push([sid, fid, label, true])
+}
+for (const [label, formName, siteName, o] of [
+  ['anuncios diferentes dos dois lados nao ligam so pelo telefone', 'Fulano Perfil', 'Beltrano Digitado', { siteAd: 'ADOUTRO' }],
+  ['site mais de 15 min depois nao liga por esta regra', 'Fulano Perfil', 'Beltrano Digitado', { minutes: 30 }],
+  ['telefone diferente nao liga mesmo com anuncio igual e nome diferente', 'Fulano Perfil', 'Beltrano Digitado', { sitePhone: '11900000099' }],
+]) {
+  const ad = 'ADW' + (++adW), n = adW, phone = '1196' + String(1000000 + n)
+  const fid = await form('w' + n, { name: formName, phone: '+55' + phone, ad, at: '2026-10-14T11:00:00Z' })
+  const sid = await site('w' + n, { name: siteName, phone: o.sitePhone || phone, ad: o.siteAd === undefined ? ad : o.siteAd, at: new Date(Date.parse('2026-10-14T11:00:00Z') + (o.minutes || 2) * 60000).toISOString() })
+  waCases.push([sid, fid, label, false])
+}
+// duas pessoas (formularios) com o mesmo WhatsApp e anuncio e um unico registro do site: ambiguo
+const adAmb = 'ADW' + (++adW)
+const fa1 = await form('wamb1', { name: 'Perfil Um', phone: '+5511961999999', ad: adAmb, at: '2026-10-14T12:00:00Z' })
+const fa2 = await form('wamb2', { name: 'Perfil Dois', phone: '+5511961999999', ad: adAmb, at: '2026-10-14T12:01:00Z' })
+const sa = await site('wamb', { name: 'Digitado Nome', phone: '11961999999', ad: adAmb, at: '2026-10-14T12:03:00Z' })
+const wRows = await q('select * from public.meta_site_form_pairs() where site_id=$1', [sa])
+assert.equal(wRows.length, 2); assert(wRows.every(r => r.ambiguous && Number(r.rule) === 4), 'dois formularios para o mesmo site = revisar')
+const wPreview = await q('select * from public.meta_link_site_answers(false)')
+for (const [sid, fid, label, shouldLink] of waCases) {
+  const row = wPreview.find(r => r.site_id === sid)
+  if (shouldLink) { assert(row && row.form_id === fid && !row.ambiguous && Number(row.rule) === 4 && row.situacao === 'previsto', label) } else assert(!row, label)
+}
+await link(true)
+for (const [sid, fid, label, shouldLink] of waCases)
+  assert.equal((await q('select answers_form_lead_id a from public.meta_form_leads where id=$1', [sid]))[0].a, shouldLink ? fid : null, 'vinculo: ' + label)
+assert.equal((await q('select answers_form_lead_id a from public.meta_form_leads where id=$1', [sa]))[0].a, null, 'ambiguo nao e ligado')
+const basis = (await q('select answers_link_basis b from public.meta_form_leads where id=$1', [waCases[0][0]]))[0].b
+assert.match(basis, /^mesmo WhatsApp e mesmo anúncio, nome diferente, 120 s depois do formulário$/)
+assert.match((await q('select answers_link_basis b from public.meta_form_leads where id=$1', [waCases[3][0]]))[0].b, /^mesmo WhatsApp \(site sem anúncio identificado\), nome diferente, 360 s/)
+// o site do atleta que ja esta no CRM ganha as respostas (contexto) com o motivo registrado
+const WCRM = await form('wcrm', { name: 'Perfil Joga', phone: '+5511961888888', ad: 'ADWCRM', at: '2026-10-14T13:00:00Z' })
+const SWCRM = await site('wcrm', { name: 'Joao Digitado', phone: '11961888888', ad: 'ADWCRM', at: '2026-10-14T13:02:00Z', approved: true })
+assert.equal((await sync(SWCRM)).ok, true); const crmW = await crmOf(SWCRM)
+assert.equal((await ctx(crmW)).filter(c => c.context_type === 'meta_form').length, 0)
+await link(true)
+const wCtx = (await ctx(crmW)).filter(c => c.context_type === 'meta_form')
+assert.equal(wCtx.length, 1); assert(wCtx[0].content.includes('mesmo WhatsApp e mesmo anúncio, nome diferente'), 'o motivo do vinculo aparece no Contexto'); assert(wCtx[0].content.includes('Esse mlk e muito craque'), 'resposta exata do formulario')
+// as regras antigas continuam funcionando como antes
+assert.equal(Number((await q('select rule from public.meta_link_site_answers(false) where nome_formulario=$1 limit 1', ['Carlos Alberto']))[0]?.rule ?? 2), 2)
+
+// ---------- leads criados a mao com formulario do mesmo WhatsApp ----------
+const manualLead = async (name, phone) => (await q(`insert into public.crm_leads(name,phone) values($1,$2) returning id`, [name, phone]))[0].id
+const metaCtx = async crm => (await ctx(crm)).filter(c => c.context_type === 'meta_form')
+const MF1 = await form('mf1', { name: 'Perfil Joao', phone: '+5511961000001', ad: 'ADM1', at: '2026-10-14T14:00:00Z' })
+const M1 = await manualLead('Joao (pai)', '11 96100-0001') // ninguem abordou
+const MF2 = await form('mf2', { name: 'Perfil Pedro', phone: '+5511961000002', ad: 'ADM2', at: '2026-10-14T14:10:00Z' })
+const M2 = await manualLead('Pedro', '(11) 96100-0002')
+await db.query(`update public.crm_leads set approach_stage='em_abordagem',approach_count=1,pipeline_stage='em_qualificacao' where id=$1`, [M2]) // o SDR ja trabalhou este lead
+const MF3 = await form('mf3', { name: 'Perfil Tres', phone: '+5511961000003', ad: 'ADM3', at: '2026-10-14T14:20:00Z' })
+const M3a = await manualLead('Tres A', '11961000003'), M3b = await manualLead('Tres B', '11 96100-0003') // dois leads, um formulario: ambiguo
+const M4 = await manualLead('Sem formulario', '11961000004')
+const MF5 = await form('mf5', { name: 'Sem Respostas', phone: '+5511961000005', ad: 'ADM5', at: '2026-10-14T14:30:00Z', answers: false })
+const M5 = await manualLead('Sem respostas', '11961000005')
+const MF6 = await form('mf6', { name: 'Perfil Seis', phone: '+5511961000006', ad: 'ADM6', at: '2026-10-14T15:00:00Z' })
+const SM6 = await site('mf6', { name: 'Seis Digitado', phone: '11961000006', ad: 'ADM6', at: '2026-10-14T15:02:00Z' })
+const M6 = await manualLead('Seis (mae)', '11961000006')
+const mPreview = await q('select * from public.meta_link_manual_answers(false)')
+const mRow = id => mPreview.filter(r => r.crm_lead_id === id)
+assert.deepEqual([mRow(M1)[0].form_id, mRow(M1)[0].ambiguous, mRow(M1)[0].situacao], [MF1, false, 'previsto'])
+assert.deepEqual([mRow(M2)[0].form_id, mRow(M2)[0].ambiguous], [MF2, false])
+assert(mRow(M3a)[0].ambiguous && mRow(M3b)[0].ambiguous && mRow(M3a)[0].situacao === 'revisar (ambíguo)', 'dois leads manuais para um formulario = revisar')
+assert.equal(mRow(M4).length + mRow(M5).length, 0, 'sem formulario ou formulario sem respostas nao entra')
+assert.equal((await metaCtx(M1)).length, 0, 'a simulacao nao grava')
+assert.equal(await temperatureOf(M1), 'frio')
+const countBeforeManual = await countCrm()
+await link(true)
+assert.equal(await countCrm(), countBeforeManual, 'vincular nao cria lead')
+const mc1 = await metaCtx(M1)
+assert.equal(mc1.length, 1); assert(mc1[0].content.startsWith('Respostas do formulário Meta · FORMULÁRIO ZYRON'), mc1[0].content.slice(0, 80))
+assert(mc1[0].content.includes('Esse mlk e muito craque Zé, até me deram um apelido "franginha*"') && mc1[0].content.includes(LONG), 'resposta exata e sem corte')
+assert.deepEqual([mc1[0].author_id, mc1[0].author_role], [ATOR, 'trafego'], 'o autor e quem criou o lead manual')
+assert.equal((await metaCtx(M2)).length, 1)
+assert.equal(await temperatureOf(M1), 'morno', 'lead manual que ninguem abordou recebe o aquecimento'); assert.equal((await hintOf(M1)).applied, true)
+assert.equal(await temperatureOf(M2), 'frio', 'lead manual que o SDR ja abordou so recebe a sugestao'); assert.deepEqual([(await hintOf(M2)).temperature, (await hintOf(M2)).applied], ['morno', false])
+for (const id of [M3a, M3b, M4, M5]) assert.equal((await metaCtx(id)).length, 0)
+assert.deepEqual((await q('select crm_lead_id from public.crm_form_answer_links order by crm_lead_id')).map(r => r.crm_lead_id).sort(), [M1, M2, M6].sort())
+// idempotente; e o vinculo persiste mesmo se o SDR apagar o contexto (nao reaparece a cada ciclo)
+await link(true); await link(true)
+assert.equal((await metaCtx(M1)).length, 1)
+await db.query(`delete from public.crm_lead_contexts where lead_id=$1 and context_type='meta_form'`, [M2]); await link(true)
+assert.equal((await metaCtx(M2)).length, 0, 'o que o SDR apagou nao volta sozinho')
+// o contexto vira indicador (icone laranja)
+assert((await q('select lead_id from public.crm_context_summary()')).some(r => r.lead_id === M1), 'o icone de contexto acende para o lead manual')
+// Aprovacao: o formulario REAPROVEITA o lead manual, sem criar outro.
+await approve(MF1); const leadsBeforeApproval = await countCrm()
+const ok1 = await sync(MF1)
+assert.deepEqual([ok1.ok, ok1.crm_lead_id, ok1.already], [true, M1, false]); assert.equal(await countCrm(), leadsBeforeApproval, 'aprovar nao duplica o lead manual')
+assert.equal((await q('select crm_sync_status s from public.meta_form_leads where id=$1', [MF1]))[0].s, 'enviado')
+assert.equal((await q('select count(*) n from public.crm_leads where meta_form_lead_id=$1', [MF1]))[0].n, 0, 'o lead manual continua sem vinculo de origem Meta')
+assert.equal((await metaCtx(M1)).length, 1, 'aprovar de novo nao duplica o contexto'); assert.equal((await sync(MF1)).crm_lead_id, M1)
+// O registro do SITE do mesmo atleta tambem reaproveita o lead manual.
+await approve(SM6); const ok6 = await sync(SM6)
+assert.deepEqual([ok6.ok, ok6.crm_lead_id], [true, M6]); assert.equal(await countCrm(), leadsBeforeApproval, 'aprovar o registro do site tambem nao duplica')
+assert.equal((await metaCtx(M6)).length, 1)
+// Sem vinculo (ambiguo), a aprovacao continua criando o lead como antes.
+await approve(MF3); assert.equal((await sync(MF3)).ok, true); assert.equal(await countCrm(), leadsBeforeApproval + 1)
+// Permissoes
+await db.exec('set role authenticated')
+await assert.rejects(db.query('select * from public.meta_link_manual_answers(false)'), /permission denied/)
+await assert.rejects(db.query('select * from public.meta_manual_twin_pairs()'), /permission denied/)
+await assert.rejects(db.query('select * from public.crm_form_answer_links'), /permission denied/)
+await db.exec('reset role; set role anon')
+await assert.rejects(db.query('select * from public.crm_form_answer_links'), /permission denied/)
+await db.exec('reset role')
 
 // ---------- aquecimento (frio / morno / quente) ----------
 const answersOf = (o = {}) => {

@@ -7,6 +7,7 @@ import { resolve } from 'node:path'
 //   preview          o que seria vinculado, SEM gravar nada (revise a lista, principalmente "revisar (ambiguo)")
 //   apply            vincula os pares inequivocos e leva as respostas ao Contexto dos leads que ja estao no CRM
 //   twins            leads criados a mao no CRM com formulario do mesmo WhatsApp e primeiro nome (so aviso)
+//   manual           (depois da migration 20261015032000) leads criados a mao que receberao as respostas do formulario de mesmo WhatsApp, SEM gravar
 //   backfill [data]  busca na Meta os formularios anteriores a 07/10 (data inicial, padrao 2026-09-01)
 //   backfill-status  acompanha a busca
 //   temperature      confere a classificacao frio/morno/quente (contagem e 3 exemplos de cada, sem nomes)
@@ -33,10 +34,19 @@ if (command === 'status') show(run(`SELECT
   (SELECT count(*) FROM public.meta_form_leads WHERE answers_form_lead_id IS NOT NULL) AS site_ligados_a_formulario,
   (SELECT count(*) FROM public.crm_leads c WHERE c.import_channel='website') AS leads_do_site_no_crm,
   (SELECT count(*) FROM public.crm_leads c WHERE c.import_channel='website' AND EXISTS(SELECT 1 FROM public.crm_lead_contexts x WHERE x.lead_id=c.id AND x.context_type='meta_form')) AS leads_do_site_com_respostas,
+  (SELECT count(*) FROM public.crm_leads c WHERE c.meta_form_lead_id IS NULL) AS leads_manuais_no_crm,
+  (SELECT count(*) FROM public.crm_leads c WHERE c.meta_form_lead_id IS NULL AND EXISTS(SELECT 1 FROM public.crm_lead_contexts x WHERE x.lead_id=c.id AND x.context_type='meta_form')) AS leads_manuais_com_respostas,
   (SELECT count(*) FROM public.meta_site_form_pairs() WHERE ambiguous) AS pares_para_revisar;`))
 else if (command === 'preview') show(run(`SELECT situacao, rule AS regra, delta_seconds AS segundos_depois_do_formulario, nome_site, nome_formulario, crm_lead_id IS NOT NULL AS site_ja_no_crm
   FROM public.meta_link_site_answers(false) ORDER BY ambiguous DESC, rule, delta_seconds;`))
+else if (command === 'manual') show(run(`SELECT situacao, nome_crm, nome_formulario, crm_lead_id FROM public.meta_link_manual_answers(false) ORDER BY ambiguous DESC, nome_crm;`))
 else if (command === 'apply') {
+  // Leads criados a mao (so existe depois da migration 20261015032000): mostra o que foi vinculado antes do restante.
+  if (run(`SELECT to_regprocedure('public.meta_link_manual_answers(boolean)') IS NOT NULL AS ok;`)?.[0]?.ok) {
+    console.log('Leads criados a mao x formulario do mesmo WhatsApp:')
+    show(run(`SELECT situacao, nome_crm, nome_formulario, crm_lead_id FROM public.meta_link_manual_answers(true) ORDER BY ambiguous DESC, nome_crm;`))
+    console.log('\nSite x formulario:')
+  }
   const rows = run(`SELECT situacao, rule AS regra, delta_seconds AS segundos_depois_do_formulario, nome_site, nome_formulario, crm_lead_id IS NOT NULL AS site_ja_no_crm
     FROM public.meta_link_site_answers(true) ORDER BY ambiguous DESC, rule, delta_seconds;`)
   show(rows)
@@ -66,4 +76,4 @@ else if (command === 'backfill-status') show(run(`SELECT
   (SELECT count(*) FROM public.meta_webhook_events WHERE status NOT IN ('processed','ignored')) AS eventos_na_fila,
   (SELECT count(*) FROM public.meta_form_leads WHERE entry_channel='form' AND created_time < '2026-10-07') AS formularios_antes_de_07_10,
   (SELECT count(*) FROM public.meta_form_leads WHERE entry_channel='form') AS formularios_total;`))
-else { console.error('Use: status | preview | apply | twins | temperature | hints | backfill [AAAA-MM-DD] | backfill-status'); process.exit(2) }
+else { console.error('Use: status | preview | apply | twins | manual | temperature | hints | backfill [AAAA-MM-DD] | backfill-status'); process.exit(2) }

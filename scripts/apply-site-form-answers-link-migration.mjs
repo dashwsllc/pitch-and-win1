@@ -6,10 +6,13 @@ import { resolve } from 'node:path'
 //   20261015021500_site_form_answers_link   liga formulario <-> registro do site, copia as respostas, evita lead duplicado
 //   20261015030000_form_temperature         sugere/marca frio, morno ou quente pelo DDD e pelas respostas
 //   20261015031000_site_form_pairs_name_compat  exige nomes compativeis nos vinculos por primeiro nome
+//   20261015032000_whatsapp_answer_links  regra 4 (mesmo WhatsApp + mesmo anuncio, nome diferente) e leads criados a mao com formulario do mesmo WhatsApp
 //   node scripts/apply-site-form-answers-link-migration.mjs preflight        ensaio das TRES num banco novo/real, numa transacao que sempre volta atras (nada e gravado)
 //   node scripts/apply-site-form-answers-link-migration.mjs apply            instala as tres e registra em schema_migrations
 //   node scripts/apply-site-form-answers-link-migration.mjs fix-preflight    ensaio so da terceira (quando as duas primeiras ja estao instaladas)
 //   node scripts/apply-site-form-answers-link-migration.mjs fix              instala so a terceira
+//   node scripts/apply-site-form-answers-link-migration.mjs whatsapp-preflight  ensaio so da quarta (as tres primeiras ja instaladas)
+//   node scripts/apply-site-form-answers-link-migration.mjs whatsapp         instala so a quarta
 //   node scripts/apply-site-form-answers-link-migration.mjs cron-preflight   ensaio do agendamento automatico
 //   node scripts/apply-site-form-answers-link-migration.mjs cron             liga o vinculo automatico a cada 5 min (so depois de conferir a simulacao)
 const root = resolve(import.meta.dirname, '..')
@@ -17,17 +20,20 @@ const mode = process.argv[2]
 const link = { version: '20261015021500', name: 'site_form_answers_link' }
 const temperature = { version: '20261015030000', name: 'form_temperature' }
 const namefix = { version: '20261015031000', name: 'site_form_pairs_name_compat' }
+const whatsapp = { version: '20261015032000', name: 'whatsapp_answer_links' }
 const cron = { version: '20261015021600', name: 'site_form_answers_link_cron' }
 const modes = {
   preflight: { chain: [link, temperature, namefix], install: false },
   apply: { chain: [link, temperature, namefix], install: true },
   'fix-preflight': { chain: [namefix], install: false },
   fix: { chain: [namefix], install: true },
+  'whatsapp-preflight': { chain: [whatsapp], install: false },
+  whatsapp: { chain: [whatsapp], install: true },
   'cron-preflight': { chain: [cron], install: false },
   cron: { chain: [cron], install: true },
 }
 const job = modes[mode]
-if (!job) { console.error('Use: preflight | apply | fix-preflight | fix | cron-preflight | cron'); process.exit(2) }
+if (!job) { console.error('Use: preflight | apply | fix-preflight | fix | whatsapp-preflight | whatsapp | cron-preflight | cron'); process.exit(2) }
 const { chain, install } = job
 const sources = chain.map(m => ({ ...m, source: readFileSync(resolve(root, `supabase/migrations/${m.version}_${m.name}.sql`), 'utf8') }))
 const bodyOf = source => source.replace(/^BEGIN;\s*/m, '').replace(/COMMIT;\s*$/m, '')
@@ -47,7 +53,16 @@ if (install) {
         INTO pares,ambiguos,no_crm FROM public.meta_link_site_answers(false);
       RAISE EXCEPTION 'PREFLIGHT_OK pares_inequivocos=% para_revisar=% leads_do_crm_que_ganham_contexto=%',pares,ambiguos,no_crm USING ERRCODE='P0001';
     END $preflight$;`
-  const report = chain[0].version === namefix.version ? pairsOnly : chain[0].version === link.version ? `
+  const whatsappReport = `
+    DO $preflight$
+    DECLARE pares int; regra4 int; ambiguos int; no_crm int; man_ok int; man_amb int;
+    BEGIN
+      SELECT count(*) FILTER (WHERE NOT ambiguous),count(*) FILTER (WHERE NOT ambiguous AND rule=4),count(*) FILTER (WHERE ambiguous),count(*) FILTER (WHERE NOT ambiguous AND crm_lead_id IS NOT NULL)
+        INTO pares,regra4,ambiguos,no_crm FROM public.meta_link_site_answers(false);
+      SELECT count(*) FILTER (WHERE NOT ambiguous),count(*) FILTER (WHERE ambiguous) INTO man_ok,man_amb FROM public.meta_link_manual_answers(false);
+      RAISE EXCEPTION 'PREFLIGHT_OK site_x_formulario: inequivocos=% (pela regra do WhatsApp=%) para_revisar=% leads_do_crm_que_ganham_contexto=% | leads_manuais_x_formulario: inequivocos=% para_revisar=%',pares,regra4,ambiguos,no_crm,man_ok,man_amb USING ERRCODE='P0001';
+    END $preflight$;`
+  const report = chain[0].version === whatsapp.version ? whatsappReport : chain[0].version === namefix.version ? pairsOnly : chain[0].version === link.version ? `
     DO $preflight$
     DECLARE pares int; ambiguos int; no_crm int; gemeos int; quente int; morno int; frio int; sem int;
     BEGIN
