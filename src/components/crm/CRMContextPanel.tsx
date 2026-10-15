@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { useRoles } from '@/hooks/useRoles'
-import { CRMLead, CRMLeadContext, useCRMContexts } from '@/hooks/useCRM'
+import { CRMLead, CRMLeadContext, useCRMContexts, useCRMTemperatureHint } from '@/hooks/useCRM'
 import { callDate } from '@/lib/crm'
 import { safePlainText, sanitizePlainText, validatePlainText } from '@/lib/plain-text'
 import { errorMessage } from '@/lib/sales'
@@ -24,10 +24,18 @@ const contextLabels: Record<string, string> = {
   meta_form: 'Respostas do formulário',
 }
 
+const hintLabels = { frio: 'Frio', morno: 'Morno', quente: 'Quente' } as const
+const hintColors = { frio: 'bg-slate-500/15 text-slate-300', morno: 'bg-yellow-600/15 text-yellow-500', quente: 'bg-orange-600/15 text-orange-400' } as const
+
 export function CRMContextPanel({ lead, names = {} }: { lead: CRMLead; names?: Record<string,string> }) {
   const context = useCRMContexts(lead.id)
+  const hint = useCRMTemperatureHint(lead.id).data
   const entryNames = { ...names, ...Object.fromEntries(context.contexts.filter(entry => entry.author_id && entry.author_name)
     .map(entry => [entry.author_id,entry.author_name])) }
+  // Leads do canal formulário já mostram as respostas completas em "Dados completos da importação".
+  // Nos demais (site, criados à mão) as respostas do formulário Meta ligadas ao lead ficam aqui, abertas.
+  const formAnswers = importChannel(lead) === 'form' ? [] : context.contexts.filter(entry => entry.context_type === 'meta_form')
+  const notes = context.contexts.filter(entry => entry.context_type !== 'meta_form')
   const { toast } = useToast()
   const { capabilities } = useRoles()
   const canWrite = capabilities.sdr || capabilities.closer
@@ -175,6 +183,20 @@ export function CRMContextPanel({ lead, names = {} }: { lead: CRMLead; names?: R
           Importar conversa/transcrição
         </Button>}
       </div>
+      {hint && hintLabels[hint.temperature] && <div role="status" aria-label="Aquecimento sugerido pelo formulário" className="space-y-1 rounded-lg border border-border/60 bg-card/60 p-3 text-xs">
+        <p className="font-semibold">
+          Aquecimento sugerido pelo formulário: <span className={`rounded px-1.5 py-0.5 ${hintColors[hint.temperature]}`}>{hintLabels[hint.temperature]}</span>
+          <span className="ml-1 font-normal text-muted-foreground">· {hint.applied ? 'já marcado no lead; o SDR pode alterar' : 'sugestão; o aquecimento do lead não foi alterado'}</span>
+        </p>
+        <p className="leading-5 text-muted-foreground">{hint.reasons}</p>
+      </div>}
+      {formAnswers.map(entry => (
+        <section key={entry.id} aria-label="Respostas do formulário Meta" className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <h3 className="text-sm font-semibold">Respostas do formulário Meta</h3>
+          <p className="text-[11px] text-muted-foreground">Perguntas e respostas exatamente como o atleta enviou · registrado por {safePlainText(entry.author_name, 160)} · {callDate(entry.created_at)}</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6">{entry.content}</p>
+        </section>
+      ))}
       <CRMImportDetails lead={lead} names={entryNames} />
       {context.loading && <p role="status" className="text-xs text-muted-foreground">Carregando contexto...</p>}
       {context.error && (
@@ -188,7 +210,7 @@ export function CRMContextPanel({ lead, names = {} }: { lead: CRMLead; names?: R
           Sem contexto importado. Use o botão acima para colar ou anexar o bloco completo.
         </p>
       )}
-      {context.contexts.filter(entry => entry.context_type !== 'meta_form' || !importChannel(lead)).map((entry) => (
+      {notes.map((entry) => (
         <article key={entry.id} className="rounded-md border border-border/50 p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -200,7 +222,7 @@ export function CRMContextPanel({ lead, names = {} }: { lead: CRMLead; names?: R
                 <p className="text-[11px] text-muted-foreground">Editado por {safePlainText(entry.updated_by_name, 160) || 'usuário CRM'} em {callDate(entry.updated_at)}</p>
               )}
             </div>
-            {canWrite && entry.context_type !== 'meta_form' && <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={`Editar ${contextLabels[entry.context_type] || 'contexto'}`} onClick={() => startEdit(entry)}>
+            {canWrite && <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={`Editar ${contextLabels[entry.context_type] || 'contexto'}`} onClick={() => startEdit(entry)}>
               <Pencil className="h-3.5 w-3.5" />
             </Button>}
           </div>
@@ -212,11 +234,7 @@ export function CRMContextPanel({ lead, names = {} }: { lead: CRMLead; names?: R
               <ExternalLink className="mr-2 h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="truncate">Abrir mídia no Google Drive</span>
             </a>
           </Button>}
-          {entry.context_type === 'meta_form' ? <details className="mt-2">
-            <summary className="cursor-pointer text-xs">Resumo gerado na importação (pode ser abreviado)</summary>
-            <p className="mt-2 text-xs text-muted-foreground">As respostas completas e categorizadas estão em Dados e contexto da importação, acima.</p>
-            <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5">{entry.content}</p>
-          </details> : <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5">{entry.file_name ? entry.content : safePlainText(entry.content, MAX_CONTEXT_LENGTH)}</p>}
+          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5">{entry.file_name ? entry.content : safePlainText(entry.content, MAX_CONTEXT_LENGTH)}</p>
         </article>
       ))}
 

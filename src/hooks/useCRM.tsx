@@ -334,6 +334,24 @@ export function useCRMContextSummary() {
   };
 }
 
+export type CRMTemperatureHint = { temperature: 'frio' | 'morno' | 'quente'; reasons: string; applied: boolean };
+
+/** Aquecimento sugerido pelas respostas do formulário (e o motivo). Se a função ainda não existe no banco, simplesmente não há sugestão. */
+export function useCRMTemperatureHint(leadId: string | null) {
+  const { user } = useAuth();
+  const { hasCRMAccess } = useRoles();
+  return useQuery({
+    queryKey: ["crm", "temperature-hint", user?.id, leadId],
+    enabled: !!user && hasCRMAccess && !!leadId,
+    ...queryOptions,
+    retry: false,
+    queryFn: async () => {
+      const rows = await arenaRpc<CRMTemperatureHint[]>('crm_lead_temperature_hint', { p_lead: leadId! });
+      return Array.isArray(rows) ? rows[0] ?? null : null;
+    },
+  });
+}
+
 export function useCRMContexts(leadId: string | null) {
   const { user } = useAuth();
   const { hasCRMAccess } = useRoles();
