@@ -98,8 +98,8 @@ assert.equal((await q(`select to_regclass('public.crm_lead_temperature_hints') r
 // Instalacao: aplica + registra em schema_migrations; reaplicar e barrado.
 const installSql = withMd5(generated('apply'))
 await db.exec(installSql)
-assert.deepEqual((await q(`select version,name,(statements[1] like '%meta_link_site_answers%' or statements[1] like '%meta_form_temperature%') ok from supabase_migrations.schema_migrations order by version`)),
-  [{ version: '20261015021500', name: 'site_form_answers_link', ok: true }, { version: '20261015030000', name: 'form_temperature', ok: true }])
+assert.deepEqual((await q(`select version,name,(statements[1] like '%meta_link_site_answers%' or statements[1] like '%meta_form_temperature%' or statements[1] like '%meta_names_compatible%') ok from supabase_migrations.schema_migrations order by version`)),
+  [{ version: '20261015021500', name: 'site_form_answers_link', ok: true }, { version: '20261015030000', name: 'form_temperature', ok: true }, { version: '20261015031000', name: 'site_form_pairs_name_compat', ok: true }])
 await assert.rejects(db.exec(installSql), /ja instalada/); await db.exec('ROLLBACK')
 
 // A funcao de aprovacao so pode diferir da original nos trechos marcados NOVO.
@@ -282,6 +282,35 @@ assert.equal(bad[0].r.ok, false, JSON.stringify(bad[0].r)); assert.match(bad[0].
 assert.equal((await q('select crm_sync_status s from public.meta_form_leads where id=$1', [F11]))[0].s, 'falhou')
 assert.equal((await ctx(crm11)).length, 0)
 assert.equal((await sync(F11)).ok, true, 'com autor valido a nova tentativa conclui'); assert.equal((await ctx(crm11)).length, 1)
+
+// ---------- nomes compativeis nas regras por primeiro nome ----------
+for (const [a, b, expected] of [['Carlos Alberto', 'Carlos Daniel dos Anjos Chaves', false], ['Maria', 'Maria Clara Souza', true],
+  ['Pedro vitor sousa gomes dos santos', 'Pedro vitor sousa games dos santos', true], ['Joao Pedro', 'Joao Paulo', false], ['', 'Maria', false],
+  ['João Pedro de Andrade Santana', 'Joao Pedro de Andrade Santana', true], ['Jarmeson Santos', 'Jarmeson Costa dos santos', true], ['Carlos E.', 'Carlos Eduardo', true]])
+  assert.equal((await q('select public.meta_names_compatible($1,$2) r', [a, b]))[0].r, expected, a + ' x ' + b)
+let adN = 200
+const compatCases = []
+for (const [formName, siteName, shouldLink] of [
+  ['Carlos Alberto', 'Carlos Daniel dos Anjos Chaves', false], // so o primeiro nome coincide: pode ser outra pessoa
+  ['Joao Pedro', 'Joao Paulo', false],
+  ['Pedro vitor sousa gomes dos santos', 'Pedro vitor sousa games dos santos', true], // 4+ nomes, 1 letra diferente
+  ['Luiz Henrique', 'Luiz Henrique blam dos Santos', true], // menor contido no maior
+  ['kaio_xz123', 'Kaio Mateus da Silva Morais', true], // apelido/usuario no formulario
+  ['@carlos.X7', 'Carlos Antonio Monteiro', true],
+]) {
+  const ad = 'ADC' + (++adN)
+  const fid = await form('c' + adN, { name: formName, phone: '+55119' + String(10000000 + adN), ad, at: '2026-10-13T10:00:00Z' })
+  const sid = await site('c' + adN, { name: siteName, phone: '1190000' + adN, ad, at: '2026-10-13T10:02:00Z' })
+  const row = (await q('select * from public.meta_site_form_pairs() where site_id=$1', [sid]))[0]
+  assert(row && row.form_id === fid, formName + ' x ' + siteName + ' deve aparecer como candidato')
+  assert.equal(row.ambiguous, !shouldLink, formName + ' x ' + siteName)
+  compatCases.push([sid, fid, shouldLink, formName])
+}
+await link(true)
+for (const [sid, fid, shouldLink, label] of compatCases)
+  assert.equal((await q('select answers_form_lead_id a from public.meta_form_leads where id=$1', [sid]))[0].a, shouldLink ? fid : null, 'vinculo de ' + label)
+const dry2 = await q('select * from public.meta_link_site_answers(false)')
+assert(dry2.some(r => r.nome_formulario === 'Carlos Alberto' && r.situacao === 'revisar (ambíguo)'), 'nomes incompativeis ficam para revisao')
 
 // ---------- aquecimento (frio / morno / quente) ----------
 const answersOf = (o = {}) => {
