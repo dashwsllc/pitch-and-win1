@@ -288,6 +288,51 @@ html.painel [data-sidebar='menu-button'][data-active='true']::before {
   }
 }
 
+/*
+  Gráfico de vendas (AreaKpi). O desenho e o morph são feitos no componente (requestAnimationFrame); aqui ficam só a
+  mira, o marcador e a dica: entram e saem em 120 ms, a dica segue o ponteiro com um leve atraso e tudo some enquanto o
+  desenho anima (data-animando), para não mostrar o valor de um ponto em movimento.
+*/
+@keyframes grafico-aparecer {
+  from {
+    opacity: 0;
+  }
+}
+.grafico-foco {
+  transition: opacity 120ms ease-out;
+  animation: grafico-aparecer 120ms ease-out;
+}
+.grafico-dica {
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out,
+    visibility 0s;
+}
+/* Fora do ar: some com fade e só então deixa de existir para a leitura (innerText, leitores de tela). */
+.grafico-dica[aria-hidden='true'] {
+  visibility: hidden;
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out,
+    visibility 0s linear 120ms;
+}
+.grafico-area[data-animando] .grafico-foco,
+.grafico-area[data-animando] .grafico-dica {
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .grafico-dica {
+    transition:
+      opacity 120ms ease-out,
+      visibility 0s;
+  }
+  .grafico-dica[aria-hidden='true'] {
+    transition:
+      opacity 120ms ease-out,
+      visibility 0s linear 120ms;
+  }
+}
+
 /* Dados em recarga por troca de filtro: os números anteriores ficam na tela, só mais discretos. */
 .painel-recarregando {
   opacity: 0.6;

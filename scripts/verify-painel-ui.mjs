@@ -188,14 +188,24 @@ await teste('estrutura, ordem das seções, tokens escopados e navegação intac
     for (const nome of [...KPIS, GRAFICO, ...PODIOS]) await expect(regiao(pagina, nome)).toBeVisible()
     // Os indicadores conservam sua linha; os DOIS pódios ficam ao lado de calls/abordagens.
     const caixa = (nome) => regiao(pagina, nome).boundingBox()
-    const [qv, closers, grafico, sdrs, conv, meta, abord] = await Promise.all(['Quantidade de Vendas', PODIOS[0], GRAFICO, PODIOS[1], 'Conversão', 'Meta do dia', 'Abordagens'].map(caixa))
+    const [qv, closers, grafico, sdrs, conv, meta, abord, total, ticket, posicao] = await Promise.all(['Quantidade de Vendas', PODIOS[0], GRAFICO, PODIOS[1], 'Conversão', 'Meta do dia', 'Abordagens', 'Total de Vendas', 'Ticket Médio', 'Posição no ranking'].map(caixa))
     for (const [dir, nome] of [[closers, PODIOS[0]], [sdrs, PODIOS[1]]]) {
       assert.ok(dir.x >= grafico.x + grafico.width, `${nome}: ao lado do gráfico de calls e abordagens`)
     }
     assert.ok(Math.abs(closers.y - grafico.y) <= 1, 'Closers começa junto com o gráfico')
     assert.ok(sdrs.y > closers.y + closers.height && Math.abs(sdrs.x - closers.x) <= 1, 'SDRs logo abaixo dos Closers')
     assert.ok(Math.abs(sdrs.y + sdrs.height - (grafico.y + grafico.height)) <= 1, 'o gráfico ocupa a altura dos dois pódios')
-    assert.ok(Math.abs(qv.y - abord.y) <= 1 && Math.abs(qv.y - conv.y) <= 1, 'indicadores permanecem na mesma linha')
+    // Linha 1: Total de Vendas primeiro, com o Ticket Médio ao lado (e a posição no ranking), todos na mesma linha.
+    assert.ok(Math.abs(total.y - ticket.y) <= 1 && Math.abs(total.y - posicao.y) <= 1, 'Total de Vendas, Ticket Médio e Posição na mesma linha')
+    assert.ok(ticket.x >= total.x + total.width - 1 && posicao.x >= ticket.x + ticket.width - 1, 'Ticket Médio ao lado do Total de Vendas, a posição depois')
+    // Linha 2: o gráfico de vendas abaixo dos totais, na largura toda e alto.
+    assert.ok(qv.y >= total.y + total.height - 1, 'o gráfico de vendas vem depois do Total e do Ticket')
+    assert.ok(qv.x <= total.x + 1 && qv.x + qv.width >= posicao.x + posicao.width - 1, 'o gráfico de vendas ocupa a largura toda')
+    const desenhoDeVendas = await regiao(pagina, 'Quantidade de Vendas').getByRole('img').locator('svg').boundingBox()
+    assert.ok(desenhoDeVendas.height >= 280, `gráfico de vendas ampliado: desenho de ${desenhoDeVendas.height}px`)
+    // Linha 3: abordagens ao lado da conversão e da meta do dia (uma sobre a outra).
+    assert.ok(qv.y + qv.height <= abord.y + 1 && Math.abs(abord.y - conv.y) <= 1, 'abordagens e conversão na mesma linha, abaixo do gráfico')
+    assert.ok(conv.x >= abord.x + abord.width - 1, 'Conversão ao lado de Abordagens')
     assert.ok(Math.abs(conv.x - meta.x) < 1 && meta.y > conv.y + conv.height, 'Meta do dia logo abaixo da Conversão')
     assert.ok(Math.abs(meta.y + meta.height - (abord.y + abord.height)) <= 1, 'a coluna dos dois termina com o cartão de abordagens')
     const desenho = await regiao(pagina, GRAFICO).getByRole('img').locator('svg').boundingBox()

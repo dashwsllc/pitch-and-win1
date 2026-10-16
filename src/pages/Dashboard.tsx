@@ -166,9 +166,44 @@ export default function Dashboard() {
         {/* Aprovar uma compra de outro dia não mexe nos totais do período (contam na data da compra): o aviso mostra onde ela foi parar. */}
         <AvisoDeAprovacoes vendas={rows.compradasAntes} className={`md:col-span-2 xl:col-span-12 ${esmaecer}`} />
         <section data-dashboard-section="commercial-indicators" aria-label="Indicadores comerciais" className="contents">
-          {/* Indicadores na organização existente: vendas, abordagens e conversão sobre meta (5 · 4 · 3). */}
+          {/* Linha 1: o que entrou (Total de Vendas e Ticket Médio lado a lado) e a posição no ranking (6 · 3 · 3). */}
           <KpiCard
             destaque
+            rotulo="Total de Vendas"
+            icone={CircleDollarSignIcon}
+            valor={<NumeroAnimado valor={emCentavos(metrics.totalVendas)} formatar={formatarCentavos} />}
+            valorClasse="text-[clamp(2.25rem,3.4vw,3.75rem)]"
+            detalhe={
+              <>
+                Receita aprovada no período
+                {incluiAgora && metrics.quantidadeVendas > 0 && (
+                  <>
+                    {' · '}
+                    <strong className="font-semibold text-heading">+{formatarReais(receitaNaUltimaHora)}</strong> na última hora
+                  </>
+                )}
+              </>
+            }
+            className={`md:col-span-2 xl:col-span-6 ${esmaecer}`}
+          />
+          <KpiCard
+            rotulo="Ticket Médio"
+            icone={ChartSplineIcon}
+            valor={<NumeroAnimado valor={emCentavos(metrics.ticketMedio)} formatar={formatarCentavos} />}
+            valorClasse={VALOR_EM_REAIS}
+            detalhe="Receita média por venda"
+            className={`xl:col-span-3 ${esmaecer}`}
+          />
+          <KpiCard
+            rotulo="Posição no ranking"
+            icone={MedalIcon}
+            valor={posicao > 0 ? <NumeroAnimado valor={posicao} formatar={(n) => `#${n}`} /> : '—'}
+            detalhe={carregandoRanking ? 'Carregando…' : posicao > 0 ? `de ${tamanhoDoRanking} ${rotuloDoRanking}` : 'Ranking não iniciado'}
+            className="xl:col-span-3"
+          />
+
+          {/* Linha 2: o gráfico de vendas, em largura total e mais alto; a linha se desenha ao abrir e a cada troca de período. */}
+          <KpiCard
             rotulo="Quantidade de Vendas"
             icone={ShoppingBagIcon}
             valor={<NumeroAnimado valor={metrics.quantidadeVendas} />}
@@ -184,9 +219,9 @@ export default function Dashboard() {
                 <>Negócios confirmados</>
               )
             }
-            className={`md:col-span-2 xl:col-span-5 ${esmaecer}`}
+            className={`md:col-span-2 xl:col-span-12 ${esmaecer}`}
           >
-            <div className="mt-4">
+            <div className="mt-5">
               <AreaKpi
                 id="vendas"
                 pontos={intervalos.map((p) => ({ chave: p.chave, rotulo: p.rotulo, valor: p.vendas }))}
@@ -194,13 +229,15 @@ export default function Dashboard() {
                 passo={passo}
                 resumo={`Vendas por ${passo}`}
                 vazio="Sem vendas no período."
+                altura={340}
                 media
                 acumulado
               />
             </div>
           </KpiCard>
-          {/* Abordagens do mesmo recorte, com a divisão pela IA. */}
-          <KpiCard rotulo="Abordagens" icone={UsersRoundIcon} valor={<NumeroAnimado valor={metrics.abordagens} />} className={`xl:col-span-4 ${esmaecer}`}>
+
+          {/* Linha 3: abordagens do mesmo recorte, com a divisão pela IA, ao lado da conversão e da meta do dia. */}
+          <KpiCard rotulo="Abordagens" icone={UsersRoundIcon} valor={<NumeroAnimado valor={metrics.abordagens} />} className={`md:col-span-2 xl:col-span-6 ${esmaecer}`}>
             <div className="mt-4">
               <ColunasKpi
                 id="abordagens"
@@ -223,7 +260,7 @@ export default function Dashboard() {
               />
             </div>
           </KpiCard>
-          <div className="grid grid-rows-2 gap-4 xl:col-span-3">
+          <div className="grid gap-4 md:col-span-2 md:grid-cols-2 xl:col-span-6 xl:grid-cols-1 xl:grid-rows-2">
             <KpiCard
               rotulo="Conversão"
               icone={PercentIcon}
@@ -255,40 +292,6 @@ export default function Dashboard() {
               }
             />
           </div>
-
-          {/* Valores do período e posição no ranking (6 · 3 · 3). */}
-          <KpiCard
-            rotulo="Total de Vendas"
-            icone={CircleDollarSignIcon}
-            valor={<NumeroAnimado valor={emCentavos(metrics.totalVendas)} formatar={formatarCentavos} />}
-            detalhe={
-              <>
-                Receita aprovada no período
-                {incluiAgora && metrics.quantidadeVendas > 0 && (
-                  <>
-                    {' · '}
-                    <strong className="font-semibold text-heading">+{formatarReais(receitaNaUltimaHora)}</strong> na última hora
-                  </>
-                )}
-              </>
-            }
-            className={`md:col-span-2 xl:col-span-6 ${esmaecer}`}
-          />
-          <KpiCard
-            rotulo="Ticket Médio"
-            icone={ChartSplineIcon}
-            valor={<NumeroAnimado valor={emCentavos(metrics.ticketMedio)} formatar={formatarCentavos} />}
-            valorClasse={VALOR_EM_REAIS}
-            detalhe="Receita média por venda"
-            className={`xl:col-span-3 ${esmaecer}`}
-          />
-          <KpiCard
-            rotulo="Posição no ranking"
-            icone={MedalIcon}
-            valor={posicao > 0 ? <NumeroAnimado valor={posicao} formatar={(n) => `#${n}`} /> : '—'}
-            detalhe={carregandoRanking ? 'Carregando…' : posicao > 0 ? `de ${tamanhoDoRanking} ${rotuloDoRanking}` : 'Ranking não iniciado'}
-            className="xl:col-span-3"
-          />
         </section>
 
         <section data-dashboard-section="goals-in-progress" aria-label="Metas em andamento" className="contents">
