@@ -32,6 +32,7 @@ async function check(name, run, { role = 'super_admin', setup } = {}) {
   try {
     await page.goto(`${origin}/vendas`, { waitUntil: 'domcontentloaded', timeout: 60000 })
     await expect(page.getByRole('button', { name: 'Registrar Venda', exact: true })).toBeEnabled()
+    await page.getByRole('textbox', { name: /Produto vendido|Nome do produto/ }).fill('Mentoria personalizada')
     await run(page, writes, fixtures, edits)
     console.log(`PASS ${name}`)
   } catch (error) {
@@ -96,17 +97,39 @@ await check('valor inválido é rejeitado e sinal mantém o valor total digitado
   assert.equal(writes[0].deposit_amount, 500.5)
 })
 
-await check('produto ativo sem ticket de catálogo pode ser vinculado ao valor digitado', async (page, writes, fixtures) => {
-  await expect(page.locator('#sale-product option', { hasText: fixtures.tables.products[0].name })).toHaveCount(1)
-  await page.locator('#sale-product').selectOption(fixtures.tables.products[0].id)
+await check('nome do produto é digitável e obrigatório, sem escolha do catálogo', async page => {
+  const product = page.getByRole('textbox', { name: /Produto vendido|Nome do produto/ })
+  assert.equal(await product.evaluate(input => input.required), true)
+  await expect(page.getByRole('combobox', { name: /produto/i })).toHaveCount(0)
+  await product.fill('')
+  assert.equal(await product.evaluate(input => input.checkValidity()), false)
+})
+
+await check('nome do produto vazio ou só espaços bloqueia o registro mesmo sem validação nativa', async (page, writes) => {
+  await page.locator('#sale-ticket').fill('1.497,50')
+  await page.locator('#nome_comprador').fill('Maria Silva')
+  await page.locator('#whatsapp_comprador').fill('11999999999')
+  await page.locator('form').first().evaluate(form => { form.noValidate = true })
+  for (const name of ['', '   ']) {
+    await page.getByRole('textbox', { name: /Produto vendido|Nome do produto/ }).fill(name)
+    await page.getByRole('button', { name: 'Registrar Venda', exact: true }).click()
+    await expect(page.getByText('Informe o nome do produto vendido.', { exact: true }).first()).toBeVisible({ timeout: 1500 })
+    assert.equal(writes.length, 0)
+  }
+})
+
+await check('nome digitado é salvo na venda com o Ticket informado, independentemente do catálogo', async (page, writes) => {
+  await page.getByRole('textbox', { name: /Produto vendido|Nome do produto/ }).fill('  Mentoria personalizada  ')
   await page.locator('#sale-ticket').fill('1.497,50')
   await page.locator('#nome_comprador').fill('Maria Silva')
   await page.locator('#whatsapp_comprador').fill('11999999999')
   await page.getByRole('button', { name: 'Registrar Venda', exact: true }).click()
   await expect.poll(() => writes.length).toBe(1)
-  assert.equal(writes[0].product_id, fixtures.tables.products[0].id)
+  assert.equal(writes[0].nome_produto, 'Mentoria personalizada')
+  assert.equal(writes[0].product_id, null)
   assert.equal(writes[0].valor_venda, 1497.5)
-}, { setup: fixtures => { fixtures.tables.products[0].product_tickets = [] } })
+  await expect(page.getByRole('textbox', { name: /Produto vendido|Nome do produto/ })).toHaveValue('')
+}, { setup: fixtures => { fixtures.tables.products = [] } })
 
 const editableSale = {
   id: '00000000-0000-4000-8000-000000000188', user_id: USER_ID,

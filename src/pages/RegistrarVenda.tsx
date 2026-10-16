@@ -11,13 +11,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
 import { useToast } from "@/hooks/use-toast";
 import { ShoppingCart, ArrowLeft, Info, Clock, CalendarClock, Package } from "lucide-react";
-import { useProducts } from "@/hooks/useProducts";
 import { errorMessage, money } from "@/lib/sales";
 import { RecentSalesManagement } from "@/components/sales/RecentSalesManagement";
 import { refreshSalesData } from "@/lib/sync";
 import { lerValorEmReais, valorParaBanco, valorParaCampo } from "@/lib/valor-reais";
 
-const OUTRO_PRODUTO = "__outro__";
 const EMAIL_VALIDO = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 
 interface LeadVinculado {
@@ -31,7 +29,7 @@ interface LeadVinculado {
 }
 
 /**
- * Registrar venda. O produto do catálogo é opcional (ou pode ser digitado), o ticket é um valor informado em reais,
+ * Registrar venda. O nome do produto é digitado e obrigatório, o ticket é um valor informado em reais,
  * e nome e WhatsApp do comprador são obrigatórios. O pagamento pode ser integral ou com sinal; no faturamento a venda
  * conta pelo valor total. A venda continua nascendo pendente, para aprovação do executive.
  */
@@ -44,13 +42,11 @@ export default function RegistrarVenda() {
   const [linkedLead, setLinkedLead] = useState<LeadVinculado | null>(null);
   const { user } = useAuth();
   const { commissionRate, loading: rolesLoading, isExecutive, hasRole } = useRoles();
-  const catalog = useProducts();
   const queryClient = useQueryClient();
   const submitting = useRef(false);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [justRegistered, setJustRegistered] = useState(false);
-  const [produtoSelecionado, setProdutoSelecionado] = useState("");
   const [produtoDigitado, setProdutoDigitado] = useState("");
   const [valorTotal, setValorTotal] = useState("");
   const [pagamento, setPagamento] = useState<"integral" | "sinal" | "">("");
@@ -98,16 +94,12 @@ export default function RegistrarVenda() {
     };
   }, [leadId]);
 
-  const products = (catalog.data ?? []).filter((product) => product.active);
-  const product = products.find((item) => item.id === produtoSelecionado);
-
   const total = lerValorEmReais(valorTotal);
   const sinal = pagamento === "sinal" ? lerValorEmReais(valorDoSinal) : null;
   const faltaReceber = total !== null && sinal !== null ? Math.max(0, total - sinal) : null;
   const comissaoEstimada = total !== null ? (total * commissionRate) / 100 : null;
 
   const resetForm = () => {
-    setProdutoSelecionado("");
     setProdutoDigitado("");
     setValorTotal("");
     setPagamento("");
@@ -130,6 +122,8 @@ export default function RegistrarVenda() {
       avisar("Confira o lead no CRM antes de registrar.");
       return;
     }
+    const nomeProduto = produtoDigitado.trim();
+    if (!nomeProduto) return avisar("Informe o nome do produto vendido.");
     // O valor digitado no ticket é o total que entra no faturamento.
     if (total === null) return avisar("Informe o valor total da venda (ex.: 2.997,00).");
     if (pagamento === "sinal") {
@@ -154,14 +148,13 @@ export default function RegistrarVenda() {
         });
         if (error) throw error;
       }
-      const produtoDoCatalogo = product && produtoSelecionado !== OUTRO_PRODUTO ? product : null;
       const { error } = await supabase.from("vendas").insert([
         {
           user_id: user.id,
           ...(linkedLead ? { crm_lead_id: linkedLead.id } : {}),
-          product_id: produtoDoCatalogo?.id ?? null,
+          product_id: null,
           ticket_id: null,
-          nome_produto: produtoDoCatalogo?.name ?? produtoDigitado.trim(),
+          nome_produto: nomeProduto,
           valor_venda: total,
           payment_type: pagamento === "sinal" ? "sinal" : "integral",
           deposit_amount: pagamento === "sinal" && sinal !== null ? Number(valorParaBanco(sinal)) : null,
@@ -193,14 +186,11 @@ export default function RegistrarVenda() {
     } catch (error: unknown) {
       console.error("Erro ao registrar venda:", error);
       toast({ title: "Erro ao registrar venda", description: errorMessage(error), variant: "destructive" });
-      void catalog.refetch();
     } finally {
       submitting.current = false;
       setIsSubmitting(false);
     }
   };
-
-  const seletor = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60";
 
   return (
     <DashboardLayout>
@@ -257,44 +247,19 @@ export default function RegistrarVenda() {
             <CardTitle className="text-foreground">Dados da Venda</CardTitle>
           </CardHeader>
           <CardContent>
-            {catalog.isError && (
-              <div role="alert" className="mb-4 rounded-lg bg-destructive/10 p-4">
-                <p className="text-sm text-destructive">
-                  Não foi possível carregar o catálogo. Você pode digitar o produto e o valor, ou tentar de novo.
-                </p>
-                <Button type="button" variant="outline" className="mt-3" disabled={catalog.isFetching} onClick={() => catalog.refetch()}>
-                  Atualizar catálogo
-                </Button>
-              </div>
-            )}
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="sale-product">Produto vendido</Label>
-                  <select
+                  <Label htmlFor="sale-product">Produto vendido *</Label>
+                  <Input
                     id="sale-product"
-                    className={seletor}
-                    value={produtoSelecionado}
-                    onChange={(e) => setProdutoSelecionado(e.target.value)}
+                    value={produtoDigitado}
+                    onChange={(e) => setProdutoDigitado(e.target.value)}
+                    placeholder="Digite o nome do produto vendido"
+                    required
+                    maxLength={160}
                     disabled={isSubmitting}
-                  >
-                    <option value="">Sem produto do catálogo</option>
-                    {products.map((produto) => (
-                      <option key={produto.id} value={produto.id}>{produto.name}</option>
-                    ))}
-                    <option value={OUTRO_PRODUTO}>Outro (digitar o nome)</option>
-                  </select>
-                  {(produtoSelecionado === OUTRO_PRODUTO || produtoSelecionado === "") && (
-                    <Input
-                      aria-label="Nome do produto"
-                      value={produtoDigitado}
-                      onChange={(e) => setProdutoDigitado(e.target.value)}
-                      placeholder="Nome do produto (opcional)"
-                      maxLength={160}
-                      disabled={isSubmitting}
-                    />
-                  )}
-                  {product?.description && <p className="text-xs text-muted-foreground">{product.description}</p>}
+                  />
                 </div>
 
                 <div className="space-y-2">
