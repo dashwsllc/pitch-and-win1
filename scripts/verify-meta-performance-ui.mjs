@@ -8,6 +8,13 @@ const { buildTrafficView } = loadComponent('src/lib/meta-traffic-view.ts')
 const { MetaTrafficPerformance } = loadComponent('src/components/traffic/MetaTrafficPerformance.tsx')
 const render = props => renderToStaticMarkup(React.createElement(MetaTrafficPerformance, { onRetry() {}, ...props }))
 
+test('metric references remain accessible for both a single objective and mixed objectives', () => {
+  for (const rows of [[metricRow()], [metricRow(), metricRow({ id: 'sales', campaign_id: 'B', objective: 'OUTCOME_SALES' })]]) {
+    const html = render({ view: buildTrafficView(rows, scope), queryState: { state: 'ready', data: rows }, cohortState: null })
+    assert.match(html, /<button[^>]*>[^<]*Para se basear<\/button>/)
+  }
+})
+
 test('CRM query error renders a visible alert, retry and unavailable real rates', () => {
   const rows = [metricRow()]
   const html = render({ view: buildTrafficView(rows, scope), queryState: { state: 'ready', data: rows }, cohortState: { state: 'error', message: 'CRM temporariamente indisponível' } })

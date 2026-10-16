@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { MetaMetricReferences } from './MetaMetricReferences'
 import { money } from '@/lib/sales'
 import { summarizeObjectives } from '@/lib/meta-traffic'
 import { buildTrafficCsv, crmTrafficRates, trafficCsvText, type QueryState, type TrafficMetricTotals, type TrafficView } from '@/lib/meta-traffic-view'
@@ -54,7 +55,13 @@ export function MetaTrafficPerformance({ view, queryState, cohortState, onRetry 
   }
   return <div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{cards.filter(([key]) => !keys || keys.includes(key)).map(renderCard)}</div>
-    {keys && <Collapsible open={showAll} onOpenChange={setShowAll}><CollapsibleTrigger asChild><Button variant="outline" size="sm">{showAll ? 'Ocultar todas as métricas' : 'Ver todas as métricas'}</Button></CollapsibleTrigger><CollapsibleContent className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{cards.map(renderCard)}</CollapsibleContent></Collapsible>}
+    <Collapsible open={showAll} onOpenChange={setShowAll}>
+      <div className="flex flex-wrap items-center gap-2">
+        {keys && <CollapsibleTrigger asChild><Button variant="outline" size="sm">{showAll ? 'Ocultar todas as métricas' : 'Ver todas as métricas'}</Button></CollapsibleTrigger>}
+        <MetaMetricReferences />
+      </div>
+      {keys && <CollapsibleContent className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{cards.map(renderCard)}</CollapsibleContent>}
+    </Collapsible>
     {objectives.mixed && <p className="text-sm text-amber-500">O recorte mistura objetivos. Todas as métricas estão visíveis.</p>}
     {warnings.map(warning => <p key={warning} role="status" className="text-sm text-amber-500">{warning}</p>)}
     <p className="text-xs text-muted-foreground">CPL = gasto ÷ leads; CPA Meta = gasto ÷ compras; ROAS Meta = valor das compras ÷ gasto. CTR = cliques ÷ impressões × 100; CPM = gasto ÷ impressões × 1.000. Custo por visualização = gasto ÷ visualizações da página de destino; taxa página → compra = compras ÷ visualizações × 100. “—” indica métrica indisponível, definição incompatível ou denominador zero. Os resultados usam a atribuição de cada conjunto de anúncios, a mesma do Gerenciador de Anúncios.</p>
