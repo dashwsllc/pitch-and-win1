@@ -1,4 +1,5 @@
 import { CRMCalendarStatus } from './CRMCalendarStatus';
+import { CRMCallMeetButton } from './CRMCallMeetButton';
 import {
   Sheet,
   SheetContent,
@@ -255,6 +256,7 @@ export function CRMLeadDetail({
                     </p>
                   )}
                   {a.call_type === "fechamento_closer" && <CRMCalendarStatus callId={a.id} />}
+                  {a.call_type === "fechamento_closer" && <CRMCallMeetButton call={a} />}
                   {a.outcome && (
                     <Badge className="h-5 px-2 text-[10px]" variant="outline">
                       {outcomeLabel(a.outcome)}

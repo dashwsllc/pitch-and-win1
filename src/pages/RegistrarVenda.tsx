@@ -6,13 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
@@ -22,17 +15,34 @@ import { useProducts } from "@/hooks/useProducts";
 import { errorMessage, money } from "@/lib/sales";
 import { RecentSalesManagement } from "@/components/sales/RecentSalesManagement";
 import { refreshSalesData } from "@/lib/sync";
+import { lerValorEmReais, valorParaBanco, valorParaCampo } from "@/lib/valor-reais";
 
+const OUTRO_PRODUTO = "__outro__";
+const EMAIL_VALIDO = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+
+interface LeadVinculado {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  pipeline_stage: string;
+  version: number;
+  deposit_amount: number | null;
+}
+
+/**
+ * Registrar venda. Nada vem pré-selecionado e quase nada é obrigatório: produto e ticket do catálogo são opcionais e
+ * independentes (ou o produto é digitado), o valor é o que a pessoa informar (o ticket só sugere o preço), e o
+ * comprador pode ficar em branco. O pagamento pode ser integral ou com sinal; no faturamento a venda conta pelo valor
+ * total. A venda continua nascendo pendente, para aprovação do executive.
+ */
 export default function RegistrarVenda() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const leadId = searchParams.get("lead");
   const [leadLoading, setLeadLoading] = useState(!!leadId);
   const [leadError, setLeadError] = useState("");
-  const [linkedLead, setLinkedLead] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
+  const [linkedLead, setLinkedLead] = useState<LeadVinculado | null>(null);
   const { user } = useAuth();
   const { commissionRate, loading: rolesLoading, isExecutive, hasRole } = useRoles();
   const catalog = useProducts();
@@ -42,8 +52,11 @@ export default function RegistrarVenda() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [justRegistered, setJustRegistered] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState("");
-  const [valorSelecionado, setValorSelecionado] = useState("");
-  const [selectedPrice, setSelectedPrice] = useState<number | null>(null);
+  const [produtoDigitado, setProdutoDigitado] = useState("");
+  const [ticketSelecionado, setTicketSelecionado] = useState("");
+  const [valorTotal, setValorTotal] = useState("");
+  const [pagamento, setPagamento] = useState<"integral" | "sinal" | "">("");
+  const [valorDoSinal, setValorDoSinal] = useState("");
   const [nomeComprador, setNomeComprador] = useState("");
   const [whatsappComprador, setWhatsappComprador] = useState("");
   const [emailComprador, setEmailComprador] = useState("");
@@ -54,33 +67,33 @@ export default function RegistrarVenda() {
     setLeadError("");
     setLeadLoading(!!leadId);
     if (!leadId) return;
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        leadId,
-      )
-    ) {
-      setLeadError("Lead inválido. Abra a venda pela ficha do CRM.");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(leadId)) {
+      setLeadError("Lead inválido. Abra a venda pela ficha do CRM ou pela Agenda.");
       setLeadLoading(false);
       return;
     }
     void supabase
       .from("crm_leads")
-      .select("id,name,email,phone,pipeline_stage")
+      .select("id,name,email,phone,pipeline_stage,version,deposit_amount")
       .eq("id", leadId)
       .single()
       .then(({ data, error }) => {
         if (!active) return;
         setLeadLoading(false);
-        if (error || !data || data.pipeline_stage !== "fechado_ganho") {
-          setLeadError(
-            "Não foi possível vincular o lead. Confirme o acesso e a venda concluída no CRM.",
-          );
+        // Vale a venda concluída no CRM ou o lead que pagou sinal e ainda está com o Closer.
+        const comSinal = data?.pipeline_stage === "repassado_closer" && data.deposit_amount != null;
+        if (error || !data || (data.pipeline_stage !== "fechado_ganho" && !comSinal)) {
+          setLeadError("Não foi possível vincular o lead. Confirme o acesso e a venda concluída (ou o sinal) no CRM.");
           return;
         }
         setLinkedLead(data);
         setNomeComprador(data.name);
         setWhatsappComprador(data.phone || "");
         setEmailComprador(data.email || "");
+        if (data.deposit_amount != null) {
+          setPagamento("sinal");
+          setValorDoSinal(valorParaCampo(data.deposit_amount));
+        }
       });
     return () => {
       active = false;
@@ -88,150 +101,102 @@ export default function RegistrarVenda() {
   }, [leadId]);
 
   const products = (catalog.data ?? []).filter(
-    (product) =>
-      product.active && product.product_tickets.some((ticket) => ticket.active),
+    (product) => product.active && product.product_tickets.some((ticket) => ticket.active),
   );
   const product = products.find((item) => item.id === produtoSelecionado);
-  const tickets = (product?.product_tickets ?? [])
-    .filter((ticket) => ticket.active)
-    .sort((a, b) => a.price - b.price);
-  const ticket = tickets.find((item) => item.id === valorSelecionado);
-  const valorNumerico = ticket?.price ?? 0;
-  const comissaoEstimada = (valorNumerico * commissionRate) / 100;
+  // Ticket independente do produto: com produto escolhido, só os dele; sem produto, todos (com o nome do produto).
+  const tickets = products
+    .filter((item) => !product || item.id === product.id)
+    .flatMap((item) => item.product_tickets.filter((ticket) => ticket.active).map((ticket) => ({ ...ticket, productName: item.name, productId: item.id })))
+    .sort((a, b) => a.productName.localeCompare(b.productName) || a.price - b.price);
+  const ticket = tickets.find((item) => item.id === ticketSelecionado);
 
-  useEffect(() => {
-    if (!catalog.data || !produtoSelecionado) return;
-    if (!product || (valorSelecionado && !ticket)) {
-      if (!product) setProdutoSelecionado("");
-      setValorSelecionado("");
-      setSelectedPrice(null);
-      toast({
-        title: "Catálogo atualizado",
-        description:
-          "O produto ou ticket selecionado foi desativado. Escolha uma opção disponível.",
-      });
-    } else if (
-      ticket &&
-      selectedPrice !== null &&
-      selectedPrice !== ticket.price
-    ) {
-      setSelectedPrice(ticket.price);
-      toast({
-        title: "Preço do ticket atualizado",
-        description: `Confira o novo valor de ${money(ticket.price)} antes de registrar a venda.`,
-      });
-    }
-  }, [
-    catalog.data,
-    produtoSelecionado,
-    valorSelecionado,
-    product,
-    ticket,
-    selectedPrice,
-    toast,
-  ]);
+  const total = lerValorEmReais(valorTotal);
+  const sinal = pagamento === "sinal" ? lerValorEmReais(valorDoSinal) : null;
+  const faltaReceber = total !== null && sinal !== null ? Math.max(0, total - sinal) : null;
+  const comissaoEstimada = total !== null ? (total * commissionRate) / 100 : null;
+
+  const escolherProduto = (valor: string) => {
+    setProdutoSelecionado(valor === OUTRO_PRODUTO ? OUTRO_PRODUTO : valor);
+    // Um ticket de outro produto deixa de valer.
+    if (ticket && valor !== ticket.productId) setTicketSelecionado("");
+  };
+  const escolherTicket = (valor: string) => {
+    setTicketSelecionado(valor);
+    const escolhido = tickets.find((item) => item.id === valor);
+    if (!escolhido) return;
+    // O ticket só sugere: o produto dele e o preço como valor total (editável).
+    setProdutoSelecionado(escolhido.productId);
+    setValorTotal(valorParaCampo(escolhido.price));
+  };
 
   const resetForm = () => {
     setProdutoSelecionado("");
-    setValorSelecionado("");
-    setSelectedPrice(null);
+    setProdutoDigitado("");
+    setTicketSelecionado("");
+    setValorTotal("");
+    setPagamento("");
+    setValorDoSinal("");
     setNomeComprador("");
     setWhatsappComprador("");
     setEmailComprador("");
   };
 
+  const avisar = (description: string) => toast({ title: "Confira a venda", description, variant: "destructive" });
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting.current) return;
     if (!user) {
-      toast({
-        title: "Erro de autenticação",
-        description: "Você precisa estar logado para registrar uma venda.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro de autenticação", description: "Você precisa estar logado para registrar uma venda.", variant: "destructive" });
       return;
     }
-
     if (leadId && (leadLoading || leadError || linkedLead?.id !== leadId)) {
-      toast({
-        title: "Vínculo com lead indisponível",
-        description: "Confira o lead no CRM antes de registrar.",
-        variant: "destructive",
-      });
+      avisar("Confira o lead no CRM antes de registrar.");
       return;
     }
-
-    // Validate all fields before submitting
-    if (catalog.isError || catalog.isPending) {
-      toast({
-        title: "Catálogo indisponível",
-        description: "Atualize o catálogo antes de registrar a venda.",
-        variant: "destructive",
-      });
-      return;
+    // O valor total é o único dado que a venda precisa ter: é ele que entra no faturamento.
+    if (total === null) return avisar("Informe o valor total da venda (ex.: 2.997,00).");
+    if (pagamento === "sinal") {
+      if (sinal === null) return avisar("Informe quanto foi pago de sinal.");
+      if (sinal > total) return avisar("O sinal não pode ser maior que o valor total da venda.");
     }
-    if (!product) {
-      toast({
-        title: "Campo obrigatório",
-        description: "Selecione o produto vendido.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!ticket) {
-      toast({
-        title: "Campo obrigatório",
-        description: "Selecione um ticket ativo para este produto.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!nomeComprador.trim()) {
-      toast({
-        title: "Campo obrigatório",
-        description: "Informe o nome do comprador.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!whatsappComprador.trim()) {
-      toast({
-        title: "Campo obrigatório",
-        description: "Informe o WhatsApp do comprador.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!emailComprador.trim()) {
-      toast({
-        title: "Campo obrigatório",
-        description: "Informe o email do comprador.",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Comprador é opcional; o que for preenchido precisa estar certo.
+    if (nomeComprador.trim() && nomeComprador.trim().length < 2) return avisar("O nome do comprador precisa de pelo menos 2 letras.");
+    const whatsapp = whatsappComprador.trim();
+    if (whatsapp && (whatsapp.length < 8 || whatsapp.length > 32)) return avisar("Confira o WhatsApp do comprador (de 8 a 32 caracteres).");
+    if (emailComprador.trim() && !EMAIL_VALIDO.test(emailComprador.trim())) return avisar("Confira o e-mail do comprador.");
 
     submitting.current = true;
     setIsSubmitting(true);
-
     try {
+      // Lead com sinal que ainda está com o Closer: registrar a venda conclui a venda no CRM primeiro.
+      if (linkedLead && linkedLead.pipeline_stage === "repassado_closer") {
+        const { error } = await supabase.rpc("crm_transition", {
+          p_lead_id: linkedLead.id,
+          p_action: "close",
+          p_expected_version: linkedLead.version,
+          p_data: { outcome: "venda_concluida", note: "Venda registrada após o sinal" },
+        });
+        if (error) throw error;
+      }
+      const produtoDoCatalogo = product && produtoSelecionado !== OUTRO_PRODUTO ? product : null;
       const { error } = await supabase.from("vendas").insert([
         {
           user_id: user.id,
           ...(linkedLead ? { crm_lead_id: linkedLead.id } : {}),
-          product_id: product.id,
-          ticket_id: ticket.id,
-          nome_produto: product.name,
-          valor_venda: ticket.price,
+          product_id: produtoDoCatalogo?.id ?? null,
+          ticket_id: ticket?.id ?? null,
+          nome_produto: produtoDoCatalogo?.name ?? produtoDigitado.trim(),
+          valor_venda: total,
+          payment_type: pagamento === "sinal" ? "sinal" : "integral",
+          deposit_amount: pagamento === "sinal" && sinal !== null ? Number(valorParaBanco(sinal)) : null,
           nome_comprador: nomeComprador.trim(),
-          whatsapp_comprador: whatsappComprador.trim(),
+          whatsapp_comprador: whatsapp,
           email_comprador: emailComprador.trim(),
         },
       ]);
-
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: "Venda registrada com sucesso!",
@@ -253,11 +218,7 @@ export default function RegistrarVenda() {
       setTimeout(() => setJustRegistered(false), 8000);
     } catch (error: unknown) {
       console.error("Erro ao registrar venda:", error);
-      toast({
-        title: "Erro ao registrar venda",
-        description: errorMessage(error),
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao registrar venda", description: errorMessage(error), variant: "destructive" });
       void catalog.refetch();
     } finally {
       submitting.current = false;
@@ -265,16 +226,13 @@ export default function RegistrarVenda() {
     }
   };
 
+  const seletor = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60";
+
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center gap-4 mb-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/")}
-            className="gap-2"
-          >
+          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-2">
             <ArrowLeft className="w-4 h-4" />
             Voltar
           </Button>
@@ -283,12 +241,8 @@ export default function RegistrarVenda() {
               <ShoppingCart className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                Registrar Venda
-              </h1>
-              <p className="text-muted-foreground">
-                Registre uma nova venda realizada
-              </p>
+              <h1 className="text-2xl font-bold text-foreground">Registrar Venda</h1>
+              <p className="text-muted-foreground">Registre uma nova venda realizada</p>
             </div>
           </div>
         </div>
@@ -306,32 +260,22 @@ export default function RegistrarVenda() {
 
         {isExecutive && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">
-              Gerencie os produtos e valores disponíveis para sua equipe.
-            </p>
-            <Button
-              variant="outline"
-              onClick={() => navigate("/executive?tab=products")}
-            >
+            <p className="text-sm text-muted-foreground">Gerencie os produtos e valores disponíveis para sua equipe.</p>
+            <Button variant="outline" onClick={() => navigate("/executive?tab=products")}>
               <Package className="mr-2 h-4 w-4" />
               Produtos e tickets
             </Button>
           </div>
         )}
-        {leadLoading && (
-          <p role="status" className="mb-4">
-            Carregando lead...
-          </p>
-        )}
-        {leadError && (
-          <p role="alert" className="mb-4 text-destructive">
-            {leadError}
-          </p>
-        )}
+        {leadLoading && <p role="status" className="mb-4">Carregando lead...</p>}
+        {leadError && <p role="alert" className="mb-4 text-destructive">{leadError}</p>}
         {linkedLead && (
           <div className="mb-4 rounded border p-4 text-sm">
-            Venda vinculada ao lead: <strong>{linkedLead.name}</strong>. Confira
-            os dados e selecione produto e ticket.
+            Venda vinculada ao lead: <strong>{linkedLead.name}</strong>.
+            {linkedLead.deposit_amount != null && (
+              <> Sinal já pago: <strong>{money(linkedLead.deposit_amount)}</strong>.</>
+            )}
+            {linkedLead.pipeline_stage === "repassado_closer" && " Ao registrar, a venda é concluída no CRM."}
           </div>
         )}
         <Card className="border-border/50">
@@ -339,196 +283,144 @@ export default function RegistrarVenda() {
             <CardTitle className="text-foreground">Dados da Venda</CardTitle>
           </CardHeader>
           <CardContent>
-            {catalog.isPending && (
-              <p role="status" className="mb-4 text-sm text-muted-foreground">
-                Carregando produtos e tickets...
-              </p>
-            )}
             {catalog.isError && (
-              <div
-                role="alert"
-                className="mb-4 rounded-lg bg-destructive/10 p-4"
-              >
+              <div role="alert" className="mb-4 rounded-lg bg-destructive/10 p-4">
                 <p className="text-sm text-destructive">
-                  Não foi possível carregar o catálogo. Tente novamente antes de
-                  registrar a venda.
+                  Não foi possível carregar o catálogo. Você pode digitar o produto e o valor, ou tentar de novo.
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-3"
-                  disabled={catalog.isFetching}
-                  onClick={() => catalog.refetch()}
-                >
+                <Button type="button" variant="outline" className="mt-3" disabled={catalog.isFetching} onClick={() => catalog.refetch()}>
                   Atualizar catálogo
                 </Button>
               </div>
             )}
-            {!catalog.isPending &&
-              !catalog.isError &&
-              products.length === 0 && (
-                <p className="mb-4 rounded-lg border p-4 text-sm text-muted-foreground">
-                  Nenhum produto com ticket ativo disponível.{" "}
-                  {isExecutive
-                    ? "Cadastre um produto e ticket pelo botão acima."
-                    : "Aguarde o executive disponibilizar produtos e tickets para venda."}
-                </p>
-              )}
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="sale-product">
-                    Nome Do Produto Vendido *
-                  </Label>
-                  <Select
+                  <Label htmlFor="sale-product">Produto vendido</Label>
+                  <select
+                    id="sale-product"
+                    className={seletor}
                     value={produtoSelecionado}
-                    onValueChange={(value) => {
-                      setProdutoSelecionado(value);
-                      setValorSelecionado("");
-                      setSelectedPrice(null);
-                    }}
-                    disabled={
-                      isSubmitting ||
-                      catalog.isPending ||
-                      catalog.isError ||
-                      !products.length
-                    }
+                    onChange={(e) => escolherProduto(e.target.value)}
+                    disabled={isSubmitting}
                   >
-                    <SelectTrigger id="sale-product" className="w-full">
-                      <SelectValue placeholder="Selecione o produto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((produto) => (
-                        <SelectItem key={produto.id} value={produto.id}>
-                          {produto.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {product?.description && (
-                    <p className="text-xs text-muted-foreground">
-                      {product.description}
-                    </p>
+                    <option value="">Sem produto do catálogo</option>
+                    {products.map((produto) => (
+                      <option key={produto.id} value={produto.id}>{produto.name}</option>
+                    ))}
+                    <option value={OUTRO_PRODUTO}>Outro (digitar o nome)</option>
+                  </select>
+                  {(produtoSelecionado === OUTRO_PRODUTO || produtoSelecionado === "") && (
+                    <Input
+                      aria-label="Nome do produto"
+                      value={produtoDigitado}
+                      onChange={(e) => setProdutoDigitado(e.target.value)}
+                      placeholder="Nome do produto (opcional)"
+                      maxLength={160}
+                      disabled={isSubmitting}
+                    />
                   )}
+                  {product?.description && <p className="text-xs text-muted-foreground">{product.description}</p>}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="sale-ticket">Ticket e valor da venda *</Label>
-                  <Select
-                    value={valorSelecionado}
-                    onValueChange={(value) => {
-                      setValorSelecionado(value);
-                      setSelectedPrice(
-                        tickets.find((item) => item.id === value)?.price ??
-                          null,
-                      );
-                    }}
-                    disabled={isSubmitting || !product || catalog.isError}
+                  <Label htmlFor="sale-ticket">Ticket</Label>
+                  <select
+                    id="sale-ticket"
+                    className={seletor}
+                    value={ticketSelecionado}
+                    onChange={(e) => escolherTicket(e.target.value)}
+                    disabled={isSubmitting || !tickets.length}
                   >
-                    <SelectTrigger id="sale-ticket" className="w-full">
-                      <SelectValue
-                        placeholder={
-                          product
-                            ? "Selecione o ticket"
-                            : "Selecione primeiro o produto"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tickets.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name} — {money(item.price)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <option value="">Sem ticket</option>
+                    {tickets.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {product ? item.name : `${item.productName} · ${item.name}`} — {money(item.price)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">O ticket só preenche o valor; você pode mudar o valor à vontade.</p>
                 </div>
               </div>
 
-              {/* Commission Info — somente leitura */}
-              {ticket && !rolesLoading && !isExecutive && (
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="valor-total">Valor total da venda (R$) *</Label>
+                  <Input
+                    id="valor-total"
+                    inputMode="decimal"
+                    value={valorTotal}
+                    onChange={(e) => setValorTotal(e.target.value)}
+                    placeholder="Ex.: 2.997,00"
+                    disabled={isSubmitting}
+                  />
+                  <p className="text-xs text-muted-foreground">É o valor que entra no faturamento, mesmo quando o cliente pagou só o sinal.</p>
+                </div>
+
+                <fieldset className="space-y-2" disabled={isSubmitting}>
+                  <legend className="mb-2 text-sm font-medium leading-none">Pagamento</legend>
+                  <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Pagamento">
+                    {([
+                      ["integral", "Valor completo"],
+                      ["sinal", "Sinal"],
+                    ] as const).map(([valor, rotulo]) => (
+                      <label
+                        key={valor}
+                        className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm ${pagamento === valor ? "border-primary bg-primary/10" : "hover:bg-muted/40"}`}
+                      >
+                        <input type="radio" name="pagamento" value={valor} checked={pagamento === valor} onChange={() => setPagamento(valor)} />
+                        {rotulo}
+                      </label>
+                    ))}
+                  </div>
+                  {pagamento === "sinal" && (
+                    <div className="space-y-1 pt-1">
+                      <Label htmlFor="valor-sinal">Quanto foi pago de sinal (R$) *</Label>
+                      <Input id="valor-sinal" inputMode="decimal" value={valorDoSinal} onChange={(e) => setValorDoSinal(e.target.value)} placeholder="Ex.: 500,00" />
+                      {faltaReceber !== null && (
+                        <p className="text-xs text-muted-foreground">Falta receber {money(faltaReceber)}.</p>
+                      )}
+                    </div>
+                  )}
+                </fieldset>
+              </div>
+
+              {/* Comissão — somente leitura */}
+              {comissaoEstimada !== null && !rolesLoading && !isExecutive && (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
                   <Info className="w-4 h-4 text-green-400 flex-shrink-0" />
                   <div className="text-sm">
-                    <span className="text-muted-foreground">
-                      Sua taxa de comissão:{" "}
-                    </span>
-                    <span className="font-semibold text-foreground">
-                      {commissionRate}%
-                    </span>
-                    <span className="text-muted-foreground ml-2">
-                      &mdash; Comissão desta venda:{" "}
-                    </span>
-                    <span className="font-bold text-green-400">
-                      {money(comissaoEstimada)}
-                    </span>
+                    <span className="text-muted-foreground">Sua taxa de comissão: </span>
+                    <span className="font-semibold text-foreground">{commissionRate}%</span>
+                    <span className="text-muted-foreground ml-2">&mdash; Comissão desta venda: </span>
+                    <span className="font-bold text-green-400">{money(comissaoEstimada)}</span>
                   </div>
                 </div>
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="nome_comprador">Nome Do Comprador *</Label>
-                <Input
-                  id="nome_comprador"
-                  value={nomeComprador}
-                  onChange={(e) => setNomeComprador(e.target.value)}
-                  placeholder="Nome completo do cliente"
-                  required
-                  className="w-full"
-                />
+                <Label htmlFor="nome_comprador">Nome do comprador</Label>
+                <Input id="nome_comprador" value={nomeComprador} onChange={(e) => setNomeComprador(e.target.value)} placeholder="Nome completo do cliente (opcional)" maxLength={160} className="w-full" />
               </div>
 
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="whatsapp_comprador">
-                    WhatsApp Do Comprador *
-                  </Label>
-                  <Input
-                    id="whatsapp_comprador"
-                    value={whatsappComprador}
-                    onChange={(e) => setWhatsappComprador(e.target.value)}
-                    placeholder="(11) 99999-9999"
-                    required
-                    className="w-full"
-                  />
+                  <Label htmlFor="whatsapp_comprador">WhatsApp do comprador</Label>
+                  <Input id="whatsapp_comprador" value={whatsappComprador} onChange={(e) => setWhatsappComprador(e.target.value)} placeholder="(11) 99999-9999 (opcional)" maxLength={32} className="w-full" />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="email_comprador">Email Do Comprador *</Label>
-                  <Input
-                    id="email_comprador"
-                    value={emailComprador}
-                    onChange={(e) => setEmailComprador(e.target.value)}
-                    type="email"
-                    placeholder="cliente@email.com"
-                    required
-                    className="w-full"
-                  />
+                  <Label htmlFor="email_comprador">E-mail do comprador</Label>
+                  <Input id="email_comprador" value={emailComprador} onChange={(e) => setEmailComprador(e.target.value)} type="email" placeholder="cliente@email.com (opcional)" maxLength={254} className="w-full" />
                 </div>
               </div>
 
               <div className="flex gap-4 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate("/")}
-                  className="flex-1 md:flex-none"
-                >
+                <Button type="button" variant="outline" onClick={() => navigate("/")} className="flex-1 md:flex-none">
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
-                  disabled={
-                    isSubmitting ||
-                    rolesLoading ||
-                    catalog.isPending ||
-                    catalog.isError ||
-                    !ticket ||
-                    !product ||
-                    leadLoading ||
-                    !!leadError ||
-                    (!!leadId && linkedLead?.id !== leadId)
-                  }
+                  disabled={isSubmitting || rolesLoading || leadLoading || !!leadError || (!!leadId && linkedLead?.id !== leadId)}
                   className="flex-1 md:flex-none bg-gradient-success hover:opacity-90"
                 >
                   {isSubmitting ? "Registrando..." : "Registrar Venda"}
@@ -541,20 +433,15 @@ export default function RegistrarVenda() {
               <div className="mt-4 p-4 rounded-lg bg-yellow-500/5 border border-yellow-500/20 flex items-start gap-3 animate-fade-in">
                 <Clock className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium text-foreground">
-                    Venda registrada! Aguardando aprovação
-                  </p>
+                  <p className="font-medium text-foreground">Venda registrada! Aguardando aprovação</p>
                   <p className="text-sm text-muted-foreground mt-0.5">
                     {isExecutive ? (
                       "A venda foi enviada para validação e já está disponível no painel de vendas."
                     ) : (
                       <>
-                        Sua venda foi enviada para validação do executive. Seu saldo
-                        será atualizado após a aprovação. Acompanhe o status em{" "}
-                        <a href="/minhas-vendas" className="text-primary underline">
-                          Minhas Vendas
-                        </a>
-                        .
+                        Sua venda foi enviada para validação do executive. Seu saldo será atualizado após a aprovação.
+                        Acompanhe o status em{" "}
+                        <a href="/minhas-vendas" className="text-primary underline">Minhas Vendas</a>.
                       </>
                     )}
                   </p>

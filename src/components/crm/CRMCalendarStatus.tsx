@@ -26,6 +26,6 @@ export function CRMCalendarStatus({callId}:{callId:string}){
   return <span className="inline-flex flex-wrap items-center gap-1" role="status">
     <Badge variant="outline" className={`h-5 px-2 text-[10px] ${state==='synced'&&!loading&&!error?'text-emerald-600':failed?'text-amber-600':'text-muted-foreground'}`}>{calendarStatusLabel(row,loading,error)}</Badge>
     {failed&&(capabilities.executive?<Link to="/agenda#google-calendar" className="text-[10px] underline">{action}</Link>:<span className="text-[10px] text-muted-foreground">Solicite a revisão ao administrador.</span>)}
-    {row?.meetingUrl&&state==='synced'&&!error&&<a href={row.meetingUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-sm font-medium text-primary underline">Entrar no Google Meet</a>}
+    {/* O botão de entrar na reunião não vem mais do Google: é o link que o Closer cola na /agenda, só no horário da call (CRMCallMeetButton). */}
   </span>
 }

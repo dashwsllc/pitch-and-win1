@@ -13,6 +13,8 @@ type FunctionDef<Args> = { Args: Args; Returns: Json };
 type ExtraFunctions = {
   crm_context_summary: FunctionDef<{ p_offset: number; p_limit: number }>;
   crm_lead_temperature_hint: FunctionDef<{ p_lead: string }>;
+  // Link da reunião de uma call, colado pelo Closer na /agenda (migração 20261016130000).
+  crm_set_call_meeting_link: FunctionDef<{ p_activity_id: string; p_link: string; p_expected_revision: string }>;
   site_bridge_operation: FunctionDef<Record<string, never>>;
   // Legacy ranking contract may be deployed separately from the traffic schema.
   get_daily_call_ranking: FunctionDef<Record<string, never>>;

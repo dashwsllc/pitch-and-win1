@@ -1,4 +1,6 @@
 import { CRMCalendarStatus } from './CRMCalendarStatus';
+import { CRMCallMeetButton } from './CRMCallMeetButton';
+import { money } from '@/lib/sales';
 import { CRMLeadArrival } from './CRMLeadArrival';
 import { importChannelLabels, importMethodLabels } from '@/lib/crm-imports';
 import {
@@ -319,6 +321,12 @@ export function CRMLeadCard({
           )
         )}
         {closerCall && call && <CRMCalendarStatus callId={call.id} />}
+        {closerCall && call && <CRMCallMeetButton call={call} />}
+        {lead.deposit_amount != null && lead.pipeline_stage === "repassado_closer" && (
+          <Badge variant="outline" className="h-5 px-2 text-[10px] text-emerald-400">
+            Sinal pago: {money(lead.deposit_amount)}
+          </Badge>
+        )}
         {lead.qualification_income_range && (
           <Badge variant="outline" className="h-5 px-2 text-[10px] text-sky-300">
             Renda: {optionLabel(INCOME_RANGES, lead.qualification_income_range)}

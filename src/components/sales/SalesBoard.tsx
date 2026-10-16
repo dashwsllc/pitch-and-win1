@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { SinalDaVenda } from '@/components/sales/SinalDaVenda'
 import { ArrowUpRight, CalendarClock, Check, ChevronLeft, ChevronRight, Clock3, Eye, Loader2, RefreshCw, Search, ShieldCheck, Trash2, UserRoundPen, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -134,7 +135,7 @@ function SalesBoardBase({ compact = false, management = false }: { compact?: boo
                 {sale.seller_avatar ? <img src={sale.seller_avatar} alt={sale.seller_name} width={36} height={36} loading="lazy" decoding="async" className="h-9 w-9 shrink-0 rounded-lg object-cover" /> : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-electric-violet/15 text-xs font-medium text-violet-200">{sale.seller_name.split(' ').map(n => n[0]).join('').slice(0,2)}</div>}
                 <div className="min-w-0"><p className="text-sm font-medium text-ash">{sale.seller_name}{sale.user_id===user?.id && <span className="ml-2 text-[10px] text-ember">VOCÊ</span>}</p><p className="mt-1 break-words text-xs text-muted-foreground">{sale.nome_produto}{sale.ticket_name && <span className="mt-1 block">{sale.ticket_name}</span>}</p></div>
               </div>
-              <div className="ml-auto text-right"><p className="text-lg font-medium tabular-nums text-white">{money(sale.valor_venda)}</p><Badge className={`mt-1 border text-[10px] ${saleStatus[sale.approval_status].color}`}>{sale.approval_status==='pendente' ? <Clock3 className="mr-1 h-3 w-3" /> : sale.approval_status==='aprovada' ? <Check className="mr-1 h-3 w-3" /> : <X className="mr-1 h-3 w-3" />}{saleStatus[sale.approval_status].label}</Badge></div>
+              <div className="ml-auto text-right"><p className="text-lg font-medium tabular-nums text-white">{money(sale.valor_venda)}</p><SinalDaVenda venda={sale} /><Badge className={`mt-1 border text-[10px] ${saleStatus[sale.approval_status].color}`}>{sale.approval_status==='pendente' ? <Clock3 className="mr-1 h-3 w-3" /> : sale.approval_status==='aprovada' ? <Check className="mr-1 h-3 w-3" /> : <X className="mr-1 h-3 w-3" />}{saleStatus[sale.approval_status].label}</Badge></div>
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.05] pt-3">
               <div className="text-[10px] text-muted-foreground">

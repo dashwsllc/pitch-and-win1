@@ -1,5 +1,6 @@
 import type {CRMActivity, CRMLead} from '@/hooks/useCRM'
 import {brasiliaDateKey, isValidDateKey} from '@/lib/brasilia-time'
+import {outcomeLabel} from '@/lib/crm-stages'
 
 export type AgendaView = 'scheduled' | 'history'
 
@@ -26,5 +27,7 @@ export function selectCloserAgendaCalls(
 export function agendaCallLabel(call: CRMActivity) {
   if (call.cancelled_at) return 'Cancelada'
   if (call.outcome === 'devolvido_sdr') return 'Devolvida ao SDR'
-  return call.is_completed || call.outcome ? 'Concluída' : 'Agendada'
+  // Encerrada pela agenda ou pelo CRM: o resultado (Venda concluída, Venda recusada, Follow-up necessário, Sinal pago).
+  if (call.outcome) return outcomeLabel(call.outcome) ?? 'Concluída'
+  return call.is_completed ? 'Concluída' : 'Agendada'
 }

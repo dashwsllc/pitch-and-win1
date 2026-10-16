@@ -28,6 +28,8 @@ const OUTCOME_LABELS: Record<string, string> = {
   followup_sdr: 'Follow-up do SDR',
   repassado_closer: 'Enviado ao Closer',
   devolvido_sdr: 'Devolvido ao SDR',
+  // O lead pagou um sinal para segurar a vaga; segue com o Closer até a venda ser registrada.
+  sinal: 'Sinal pago',
 }
 
 /** O texto de um resultado ou desfecho de call; um valor que o app não conhece sai como veio (nunca vazio). */

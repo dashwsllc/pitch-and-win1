@@ -64,6 +64,7 @@ export const CALL_OUTCOMES: Record<string, string> = {
   venda_concluida: "Venda concluída",
   venda_perdida: "Venda recusada",
   devolvido_sdr: "Devolvido ao SDR",
+  sinal: "Sinal pago",
 };
 export const APPROACH_STAGES = [
   { value: "nao_abordado", label: "Não abordados" },

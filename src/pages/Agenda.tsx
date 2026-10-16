@@ -9,7 +9,13 @@ import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Badge} from '@/components/ui/badge'
 import {useRoles} from '@/hooks/useRoles'
-import {useCRMActivities, useCRMAssignees, useCRMLeads, useCRMRealtime} from '@/hooks/useCRM'
+import {useAuth} from '@/hooks/useAuth'
+import {useCRMActivities, useCRMAssignees, useCRMLeads, useCRMRealtime, useCRMSaleLinks, type CRMLead} from '@/hooks/useCRM'
+import type {Json} from '@/integrations/supabase/types'
+import {AgendaCallResultDialog, AgendaMeetingLink} from '@/components/agenda/AgendaCallTools'
+import {CRMCallMeetButton} from '@/components/crm/CRMCallMeetButton'
+import {callEncerrada} from '@/lib/crm-call-meeting'
+import {money} from '@/lib/sales'
 import {CalendarStatusesProvider, CRMCalendarStatus} from '@/components/crm/CRMCalendarStatus'
 import {GoogleCalendarIntegration} from '@/components/settings/GoogleCalendarIntegration'
 import {agendaCallLabel, selectCloserAgendaCalls, type AgendaView} from '@/lib/closer-agenda'
@@ -28,7 +34,11 @@ const temperatures: Record<string, {label: string; className: string}> = {
 
 export default function Agenda() {
   const {capabilities} = useRoles()
-  const leads = useCRMLeads(), calls = useCRMActivities(null, true), assignees = useCRMAssignees()
+  const {user} = useAuth()
+  const leads = useCRMLeads(), calls = useCRMActivities(null, true), assignees = useCRMAssignees(), saleLinks = useCRMSaleLinks()
+  // Encerrar call (Vendeu, Não vendeu, Pendente, Sinal) e o aviso com o atalho para registrar a venda.
+  const [encerrando, setEncerrando] = useState<CRMLead | null>(null)
+  const [encerrada, setEncerrada] = useState<{lead: CRMLead; outcome: string} | null>(null)
   const {realtimeUnavailable} = useCRMRealtime()
   const client = useQueryClient()
   const synchronization=useGoogleCalendarRefresh()
@@ -46,6 +56,15 @@ export default function Agenda() {
   const leadById = new Map(leads.leads.map(lead => [lead.id, lead]))
   const names = new Map((assignees.data ?? []).map(person => [person.user_id, person.display_name]))
   const refresh = () => synchronization.mutate()
+  const leadsComVenda = new Set((saleLinks.data ?? []).map(link => link.lead_id))
+  const ehResponsavel = (lead: CRMLead) => capabilities.executive || (capabilities.closer && lead.closer_id === user?.id)
+  // Venda a registrar: venda concluída sem venda cadastrada, ou lead com sinal que ainda está com o Closer.
+  const podeRegistrarVenda = (lead: CRMLead) => capabilities.sales && ehResponsavel(lead) && !leadsComVenda.has(lead.id)
+    && (lead.pipeline_stage === 'fechado_ganho' || (lead.pipeline_stage === 'repassado_closer' && lead.deposit_amount != null))
+  const registrarResultado = async (lead: CRMLead, data: Json) => {
+    await leads.transition(lead, 'close', data)
+    setEncerrada({lead, outcome: String((data as {outcome?: string}).outcome ?? '')})
+  }
 
   return <DashboardLayout>
     <div className="relative space-y-6 animate-fade-in">
@@ -60,6 +79,13 @@ export default function Agenda() {
         </div>
       </header>
       {synchronization.isError&&<p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm">Não foi possível concluir a atualização. Confira o status da agenda e tente novamente.</p>}
+      {encerrada&&<div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
+        <p>Call de {encerrada.lead.athlete_name || encerrada.lead.name} encerrada: {encerrada.outcome==='venda_concluida'?'venda concluída':encerrada.outcome==='sinal'?'sinal registrado':encerrada.outcome==='followup'?'follow-up agendado':'venda recusada'}.</p>
+        <div className="flex gap-2">
+          {['venda_concluida','sinal'].includes(encerrada.outcome)&&capabilities.sales&&<Button asChild size="sm"><Link to={`/vendas?lead=${encodeURIComponent(encerrada.lead.id)}`}>Registrar venda</Link></Button>}
+          <Button size="sm" variant="ghost" onClick={()=>setEncerrada(null)}>Fechar</Button>
+        </div>
+      </div>}
       {synchronization.isSuccess&&<p role="status" className="text-sm text-muted-foreground">{synchronization.data.pending?'Atualização solicitada. Há calls com sincronização pendente; confira os status abaixo.':'Atualização concluída. Calls e status da agenda foram recarregados.'}</p>}
 
       <Card className="border-border/50">
@@ -92,14 +118,25 @@ export default function Agenda() {
                     <p className="text-sm text-muted-foreground">Closer: {names.get(call.assigned_to ?? '') || 'Responsável indisponível'}</p>
                     {(call.description||lead.qualification_summary)&&<p className="max-w-3xl whitespace-pre-wrap break-words text-sm text-muted-foreground"><span className="font-medium text-foreground">Contexto da call: </span>{(call.description||lead.qualification_summary||'').slice(0,1200)}</p>}
                     <CRMCalendarStatus callId={call.id} />
+                    {lead.deposit_amount!=null&&lead.pipeline_stage==='repassado_closer'&&<Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">Sinal pago: {money(lead.deposit_amount)}</Badge>}
+                    {!callEncerrada(call)&&<div className="max-w-xl space-y-2 pt-1">
+                      <AgendaMeetingLink call={call} editavel={capabilities.executive||call.assigned_to===user?.id||call.user_id===user?.id} />
+                      <CRMCallMeetButton call={call} />
+                    </div>}
                   </div>
-                  <Button asChild variant="outline" size="sm"><Link to={`/crm?tab=closer&lead=${encodeURIComponent(lead.id)}`}>Ver call no CRM<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+                  <div className="flex flex-col items-stretch gap-2">
+                    {!callEncerrada(call)&&ehResponsavel(lead)&&lead.pipeline_stage==='repassado_closer'&&<Button size="sm" onClick={()=>setEncerrando(lead)}>Encerrar call</Button>}
+                    {podeRegistrarVenda(lead)&&<Button asChild size="sm" variant="secondary"><Link to={`/vendas?lead=${encodeURIComponent(lead.id)}`}>Registrar venda</Link></Button>}
+                    <Button asChild variant="outline" size="sm"><Link to={`/crm?tab=closer&lead=${encodeURIComponent(lead.id)}`}>Ver call no CRM<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+                  </div>
                 </li>
               })}
             </ul>}
           </CalendarStatusesProvider>}
         </CardContent>
       </Card>
+
+      {encerrando&&<AgendaCallResultDialog lead={leadById.get(encerrando.id) ?? encerrando} aberto aoFechar={()=>setEncerrando(null)} registrar={registrarResultado} />}
 
       {capabilities.executive && <section aria-label="Administração da agenda"><GoogleCalendarIntegration /></section>}
     </div>

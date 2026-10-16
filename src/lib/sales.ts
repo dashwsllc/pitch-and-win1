@@ -41,6 +41,9 @@ export interface TeamSale {
   nome_produto: string
   ticket_name?: string | null
   valor_venda: number
+  /** integral ou sinal (o comprador pagou deposit_amount e falta o restante). */
+  payment_type?: string | null
+  deposit_amount?: number | null
   approval_status: keyof typeof saleStatus
   created_at: string
   updated_at: string
