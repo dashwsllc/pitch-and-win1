@@ -25,7 +25,7 @@ DO $$ DECLARE l public.crm_leads; a public.abordagens; v_antes bigint; v_depois 
   SELECT count(*) INTO v_antes FROM public.dashboard_home_approaches();
   INSERT INTO public.crm_leads(name,athlete_name,phone) VALUES('Lead Cadastro QA','Atleta Cadastro QA','11999990001') RETURNING * INTO l;
   INSERT INTO self_qa(label,lead_id) VALUES ('cadastro',l.id);
-  SELECT * INTO a FROM public.abordagens WHERE crm_lead_id=l.id;
+  SELECT * INTO a FROM public.abordagens WHERE crm_lead_id=l.id AND crm_event_key IS NULL;
   IF a.id IS NULL THEN RAISE EXCEPTION 'FAIL cadastrar o lead não gerou a abordagem'; END IF;
   IF a.user_id<>'cf170000-0000-4000-8000-000000000002' OR a.tempo_medio_abordagem<>1 OR a.mostrou_ia OR a.created_at<>l.created_at
     OR a.nomes_abordados<>'Lead Cadastro QA' OR a.dados_abordados NOT LIKE 'Atleta Atleta Cadastro QA · 11999990001%' THEN
@@ -34,12 +34,12 @@ DO $$ DECLARE l public.crm_leads; a public.abordagens; v_antes bigint; v_depois 
   IF v_depois<>v_antes+1 THEN RAISE EXCEPTION 'FAIL a Visão geral conta % abordagens, esperado %', v_depois, v_antes+1; END IF;
   -- Cada lead, uma abordagem: um segundo lead soma mais uma, e nunca duas para o mesmo lead.
   INSERT INTO public.crm_leads(name,athlete_name,phone) VALUES('Lead Cadastro QA 2','Atleta 2','11999990002') RETURNING * INTO l;
-  IF (SELECT count(*) FROM public.abordagens WHERE crm_lead_id=l.id)<>1 THEN RAISE EXCEPTION 'FAIL mais de uma abordagem por lead'; END IF;
+  IF (SELECT count(*) FROM public.abordagens WHERE crm_lead_id=l.id AND crm_event_key IS NULL)<>1 THEN RAISE EXCEPTION 'FAIL mais de uma abordagem de cadastro por lead'; END IF;
   SELECT count(*) INTO v_depois FROM public.dashboard_home_approaches();
   IF v_depois<>v_antes+2 THEN RAISE EXCEPTION 'FAIL dois cadastros devem somar duas abordagens'; END IF;
   -- Editar o lead não cria outra abordagem.
   PERFORM public.crm_transition(l.id,'edit',l.version,'{"name":"Lead Cadastro QA 2 editado","athlete_name":"Atleta 2","phone":"11999990002"}');
-  IF (SELECT count(*) FROM public.abordagens WHERE crm_lead_id=l.id)<>1 THEN RAISE EXCEPTION 'FAIL editar criou outra abordagem'; END IF;
+  IF (SELECT count(*) FROM public.abordagens WHERE crm_lead_id=l.id)<>1 THEN RAISE EXCEPTION 'FAIL editar criou outra abordagem'; END IF; -- sem abordar, só o cadastro: 1 linha no total
 END; $$;
 RESET ROLE;
 -- O evento da Arena do cadastro: um por lead, do SDR, peso 0.
@@ -66,7 +66,7 @@ END; $$;
 -- Invariante: nenhuma abordagem do CRM repetida para o mesmo lead (índice único) e toda ligação aponta para um lead real.
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM public.abordagens a WHERE a.crm_lead_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.crm_leads l WHERE l.id=a.crm_lead_id))
-    OR EXISTS (SELECT crm_lead_id FROM public.abordagens WHERE crm_lead_id IS NOT NULL GROUP BY 1 HAVING count(*)>1)
+    OR EXISTS (SELECT crm_lead_id FROM public.abordagens WHERE crm_lead_id IS NOT NULL AND crm_event_key IS NULL GROUP BY 1 HAVING count(*)>1)
   THEN RAISE EXCEPTION 'FAIL abordagem do CRM sem lead ou repetida'; END IF;
 END; $$;
 
