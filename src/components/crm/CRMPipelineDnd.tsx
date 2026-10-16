@@ -17,7 +17,9 @@ import {
   type DropAnimationFunction,
   type DropAnimationFunctionArguments,
   type Over,
+  type UniqueIdentifier,
 } from "@dnd-kit/core";
+import { GripVertical } from "lucide-react";
 import { APPROACH_LABELS, type CRMLead } from "@/hooks/useCRM";
 import "@/components/crm/crm-pipeline-dnd.css";
 
@@ -28,7 +30,7 @@ import "@/components/crm/crm-pipeline-dnd.css";
 type Pending = { leadId: string; stage: string } | null;
 type DropKind = "move" | "return";
 
-const PipelineDnd = createContext<{ pending: Pending; busy: boolean } | null>(null);
+const PipelineDnd = createContext<{ pending: Pending; busy: boolean; pressing: UniqueIdentifier | null } | null>(null);
 
 // Botões, links e campos do card continuam funcionando: o arraste só começa
 // quando se pega o card fora deles.
@@ -99,7 +101,7 @@ function LiftedCopy({ source }: { source: HTMLElement }) {
 function LiftedLead({ dropAnimation }: { dropAnimation: DropAnimationFunction }) {
   const { activeNode } = useDndContext();
   return (
-    <DragOverlay dropAnimation={dropAnimation} zIndex={2147483647}>
+    <DragOverlay dropAnimation={dropAnimation} zIndex={2147483647} className="crm-dnd-overlay">
       {activeNode ? <LiftedCopy source={activeNode} /> : null}
     </DragOverlay>
   );
@@ -123,13 +125,15 @@ function PipelineBoard({ busy, onMove, children }: {
   children: ReactNode;
 }) {
   const [pending, setPending] = useState<Pending>(null);
+  // Card apertado (mouse) ou segurado (toque) antes de o arraste começar.
+  const [pressing, setPressing] = useState<UniqueIdentifier | null>(null);
   const dropKind = useRef<DropKind>("return");
   const sensors = useSensors(
     useSensor(LeadMouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(LeadTouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
   );
   const dropAnimation = useCallback<DropAnimationFunction>((args) => settleOverlay(args, dropKind.current), []);
-  const visual = useMemo(() => ({ pending, busy }), [pending, busy]);
+  const visual = useMemo(() => ({ pending, busy, pressing }), [pending, busy, pressing]);
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     const lead = active.data.current?.lead as CRMLead | undefined;
     const stage = over ? String(over.id) : null;
@@ -148,11 +152,20 @@ function PipelineBoard({ busy, onMove, children }: {
       sensors={sensors}
       collisionDetection={pointerWithin}
       accessibility={{ announcements, screenReaderInstructions }}
-      onDragStart={() => { dropKind.current = "return"; }}
+      onDragPending={({ id }) => setPressing((current) => (current === id ? current : id))}
+      onDragAbort={() => setPressing(null)}
+      onDragStart={() => { dropKind.current = "return"; setPressing(null); }}
       onDragEnd={handleDragEnd}
       onDragCancel={() => { dropKind.current = "return"; }}
     >
-      <PipelineDnd.Provider value={visual}>{children}</PipelineDnd.Provider>
+      <PipelineDnd.Provider value={visual}>
+        <p className="crm-dnd-hint -mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <GripVertical className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+          <span className="crm-dnd-hint-mouse">Arraste um card até outra etapa para mudar a abordagem. Esc cancela.</span>
+          <span className="crm-dnd-hint-touch">Segure um card e arraste até outra etapa para mudar a abordagem.</span>
+        </p>
+        {children}
+      </PipelineDnd.Provider>
       {createPortal(<LiftedLead dropAnimation={dropAnimation} />, document.body)}
     </DndContext>
   );
@@ -187,7 +200,13 @@ export function CRMPipelineColumn({ stage, className, children }: { stage: strin
     : <section className={className}>{children}</section>;
 }
 
-function DraggableLead({ lead, pending, busy, children }: { lead: CRMLead; pending: Pending; busy: boolean; children: ReactNode }) {
+function DraggableLead({ lead, pending, busy, pressing, children }: {
+  lead: CRMLead;
+  pending: Pending;
+  busy: boolean;
+  pressing: UniqueIdentifier | null;
+  children: ReactNode;
+}) {
   const { setNodeRef, listeners, isDragging } = useDraggable({ id: lead.id, data: { lead }, disabled: busy });
   // Enquanto o banco não confirma, o original fica apagado na origem; quando
   // confirma, o card entra na coluna nova assentando.
@@ -197,6 +216,8 @@ function DraggableLead({ lead, pending, busy, children }: { lead: CRMLead; pendi
       ref={setNodeRef}
       {...listeners}
       className="crm-dnd-card"
+      data-dnd-disabled={busy ? "" : undefined}
+      data-dnd-pressing={pressing === lead.id ? "" : undefined}
       data-dnd-ghost={isDragging || (moving && lead.approach_stage !== pending.stage) ? "" : undefined}
       data-dnd-arrived={moving && lead.approach_stage === pending.stage ? "" : undefined}
     >
@@ -208,6 +229,6 @@ function DraggableLead({ lead, pending, busy, children }: { lead: CRMLead; pendi
 export function CRMPipelineCard({ lead, children }: { lead: CRMLead; children: ReactNode }) {
   const visual = useContext(PipelineDnd);
   return visual
-    ? <DraggableLead lead={lead} pending={visual.pending} busy={visual.busy}>{children}</DraggableLead>
+    ? <DraggableLead lead={lead} pending={visual.pending} busy={visual.busy} pressing={visual.pressing}>{children}</DraggableLead>
     : <>{children}</>;
 }

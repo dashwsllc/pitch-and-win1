@@ -1,51 +1,165 @@
-/* Esteira do LEAD: aparência do arrastar e soltar (CRMPipelineDnd). Em repouso
-   nada aqui muda as colunas ou os cards; os efeitos só aparecem com os
-   atributos data-dnd-* que existem durante o arraste. */
+/* Esteira do LEAD: aparência do arrastar e soltar (CRMPipelineDnd). Os sinais
+   seguem o padrão dos quadros kanban (Jira, GitHub Projects): bordas laranja
+   e alça ao passar o mouse, cursor de pegar, todas as etapas viram áreas de
+   soltar durante o arraste e a etapa sob o ponteiro acende. */
 
 .crm-dnd-card,
 .crm-dnd-lift {
-  --crm-dnd-shadow-rest: 0 0 0 0 transparent, 0 0 0 0 transparent;
-  --crm-dnd-shadow-lifted: 0 18px 40px rgb(0 0 0 / 0.55), 0 4px 10px rgb(0 0 0 / 0.35);
+  --crm-dnd-shadow-rest: 0 0 0 0 transparent, 0 0 0 0 transparent, 0 0 0 0 transparent, 0 0 0 0 transparent;
+  --crm-dnd-shadow-lifted:
+    0 0 0 1px hsl(var(--primary) / 0.7),
+    0 18px 40px rgb(0 0 0 / 0.55),
+    0 4px 10px rgb(0 0 0 / 0.35),
+    0 0 32px hsl(var(--primary) / 0.16);
   --crm-dnd-settle: cubic-bezier(0.2, 0.9, 0.25, 1);
 }
 
-/* Coluna sob o ponteiro. O realce fica num pseudo-elemento para não somar
-   borda nem espaço ao layout; a coluna estica até a altura da linha para o
-   alvo cobrir a coluna inteira, o que não aparece em repouso. */
+/* Dica fixa acima das colunas; o texto muda entre mouse e toque. */
+.crm-dnd-hint-touch {
+  display: none;
+}
+
+@media (hover: none) {
+  .crm-dnd-hint-mouse {
+    display: none;
+  }
+
+  .crm-dnd-hint-touch {
+    display: inline;
+  }
+}
+
+/* Etapas. ::before é a área de soltar (tracejada, aparece em todas durante o
+   arraste); ::after é a etapa sob o ponteiro. Ficam em pseudo-elementos para
+   não somar borda nem espaço ao layout; a coluna estica até a altura da linha
+   para o alvo cobrir a etapa inteira, o que não aparece em repouso. */
 .crm-dnd-column {
   position: relative;
   isolation: isolate;
   align-self: stretch;
 }
 
-.crm-dnd-column::before {
+.crm-dnd-column::before,
+.crm-dnd-column::after {
   content: "";
   position: absolute;
   inset: -6px;
   z-index: -1;
   pointer-events: none;
-  border: 1px solid hsl(var(--primary) / 0.6);
   border-radius: calc(var(--radius) + 6px);
-  background-color: hsl(var(--primary) / 0.08);
-  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.15), 0 0 28px hsl(var(--primary) / 0.1);
   opacity: 0;
   transition: opacity 240ms ease-out;
 }
 
-.crm-dnd-column[data-dnd-dragging]::before {
+.crm-dnd-column::before {
+  border: 1px dashed hsl(var(--primary) / 0.4);
+  background-color: hsl(var(--primary) / 0.03);
+}
+
+.crm-dnd-column::after {
+  border: 1px solid hsl(var(--primary) / 0.6);
+  background-color: hsl(var(--primary) / 0.08);
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.15), 0 0 28px hsl(var(--primary) / 0.1);
+}
+
+.crm-dnd-column[data-dnd-dragging]::before,
+.crm-dnd-column[data-dnd-dragging]::after {
   transition-duration: 140ms;
 }
 
-.crm-dnd-column[data-dnd-over]::before {
+.crm-dnd-column[data-dnd-dragging]::before {
   opacity: 1;
 }
 
-/* Lugar de origem: cópia apagada que mantém o espaço. */
+.crm-dnd-column[data-dnd-over]::before {
+  opacity: 0;
+}
+
+.crm-dnd-column[data-dnd-over]::after {
+  opacity: 1;
+}
+
+/* Card. ::after são as bordas laranja; ::before é a alça pontilhada na borda
+   de cima. Os dois só aparecem no hover (mouse) ou enquanto o card é
+   apertado/segurado, e não recebem clique. */
 .crm-dnd-card {
+  position: relative;
   border-radius: var(--radius);
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+.crm-dnd-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--primary) / 0.7),
+    0 0 0 3px hsl(var(--primary) / 0.12),
+    0 10px 28px -12px hsl(var(--primary) / 0.55);
+  opacity: 0;
   transition: opacity 160ms ease-out;
 }
 
+.crm-dnd-card::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: calc(50% - 15px);
+  z-index: 2;
+  width: 30px;
+  height: 12px;
+  box-sizing: border-box;
+  padding: 1px 6.5px;
+  pointer-events: none;
+  border: 1px solid hsl(var(--primary) / 0.7);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, hsl(var(--primary)) 0.9px, transparent 1.4px) 0 0 / 5px 4px content-box,
+    hsl(var(--card));
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+.crm-dnd-card[data-dnd-pressing] {
+  transform: scale(0.985);
+  transition-duration: 160ms, 250ms;
+  transition-timing-function: ease-out, cubic-bezier(0.2, 0, 0, 1);
+}
+
+.crm-dnd-card[data-dnd-pressing]::after,
+.crm-dnd-card[data-dnd-pressing]::before {
+  opacity: 1;
+  transition-duration: 250ms;
+}
+
+.crm-dnd-card[data-dnd-pressing]::before {
+  transform: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .crm-dnd-card:not([data-dnd-disabled]) {
+    cursor: grab;
+  }
+
+  .crm-dnd-card[data-dnd-pressing] {
+    cursor: grabbing;
+  }
+
+  .crm-dnd-card:not([data-dnd-disabled]):hover::after,
+  .crm-dnd-card:not([data-dnd-disabled]):hover::before {
+    opacity: 1;
+  }
+
+  .crm-dnd-card:not([data-dnd-disabled]):hover::before {
+    transform: none;
+  }
+}
+
+/* Lugar de origem: cópia apagada que mantém o espaço. */
 .crm-dnd-card[data-dnd-ghost] {
   opacity: 0.32;
   pointer-events: none;
@@ -56,7 +170,12 @@
   box-shadow: none;
 }
 
-/* Card que acabou de entrar na coluna nova depois da confirmação. */
+.crm-dnd-card[data-dnd-ghost]::after,
+.crm-dnd-card[data-dnd-ghost]::before {
+  opacity: 0;
+}
+
+/* Card que acabou de entrar na etapa nova depois da confirmação. */
 .crm-dnd-card[data-dnd-arrived] {
   animation:
     crm-dnd-arrive 180ms var(--crm-dnd-settle) both,
@@ -64,6 +183,10 @@
 }
 
 /* Card que acompanha o ponteiro (dentro do DragOverlay, que faz o translate). */
+.crm-dnd-overlay {
+  cursor: grabbing;
+}
+
 .crm-dnd-lift {
   width: 100%;
   height: 100%;
@@ -120,8 +243,13 @@
   .crm-dnd-lift,
   .crm-dnd-lift[data-settle] {
     transform: none;
-    box-shadow: none;
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.7);
     animation: none;
+  }
+
+  .crm-dnd-card::before,
+  .crm-dnd-card[data-dnd-pressing] {
+    transform: none;
   }
 
   .crm-dnd-card[data-dnd-arrived] {
