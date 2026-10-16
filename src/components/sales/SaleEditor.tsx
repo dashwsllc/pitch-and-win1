@@ -12,12 +12,13 @@ import { useSaleAssignees } from '@/hooks/useSaleAssignees'
 import { useToast } from '@/hooks/use-toast'
 import type { ManagedSale } from '@/hooks/useManagedSales'
 import { supabase } from '@/integrations/supabase/client'
-import { errorMessage, money } from '@/lib/sales'
+import { errorMessage } from '@/lib/sales'
 import { refreshSalesData } from '@/lib/sync'
+import { lerValorEmReais, valorParaCampo } from '@/lib/valor-reais'
 
 export function SaleEditor({ sale, onClose }: { sale: ManagedSale; onClose: () => void }) {
   const catalog = useProducts()
-  const { isExecutive, isSuperAdmin } = useRoles()
+  const { isSuperAdmin } = useRoles()
   const assigneeDirectory = useSaleAssignees(isSuperAdmin)
   const client = useQueryClient()
   const { toast } = useToast()
@@ -27,18 +28,18 @@ export function SaleEditor({ sale, onClose }: { sale: ManagedSale; onClose: () =
   const [assignmentReason, setAssignmentReason] = useState('')
   const [form, setForm] = useState({
     user_id: sale.user_id,
-    product_id: sale.product_id ?? '', ticket_id: sale.ticket_id ?? '', valor_venda: String(sale.valor_venda),
+    product_id: sale.product_id ?? '', ticket_id: sale.ticket_id ?? '', valor_venda: valorParaCampo(sale.valor_venda),
     nome_comprador: sale.nome_comprador, email_comprador: sale.email_comprador,
     whatsapp_comprador: sale.whatsapp_comprador, consideracoes_gerais: sale.consideracoes_gerais ?? '',
   })
-  const products = (catalog.data ?? []).filter(p => p.active && p.product_tickets.some(t => t.active))
-  const tickets = products.find(p => p.id === form.product_id)?.product_tickets.filter(t => t.active) ?? []
+  const products = (catalog.data ?? []).filter(p => p.active)
   const sellerChanged = form.user_id !== sale.user_id
-  const financialChanged = form.product_id !== (sale.product_id ?? '') || form.ticket_id !== (sale.ticket_id ?? '') || Number(form.valor_venda) !== Number(sale.valor_venda)
+  const catalogChanged = form.product_id !== (sale.product_id ?? '') || form.ticket_id !== (sale.ticket_id ?? '')
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
     if (submitting.current) return
-    if (financialChanged && (!form.product_id || !form.ticket_id)) { setFailure('Selecione o produto e o ticket.'); return }
+    const total = lerValorEmReais(form.valor_venda)
+    if (total === null || total > 100000000) { setFailure('Informe um valor positivo em reais, de até 100.000.000,00.'); return }
     if (sellerChanged && assignmentReason.trim().length < 5) { setFailure('Informe o motivo da troca de responsável.'); return }
     submitting.current = true
     setBusy(true)
@@ -46,7 +47,8 @@ export function SaleEditor({ sale, onClose }: { sale: ManagedSale; onClose: () =
     try {
       const { error } = await supabase.rpc('manage_sale', {
         p_sale_id: sale.id, p_action: 'edit', p_expected_updated_at: sale.updated_at,
-        p_data: { ...form, product_id: form.product_id || null, ticket_id: form.ticket_id || null, valor_venda: Number(form.valor_venda) },
+        p_data: { ...form, product_id: form.product_id || null, ticket_id: form.ticket_id || null, valor_venda: total,
+          nome_comprador: form.nome_comprador.trim(), email_comprador: form.email_comprador.trim(), whatsapp_comprador: form.whatsapp_comprador.trim() },
         p_reason: sellerChanged ? assignmentReason.trim() : '',
       })
       if (error) throw error
@@ -75,31 +77,28 @@ export function SaleEditor({ sale, onClose }: { sale: ManagedSale; onClose: () =
             <Label htmlFor="edit-sale-assignment-reason">Motivo da troca de responsável</Label>
             <Textarea id="edit-sale-assignment-reason" required minLength={5} maxLength={2000} value={assignmentReason} onChange={event => setAssignmentReason(event.target.value)} placeholder="Ex.: venda registrada no usuário incorreto" />
           </div>}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2"><Label htmlFor="edit-sale-product">Produto</Label>
-              <select id="edit-sale-product" className={selectClass} value={form.product_id} disabled={catalog.isPending || catalog.isError} onChange={e => setForm({ ...form, product_id: e.target.value, ticket_id: '' })}>
-                {!products.some(p => p.id === form.product_id) && <option value={form.product_id}>{sale.nome_produto} (registro atual)</option>}
-                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2"><Label htmlFor="edit-sale-ticket">Ticket</Label>
-              <select id="edit-sale-ticket" className={selectClass} value={form.ticket_id} disabled={catalog.isPending || catalog.isError || !form.product_id} onChange={e => { const ticket = tickets.find(t => t.id === e.target.value); setForm({ ...form, ticket_id: e.target.value, valor_venda: ticket ? String(ticket.price) : form.valor_venda }) }}>
-                <option value="">{sale.ticket_id ? 'Selecione o ticket' : 'Sem ticket no registro original'}</option>
-                {form.ticket_id && !tickets.some(t => t.id === form.ticket_id) && <option value={form.ticket_id}>{sale.ticket_name || 'Ticket atual'} (registro atual)</option>}
-                {tickets.map(t => <option key={t.id} value={t.id}>{t.name} — {money(t.price)}</option>)}
-              </select>
-            </div>
+          <div className="space-y-2"><Label htmlFor="edit-sale-product">Produto</Label>
+            <select id="edit-sale-product" className={selectClass} value={form.product_id} disabled={catalog.isPending || catalog.isError} onChange={e => setForm({ ...form, product_id: e.target.value, ticket_id: '' })}>
+              <option value="">Sem produto do catálogo</option>
+              {form.product_id && !products.some(p => p.id === form.product_id) && <option value={form.product_id}>{sale.nome_produto} (registro atual)</option>}
+              {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </div>
           {catalog.isError && <p role="alert" className="text-sm text-destructive">Catálogo indisponível. Você pode atualizar os dados do comprador e tentar novamente para alterar o produto.</p>}
-          <div className="space-y-2"><Label htmlFor="edit-sale-value">Valor da venda (R$)</Label><Input id="edit-sale-value" type="number" min="0.01" max="100000000" step="0.01" required readOnly={!isExecutive} value={form.valor_venda} onChange={e => setForm({ ...form, valor_venda: e.target.value })} />{!isExecutive && <p className="text-xs text-muted-foreground">O valor acompanha o ticket selecionado.</p>}</div>
+          <div className="space-y-2"><Label htmlFor="edit-sale-value">Ticket (R$) *</Label>
+            <div className="relative">
+              <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground">R$</span>
+              <Input id="edit-sale-value" inputMode="decimal" required className="pl-10" value={form.valor_venda} onChange={e => setForm({ ...form, valor_venda: e.target.value })} />
+            </div>
+          </div>
           <div className="space-y-2"><Label htmlFor="edit-sale-buyer">Nome do comprador</Label><Input id="edit-sale-buyer" required minLength={2} maxLength={160} value={form.nome_comprador} onChange={e => setForm({ ...form, nome_comprador: e.target.value })} /></div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2"><Label htmlFor="edit-sale-email">E-mail do comprador</Label><Input id="edit-sale-email" type="email" required maxLength={254} value={form.email_comprador} onChange={e => setForm({ ...form, email_comprador: e.target.value })} /></div>
-            <div className="space-y-2"><Label htmlFor="edit-sale-phone">WhatsApp do comprador</Label><Input id="edit-sale-phone" type="tel" required minLength={5} maxLength={32} value={form.whatsapp_comprador} onChange={e => setForm({ ...form, whatsapp_comprador: e.target.value })} /></div>
+            <div className="space-y-2"><Label htmlFor="edit-sale-email">E-mail do comprador (opcional)</Label><Input id="edit-sale-email" type="email" maxLength={254} value={form.email_comprador} onChange={e => setForm({ ...form, email_comprador: e.target.value })} /></div>
+            <div className="space-y-2"><Label htmlFor="edit-sale-phone">WhatsApp do comprador</Label><Input id="edit-sale-phone" type="tel" required minLength={8} maxLength={32} value={form.whatsapp_comprador} onChange={e => setForm({ ...form, whatsapp_comprador: e.target.value })} /></div>
           </div>
           <div className="space-y-2"><Label htmlFor="edit-sale-notes">Observações</Label><Textarea id="edit-sale-notes" maxLength={10000} value={form.consideracoes_gerais} onChange={e => setForm({ ...form, consideracoes_gerais: e.target.value })} /></div>
           {failure && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{failure}</p>}
-          <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancelar</Button><Button type="submit" disabled={(financialChanged && (catalog.isPending || catalog.isError)) || (sellerChanged && assignmentReason.trim().length < 5)}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar alterações</Button></DialogFooter>
+          <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancelar</Button><Button type="submit" disabled={(catalogChanged && (catalog.isPending || catalog.isError)) || (sellerChanged && assignmentReason.trim().length < 5)}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar alterações</Button></DialogFooter>
         </fieldset>
       </form>
     </DialogContent>

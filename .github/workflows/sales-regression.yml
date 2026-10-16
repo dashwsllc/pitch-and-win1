@@ -31,3 +31,4 @@ jobs:
       - run: npx vite build --outDir .verification.local/perf/dist-aprovacao --emptyOutDir
       - run: node scripts/verify-approval-sync-ui.mjs --dist .verification.local/perf/dist-aprovacao
       - run: node scripts/verify-sale-visibility-ui.mjs --dist .verification.local/perf/dist-aprovacao
+      - run: node scripts/verify-vendas-ticket-ui.mjs --dist .verification.local/perf/dist-aprovacao

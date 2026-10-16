@@ -31,10 +31,9 @@ interface LeadVinculado {
 }
 
 /**
- * Registrar venda. Nada vem pré-selecionado e quase nada é obrigatório: produto e ticket do catálogo são opcionais e
- * independentes (ou o produto é digitado), o valor é o que a pessoa informar (o ticket só sugere o preço), e o
- * comprador pode ficar em branco. O pagamento pode ser integral ou com sinal; no faturamento a venda conta pelo valor
- * total. A venda continua nascendo pendente, para aprovação do executive.
+ * Registrar venda. O produto do catálogo é opcional (ou pode ser digitado), o ticket é um valor informado em reais,
+ * e nome e WhatsApp do comprador são obrigatórios. O pagamento pode ser integral ou com sinal; no faturamento a venda
+ * conta pelo valor total. A venda continua nascendo pendente, para aprovação do executive.
  */
 export default function RegistrarVenda() {
   const navigate = useNavigate();
@@ -53,7 +52,6 @@ export default function RegistrarVenda() {
   const [justRegistered, setJustRegistered] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState("");
   const [produtoDigitado, setProdutoDigitado] = useState("");
-  const [ticketSelecionado, setTicketSelecionado] = useState("");
   const [valorTotal, setValorTotal] = useState("");
   const [pagamento, setPagamento] = useState<"integral" | "sinal" | "">("");
   const [valorDoSinal, setValorDoSinal] = useState("");
@@ -100,40 +98,17 @@ export default function RegistrarVenda() {
     };
   }, [leadId]);
 
-  const products = (catalog.data ?? []).filter(
-    (product) => product.active && product.product_tickets.some((ticket) => ticket.active),
-  );
+  const products = (catalog.data ?? []).filter((product) => product.active);
   const product = products.find((item) => item.id === produtoSelecionado);
-  // Ticket independente do produto: com produto escolhido, só os dele; sem produto, todos (com o nome do produto).
-  const tickets = products
-    .filter((item) => !product || item.id === product.id)
-    .flatMap((item) => item.product_tickets.filter((ticket) => ticket.active).map((ticket) => ({ ...ticket, productName: item.name, productId: item.id })))
-    .sort((a, b) => a.productName.localeCompare(b.productName) || a.price - b.price);
-  const ticket = tickets.find((item) => item.id === ticketSelecionado);
 
   const total = lerValorEmReais(valorTotal);
   const sinal = pagamento === "sinal" ? lerValorEmReais(valorDoSinal) : null;
   const faltaReceber = total !== null && sinal !== null ? Math.max(0, total - sinal) : null;
   const comissaoEstimada = total !== null ? (total * commissionRate) / 100 : null;
 
-  const escolherProduto = (valor: string) => {
-    setProdutoSelecionado(valor === OUTRO_PRODUTO ? OUTRO_PRODUTO : valor);
-    // Um ticket de outro produto deixa de valer.
-    if (ticket && valor !== ticket.productId) setTicketSelecionado("");
-  };
-  const escolherTicket = (valor: string) => {
-    setTicketSelecionado(valor);
-    const escolhido = tickets.find((item) => item.id === valor);
-    if (!escolhido) return;
-    // O ticket só sugere: o produto dele e o preço como valor total (editável).
-    setProdutoSelecionado(escolhido.productId);
-    setValorTotal(valorParaCampo(escolhido.price));
-  };
-
   const resetForm = () => {
     setProdutoSelecionado("");
     setProdutoDigitado("");
-    setTicketSelecionado("");
     setValorTotal("");
     setPagamento("");
     setValorDoSinal("");
@@ -155,16 +130,15 @@ export default function RegistrarVenda() {
       avisar("Confira o lead no CRM antes de registrar.");
       return;
     }
-    // O valor total é o único dado que a venda precisa ter: é ele que entra no faturamento.
+    // O valor digitado no ticket é o total que entra no faturamento.
     if (total === null) return avisar("Informe o valor total da venda (ex.: 2.997,00).");
     if (pagamento === "sinal") {
       if (sinal === null) return avisar("Informe quanto foi pago de sinal.");
       if (sinal > total) return avisar("O sinal não pode ser maior que o valor total da venda.");
     }
-    // Comprador é opcional; o que for preenchido precisa estar certo.
-    if (nomeComprador.trim() && nomeComprador.trim().length < 2) return avisar("O nome do comprador precisa de pelo menos 2 letras.");
+    if (nomeComprador.trim().length < 2) return avisar("O nome do comprador precisa de pelo menos 2 letras.");
     const whatsapp = whatsappComprador.trim();
-    if (whatsapp && (whatsapp.length < 8 || whatsapp.length > 32)) return avisar("Confira o WhatsApp do comprador (de 8 a 32 caracteres).");
+    if (whatsapp.length < 8 || whatsapp.length > 32) return avisar("Confira o WhatsApp do comprador (de 8 a 32 caracteres).");
     if (emailComprador.trim() && !EMAIL_VALIDO.test(emailComprador.trim())) return avisar("Confira o e-mail do comprador.");
 
     submitting.current = true;
@@ -186,7 +160,7 @@ export default function RegistrarVenda() {
           user_id: user.id,
           ...(linkedLead ? { crm_lead_id: linkedLead.id } : {}),
           product_id: produtoDoCatalogo?.id ?? null,
-          ticket_id: ticket?.id ?? null,
+          ticket_id: null,
           nome_produto: produtoDoCatalogo?.name ?? produtoDigitado.trim(),
           valor_venda: total,
           payment_type: pagamento === "sinal" ? "sinal" : "integral",
@@ -301,7 +275,7 @@ export default function RegistrarVenda() {
                     id="sale-product"
                     className={seletor}
                     value={produtoSelecionado}
-                    onChange={(e) => escolherProduto(e.target.value)}
+                    onChange={(e) => setProdutoSelecionado(e.target.value)}
                     disabled={isSubmitting}
                   >
                     <option value="">Sem produto do catálogo</option>
@@ -324,39 +298,25 @@ export default function RegistrarVenda() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="sale-ticket">Ticket</Label>
-                  <select
-                    id="sale-ticket"
-                    className={seletor}
-                    value={ticketSelecionado}
-                    onChange={(e) => escolherTicket(e.target.value)}
-                    disabled={isSubmitting || !tickets.length}
-                  >
-                    <option value="">Sem ticket</option>
-                    {tickets.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {product ? item.name : `${item.productName} · ${item.name}`} — {money(item.price)}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground">O ticket só preenche o valor; você pode mudar o valor à vontade.</p>
+                  <Label htmlFor="sale-ticket">Ticket (R$) *</Label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground" aria-hidden="true">R$</span>
+                    <Input
+                      id="sale-ticket"
+                      inputMode="decimal"
+                      required
+                      value={valorTotal}
+                      onChange={(e) => setValorTotal(e.target.value)}
+                      placeholder="Ex.: 2.997,00"
+                      className="pl-10"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Digite o valor total da venda em reais. É o valor que entra no faturamento, mesmo quando o cliente pagou só o sinal.</p>
                 </div>
               </div>
 
               <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="valor-total">Valor total da venda (R$) *</Label>
-                  <Input
-                    id="valor-total"
-                    inputMode="decimal"
-                    value={valorTotal}
-                    onChange={(e) => setValorTotal(e.target.value)}
-                    placeholder="Ex.: 2.997,00"
-                    disabled={isSubmitting}
-                  />
-                  <p className="text-xs text-muted-foreground">É o valor que entra no faturamento, mesmo quando o cliente pagou só o sinal.</p>
-                </div>
-
                 <fieldset className="space-y-2" disabled={isSubmitting}>
                   <legend className="mb-2 text-sm font-medium leading-none">Pagamento</legend>
                   <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Pagamento">
@@ -399,14 +359,14 @@ export default function RegistrarVenda() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="nome_comprador">Nome do comprador</Label>
-                <Input id="nome_comprador" value={nomeComprador} onChange={(e) => setNomeComprador(e.target.value)} placeholder="Nome completo do cliente (opcional)" maxLength={160} className="w-full" />
+                <Label htmlFor="nome_comprador">Nome do comprador *</Label>
+                <Input id="nome_comprador" required minLength={2} value={nomeComprador} onChange={(e) => setNomeComprador(e.target.value)} placeholder="Nome completo do cliente" maxLength={160} className="w-full" />
               </div>
 
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="whatsapp_comprador">WhatsApp do comprador</Label>
-                  <Input id="whatsapp_comprador" value={whatsappComprador} onChange={(e) => setWhatsappComprador(e.target.value)} placeholder="(11) 99999-9999 (opcional)" maxLength={32} className="w-full" />
+                  <Label htmlFor="whatsapp_comprador">WhatsApp do comprador *</Label>
+                  <Input id="whatsapp_comprador" type="tel" required minLength={8} value={whatsappComprador} onChange={(e) => setWhatsappComprador(e.target.value)} placeholder="(11) 99999-9999" maxLength={32} className="w-full" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email_comprador">E-mail do comprador</Label>
