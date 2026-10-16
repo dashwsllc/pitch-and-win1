@@ -63,6 +63,7 @@ import { CRMReturnDialog } from "@/components/crm/CRMReturnDialog";
 import { leadResult } from "@/lib/crm-results";
 import { candidatesFor } from "@/lib/crm-assignees";
 import { CRMLeadPeriodFilter } from "@/components/crm/CRMLeadPeriodFilter";
+import { CRMPipelineCard, CRMPipelineColumn, CRMPipelineDnd } from "@/components/crm/CRMPipelineDnd";
 import { CRMUserManagement } from "@/components/crm/CRMUserManagement";
 import { CRMPermissionsReport } from "@/components/crm/CRMPermissionsReport";
 import {
@@ -938,6 +939,7 @@ export default function CRM() {
                     </span>
                   </div>
                 </div>
+                <CRMPipelineDnd enabled={dailyPipeline} busy={busy} onMove={(lead, stage) => transition(lead, "approach", { stage })}>
                 <div
                   className={
                     groups.length > 1
@@ -950,7 +952,7 @@ export default function CRM() {
                       (l) => groupFor(l) === group.value,
                     );
                     return (
-                      <section key={group.value} className="min-w-0 space-y-2">
+                      <CRMPipelineColumn key={group.value} stage={group.value} className="min-w-0 space-y-2">
                         {groups.length > 1 && (
                           <h2 className="flex gap-2 items-center text-sm font-semibold">
                             {group.label}
@@ -965,17 +967,18 @@ export default function CRM() {
                                 : "grid items-start gap-3 lg:grid-cols-2 2xl:grid-cols-3"
                             }
                           >
-                            {rows.map(renderLead)}
+                            {rows.map((lead) => <CRMPipelineCard key={lead.id} lead={lead}>{renderLead(lead)}</CRMPipelineCard>)}
                           </div>
                         ) : (
                           <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                             {dailyPipeline ? "Nenhum lead nesta etapa durante o período selecionado." : "Nenhum lead nesta visualização."}
                           </div>
                         )}
-                      </section>
+                      </CRMPipelineColumn>
                     );
                   })}
                 </div>
+                </CRMPipelineDnd>
                 </>}
               </>
             )}
