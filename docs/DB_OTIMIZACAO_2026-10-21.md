@@ -2,17 +2,19 @@
 
 Projeto dash (`mbzwchnxtskysqplqiyy`). Alerta do Supabase: "Your project is about to deplete its Disk IO Budget". Tudo abaixo foi **medido por leitura** antes de propor qualquer mudança.
 
-## Estado do deploy (21/10/2026, ~22:10 UTC)
+## Estado do deploy (21/10/2026, 22:18 UTC): CONCLUÍDO
 
-**Aplicado em produção** (verificado por leitura): migration `20261021230000` (função, 3 jobs, proteção do job `meta-insights-resume`, registrada no histórico); `crm_context_delivery_invoke` com prazo de 50 s e só com evento vencido; `VACUUM FULL` de `net._http_response` (**79,6 MB → 1,9 MB**) e de `cron.job_run_details` (**151 MB → 103 MB**, só reescrita das linhas vivas). Banco inteiro: ~300 MB → **249 MB**. O job `meta-insights-resume` já devolve `0 rows` a cada minuto (não chama mais a Edge Function); a última chamada real foi às 22:04.
+Tudo aplicado em produção e verificado por leitura:
 
-**Pendente (o classificador de permissões barrou; rodar no SQL Editor):**
+- Migration `20261021230000` (função, 3 jobs, proteção do job `meta-insights-resume`, registrada no histórico); `crm_context_delivery_invoke` com prazo de 50 s e só com evento vencido.
+- Frequências: `arena-cycle-deadlines` em `15 seconds` e `crm-context-reconcile` em `*/15 * * * *` (aplicadas pelo dono no SQL Editor; o classificador de permissões barrou a minha tentativa).
+- Primeira drenagem da retenção (rodada pelo dono): vencidos foram de 496.939 (cron), 12.208 (batidas vazias), 9.085 (candidatas de revisão) e 500 (páginas) para **~0**. `db_housekeeping_run()` devolve `more:false` e `errors:{}`. Nada que devia ficar foi tocado: leads (1.046), leads do CRM (228), vendas (92), métricas publicadas (63), fila da ponte (211), revisões (1.535), eventos de auditoria; erros e execuções parciais do Meta seguem todos.
+- Compactação (`VACUUM (FULL, ANALYZE)`, só reescreve linhas vivas): `net._http_response` 79,6 → 2 MB; `cron.job_run_details` 163 → 13 MB; `meta_capture_review_rows` 68 → 33 MB; `meta_sync_runs` 10 → 3 MB; `meta_insights_pages` 6,6 → 3,6 MB. **Banco inteiro: ~400 MB → 103 MB.**
+- Saúde depois da compactação: todos os jobs do pg_cron `succeeded` (Arena a cada 15 s), pg_net enviando e gravando respostas (136 `200` em 40 min, fila vazia), `meta-insights-resume` devolvendo `0 rows` (não chama mais a Edge Function), nenhuma consulta presa nem trava advisory.
 
-1. Frequências: `crm-context-reconcile` para `*/15 * * * *` e `arena-cycle-deadlines` para `15 seconds` (ainda em `*/5` e `5 seconds`).
-2. Primeira drenagem da retenção (sem isso o job diário apaga ~60 mil linhas do cron por dia e leva ~8 dias): `select public.db_housekeeping(false, 50000) from generate_series(1,10);` (apaga só o vencido, até 50 mil por regra por chamada; repita até `cron_history` e os demais virarem 0 em `select public.db_housekeeping(true);`).
-3. Depois da drenagem, compactar (um comando por vez): `VACUUM (FULL, ANALYZE) cron.job_run_details;` (103 MB → poucos MB) e os três de `scripts/db-optimization-2026-10-21-vacuum.sql` (`meta_capture_review_rows` 68 MB, `meta_sync_runs`, `meta_insights_pages`). `VACUUM` roda por esse canal (testado).
+O que sobrou de "running" na tela do SQL Editor era só a interface: uma consulta longa (a drenagem) perdeu a resposta e a aba ficou pendurada, enquanto o banco já tinha terminado. O `{"skipped":"running"}` é a trava da função (`pg_try_advisory_xact_lock`): ela se recusa a rodar duas vezes ao mesmo tempo, e naquele instante a drenagem ainda estava em andamento. Se acontecer de novo: atualize a página e confira `select public.db_housekeeping(true);`; se vier `skipped`, espere um minuto.
 
-Sem esses passos manuais o sistema já converge sozinho: o job das 03:17 BRT apaga o vencido em lotes e o `VACUUM` agendado devolve o espaço para reuso; o que fica é só espaço já alocado.
+Daqui para frente não há passo manual: o job das 03:17 BRT apaga o vencido (alguns milhares de linhas por dia) e os `VACUUM` agendados devolvem o espaço para reuso.
 
 ## O que as medições mostram
 
