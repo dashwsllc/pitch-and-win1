@@ -63,3 +63,6 @@ verify_jwt = true
 
 [functions.site-lead-receiver]
 verify_jwt = false
+
+[functions.voxen-context-delivery]
+verify_jwt = false
