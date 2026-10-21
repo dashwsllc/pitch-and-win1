@@ -3,7 +3,9 @@ import { GoogleCalendarClient, GoogleError } from './google-calendar-client.ts'
 import { CalendarStore, CalendarStoreError, type Job, type Snapshot } from './google-calendar-store.ts'
 import { projectCall, ownsEvent, eventMatches, managedEventHash, googleMeetingUrl, withMeeting } from './google-calendar-projection.ts'
 
-export type WorkerDeps = { store: CalendarStore; client: GoogleCalendarClient; now: () => number; random: () => number; deadlineAt?: number }
+export type WorkerDeps = { store: CalendarStore; client: GoogleCalendarClient; now: () => number; random: () => number; deadlineAt?: number;
+  // E-mail Google do closer para convidá-lo. null = sem convite; erro = tenta de novo (não apaga um convite por falha momentânea).
+  closerEmail?: (userId: string) => Promise<string | null> }
 class LeaseLost extends Error {}
 class Changed extends Error {}
 class BudgetSpent extends Error {}
@@ -57,7 +59,8 @@ export async function deliverJob(job: Job, deps: WorkerDeps): Promise<void> {
   try {
     for(let round=0;round<6;round++) {
       if(now()+20_000>deadline) throw new BudgetSpent()
-      const snapshot=await fresh(), desired=projectCall(snapshot), binding=snapshot.binding
+      const snapshot=await fresh(), assignee=snapshot.call?.assignedTo
+      const desired=projectCall({...snapshot,closerEmail:assignee&&deps.closerEmail?await deps.closerEmail(assignee):null}), binding=snapshot.binding
       if(desired.kind==='blocked') throw new Blocked(desired.code)
       try {
         let actual: GoogleEvent | null

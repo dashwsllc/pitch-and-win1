@@ -391,3 +391,36 @@ test('worker: cancelled ID-only tombstone rotates, owned restorable tombstone ke
     assert.equal(f.x.binding.eventId===old,restorable)
   }
 })
+
+test('projection: closer com e-mail válido vira convidado do evento; e-mail inválido ou ausente não convida',async()=>{
+  const {exports:p}=await loadModule(projectionPath)
+  const x=input();x.closerEmail='  Closer@Gmail.com '
+  const e=p.projectCall(x).event
+  assert.equal(JSON.stringify(e.attendees),'[{"email":"closer@gmail.com"}]');assert.equal(e.extendedProperties.private.closer_email,'closer@gmail.com')
+  for(const bad of [null,undefined,'','sem-arroba','a b@c.com','x@y']){x.closerEmail=bad;const n=p.projectCall(x).event;assert.ok(!('attendees' in n));assert.ok(!('closer_email' in n.extendedProperties.private))}
+  // Sem convite o hash é o de antes; com convite o evento sem o convidado deixa de combinar.
+  const plain=p.projectCall(input()).event
+  x.closerEmail='closer@gmail.com';const invited=p.projectCall(x).event
+  assert.notEqual(await p.managedEventHash(plain),await p.managedEventHash(invited))
+  assert.equal(p.eventMatches({...plain,id:'e'},invited),false)
+  assert.equal(p.eventMatches({...invited,id:'e',attendees:[{email:'Closer@gmail.com',responseStatus:'needsAction'}]},invited),true)
+  assert.equal(p.eventMatches({...invited,id:'e',attendees:[]},invited),false)
+})
+
+test('worker: convida o closer, troca o convite ao trocar de closer e preserva convidados manuais',async()=>{
+  const emails={closer1:'ana@gmail.com',closer2:'bia@gmail.com',closer3:null}
+  const f=await workerFixture();f.deps.closerEmail=async id=>emails[id]
+  await f.deliver();const id=f.x.binding.eventId
+  assert.deepEqual(f.events.get(id).attendees,[{email:'ana@gmail.com'}]);assert.equal(f.events.get(id).extendedProperties.private.closer_email,'ana@gmail.com');assert.ok(f.synced)
+  f.events.get(id).attendees.push({email:'manual@example'})
+  f.edit(x=>{x.call.assignedTo='closer2'});await f.deliver()
+  assert.deepEqual(f.events.get(id).attendees.map(a=>a.email),['manual@example','bia@gmail.com']);assert.equal(f.events.get(id).extendedProperties.private.closer_email,'bia@gmail.com');assert.ok(f.synced)
+  const count=f.writes.length;f.edit(()=>{});await f.deliver();assert.equal(f.writes.length,count);assert.ok(f.synced)
+  f.edit(x=>{x.call.assignedTo='closer3'});await f.deliver()
+  assert.deepEqual(f.events.get(id).attendees.map(a=>a.email),['manual@example']);assert.ok(!f.events.get(id).extendedProperties.private.closer_email);assert.ok(f.synced)
+})
+
+test('worker: falha ao buscar o e-mail do closer tenta de novo sem escrever no Google',async()=>{
+  const f=await workerFixture();f.deps.closerEmail=async()=>{throw Error('auth indisponível')}
+  await f.deliver();assert.equal(f.writes.length,0);assert.equal(f.synced,false);assert.equal(f.errors.at(-1).code,'storage_unavailable');assert.ok(f.errors.at(-1).retryAt)
+})

@@ -115,8 +115,14 @@ export class GoogleCalendarClient {
     if (!etag) throw new GoogleError(412,'precondition_failed')
     const conference=current?.conferenceData as {createRequest?:{status?:{statusCode?:string}}}|undefined
     const needsMeet=!current?.hangoutLink && (!conference || conference.createRequest?.status?.statusCode==='failure')
-    const body = { ...event, ...(current?.status === 'cancelled' ? {status:'confirmed'} : {}),
-      ...(needsMeet?{conferenceData:{createRequest:{requestId:conference?.createRequest?.status?.statusCode==='failure'?`${eventId}-${crypto.randomUUID()}`:`${eventId}-${event.extendedProperties.private.revision}`,conferenceSolutionKey:{type:'hangoutsMeet'}}}}:{}),extendedProperties:{private:{ ...current?.extendedProperties?.private, ...event.extendedProperties.private }} }
+    // O CRM só administra o convite do closer; convidados colocados à mão no Google ficam como estão.
+    const previousCloser=current?.extendedProperties?.private?.closer_email?.toLowerCase()
+    const wanted=event.attendees??[], existing=(current?.attendees??[]) as {email?:string}[]
+    const attendees=[...existing.filter(a=>{const email=a.email?.toLowerCase();return !(email&&email===previousCloser&&!wanted.some(w=>w.email===email))}),
+      ...wanted.filter(w=>!existing.some(a=>a.email?.toLowerCase()===w.email))]
+    const body = { ...event, ...(wanted.length||previousCloser?{attendees}:{}), ...(current?.status === 'cancelled' ? {status:'confirmed'} : {}),
+      ...(needsMeet?{conferenceData:{createRequest:{requestId:conference?.createRequest?.status?.statusCode==='failure'?`${eventId}-${crypto.randomUUID()}`:`${eventId}-${event.extendedProperties.private.revision}`,conferenceSolutionKey:{type:'hangoutsMeet'}}}}:{}),
+      extendedProperties:{private:{ ...current?.extendedProperties?.private, ...(previousCloser&&!event.extendedProperties.private.closer_email?{closer_email:null}:{}), ...event.extendedProperties.private }} }
     return eventResult(await this.request('/calendars/' + segment(calendarId) + '/events/' + segment(eventId) + '?sendUpdates=none&conferenceDataVersion=1', {
       method:'PATCH', headers:{'If-Match':etag}, body:JSON.stringify(body),
     }, beforeWrite))

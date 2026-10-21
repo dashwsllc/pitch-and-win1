@@ -20,6 +20,8 @@ export function projectCall(input: ProjectionInput): DesiredEvent {
   const minutes=call.durationMinutes ?? CALL_DURATION_MS/60000
   if (!call.assignedTo || !Number.isInteger(minutes) || minutes<1 || minutes>480 || !Number.isFinite(start) || !Number.isFinite(start + minutes*60000)) return { kind: 'blocked', code: 'incomplete_call' }
   const closer = input.closerName?.trim() || 'Closer responsável'
+  // O closer entra como convidado: quem está na lista do evento entra no Meet sem o organizador (admvoxenai) admitir.
+  const closerEmail = validEmail(input.closerEmail)
   const link = new URL('/crm', input.dashboardOrigin)
   link.searchParams.set('tab', 'closer'); link.searchParams.set('lead', call.leadId)
   return { kind: completed ? 'completed' : 'upsert', event: {
@@ -31,8 +33,14 @@ export function projectCall(input: ProjectionInput): DesiredEvent {
       callContext(input)].filter(Boolean).map(escapeCalendarText).join('\n'),
     start: { dateTime: new Date(start).toISOString(), timeZone: CALENDAR_TIME_ZONE },
     end: { dateTime: new Date(start + minutes*60000).toISOString(), timeZone: CALENDAR_TIME_ZONE },
-    extendedProperties: { private: { project_id: input.projectId, call_id: binding.callId, binding_id: binding.id, revision: binding.revision } },
+    ...(closerEmail ? { attendees: [{ email: closerEmail }] } : {}),
+    extendedProperties: { private: { project_id: input.projectId, call_id: binding.callId, binding_id: binding.id, revision: binding.revision,
+      ...(closerEmail ? { closer_email: closerEmail } : {}) } },
   } }
+}
+function validEmail(value: string | null | undefined): string | null {
+  const email = value?.trim().toLowerCase() ?? ''
+  return email.length <= 254 && /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(email) ? email : null
 }
 function escapeCalendarText(value:string):string{return value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
 function callContext(input:ProjectionInput):string {
@@ -56,10 +64,16 @@ function normalized(event: Partial<ManagedEvent>): string {
   return JSON.stringify({ summary: event.summary, description: event.description,
     start: { dateTime: event.start?.dateTime ? new Date(event.start.dateTime).toISOString() : null, timeZone: event.start?.timeZone },
     end: { dateTime: event.end?.dateTime ? new Date(event.end.dateTime).toISOString() : null, timeZone: event.end?.timeZone },
-    ownership: [props.project_id, props.call_id, props.binding_id] })
+    ownership: [props.project_id, props.call_id, props.binding_id],
+    // Só entra quando há closer convidado: o hash dos eventos sem convite não muda.
+    ...(props.closer_email ? { closerEmail: props.closer_email } : {}) })
+}
+function hasAttendees(actual: GoogleEvent, expected: ManagedEvent): boolean {
+  const present = new Set(((actual.attendees ?? []) as { email?: string }[]).map(a => a.email?.toLowerCase()))
+  return (expected.attendees ?? []).every(a => present.has(a.email))
 }
 export function eventMatches(actual: GoogleEvent, expected: ManagedEvent): boolean {
-  try { return actual.status !== 'cancelled' && ownsEvent(actual, expected) && normalized(actual) === normalized(expected) } catch { return false }
+  try { return actual.status !== 'cancelled' && ownsEvent(actual, expected) && normalized(actual) === normalized(expected) && hasAttendees(actual, expected) } catch { return false }
 }
 export async function managedEventHash(event: ManagedEvent): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized(event)))

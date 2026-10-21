@@ -28,9 +28,9 @@ export type CallSource = { id: string; leadId: string; callType: string | null; 
 export type LeadSource = { id: string; name: string; pipelineStage: string; athleteName?:string|null; qualificationSummary?:string|null; observations?:string|null; temperature?:string|null }
 export type Binding = { id: string; callId: string; leadId: string; calendarId: string; eventId: string;
   generation: number; revision: string; confirmedRevision: string | null; confirmedHash: string | null; etag: string | null }
-export type ProjectionInput = { call: CallSource | null; lead: LeadSource | null; closerName: string | null;
+export type ProjectionInput = { call: CallSource | null; lead: LeadSource | null; closerName: string | null; closerEmail?: string | null;
   binding: Binding; projectId: string; dashboardOrigin: string; contexts?:{type:string;content:string}[] }
 export type ManagedEvent = { summary: string; description: string; start: { dateTime: string; timeZone: string };
-  end: { dateTime: string; timeZone: string }; extendedProperties: { private: Record<string, string> } }
+  end: { dateTime: string; timeZone: string }; attendees?: { email: string }[]; extendedProperties: { private: Record<string, string> } }
 export type DesiredEvent = { kind: 'upsert' | 'completed'; event: ManagedEvent } | { kind: 'remove' } | { kind: 'blocked'; code: 'incomplete_call' }
 export type GoogleEvent = Partial<ManagedEvent> & { id: string; status?: string; etag?: string; htmlLink?: string; [key: string]: unknown }

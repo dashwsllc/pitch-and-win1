@@ -20,7 +20,7 @@ O administrador conecta o Google na seção **Google Agenda · Closers** dessa p
 - O evento contém a pauta, qualificação, observações e os contextos do lead, com um link para o contexto completo no CRM. Textos extensos usam um trecho limitado; anexos não são enviados. Alterar ou remover contexto solicita nova revisão do mesmo evento.
 - Cada call recebe um Google Meet; remarcar conserva o mesmo evento e Meet. O Google pode gerar o link de forma assíncrona: a interface mostra “preparando Google Meet” e aguarda a resposta antes de confirmar. Falha de criação permanece visível para nova tentativa.
 - **Atualizar**, na Agenda, solicita reconciliação e entrega no servidor e recarrega calls/status. O botão permanece ocupado durante a solicitação. Acesso exige Closer aprovado; o servidor limita solicitações concorrentes/repetidas. Filas maiores continuam no cron e mostram processamento pendente.
-- Não são criados convites ou recorrências. Campos externos não controlados pelo CRM são preservados.
+- O closer responsável entra como **convidado** do evento, com o e-mail de login dele no CRM (`auth.users`), lido pelo servidor a cada entrega. Quem está na lista do evento entra no Meet sem o organizador (admvoxenai) estar na sala; o limite de duração segue o plano do organizador. O envio é com `sendUpdates=none`: o Google não manda e-mail. Trocar de closer remove o convite do anterior e convida o novo; closer sem e-mail válido fica sem convite. A marca do convite do CRM fica em `extendedProperties.private.closer_email`; convidados colocados à mão no Google são preservados. Não são criadas recorrências. Campos externos não controlados pelo CRM são preservados.
 
 ## Estado da entrega
 
