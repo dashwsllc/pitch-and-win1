@@ -2,6 +2,18 @@
 
 Projeto dash (`mbzwchnxtskysqplqiyy`). Alerta do Supabase: "Your project is about to deplete its Disk IO Budget". Tudo abaixo foi **medido por leitura** antes de propor qualquer mudança.
 
+## Estado do deploy (21/10/2026, ~22:10 UTC)
+
+**Aplicado em produção** (verificado por leitura): migration `20261021230000` (função, 3 jobs, proteção do job `meta-insights-resume`, registrada no histórico); `crm_context_delivery_invoke` com prazo de 50 s e só com evento vencido; `VACUUM FULL` de `net._http_response` (**79,6 MB → 1,9 MB**) e de `cron.job_run_details` (**151 MB → 103 MB**, só reescrita das linhas vivas). Banco inteiro: ~300 MB → **249 MB**. O job `meta-insights-resume` já devolve `0 rows` a cada minuto (não chama mais a Edge Function); a última chamada real foi às 22:04.
+
+**Pendente (o classificador de permissões barrou; rodar no SQL Editor):**
+
+1. Frequências: `crm-context-reconcile` para `*/15 * * * *` e `arena-cycle-deadlines` para `15 seconds` (ainda em `*/5` e `5 seconds`).
+2. Primeira drenagem da retenção (sem isso o job diário apaga ~60 mil linhas do cron por dia e leva ~8 dias): `select public.db_housekeeping(false, 50000) from generate_series(1,10);` (apaga só o vencido, até 50 mil por regra por chamada; repita até `cron_history` e os demais virarem 0 em `select public.db_housekeeping(true);`).
+3. Depois da drenagem, compactar (um comando por vez): `VACUUM (FULL, ANALYZE) cron.job_run_details;` (103 MB → poucos MB) e os três de `scripts/db-optimization-2026-10-21-vacuum.sql` (`meta_capture_review_rows` 68 MB, `meta_sync_runs`, `meta_insights_pages`). `VACUUM` roda por esse canal (testado).
+
+Sem esses passos manuais o sistema já converge sozinho: o job das 03:17 BRT apaga o vencido em lotes e o `VACUUM` agendado devolve o espaço para reuso; o que fica é só espaço já alocado.
+
 ## O que as medições mostram
 
 | Medida (desde 30/08, 52 dias) | Valor | Leitura |
