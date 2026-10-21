@@ -16,6 +16,9 @@ type ExtraFunctions = {
   // Link da reunião de uma call, colado pelo Closer na /agenda (migração 20261016130000).
   crm_set_call_meeting_link: FunctionDef<{ p_activity_id: string; p_link: string; p_expected_revision: string }>;
   site_bridge_operation: FunctionDef<Record<string, never>>;
+  // Envio do contexto do atleta do CRM para a VOXEN (migration 20261020120000): so o Executivo; so numeros e codigos.
+  crm_context_health: FunctionDef<Record<string, never>>;
+  crm_context_alignment: FunctionDef<Record<string, never>>;
   // Legacy ranking contract may be deployed separately from the traffic schema.
   get_daily_call_ranking: FunctionDef<Record<string, never>>;
   meta_traffic_operation: FunctionDef<Record<string, never>>;

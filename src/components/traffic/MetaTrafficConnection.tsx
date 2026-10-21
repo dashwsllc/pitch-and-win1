@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SiteBridgeStatus } from './SiteBridgeStatus'
+import { VoxenContextBridgeStatus } from './VoxenContextBridgeStatus'
 import { AlertTriangle, RadioTower } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -118,6 +119,7 @@ export function MetaTrafficConnection({ active, onProposeChange }: { active: boo
   }
   return <div className="space-y-5">
     <SiteBridgeStatus active={active} />
+    {isExecutive && <VoxenContextBridgeStatus active={active} />}
     <section className="surface-panel space-y-4 rounded-2xl p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-medium">Contas conectadas</h2><p className="mt-1 text-sm text-muted-foreground">Métricas da API oficial da Meta a cada 30 minutos, recapturando os últimos 8 dias com a atribuição de cada conjunto de anúncios (a mesma do Gerenciador). Capturas completas e sem conflito são publicadas automaticamente.</p></div>
         <Button size="sm" disabled={busy || runningInsights} onClick={() => void syncNow()}>{runningInsights ? 'Sincronizando…' : 'Sincronizar agora'}</Button></div>
