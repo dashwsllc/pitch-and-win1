@@ -5,6 +5,13 @@ export const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
 ] as const
+// Permissão extra, só para abrir o acesso do Meet das calls (API do Meet, config.accessType = OPEN). Não sensível. Fica FORA de CALENDAR_SCOPES de propósito:
+// CALENDAR_SCOPES é o que a agenda exige para existir; sem o escopo do Meet a agenda sincroniza normalmente e só o acesso aberto fica de fora.
+export const MEET_SETTINGS_SCOPE = 'https://www.googleapis.com/auth/meetings.space.settings'
+export const AUTHORIZATION_SCOPES = [...CALENDAR_SCOPES, MEET_SETTINGS_SCOPE] as const
+// unknown: ainda não tentou · open: o Google confirmou o acesso aberto · scope_missing: falta reconectar e aceitar a permissão nova · api_disabled: API do Meet desligada no Google Cloud
+// not_permitted: o Google recusou mudar o acesso desta conta ou reunião · error: falha momentânea (tenta de novo sozinho)
+export type MeetAccessState = 'unknown' | 'open' | 'scope_missing' | 'api_disabled' | 'not_permitted' | 'error'
 export type SyncStatus = 'disabled' | 'awaiting_connection' | 'pending' | 'syncing' | 'synced' | 'removal_pending' | 'removed' | 'error'
 export type ConnectionStatus = 'not_connected' | 'connected' | 'reconnect_required' | 'permission_denied' | 'disconnected'
 export type CalendarChoice = { id: string; name: string; accessRole: 'writer' | 'owner'; timeZone: string | null }
@@ -12,6 +19,8 @@ export type AdminStatus = {
   configured: boolean; connection: ConnectionStatus; calendar: CalendarChoice | null; destinationLocked: boolean
   activatedAt: string | null; lastRunAt: string | null; pendingCount: number; errorCount: number
   backfillPending: boolean; errorCode: string | null
+  // Ausente enquanto a migration 20261022190000 não está no banco.
+  meetAccess?: { state: MeetAccessState; checkedAt: string | null }
 }
 export type ManageRequest = { action: 'status' } | { action: 'start_oauth' } | { action: 'list_calendars' }
   | { action: 'disconnect' } | { action: 'activate'; calendarId: string } | { action: 'retry'; callId?: string } | {action:'sync'}

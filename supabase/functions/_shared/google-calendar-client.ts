@@ -1,4 +1,4 @@
-import { CALENDAR_SCOPES, type CalendarChoice, type GoogleEvent, type ManagedEvent } from './google-calendar-contract.ts'
+import { CALENDAR_SCOPES, MEET_SETTINGS_SCOPE, type CalendarChoice, type GoogleEvent, type ManagedEvent } from './google-calendar-contract.ts'
 import type { Credential } from './google-calendar-store.ts'
 
 export class GoogleError extends Error {
@@ -9,6 +9,7 @@ type Json = Record<string, unknown>
 type TokenProvider = (forceRefresh?: boolean) => Promise<Credential>
 export type OAuthTokenResult = { accessToken: string; refreshToken: string | null; expiresAt: string; scopes: string[] }
 const API = 'https://www.googleapis.com/calendar/v3'
+const MEET_API = 'https://meet.googleapis.com/v2'
 const segment = encodeURIComponent
 function retryAfter(value: string | null, now: number): number | null {
   if (!value) return null
@@ -43,6 +44,28 @@ function providerError(response: Response, body: Json, now: number): GoogleError
     : status >= 500 ? 'google_unavailable' : 'invalid_payload'
   return new GoogleError(status, code, retry, rate || status >= 500)
 }
+// Erros da API do Meet. Códigos próprios (meet_*) para que uma falha do Meet nunca pause a conexão do Google Agenda (só calendar_access e reconnect_required fazem isso).
+function meetError(response: Response, body: Json, now: number): GoogleError {
+  const error = body.error as { message?: unknown; details?: unknown; errors?: unknown } | undefined
+  const status = response.status, retry = retryAfter(response.headers.get('Retry-After'), now)
+  const reasons = [...(Array.isArray(error?.details) ? error.details as { reason?: unknown }[] : []), ...(Array.isArray(error?.errors) ? error.errors as { reason?: unknown }[] : [])].map(item => String(item?.reason ?? ''))
+  const message = typeof error?.message === 'string' ? error.message : ''
+  if (status === 429 || (status === 403 && reasons.some(reason => ['rateLimitExceeded','userRateLimitExceeded','quotaExceeded','RATE_LIMIT_EXCEEDED'].includes(reason)))) return new GoogleError(status, 'rate_limit', retry, true)
+  if (status >= 500) return new GoogleError(status, 'google_unavailable', retry, true)
+  if (status === 403 && (reasons.includes('SERVICE_DISABLED') || /has not been used in project|is disabled|has not been enabled/i.test(message))) return new GoogleError(status, 'meet_api_disabled')
+  if (status === 403 && (reasons.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || /insufficient authentication scopes/i.test(message))) return new GoogleError(status, 'meet_scope_missing')
+  if (status === 403) return new GoogleError(status, 'meet_not_permitted')
+  if (status === 404) return new GoogleError(status, 'meet_not_found')
+  if (status === 401) return new GoogleError(status, 'meet_error')
+  return new GoogleError(status, 'meet_not_allowed')
+}
+type Target = { base: string; classify: (response: Response, body: Json, now: number) => GoogleError; scope?: string }
+const CALENDAR_TARGET: Target = { base: API, classify: providerError }
+const MEET_TARGET: Target = { base: MEET_API, classify: meetError, scope: MEET_SETTINGS_SCOPE }
+/** Código da reunião (abc-defg-hij) a partir do link do Meet que o Google Agenda devolve. */
+export function meetingCodeOf(url: string): string | null {
+  return /^https:\/\/meet\.google\.com\/([a-z]{3}-[a-z]{4}-[a-z]{3})$/.exec(url)?.[1] ?? null
+}
 function choice(body: Json): CalendarChoice {
   if (typeof body.id !== 'string' || !['writer','owner'].includes(String(body.accessRole))) throw new GoogleError(403, 'calendar_access')
   return { id: body.id, name: typeof body.summary === 'string' ? body.summary : body.id, accessRole: body.accessRole as 'writer' | 'owner', timeZone: typeof body.timeZone === 'string' ? body.timeZone : null }
@@ -59,22 +82,24 @@ export class GoogleCalendarClient {
   constructor(options: { tokenProvider: TokenProvider; fetchImpl?: typeof fetch; now?: () => number; deadlineAt?: number }) {
     this.tokenProvider = options.tokenProvider; this.fetchImpl = options.fetchImpl ?? fetch; this.now = options.now ?? Date.now; this.deadlineAt = options.deadlineAt ?? Infinity
   }
-  private async request<T = Json>(path: string, options: RequestInit = {}, beforeWrite?: () => Promise<void>, read?: (body: Json) => T): Promise<T> {
+  private async request<T = Json>(path: string, options: RequestInit = {}, beforeWrite?: () => Promise<void>, read?: (body: Json) => T, target: Target = CALENDAR_TARGET): Promise<T> {
     for (let attempt = 0; attempt < 2; attempt++) {
       if (this.now() >= this.deadlineAt - 2000) throw new GoogleError(0, 'run_budget', null, true)
       const token = await this.tokenProvider(attempt === 1)
       if (this.now() >= this.deadlineAt - 2000) throw new GoogleError(0, 'run_budget', null, true)
       if (!token.accessToken) { const error=new GoogleError(401,'reconnect_required');error.credentialRevision=token.revision;throw error }
+      // Escopo que o Google ainda não concedeu (conexão feita antes da permissão nova): nem chama a API.
+      if (target.scope && !token.scopes?.includes(target.scope)) { const error=new GoogleError(403,'meet_scope_missing');error.credentialRevision=token.revision;throw error }
       const headers = new Headers(options.headers); headers.set('Authorization', 'Bearer ' + token.accessToken)
       if (options.body) headers.set('Content-Type','application/json')
       if (beforeWrite) await beforeWrite()
-      const { response, body } = await http(this.fetchImpl, API + path, { ...options, headers }, Math.min(8000, this.deadlineAt - this.now() - 2000))
+      const { response, body } = await http(this.fetchImpl, target.base + path, { ...options, headers }, Math.min(8000, this.deadlineAt - this.now() - 2000))
       if (response.ok) {
         try { return read ? read(body) : body as T }
         catch(error) { if(error instanceof GoogleError)error.credentialRevision=token.revision;throw error }
       }
       if (response.status === 401 && attempt === 0) continue
-      const error=providerError(response, body, this.now());error.credentialRevision=token.revision;throw error
+      const error=target.classify(response, body, this.now());error.credentialRevision=token.revision;throw error
     }
     throw new GoogleError(401,'reconnect_required')
   }
@@ -126,6 +151,24 @@ export class GoogleCalendarClient {
     return eventResult(await this.request('/calendars/' + segment(calendarId) + '/events/' + segment(eventId) + '?sendUpdates=none&conferenceDataVersion=1', {
       method:'PATCH', headers:{'If-Match':etag}, body:JSON.stringify(body),
     }, beforeWrite))
+  }
+  /**
+   * Deixa a reunião do Meet com acesso aberto (quem tem o link entra sem pedir para entrar). A reunião é criada pelo Google Agenda; aqui ela é lida pelo código
+   * (o GET aceita o código como apelido) e alterada pelo ID do espaço (o PATCH só aceita spaces/{id}). Idempotente: se já está aberta, não escreve.
+   */
+  async openMeetAccess(meetingUrl: string): Promise<'opened' | 'already_open'> {
+    const code = meetingCodeOf(meetingUrl)
+    if (!code) throw new GoogleError(0, 'meet_error')
+    const read = (body: Json) => {
+      const access = (body.config as { accessType?: unknown } | undefined)?.accessType
+      if (typeof body.name !== 'string' || !/^spaces\/[^/\s]+$/.test(body.name)) throw new GoogleError(502, 'google_unavailable', null, true)
+      return { name: body.name, access: typeof access === 'string' ? access : null }
+    }
+    const space = await this.request('/spaces/' + segment(code), {}, undefined, read, MEET_TARGET)
+    if (space.access === 'OPEN') return 'already_open'
+    const changed = await this.request('/' + space.name + '?updateMask=config.accessType', { method: 'PATCH', body: JSON.stringify({ config: { accessType: 'OPEN' } }) }, undefined, read, MEET_TARGET)
+    if (changed.access !== 'OPEN') throw new GoogleError(502, 'meet_not_applied')
+    return 'opened'
   }
   async deleteEvent(calendarId: string, eventId: string, etag: string, beforeWrite?: () => Promise<void>): Promise<void> {
     if (!etag) throw new GoogleError(412,'precondition_failed')

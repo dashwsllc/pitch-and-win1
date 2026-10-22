@@ -5,6 +5,7 @@ import {Button} from '@/components/ui/button'
 import {Label} from '@/components/ui/label'
 import {useGoogleCalendarAdmin} from '@/hooks/useGoogleCalendar'
 import type {CalendarChoice} from '@/lib/google-calendar-api'
+import {meetAccessView} from '@/lib/google-calendar-meet'
 import type {ManageRequest} from '../../../supabase/functions/_shared/google-calendar-contract'
 const connectionLabels={not_connected:'Não conectado',connected:'Google conectado',reconnect_required:'Reconecte o Google',permission_denied:'Revise o acesso à agenda',disconnected:'Desconectado'}
 const emptySessionState=(sessionKey:string)=>({sessionKey,calendars:[] as CalendarChoice[],selected:'',error:'',notice:''})
@@ -64,6 +65,14 @@ export function GoogleCalendarIntegration(){
         </div>}
         {status.destinationLocked&&<p className="text-xs text-muted-foreground">O destino está fixado para preservar a identidade dos eventos.</p>}
         {status.activatedAt&&<div className="text-sm"><p>{status.pendingCount} pendência(s) · {status.errorCount} erro(s)</p>{status.backfillPending&&<p>Preparando calls existentes para sincronização…</p>}<p className="text-xs text-muted-foreground">Última execução: {status.lastRunAt?new Date(status.lastRunAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'Aguardando primeira execução'}</p></div>}
+        {active&&status.meetAccess&&(()=>{
+          const meet=meetAccessView(status.meetAccess.state)
+          return <div className="space-y-1 rounded border p-3 text-sm" role={meet.tone==='problem'?'alert':'status'}>
+            <p className={meet.tone==='ok'?'font-medium text-emerald-600':'font-medium'}>Acesso aberto do Meet: {meet.label}</p>
+            <p className="text-xs text-muted-foreground">{meet.detail}</p>
+            {meet.reconnect&&<Button size="sm" variant="outline" disabled={busy} onClick={()=>void act({action:'start_oauth'})}>Reconectar Google</Button>}
+          </div>
+        })()}
         <p className="text-xs text-muted-foreground">Ao desconectar, a sincronização pausa e os eventos existentes permanecem na agenda. Compartilhe o acesso dos closers nas configurações do Google Agenda.</p>
       </>}
       {notice&&<p role="status" className="text-sm">{notice}</p>}{error&&<p role="alert" className="text-sm text-destructive">{error}</p>}

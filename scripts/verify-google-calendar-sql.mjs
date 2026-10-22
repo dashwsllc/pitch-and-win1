@@ -38,6 +38,11 @@ try {
  for(const name of ['20261011180000_google_calendar_safeupdate.sql','20261012090000_google_calendar_call_details.sql','20261012100000_agenda_lead_temperature.sql']) await db.exec(readFileSync(resolve(dir,name),'utf8'))
  label='classification and call details fixtures'
  await db.exec('BEGIN;'+readFileSync(resolve(root,'supabase/tests/google_calendar_details.sql'),'utf8')+'ROLLBACK;')
+ label='meet access migration'
+ await db.exec(readFileSync(resolve(dir,'20261022190000_google_calendar_meet_access.sql'),'utf8'))
+ await db.exec(readFileSync(resolve(dir,'20261022190000_google_calendar_meet_access.sql'),'utf8')) // idempotente: reaplicar nao quebra nem muda nada
+ label='meet access fixtures'
+ await db.exec('BEGIN;'+readFileSync(resolve(root,'supabase/tests/google_calendar_meet_access.sql'),'utf8')+'ROLLBACK;')
  console.log('PASS: real PostgreSQL DDL, CRM/RLS/queue/OAuth fixtures and cron SQL. Vault, cron and HTTP use local stand-ins; native encryption and concurrent sessions remain release gates.')
 } catch(error) {
  // Do not dump SQL query text, token values or request bodies on failure.

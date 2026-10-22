@@ -255,19 +255,20 @@ export async function workerFixture() {
   const {GoogleCalendarClient}=await loaded.dependency(clientPath)
   const x=input(), events=new Map(), tombstones=new Set(), writes=[]
   let leased=false,paused=false,lost=false,attempt=0,confirmed=false,removed=false,ackFailure=false,insertTimeout=false,access=true,onInsert=null,onRead=null,onPatch=null,onDelete=null
-  const errors=[];const log=[]
+  const errors=[];const log=[];const meetStates=[];let meetHandler=null,tokenScopes=null
   const store={
     claim:async()=>{if(leased||confirmed||paused)return[];leased=true;attempt++;return[{binding:structuredClone(x.binding),leaseToken:'lease',leaseExpiresAt:'2030-01-01',attempt}]},
     snapshot:async()=>leased&&!paused&&!lost?{...structuredClone(x),connectionRevision:'1'}:null,
     renew:async()=>leased&&!paused&&!lost,
     ack:async(_id,_token,revision,hash,etag,isRemoved)=>{if(ackFailure){ackFailure=false;throw Error('database outage')};if(!leased||paused||lost)return false;leased=false;if(revision!==x.binding.revision)return false;confirmed=true;removed=isRemoved;x.binding.confirmedRevision=revision;x.binding.confirmedHash=hash;x.binding.etag=etag;return true},
     fail:async(_id,_token,revision,code,retryAt)=>{errors.push({revision,code,retryAt});leased=false},
-    setConnectionError:async()=>{paused=true},
+    setConnectionError:async()=>{paused=true},setMeetAccess:async state=>{meetStates.push(state)},
     rotateEventId:async(_id,_token,revision,oldId)=>{assert.ok(leased);assert.equal(revision,x.binding.revision);assert.equal(oldId,x.binding.eventId);log.push('rotate');x.binding.eventId='40000000000040008000000000000001';x.binding.generation++;x.binding.revision=String(BigInt(x.binding.revision)+1n);return structuredClone(x.binding)},
     scanPage:async mode=>({processed:0,done:true}),recordRun:async()=>{},hasPending:async()=>!confirmed,
   }
-  const client=new GoogleCalendarClient({tokenProvider:async()=>credential(),fetchImpl:async(u,o)=>{
+  const client=new GoogleCalendarClient({tokenProvider:async()=>tokenScopes?{...credential(),scopes:tokenScopes}:credential(),fetchImpl:async(u,o)=>{
     const url=new URL(u),method=o.method??'GET',id=decodeURIComponent(url.pathname.split('/').at(-1))
+    if(url.hostname==='meet.googleapis.com')return meetHandler?meetHandler(url,method,o):response({},404) // API do Meet: so responde se o teste mandar
     if(url.pathname.includes('calendarList/'))return access?response({id:'shared@example',accessRole:'writer'}):response({},404)
     if(!access)return response({},404)
     if(method==='GET') {if(onRead){const fn=onRead;onRead=null;fn()};return tombstones.has(id)?response({},410):events.has(id)?response(events.get(id)):response({},404)}
@@ -292,7 +293,7 @@ export async function workerFixture() {
     assert.equal(new Headers(o.headers).get('If-Match'),event.etag);events.delete(id);tombstones.add(id);return new Response(null,{status:204})
   }})
   const deps={store,client,now:()=>Date.parse('2026-10-13T12:00:00Z'),random:()=>0.5}
-  return {worker,x,events,tombstones,writes,errors,log,deps,async deliver(){const jobs=await store.claim();if(jobs[0])await worker.deliverJob(jobs[0],deps)},edit(fn){fn(x);x.binding.revision=String(BigInt(x.binding.revision)+1n);confirmed=false},get synced(){return confirmed},get removed(){return removed},get paused(){return paused},set lost(v){lost=v},set access(v){access=v},set ackFailure(v){ackFailure=v},set insertTimeout(v){insertTimeout=v},set onInsert(fn){onInsert=fn},set onRead(fn){onRead=fn},set onPatch(fn){onPatch=fn},set onDelete(fn){onDelete=fn}}
+  return {worker,x,events,tombstones,writes,errors,log,deps,async deliver(){const jobs=await store.claim();if(jobs[0])await worker.deliverJob(jobs[0],deps)},edit(fn){fn(x);x.binding.revision=String(BigInt(x.binding.revision)+1n);confirmed=false},get synced(){return confirmed},get meetStates(){return meetStates},set meetHandler(fn){meetHandler=fn},set tokenScopes(v){tokenScopes=v},get removed(){return removed},get paused(){return paused},set lost(v){lost=v},set access(v){access=v},set ackFailure(v){ackFailure=v},set insertTimeout(v){insertTimeout=v},set onInsert(fn){onInsert=fn},set onRead(fn){onRead=fn},set onPatch(fn){onPatch=fn},set onDelete(fn){onDelete=fn}}
 }
 test('worker: lost insert response and failed local ACK retry the persisted identity without duplication',async()=>{
   for(const failure of ['insertTimeout','ackFailure']){

@@ -1,11 +1,23 @@
-import type { GoogleEvent, ManagedEvent } from './google-calendar-contract.ts'
+import type { GoogleEvent, ManagedEvent, MeetAccessState } from './google-calendar-contract.ts'
 import { GoogleCalendarClient, GoogleError } from './google-calendar-client.ts'
 import { CalendarStore, CalendarStoreError, type Job, type Snapshot } from './google-calendar-store.ts'
 import { projectCall, ownsEvent, eventMatches, managedEventHash, googleMeetingUrl, withMeeting } from './google-calendar-projection.ts'
 
 export type WorkerDeps = { store: CalendarStore; client: GoogleCalendarClient; now: () => number; random: () => number; deadlineAt?: number;
   // E-mail Google do closer para convidá-lo. null = sem convite; erro = tenta de novo (não apaga um convite por falha momentânea).
-  closerEmail?: (userId: string) => Promise<string | null> }
+  closerEmail?: (userId: string) => Promise<string | null>;
+  // Deixa o Meet da call com acesso aberto (quem tem o link entra sem pedir). Opcional: sem isso o worker só sincroniza o evento.
+  meet?: { open(meetingUrl: string): Promise<unknown>; record(state: MeetAccessState): Promise<void> } }
+/** Acesso aberto do Meet para o cliente e o banco, gravando o resultado só quando ele muda dentro da mesma execução. */
+export function meetAccessDeps(client: GoogleCalendarClient, store: CalendarStore): NonNullable<WorkerDeps['meet']> {
+  let recorded: MeetAccessState | undefined
+  return {
+    open: url => client.openMeetAccess(url),
+    record: async state => { if (state === recorded) return; await store.setMeetAccess(state); recorded = state },
+  }
+}
+// Falha momentânea do Meet repete o job até esta tentativa; depois o evento é confirmado mesmo assim e a varredura de 15 min tenta de novo.
+const MEET_TRIES = 4
 class LeaseLost extends Error {}
 class Changed extends Error {}
 class BudgetSpent extends Error {}
@@ -51,6 +63,25 @@ export async function deliverJob(job: Job, deps: WorkerDeps): Promise<void> {
   }
   async function ack(snapshot: Snapshot, hash: string | null, etag: string | null, removed: boolean,meetingUrl:string|null=null) {
     await store.ack(snapshot.binding.id,job.leaseToken,snapshot.binding.revision,hash,etag,removed,meetingUrl)
+  }
+  /**
+   * Acesso aberto do Meet das calls que ainda vão acontecer. NUNCA impede o evento de ficar sincronizado: erro de configuração (escopo, API desligada, permissão)
+   * só é registrado para a tela de Configurações; falha momentânea repete o job (até MEET_TRIES) e depois fica para a próxima varredura.
+   */
+  async function openMeet(meetingUrl: string | null, event: ManagedEvent): Promise<void> {
+    const meet = deps.meet
+    if (!meet || !meetingUrl) return
+    // Reunião que já passou (uma hora de folga) não precisa mais disso, e o Google pode já ter apagado o espaço.
+    if (Date.parse(event.start.dateTime) < now() - 3_600_000) return
+    let state: MeetAccessState = 'open'
+    try { await meet.open(meetingUrl) }
+    catch (error) {
+      if (!(error instanceof GoogleError) || error.code === 'run_budget') throw error
+      if ((error.retryable || error.code === 'meet_not_found') && job.attempt < MEET_TRIES) throw new GoogleError(error.status, 'meet_unavailable', error.retryAfterMs, true)
+      state = error.code === 'meet_scope_missing' ? 'scope_missing' : error.code === 'meet_api_disabled' ? 'api_disabled'
+        : error.code === 'meet_not_permitted' || error.code === 'meet_not_allowed' ? 'not_permitted' : 'error'
+    }
+    try { await meet.record(state) } catch { /* só informativo: nunca derruba a sincronização */ }
   }
   async function rotate(snapshot: Snapshot) {
     await guard(snapshot)()
@@ -119,6 +150,7 @@ export async function deliverJob(job: Job, deps: WorkerDeps): Promise<void> {
         const conference=actual.conferenceData as {createRequest?:{status?:{statusCode?:string}}}|undefined
         if(desired.kind==='upsert'&&!meetingUrl&&conference?.createRequest?.status?.statusCode==='pending')throw new GoogleError(0,'meet_pending',5000,true)
         if(eventMatches(actual,desired.event)&&(desired.kind==='completed'||meetingUrl)) {
+          if(desired.kind==='upsert')await openMeet(meetingUrl,desired.event)
           await guard(snapshot)()
           await ack(snapshot,await managedEventHash(desired.event),actual.etag ?? null,false,meetingUrl);return
         }
@@ -128,6 +160,7 @@ export async function deliverJob(job: Job, deps: WorkerDeps): Promise<void> {
         const updatedMeet=googleMeetingUrl(updated)
         if(desired.kind==='upsert')requireMeeting(updated)
         if(updatedMeet!==meetingUrl)continue
+        if(desired.kind==='upsert')await openMeet(updatedMeet,desired.event)
         await ack(snapshot,await managedEventHash(desired.event),updated.etag ?? null,false,updatedMeet);return
       } catch(error) {
         if(error instanceof Changed) continue

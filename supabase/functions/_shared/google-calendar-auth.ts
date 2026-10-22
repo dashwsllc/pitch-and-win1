@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0'
-import { CALENDAR_SCOPES } from './google-calendar-contract.ts'
+import { AUTHORIZATION_SCOPES } from './google-calendar-contract.ts'
 import { CalendarStore, CalendarStoreError } from './google-calendar-store.ts'
 import { isTrustedOrigin, RequestError } from './http.ts'
 export function dashboardOrigin(): string {
@@ -12,6 +12,17 @@ export function calendarRuntime() {
   if (!url || !key) throw new RequestError(503,'configuration_required')
   const db = createClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}})
   return {db,store:new CalendarStore(db,new URL(url).hostname.split('.')[0],dashboardOrigin())}
+}
+/**
+ * E-mail Google do closer (o mesmo do login no CRM), para convidá-lo ao evento. null = sem convite; erro = o job tenta de novo (não apaga um convite por falha momentânea).
+ * Todo caminho que roda o worker precisa passar isto: sem ele o evento é projetado sem convidado e o convite do closer sairia.
+ */
+export function closerEmailOf(db: ReturnType<typeof calendarRuntime>['db']): (userId: string) => Promise<string | null> {
+  return async userId => {
+    const { data, error } = await db.auth.admin.getUserById(userId)
+    if (error) { if (error.status === 404) return null; throw error }
+    return data.user?.email ?? null
+  }
 }
 export async function assertCalendarAdmin(userId: string): Promise<void> {
   try { await calendarRuntime().store.adminStatus(userId) }
@@ -43,7 +54,7 @@ export function buildAuthorizationUrl(state: string): string {
   const clientId = Deno.env.get('GOOGLE_CALENDAR_CLIENT_ID'), redirect = Deno.env.get('GOOGLE_CALENDAR_REDIRECT_URI')
   if (!clientId || !redirect) throw new RequestError(503,'configuration_required')
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
-  url.search = new URLSearchParams({client_id:clientId,redirect_uri:redirect,response_type:'code',scope:CALENDAR_SCOPES.join(' '),
+  url.search = new URLSearchParams({client_id:clientId,redirect_uri:redirect,response_type:'code',scope:AUTHORIZATION_SCOPES.join(' '),
     state,access_type:'offline',prompt:'consent',login_hint:'admvoxenai@gmail.com'}).toString()
   return url.href
 }

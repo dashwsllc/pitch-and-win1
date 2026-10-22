@@ -6,7 +6,7 @@ const date=z.string().datetime({offset:true}).nullable()
 const syncStatus=z.enum(['disabled','awaiting_connection','pending','syncing','synced','removal_pending','removed','error'])
 const revision=z.string().regex(/^\d+$/)
 const choice=z.object({id:z.string().min(1),name:z.string(),accessRole:z.enum(['writer','owner']),timeZone:z.string().nullable()}).strict()
-const admin=z.object({configured:z.boolean(),connection:z.enum(['not_connected','connected','reconnect_required','permission_denied','disconnected']),calendar:choice.nullable(),destinationLocked:z.boolean(),activatedAt:date,lastRunAt:date,pendingCount:z.number().int().nonnegative(),errorCount:z.number().int().nonnegative(),backfillPending:z.boolean(),errorCode:z.string().nullable()}).strict()
+const admin=z.object({configured:z.boolean(),connection:z.enum(['not_connected','connected','reconnect_required','permission_denied','disconnected']),calendar:choice.nullable(),destinationLocked:z.boolean(),activatedAt:date,lastRunAt:date,pendingCount:z.number().int().nonnegative(),errorCount:z.number().int().nonnegative(),backfillPending:z.boolean(),errorCode:z.string().nullable(),meetAccess:z.object({state:z.enum(['unknown','open','scope_missing','api_disabled','not_permitted','error']),checkedAt:date}).strict().optional()}).strict()
 const authorization=z.object({authorizationUrl:z.string().url().refine(value=>{
   const u=new URL(value);return u.origin==='https://accounts.google.com'&&u.pathname==='/o/oauth2/v2/auth'&&!u.username&&!u.password
 })}).strict()

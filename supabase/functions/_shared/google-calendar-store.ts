@@ -1,6 +1,6 @@
 import { CALENDAR_SCOPES } from './google-calendar-contract.ts'
 import { GoogleError, refreshOAuthToken } from './google-calendar-client.ts'
-import type { AdminStatus, Binding, ProjectionInput } from './google-calendar-contract.ts'
+import type { AdminStatus, Binding, MeetAccessState, ProjectionInput } from './google-calendar-contract.ts'
 
 export type CredentialLease = { token: string; revision: string; expiresAt: string }
 export type Credential = { accountId: string | null; accessToken: string | null; refreshToken: string | null; expiresAt: string | null; scopes: string[]; revision: string }
@@ -35,6 +35,8 @@ export class CalendarStore {
   }
   disconnect(actor: string, token: string) { return this.rpc<AdminStatus>('disconnect', {p_actor: actor, p_token: token}) }
   setConnectionError(revision: string, code: string) { return this.rpc<void>('set_connection_error', {p_credential_revision: revision, p_code: code}) }
+  /** Resultado da última tentativa de abrir o acesso do Meet (só para a tela de Configurações). Não mexe na conexão nem nas calls. */
+  setMeetAccess(state: MeetAccessState) { return this.rpc<void>('set_meet_access', {p_state: state}) }
   retry(actor: string, callId?: string) { return this.rpc<AdminStatus>('retry', {p_actor: actor, p_call_id: callId ?? null}) }
   claim(limit = 1, seconds = 60) { return this.rpc<Job[]>('claim', {p_limit: limit, p_lease_seconds: seconds}) }
   async snapshot(bindingId: string, token: string): Promise<Snapshot | null> {

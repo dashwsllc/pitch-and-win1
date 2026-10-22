@@ -1,5 +1,6 @@
 import { calendarRuntime, dashboardOrigin, hashOAuthState, assertCalendarAdmin } from '../_shared/google-calendar-auth.ts'
 import { GoogleCalendarClient, exchangeOAuthCode } from '../_shared/google-calendar-client.ts'
+import { MEET_SETTINGS_SCOPE } from '../_shared/google-calendar-contract.ts'
 import type { Credential } from '../_shared/google-calendar-store.ts'
 import { CalendarStoreError } from '../_shared/google-calendar-store.ts'
 import { RequestError } from '../_shared/http.ts'
@@ -35,6 +36,8 @@ export async function handleOAuthCallback(req: Request): Promise<Response> {
     const current = await store.adminStatus(state.actorId)
     if (current.calendar) await client.getCalendar(current.calendar.id)
     if (!await store.saveCredential(lease.token,lease.revision,credential,state.actorId,state.stateId)) return redirect('error')
+    // A permissão do Meet é opcional (o Google deixa desmarcar): o que ele concedeu de verdade define o ponto de partida do acesso aberto. Só informativo.
+    try { await store.setMeetAccess(credential.scopes.includes(MEET_SETTINGS_SCOPE) ? 'unknown' : 'scope_missing') } catch { /* a conexão já foi salva */ }
     return redirect('connected')
   } catch { return redirect('error') }
   finally { if (lease) { try { await store.releaseCredential(lease.token) } catch { /* Lease expiry recovers a failed release. */ } } }
