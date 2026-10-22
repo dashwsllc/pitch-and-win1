@@ -82,7 +82,7 @@ test('card de cobertura: explica que quem nao esta na VOXEN nao e erro, e avisa 
   assert.match(html, /Dos 175 leads com respostas do formulário, 66 já têm cadastro na VOXEN e 109 ainda não se cadastraram lá\. 18 leads têm só notas/)
   assert.match(html, /Não é erro/); assert.doesNotMatch(html, /a enviar|ignorados|role="alert"/)
   html = view({ ...PROD_ALIGNMENT, to_enqueue: 4, skipped: 1, with_answers_without_voxen_id: 0, context_without_answers: 0, unmapped_questions: ['qual_o_time_do_coracao?'] })
-  assert.match(html, /210 em dia, 4 a enviar, 1 ignorados/); assert.doesNotMatch(html, /Não é erro/); assert.match(html, /role="alert".*qual_o_time_do_coracao\?/)
+  assert.match(html, /210 em dia, 4 a enviar, 1 ignorados/); assert.doesNotMatch(html, /Não é erro/); assert.match(html, /Perguntas novas do formulário \(vão sozinhas, como resposta, sem mapeamento\): qual_o_time_do_coracao\?/); assert.doesNotMatch(html, /role="alert"/)
 })
 
 test('guardas de codigo: cobertura pesada nunca dispara sozinha e o card e so do Executivo', () => {
@@ -96,4 +96,58 @@ test('guardas de codigo: cobertura pesada nunca dispara sozinha e o card e so do
   assert.match(traffic, /\{isExecutive && <VoxenContextBridgeStatus active=\{active\} \/>\}/, 'as RPCs recusam quem nao e Executivo')
   const api = readFileSync('src/lib/arena-api.ts', 'utf8')
   assert.match(api, /crm_context_health: FunctionDef/); assert.match(api, /crm_context_alignment: FunctionDef/)
+})
+
+const ACCEPTED = { accepted: true, state: 'delivered', receipt_status: 'applied' }
+const prospects = (over = {}) => ({ ready: false, enabled: 0, stopped: 0, waiting: 0, pending: 0, delivered: 0, blocked: 0, quarantined: 0, available: 127, rehearsal: { accepted: false, state: null, receipt_status: null }, ...over })
+const READY = { ready: true, rehearsal: ACCEPTED }
+
+test('leads sem cadastro: validador aceita o formato da RPC e recusa o quebrado', () => {
+  const { isVoxenProspectsStatus } = load('src/lib/voxen-bridge.ts')
+  assert(isVoxenProspectsStatus(prospects())); assert(isVoxenProspectsStatus(prospects({ ...READY, enabled: 5, delivered: 5 })))
+  for (const bad of [null, undefined, 'x', [], {}, prospects({ ready: 'sim' }), prospects({ enabled: '5' }), prospects({ blocked: -1 }), prospects({ available: Number.NaN }),
+    prospects({ rehearsal: null }), prospects({ rehearsal: { accepted: 'sim', state: null, receipt_status: null } }), prospects({ rehearsal: { accepted: true, state: 1, receipt_status: null } }),
+    { ...prospects(), quarantined: undefined }, { ...prospects(), closed_at: null, ready: undefined }]) assert.equal(isVoxenProspectsStatus(bad), false, JSON.stringify(bad))
+})
+
+test('leads sem cadastro: cada estado diz a verdade e nunca "liberado" com problema', () => {
+  const { voxenProspectsVerdict: verdict } = load('src/lib/voxen-bridge.ts')
+  let r = verdict(prospects()); assert.equal(r.level, 'attention'); assert.equal(r.title, 'Envio de leads sem cadastro ainda não liberado'); assert.match(r.reasons[0], /127 leads disponíveis para enviar\. Falta o ensaio/)
+  r = verdict(prospects({ rehearsal: { accepted: false, state: 'pending', receipt_status: null } })); assert.equal(r.title, 'Ensaio enviado, aguardando a VOXEN'); assert.equal(r.level, 'attention')
+  r = verdict(prospects({ rehearsal: { accepted: false, state: 'processing', receipt_status: null } })); assert.equal(r.title, 'Ensaio enviado, aguardando a VOXEN')
+  r = verdict(prospects({ rehearsal: { accepted: false, state: 'blocked', receipt_status: null } })); assert.equal(r.level, 'problem'); assert.match(r.title, /Ensaio recusado/)
+  r = verdict(prospects({ rehearsal: { accepted: false, state: 'delivered', receipt_status: 'quarantined' } })); assert.equal(r.level, 'problem'); assert.match(r.reasons[0], /"quarantined".*"applied" ou "waiting_member"/)
+  r = verdict(prospects({ ...READY, available: 127 })); assert.equal(r.level, 'ok'); assert.equal(r.title, 'Envio de leads sem cadastro liberado'); assert.match(r.reasons.join(' '), /0 leads escolhidos|127 leads disponíveis para enviar na aba VOXEN do CRM/)
+  r = verdict(prospects({ ...READY, enabled: 40, delivered: 30, pending: 8, waiting: 2, available: 87 })); assert.equal(r.level, 'ok'); assert.match(r.reasons[0], /40 leads escolhidos para sincronizar: 30 entregues, 8 na fila, 2 aguardando conteúdo/); assert.match(r.reasons.join(' '), /87 leads disponíveis/)
+  r = verdict(prospects({ ...READY, enabled: 1, delivered: 1, available: 0 })); assert.match(r.reasons[0], /1 lead escolhido para sincronizar: 1 entregues/)
+  r = verdict(prospects({ ...READY, enabled: 40, delivered: 38, blocked: 2 })); assert.equal(r.level, 'problem'); assert.doesNotMatch(r.title, /liberado/); assert.match(r.reasons.join(' '), /2 leads com envio bloqueado.*reenfileirar/)
+  r = verdict(prospects({ ...READY, enabled: 40, delivered: 39, quarantined: 1 })); assert.equal(r.level, 'problem'); assert.doesNotMatch(r.title, /liberado/); assert.match(r.reasons.join(' '), /1 lead ficou em quarentena.*Avise a Zyron/)
+  // propriedade: "liberado" so existe com o ensaio aceito, sem bloqueio e sem quarentena
+  for (const ready of [false, true]) for (const blocked of [0, 1]) for (const quarantined of [0, 1]) {
+    const t = verdict(prospects({ ready, rehearsal: ready ? ACCEPTED : prospects().rehearsal, blocked, quarantined })).title
+    assert.equal(/liberado/.test(t) && !/ainda não liberado/.test(t), ready && blocked === 0 && quarantined === 0, `ready=${ready} blocked=${blocked} quarantined=${quarantined} -> ${t}`)
+  }
+})
+
+test('painel e cobertura contam a historia certa em cada estado', () => {
+  const { VoxenProspectsView, VoxenCoverageView } = load('src/components/traffic/VoxenContextBridgeStatus.tsx')
+  const card = data => renderToStaticMarkup(React.createElement(VoxenProspectsView, { data }))
+  const coverage = (data, extra) => renderToStaticMarkup(React.createElement(VoxenCoverageView, { data, prospects: extra }))
+  let html = card(prospects()); assert.match(html, /Leads sem cadastro na VOXEN \(envio por escolha do time\)/); assert.match(html, /role="status"/); assert.doesNotMatch(html, /role="alert"/)
+  html = card(prospects({ rehearsal: { accepted: false, state: 'delivered', receipt_status: '<script>x</script>' } }))
+  assert.match(html, /role="alert"/); assert.doesNotMatch(html, /<script>/); assert.match(html, /&lt;script&gt;/)
+  html = card(prospects({ ...READY, enabled: 3, delivered: 3 })); assert.match(html, /Envio de leads sem cadastro liberado/); assert.doesNotMatch(html, /payload|notes|answers|phone|telefone|e-mail/i, 'o painel nao mostra conteudo de lead')
+  html = coverage(PROD_ALIGNMENT); assert.match(html, /o envio acontece sozinho quando o cadastro aparecer/); assert.doesNotMatch(html, /Leads sem cadastro na VOXEN/, 'sem a RPC a cobertura continua igual')
+  html = coverage(PROD_ALIGNMENT, prospects()); assert.match(html, /o envio acontece sozinho quando o cadastro aparecer/, 'antes de liberar a explicacao antiga ainda e a verdadeira'); assert.match(html, /ainda não liberado/)
+  html = coverage(PROD_ALIGNMENT, prospects(READY))
+  assert.match(html, /O time escolhe quais enviar na aba VOXEN do CRM/); assert.match(html, /quem for enviado fica em sincronia/); assert.doesNotMatch(html, /o envio acontece sozinho quando o cadastro aparecer/)
+})
+
+test('guardas de codigo: a cobertura aceita a RPC ausente e as RPCs estao registradas', () => {
+  const component = readFileSync('src/components/traffic/VoxenContextBridgeStatus.tsx', 'utf8').replace(/\r\n/g, '\n')
+  const coverageQuery = component.slice(component.indexOf("queryKey: ['voxen-bridge', 'alignment'"), component.indexOf('return <section'))
+  assert.match(coverageQuery, /crm_context_prospects_status/); assert.match(coverageQuery, /\(\) => null/, 'sem a migration a cobertura nao pode falhar')
+  assert.match(coverageQuery, /enabled: false/)
+  const api = readFileSync('src/lib/arena-api.ts', 'utf8')
+  for (const name of ['crm_context_prospects_status', 'crm_voxen_send', 'crm_voxen_stop', 'crm_voxen_sync_states']) assert.match(api, new RegExp(name + ': FunctionDef'))
 })

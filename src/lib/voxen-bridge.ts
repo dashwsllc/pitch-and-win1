@@ -31,6 +31,20 @@ export interface VoxenBridgeAlignment {
   unmapped_questions: string[]
 }
 
+// Leads do CRM que ainda nao se cadastraram na VOXEN e o time escolheu enviar (RPC crm_context_prospects_status, migration 20261021233000). So contagens.
+export interface VoxenProspectsStatus {
+  ready: boolean
+  enabled: number
+  stopped: number
+  waiting: number
+  pending: number
+  delivered: number
+  blocked: number
+  quarantined: number
+  available: number
+  rehearsal: { accepted: boolean; state: string | null; receipt_status: string | null }
+}
+
 export type VoxenBridgeLevel = 'ok' | 'attention' | 'problem' | 'off'
 export interface VoxenBridgeVerdict { level: VoxenBridgeLevel; title: string; reasons: string[] }
 
@@ -57,6 +71,14 @@ export function isVoxenBridgeAlignment(value: unknown): value is VoxenBridgeAlig
   if (!a || typeof a !== 'object') return false
   return [a.linked_sites, a.in_sync, a.to_enqueue, a.skipped, a.crm_leads_with_context, a.with_answers, a.with_answers_addressable,
     a.with_answers_without_voxen_id, a.context_without_answers].every(isCount) && Array.isArray(a.unmapped_questions)
+}
+
+export function isVoxenProspectsStatus(value: unknown): value is VoxenProspectsStatus {
+  const p = value as Partial<VoxenProspectsStatus> | null
+  if (!p || typeof p !== 'object' || typeof p.ready !== 'boolean') return false
+  if (![p.enabled, p.stopped, p.waiting, p.pending, p.delivered, p.blocked, p.quarantined, p.available].every(isCount)) return false
+  const r = p.rehearsal
+  return !!r && typeof r === 'object' && typeof r.accepted === 'boolean' && (r.state === null || typeof r.state === 'string') && (r.receipt_status === null || typeof r.receipt_status === 'string')
 }
 
 function minutesSince(at: string | null | undefined, now: number): number | null {
@@ -113,4 +135,24 @@ export function voxenBridgeVerdict(h: VoxenBridgeHealth, now = Date.now()): Voxe
   }
   const title = level === 'problem' ? 'Há envios bloqueados' : level === 'attention' ? 'Funcionando, com pontos de atenção' : waiting > 0 ? 'Enviando: fila normal' : 'Em dia'
   return { level, title, reasons }
+}
+
+/**
+ * Resume o envio de leads sem cadastro em uma frase e uma lista de motivos. Antes de liberar, diz em que pé está o ensaio com a VOXEN (a fila do dash conta
+ * "quarantined" como entregue, então só este resumo avisa); depois de liberado, nunca diz "tudo certo" com lead bloqueado ou em quarentena.
+ */
+export function voxenProspectsVerdict(p: VoxenProspectsStatus): VoxenBridgeVerdict {
+  const r = p.rehearsal
+  if (!p.ready) {
+    if (r.state === 'blocked') return { level: 'problem', title: 'Ensaio recusado pela VOXEN', reasons: ['A VOXEN recusou o evento de ensaio. O envio de leads sem cadastro só é liberado depois que ela aceitar.'] }
+    if (r.state === 'pending' || r.state === 'processing') return { level: 'attention', title: 'Ensaio enviado, aguardando a VOXEN', reasons: ['O envio de leads sem cadastro é liberado quando a VOXEN aceitar o ensaio.'] }
+    if (r.state === 'delivered') return { level: 'problem', title: 'Ensaio não aceito pela VOXEN', reasons: [`A VOXEN respondeu "${r.receipt_status ?? 'sem status'}" ao ensaio; o envio só é liberado com "applied" ou "waiting_member".`] }
+    return { level: 'attention', title: 'Envio de leads sem cadastro ainda não liberado', reasons: [`${plural(p.available, 'lead disponível', 'leads disponíveis')} para enviar. Falta o ensaio com a VOXEN.`] }
+  }
+  let level = 'ok' as 'ok' | 'attention' | 'problem'
+  const reasons: string[] = [`${plural(p.enabled, 'lead escolhido', 'leads escolhidos')} para sincronizar: ${p.delivered} entregues${p.pending > 0 ? `, ${p.pending} na fila` : ''}${p.waiting > 0 ? `, ${p.waiting} aguardando conteúdo` : ''}.`]
+  if (p.blocked > 0) { level = 'problem'; reasons.push(`${plural(p.blocked, 'lead com envio bloqueado', 'leads com envio bloqueado')}: a VOXEN recusou. É preciso corrigir a causa e reenfileirar.`) }
+  if (p.quarantined > 0) { level = 'problem'; reasons.push(`${plural(p.quarantined, 'lead ficou', 'leads ficaram')} em quarentena na VOXEN: ela recebeu e não guardou. Avise a Zyron.`) }
+  if (p.available > 0) reasons.push(`${plural(p.available, 'lead disponível', 'leads disponíveis')} para enviar na aba VOXEN do CRM.`)
+  return { level, title: level === 'problem' ? 'Leads sem cadastro: há envios com problema' : 'Envio de leads sem cadastro liberado', reasons }
 }
