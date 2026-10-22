@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { PGlite } from '../.verification.local/calendar-tools/node_modules/@electric-sql/pglite/dist/index.js'
 
-const dir = 'supabase/migrations/'
+const dir = process.env.CRM_MIGRATIONS_DIR ?? 'supabase/migrations/'   // so a checagem de mutacao troca a pasta (copia com a migration alterada)
 const read = file => readFileSync(dir + file, 'utf8').replace(/\r\n/g, '\n')
 const MIGRATION = '20261020120000_crm_context_bridge.sql'
 function extractFunction(file, name) {
@@ -25,9 +25,11 @@ const rejects = (promise, re, msg) => assert.rejects(promise, re, msg)
 
 await db.exec(`
 create role anon; create role authenticated; create role service_role; create schema auth;
+alter default privileges in schema public grant all on tables to anon,authenticated,service_role;
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
 create function auth.role() returns text language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claim.role',true),''),'anon')$$;
 create table public.user_roles(user_id uuid,role text);
+create function public.crm_has_access() returns boolean language sql stable as $$select exists(select 1 from public.user_roles r where r.user_id=auth.uid() and r.role in('executive','super_admin','sdr','closer','seller'))$$;
 create function public.is_executive(_user_id uuid) returns boolean language sql stable as $$select exists(select 1 from public.user_roles r where r.user_id=_user_id and r.role in('executive','super_admin'))$$;
 create table public.meta_form_leads(id uuid primary key default gen_random_uuid(),meta_lead_id text unique not null,page_id text default 'p',form_id text default 'f',
  form_name text,campaign_name text,ad_id text,created_time timestamptz default now(),field_data jsonb not null default '[]',full_name text,phone text,email text,
@@ -78,6 +80,12 @@ const installSql = generated('apply')
 await db.exec(installSql)
 assert.deepEqual(await q(`select version,name,(statements[1] like '%crm_context_outbox%') ok from supabase_migrations.schema_migrations`), [{ version: '20261020120000', name: 'crm_context_bridge', ok: true }])
 await rejects(db.exec(installSql), /ja instalada/); await db.exec('ROLLBACK')
+// Gabarito: o texto ORIGINAL de crm_context_payload (do arquivo da ponte) instalado ao lado com outro nome, para provar adiante que a refatoracao
+// do montador nao mudou nada no fluxo normal. Depois, a migration do preenchimento unico de leads sem cadastro na VOXEN.
+await db.exec(extractFunction(MIGRATION, 'crm_context_payload').replace('public.crm_context_payload(', 'public.crm_context_payload_legacy('))
+const PROSPECTS = '20261021233000_crm_context_prospects.sql'
+await db.exec(read(PROSPECTS))
+await db.exec(read(PROSPECTS))   // idempotente: reaplicar nao quebra nem muda nada
 
 // ---------- estrutura, permissoes, agendamento desligado ----------
 {
@@ -99,7 +107,9 @@ await rejects(db.exec(installSql), /ja instalada/); await db.exec('ROLLBACK')
     assert.equal(await exec('anon', sig) || await exec('authenticated', sig), false, 'anon/authenticated nao executam ' + sig)
   }
   for (const sig of ['public.crm_context_payload(uuid)', 'public.crm_context_enqueue(uuid,boolean)', 'public.crm_context_on_answer_link()', 'public.crm_context_on_crm_lead()', 'public.crm_context_on_form_lead()',
-    'public.crm_context_on_lead_context()', 'public.crm_context_on_crm_lead_delete()', 'public.crm_context_scrub(text)', 'public.crm_context_candidate_sites()', 'public.crm_context_sites_of_lead(uuid)', 'public.crm_context_touch(uuid)', 'public.crm_context_log_error(text,text)'])
+    'public.crm_context_on_lead_context()', 'public.crm_context_on_crm_lead_delete()', 'public.crm_context_build(uuid,uuid,uuid,text,boolean)', 'public.crm_context_strip_auto_observations(text)', 'public.crm_context_lead_has_voxen(uuid)',
+    'public.crm_context_payload_prospect(uuid)', 'public.crm_context_prospect_candidates()', 'public.crm_context_enqueue_prospect(uuid,boolean,boolean)', 'public.crm_context_rehearsal_accepted()', 'public.crm_context_is_contact_field(text)',
+    'public.crm_context_touch_prospect(uuid)', 'public.crm_context_on_prospect_lead()', 'public.crm_context_on_prospect_note()', 'public.crm_context_on_prospect_link()', 'public.crm_context_on_prospect_form()', 'public.crm_context_scrub(text)', 'public.crm_context_candidate_sites()', 'public.crm_context_sites_of_lead(uuid)', 'public.crm_context_touch(uuid)', 'public.crm_context_log_error(text,text)'])
     for (const role of ['anon', 'authenticated', 'service_role'])
       assert.equal(await exec(role, sig), false, `${role} nao executa a funcao interna ${sig}`)
   for (const sig of ['public.crm_context_health()', 'public.crm_context_alignment()']) {
@@ -120,7 +130,7 @@ const EXEC = U(800), PLAIN = U(801)
 await db.exec(`insert into public.user_roles values('${EXEC}','executive'),('${PLAIN}','sdr')`)
 // O que NUNCA sai (decisao do dono em 21/10 liberou: nome do responsavel, observacoes, qualificacao qualitativa e notas de atendimento).
 const SECRETS = ['11948173104', '5511948173104', 'segredo.pessoa@example.invalid', 'CAMPANHA SEGREDO', 'AD-SEGREDO-77',
-  'QUALIFICACAO SEGREDO', 'FOLLOWUP SEGREDO', 'SNAPSHOT SEGREDO', 'utm-segredo', 'NOTA INTERNA SEGREDO', 'Nome CRM Secreto', 'TEMPERATURA SEGREDO', '123.456.789-00',
+  'QUALIFICACAO SEGREDO', 'FOLLOWUP SEGREDO', 'SNAPSHOT SEGREDO', 'utm-segredo', 'NOTA INTERNA SEGREDO', 'Nome CRM Secreto', 'TEMPERATURA SEGREDO',
   'CONSENTIMENTO SEGREDO', 'Cidade Secreta', '21977776666', 'AUTOR SEGREDO']
 const FILLER = 'Fulano Preenchedor'   // nome de quem preencheu o formulario: vai como responsavel (ou como nome do atleta, se o atleta preencheu)
 const COMMITMENT_Q = 'de_0_a_10,_quanto_o_atleta_está_comprometido_em_buscar_seu_objetivo_no_futebol?__escala_de_0_a_10'
@@ -142,12 +152,12 @@ const fieldData = (overrides = {}, extra = [], contact = {}) => JSON.stringify([
   { name: 'full_name', values: [FILLER] }, { name: 'phone_number', values: ['+5511948173104'] },
   { name: 'date_of_birth', values: [contact.dob ?? '2008-09-06'] }, { name: 'state', values: [contact.state ?? 'SP'] },
   { name: 'email', values: ['segredo.pessoa@example.invalid'] }, { name: 'city', values: ['Cidade Secreta'] },
-  { name: 'qual_o_seu_cpf?', values: ['123.456.789-00'] }, ...extra])
+  ...extra])
 let seq = 0
-async function seed({ link = 'insert', basis = 'mesmo anúncio, nome completo igual, 61 s depois do formulário', overrides = {}, formId = 'f' } = {}) {
+async function seed({ link = 'insert', basis = 'mesmo anúncio, nome completo igual, 61 s depois do formulário', overrides = {}, formId = 'f', extra = [] } = {}) {
   const n = ++seq, sid = U(100 + n), form = U(1000 + n), site = U(2000 + n)
   await db.query(`insert into public.meta_form_leads(id,meta_lead_id,form_id,form_name,campaign_name,ad_id,field_data,full_name,phone,email,entry_channel)
-   values($1,$2,$3,'FORMULARIO','CAMPANHA SEGREDO','AD-SEGREDO-77',$4::jsonb,'Fulano Preenchedor','+5511948173104','segredo.pessoa@example.invalid','form')`, [form, 'form:' + n, formId, fieldData(overrides)])
+   values($1,$2,$3,'FORMULARIO','CAMPANHA SEGREDO','AD-SEGREDO-77',$4::jsonb,'Fulano Preenchedor','+5511948173104','segredo.pessoa@example.invalid','form')`, [form, 'form:' + n, formId, fieldData(overrides, extra)])
   await db.query(`insert into public.meta_form_leads(id,meta_lead_id,form_id,campaign_name,ad_id,field_data,full_name,phone,email,entry_channel,answers_form_lead_id,answers_link_basis,answers_linked_at,source_snapshot,review_note,import_contact)
    values($1,$2,'site:avaliacao','CAMPANHA SEGREDO','AD-SEGREDO-77','[]'::jsonb,'Fulano Preenchedor','11948173104','segredo.pessoa@example.invalid','website',$3,$4,now(),$5::jsonb,'NOTA INTERNA SEGREDO',$6::jsonb)`,
   [site, 'site:zyron:' + sid, link === 'insert' ? form : null, link === 'insert' ? basis : null,
@@ -511,7 +521,7 @@ assert.match(f1.payload.generated_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/
   assert.equal(a2.to_enqueue, 0, 'depois da varredura nada fica por enfileirar'); assert.equal(a2.in_sync + a2.skipped, a2.linked_sites)
   assert.equal((await one('select public.crm_context_reconcile(500) s')).s.changed, 0, 'segunda varredura: idempotente')
   const ctl = await one('select last_reconcile_at t,last_reconcile_summary s from public.crm_context_delivery_control')
-  assert(ctl.t); assert.deepEqual(Object.keys(ctl.s).sort(), ['changed', 'cycle_complete', 'errors', 'examined'])
+  assert(ctl.t); assert.deepEqual(Object.keys(ctl.s).sort(), ['changed', 'cycle_complete', 'errors', 'examined', 'prospects_changed', 'prospects_examined'])
   // um erro nao derruba a varredura: tudo vira contagem e registro, o cursor segue e nada levanta
   const errBefore = await N('select trigger_error_count n from public.crm_context_delivery_control')
   await db.exec('alter function public.meta_form_field_rank(text) rename to meta_form_field_rank_bak')
@@ -541,7 +551,8 @@ assert.match(f1.payload.generated_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/
   assert(a3.unmapped_questions.includes('qual_o_seu_time_do_coracao?'), 'pergunta nova aparece no alinhamento')
   assert(!JSON.stringify(a3).includes('Segredo FC') && !JSON.stringify(a3).includes('NOTA DE ATENDIMENTO'), 'o alinhamento nunca traz respostas nem notas')
   const pay = (await one('select public.crm_context_payload($1) p', [P.site])).p
-  assert(!JSON.stringify(pay).includes('time_do_coracao') && !JSON.stringify(pay).includes('Segredo FC'), 'pergunta desconhecida nao sai ate ser mapeada')
+  assert.deepEqual(pay.answers.at(-1), { question: 'Qual o seu time do coracao?', answer: 'Segredo FC' }, 'pergunta nova vai sozinha, como resposta, sem filtro de assunto (decisao do dono em 22/10)')
+  assert(!('time_do_coracao' in (pay.context ?? {})) && !('time_do_coracao' in (pay.profile ?? {})), 'e so resposta: nao vira campo mapeado')
   await asService('authenticated'); await rejects(q('select public.crm_context_alignment()'), /Executive|42501/)
   await asService('')
   await db.query('delete from public.crm_leads where id=any($1::uuid[])', [[viaSite, manual, orphan, noteOnly]])
@@ -727,6 +738,397 @@ for (let i = 0; i < 5; i++) claimSites.push(await seed())
   assert.equal((await one('select enabled e from public.crm_context_delivery_control')).e, false)
   const cmd = (await one(`select command c from cron.job where jobname='crm-context-delivery'`)).c
   assert(!/secret|segredo/i.test(cmd.replace('crm_context_delivery_invoke', '')), 'o comando agendado nao carrega segredo')
+}
+
+const setAuth = (sub, role) => db.query(`select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claim.role',$2,false)`, [sub ?? '', role ?? ''])
+// Observacao que o proprio CRM grava ao criar o lead a partir do formulario da Meta: traz o NOME DA CAMPANHA e IDs da Meta (migration 20261015032000).
+const TPL_AUTO = (campaign, formId, leadId) => `Formulário Meta ${formId} · campanha ${campaign}\nMeta lead ID: ${leadId}\nRespostas do formulário no painel Contexto deste lead.`
+const TPL_X = TPL_AUTO('CAMPANHA-ESCONDIDA-X', '9988776655443322', '1122334455667788')
+const TPL_LEAK = ['CAMPANHA-ESCONDIDA-X', '9988776655443322', '1122334455667788', 'Meta lead ID', 'Formulário Meta']
+
+// ---------- GABARITO: o fluxo normal so mudou onde o dono mandou (observacao gerada pelo sistema sai); o resto e identico ao texto antigo ----------
+{
+  const sites = (await q(`select id from public.meta_form_leads where entry_channel='website'`)).map(r => r.id)
+  assert(sites.length >= 20, 'ha cadastros suficientes para comparar: ' + sites.length)
+  let withCrm = 0, withGuardian = 0, withoutForm = 0, firstCrm = null, withNewQuestions = 0
+  // Pergunta nova (que o texto antigo nao conhecia) agora vai em answers: o gabarito compara sem elas e conta quantos cadastros as tinham.
+  const dropNewQuestions = (novo, antigo) => {
+    if (!novo?.answers) return novo
+    const known = new Set((antigo?.answers ?? []).map(a => a.question)), kept = novo.answers.filter(a => known.has(a.question))
+    const { answers, ...rest } = novo
+    return kept.length ? { ...rest, answers: kept } : rest
+  }
+  for (const id of sites) {
+    const novo = (await one('select public.crm_context_payload($1) p', [id])).p, antigo = (await one('select public.crm_context_payload_legacy($1) p', [id])).p
+    if (novo?.answers && novo.answers.length > (antigo?.answers?.length ?? 0)) withNewQuestions++
+    assert.deepEqual(dropNewQuestions(novo, antigo), antigo, 'o payload do fluxo normal mudou na refatoracao: ' + id)
+    if (novo?.link?.crm_lead_id) { withCrm++; firstCrm ??= { site: id, crm: novo.link.crm_lead_id } } if (novo?.guardian) withGuardian++; if (novo && !novo.link.form_lead_id) withoutForm++
+  }
+  assert(withCrm > 0 && withoutForm > 0 && withNewQuestions > 0, 'o gabarito cobre cadastro com lead no CRM, sem formulario e com pergunta nova: ' + JSON.stringify({ withCrm, withGuardian, withoutForm, withNewQuestions }))
+  // Observacao gerada pelo sistema (campanha e IDs da Meta): sai nos dois fluxos (decisao do dono em 22/10). Fora de crm.observations nada muda.
+  const pay = async (fn, site) => (await one(`select public.${fn}($1) p`, [site])).p
+  const setObs = text => db.query('update public.crm_leads set observations=$2 where id=$1', [firstCrm.crm, text])
+  await setObs(TPL_X + '\nPai pediu retorno.')
+  let nTpl = await pay('crm_context_payload', firstCrm.site), aTpl = await pay('crm_context_payload_legacy', firstCrm.site)
+  assert.match(aTpl.crm.observations, /CAMPANHA-ESCONDIDA-X/, 'o texto antigo levava a campanha')
+  assert.equal(nTpl.crm.observations, 'Pai pediu retorno.', 'o fluxo normal tira as 3 linhas do sistema e mantem o texto da pessoa')
+  assert.deepEqual({ ...dropNewQuestions(nTpl, aTpl), crm: undefined }, { ...aTpl, crm: undefined }, 'fora de crm nada mudou')
+  assert.deepEqual({ ...nTpl.crm, observations: undefined }, { ...aTpl.crm, observations: undefined }, 'a qualificacao continua igual')
+  for (const x of TPL_LEAK) assert(!JSON.stringify(nTpl).includes(x), 'vazou no fluxo normal: ' + x)
+  await setObs(TPL_X)
+  nTpl = await pay('crm_context_payload', firstCrm.site)
+  assert(!nTpl.crm || !('observations' in nTpl.crm), 'so observacao do sistema: a chave some (e o bloco crm inteiro, se nao ha mais nada nele)')
+  await setObs('OBSERVACAO DO SDR')
+  const nOld = await pay('crm_context_payload', firstCrm.site), aOld = await pay('crm_context_payload_legacy', firstCrm.site)
+  assert.deepEqual(dropNewQuestions(nOld, aOld), aOld, 'sem observacao automatica, identico ao texto antigo')
+  assert.equal((await one('select public.crm_context_payload($1) p', [U(777777)])).p, null); assert.equal((await one('select public.crm_context_payload_legacy($1) p', [U(777777)])).p, null)
+  const formId = (await one(`select id from public.meta_form_leads where entry_channel='form' limit 1`)).id
+  assert.equal((await one('select public.crm_context_payload($1) p', [formId])).p, null, 'registro de formulario nao e atleta da VOXEN')
+}
+
+// ---------- pergunta nova de formulario: vai sozinha, como resposta, sem filtro de assunto; contato fica fora e o texto passa pela limpeza de contato ----------
+const EXTRA_Q = [
+  { name: 'qual_o_seu_cpf?', values: ['123.456.789-00'] },                                    // assunto sensivel: vai (decisao do dono: sem filtro)
+  { name: 'qual_o_time_do_coracao?', values: ['Segredo FC'] },
+  { name: 'comentario_livre', values: ['me ligue 11 94817-3104 ou escreva a@b.com'] },         // contato digitado no texto e removido
+  { name: 'work_email', values: ['trabalho.segredo@example.invalid'] },                       // campo de contato: nunca sai
+  { name: 'telefone_do_pai', values: ['(11) 94817-3104'] },
+  { name: 'first_name', values: ['PrimeiroNomeSecreto'] },
+  { name: 'qual_o_whatsapp_do_responsavel?', values: ['11948173104'] },
+  { name: 'resposta_longa', values: ['x'.repeat(5000)] },
+]
+const EXTRA_EXPECTED = [
+  { question: 'Qual o seu cpf?', answer: '123.456.789-00' }, { question: 'Qual o time do coracao?', answer: 'Segredo FC' },
+  { question: 'Comentario livre', answer: 'me ligue [contato removido] ou escreva [contato removido]' }, { question: 'Resposta longa', answer: 'x'.repeat(4000) }]
+const EXTRA_LEAK = ['trabalho.segredo@example.invalid', 'PrimeiroNomeSecreto', '11948173104', '94817-3104', 'a@b.com']
+{
+  const X = await seed({ extra: EXTRA_Q })
+  const crm = await crmFor(X.site)
+  const body = (await one('select public.crm_context_payload($1) p', [X.site])).p
+  assert.equal(body.answers[10].answer, 'Acho que us 8/10', 'as 11 conhecidas primeiro')
+  assert.deepEqual(body.answers.slice(11), EXTRA_EXPECTED, 'perguntas novas: na ordem do formulario, contato removido do texto, resposta longa cortada em 4000')
+  for (const k of ['profile', 'context', 'structured']) for (const v of Object.values(body[k])) assert(!/Segredo FC|123\.456/.test(String(v)), 'pergunta nova so entra em answers')
+  const text = JSON.stringify(body)
+  for (const x of [...SECRETS, ...EXTRA_LEAK]) assert(!text.includes(x), 'vazou junto das perguntas novas: ' + x)
+  assert.equal(body.answers.length, 15, '11 conhecidas + 4 novas (os 4 campos de contato ficam de fora)')
+  // rotulo muito longo (vem da definicao do formulario) e cortado em 500; a resposta continua inteira
+  await db.query(`insert into public.meta_form_definitions(form_id,page_id,name,questions) values('fdef','p','Formulario',$1::jsonb)`, [JSON.stringify([{ key: 'pergunta_longa', label: 'L'.repeat(600) }])])
+  const D = await seed({ formId: 'fdef', extra: [{ name: 'pergunta_longa', values: ['ok'] }] })
+  const longo = (await one('select public.crm_context_payload($1) p', [D.site])).p.answers.at(-1)
+  assert.deepEqual(longo, { question: 'L'.repeat(500), answer: 'ok' })
+  // a lista do alinhamento passa a ser so informacao do que vai como resposta
+  await setAuth(null, 'service_role')
+  assert(((await one('select public.crm_context_alignment() a')).a.unmapped_questions).includes('qual_o_time_do_coracao?'))
+  await setAuth(null, '')
+  await db.query('delete from public.crm_leads where id=$1', [crm])
+  // funcao de contato: nomes exatos e e-mail/telefone/WhatsApp em qualquer lugar; assunto qualquer outro nao
+  const contact = async n => (await one('select public.crm_context_is_contact_field($1) c', [n])).c
+  for (const n of ['first_name', 'last_name', 'full_name', 'name', 'work_email', 'email', 'phone_number', 'work_phone_number', 'telefone_do_pai', 'e-mail', 'qual_o_whatsapp_do_responsavel?', 'celular', 'Zap']) assert.equal(await contact(n), true, 'contato: ' + n)
+  for (const n of ['qual_o_seu_cpf?', 'qual_o_nome_do_clube?', 'renda_familiar', 'endereco', 'cep', 'qual_o_time_do_coracao?', null]) assert.equal(await contact(n), false, 'nao e contato: ' + n)
+}
+
+// ---------- leads sem cadastro na VOXEN: envio por escolha do time (kind prospect_context) ----------
+{
+  await db.exec('truncate public.crm_context_outbox cascade')
+  await db.exec('truncate public.crm_voxen_prospects')
+  const errBase = await N('select trigger_error_count n from public.crm_context_delivery_control')   // erros ja provocados de proposito por testes anteriores
+  const auth = setAuth
+  const exec = async (role, sig) => (await one(`select has_function_privilege('${role}','${sig}','EXECUTE') p`)).p
+  const NOBODY = U(802)
+  // O evento de ensaio tem o mesmo tipo, mas nao e um lead do CRM: fica fora das contagens de prospects.
+  const ONLY_PROSPECTS = `payload->>'kind'='prospect_context' and coalesce(payload->'link'->>'basis','')<>'teste de integração'`
+  const prospectRows = lead => lead ? q(`select * from public.crm_context_outbox where ${ONLY_PROSPECTS} and source_lead_id=$1 order by source_revision`, [lead])
+    : q(`select * from public.crm_context_outbox where ${ONLY_PROSPECTS} order by source_lead_id,source_revision`)
+  const synRows = () => q(`select * from public.crm_context_outbox where payload->>'kind'='prospect_context' and payload->'link'->>'basis'='teste de integração' order by created_at`)
+  const accepted = async () => (await one('select public.crm_context_rehearsal_accepted() a')).a
+  const as = async (user, role, fn) => { await auth(user, role); try { return await fn() } finally { await auth(null, '') } }
+  const send = (leads, user = PLAIN) => as(user, 'authenticated', async () => (await one('select public.crm_voxen_send($1::uuid[]) r', [leads])).r)
+  const stop = (leads, user = PLAIN) => as(user, 'authenticated', async () => (await one('select public.crm_voxen_stop($1::uuid[]) r', [leads])).r)
+  const states = (user = PLAIN) => as(user, 'authenticated', async () => (await one('select public.crm_voxen_sync_states() s')).s)
+  const status = () => as(null, 'service_role', async () => (await one('select public.crm_context_prospects_status() s')).s)
+  const stateOf = async lead => (await states()).rows.find(r => r.lead_id === lead)?.state ?? 'available'
+  const resultOf = (r, lead) => r.find(x => x.lead_id === lead)?.result
+  let pseq = 0
+  const formOnly = async (overrides = {}, extra = []) => {
+    const id = U(9000 + ++pseq)
+    await db.query(`insert into public.meta_form_leads(id,meta_lead_id,form_id,field_data,full_name,phone,email,entry_channel,campaign_name)
+      values($1,$2,'f',$3::jsonb,$4,'+5511948173104','segredo.pessoa@example.invalid','form','CAMPANHA SEGREDO')`, [id, 'form:prospect:' + pseq, fieldData(overrides, extra), FILLER])
+    return id
+  }
+  const bare = async (name, athlete) => (await one(`insert into public.crm_leads(name,phone,email,athlete_name,athlete_position,observations,temperature)
+    values($1,'21977776666','segredo.pessoa@example.invalid',$2,'Meia','OBSERVACAO DO SDR','TEMPERATURA SEGREDO') returning id`, [name, athlete])).id
+  const note = (lead, text, type = 'whatsapp_summary') => db.query('insert into public.crm_lead_contexts(lead_id,context_type,content) values($1,$2,$3)', [lead, type, text])
+  const enq = (lead, dry = false, now = false) => one('select public.crm_context_enqueue_prospect($1,$2,$3) r', [lead, dry, now]).then(x => x.r)
+  const deliver = async (eventId, status = 'applied', i = 90) => { await makeDue(); const [c] = await claim(20, 60, eventId); assert.equal(c.event_id, eventId); await ack(c, status, i); return c }
+
+  // P1: so do formulario da Meta (aprovado no CRM, nunca se cadastrou na VOXEN). P5 idem, com perguntas novas. P2: criado a mao e ligado a um formulario. P3: so notas.
+  const f1 = await formOnly(), f2 = await formOnly({ 'qual_é_a_posição_e_a_categoria_atual_do_atleta?': 'Goleiro, sub-15' }), f5 = await formOnly({}, EXTRA_Q)
+  const p1 = await crmFor(f1), p5 = await crmFor(f5)
+  const p2 = await bare('Nome CRM Secreto', 'Atleta Manual'); await db.query('insert into public.crm_form_answer_links(crm_lead_id,form_lead_id,basis) values($1,$2,$3)', [p2, f2, 'mesmo WhatsApp'])
+  const p3 = await bare('Maria Responsavel', 'Joao Prospect'); await note(p3, 'Conversou com o pai (11) 94817-3104 sobre a peneira.')
+  const p4 = await bare('Sem Contexto', 'Sem Contexto')                                   // sem nada: nem entra na lista de leads com contexto
+  const pe = (await one(`insert into public.crm_leads(name) values('Lead Vazio') returning id`)).id   // sem nenhum dado que possa sair
+  // V1: JA tem cadastro valido na VOXEN (fluxo normal). V2: ligado a um registro do site com ID malformado: para a VOXEN e como se nao tivesse cadastro.
+  const V1 = await seed(), v1 = await crmFor(V1.site)
+  const bad = U(9500); await db.query(`insert into public.meta_form_leads(id,meta_lead_id,field_data,full_name,entry_channel) values($1,'site:zyron:malformado-prospect','[]'::jsonb,'Fulano','website')`, [bad])
+  const v2 = await bare('Contato V2', 'Atleta V2'); await note(v2, 'Nota do lead com cadastro malformado.'); await db.query('update public.crm_leads set meta_form_lead_id=$2 where id=$1', [v2, bad])
+  // Observacao gerada pelo sistema: P1 = sistema + texto da pessoa; P2 = so sistema (nada sobra); P3, P5 e V2 = so texto da pessoa (nao muda).
+  await db.query('update public.crm_leads set observations=$2 where id=$1', [p1, TPL_X + '\nOBSERVACAO DO SDR'])
+  await db.query('update public.crm_leads set observations=$2 where id=$1', [p2, TPL_X])
+  const cand = async () => (await q('select c from public.crm_context_prospect_candidates() c order by c')).map(r => r.c)
+  const expected = [p1, p2, p3, p5, v2].sort()
+  assert.deepEqual(await cand(), expected, 'candidatos: tem contexto e nao tem cadastro valido na VOXEN (fora: P4 e o lead vazio sem contexto, e V1 ja cadastrado)')
+  assert.equal(await N(`select count(*) n from public.crm_context_outbox where ${ONLY_PROSPECTS}`), 0, 'nada vai sozinho: so quem for escolhido')
+
+  // --- o corpo do evento: mesma lista fechada, base propria, nada que nunca sai ---
+  const body = async id => (await one('select public.crm_context_payload_prospect($1) p', [id])).p
+  const b1 = await body(p1)
+  assert.deepEqual(b1.link, { basis: 'lead do CRM sem cadastro na VOXEN', form_lead_id: f1, crm_lead_id: p1 })
+  assert.equal(b1.answers.length, 11); assert.equal(b1.structured.athlete_name, 'Joao Atleta'); assert(!('kind' in b1))
+  assert.equal(b1.crm.observations, 'OBSERVACAO DO SDR', 'a observacao gerada pelo sistema (campanha e IDs da Meta) nao sai; o texto da pessoa sim')
+  for (const k of Object.keys(b1)) assert(ALLOWED_TOP.includes(k), 'chave fora da lista: ' + k)
+  for (const k of Object.keys(b1.link)) assert(ALLOWED.link.includes(k))
+  for (const id of [p1, p2, p3, v2]) { const text = JSON.stringify(await body(id)); for (const x of [...SECRETS, ...TPL_LEAK]) assert(!text.includes(x), 'vazou no envio: ' + x) }
+  const b5 = await body(p5)
+  assert.deepEqual(b5.answers.slice(11), EXTRA_EXPECTED, 'perguntas novas tambem vao nos leads sem cadastro')
+  for (const x of [...SECRETS, ...TPL_LEAK, ...EXTRA_LEAK]) assert(!JSON.stringify(b5).includes(x), 'vazou no envio do P5: ' + x)
+  const b2 = await body(p2); assert.equal(b2.link.form_lead_id, f2, 'lead criado a mao: o formulario vem de crm_form_answer_links'); assert.equal(b2.profile.position_category_raw, 'Goleiro, sub-15')
+  assert(!('observations' in (b2.crm ?? {})), 'observacao so gerada pelo sistema nao deixa nada para enviar')
+  const b3 = await body(p3)
+  assert.equal(b3.notes.length, 1); assert.equal(b3.notes[0].content, 'Conversou com o pai [contato removido] sobre a peneira.'); assert(!('answers' in b3) && !('context' in b3))
+  assert.equal(b3.crm.observations, 'OBSERVACAO DO SDR', 'texto digitado por pessoa segue como estava')
+  assert.deepEqual(b3.guardian, { name: 'Maria Responsavel' }); assert.equal(b3.structured.athlete_name, 'Joao Prospect'); assert.equal(b3.link.form_lead_id, null)
+  assert.equal(await body(v1), null, 'quem ja tem cadastro na VOXEN segue o fluxo normal e nao e prospect'); assert(!(await cand()).includes(p4), 'sem o icone de contexto aceso o lead nao e candidato')
+  assert.equal(await body(pe), null, 'lead sem nada a enviar'); assert.equal(await body(U(888888)), null)
+  // a funcao de limpeza: so as 3 linhas do sistema saem; texto de pessoa fica, inclusive o que cita as mesmas palavras no meio de uma frase
+  const strip = async t => (await one('select public.crm_context_strip_auto_observations($1) s', [t])).s
+  assert.equal(await strip(null), null); assert.equal(await strip(''), null); assert.equal(await strip('   \n  '), null)
+  assert.equal(await strip(TPL_AUTO('C', '1', '2')), null, 'so o texto do sistema: nada a enviar')
+  assert.equal(await strip(TPL_AUTO('C', '1', '2') + '\nPai pediu retorno.'), 'Pai pediu retorno.')
+  assert.equal(await strip('Antes\n' + TPL_AUTO('C', '1', '2') + '\nDepois'), 'Antes\n\nDepois')
+  assert.equal(await strip(TPL_AUTO('C', '1', '2').replace(/\n/g, '\r\n') + '\r\nTexto'), 'Texto', 'quebra de linha do Windows')
+  assert.equal(await strip('  Formulário Meta 1 · campanha C'), null, 'espaco antes da linha'); assert.equal(await strip('Meta lead ID: 55'), null)
+  assert.equal(await strip('Respostas do formulário no painel Contexto deste lead'), null, 'rodape sem ponto final')
+  for (const humano of ['OBSERVACAO DO SDR', 'Formulário preenchido pelo pai', 'Falei da campanha ontem. Meta lead ID: 123 foi o do filho.', 'Linha 1\n\nLinha 2']) assert.equal(await strip(humano), humano, 'texto de pessoa nao muda: ' + humano)
+
+  // --- quem pode usar: so quem enxerga leads no CRM; o ensaio com a VOXEN libera o envio ---
+  for (const [who, role] of [[NOBODY, 'authenticated'], [null, 'anon']]) {
+    await as(who, role, async () => {
+      await rejects(q('select public.crm_voxen_send($1::uuid[])', [[p1]]), /Acesso ao CRM|42501/); await rejects(q('select public.crm_voxen_stop($1::uuid[])', [[p1]]), /Acesso ao CRM|42501/)
+      await rejects(q('select public.crm_voxen_sync_states()'), /Acesso ao CRM|42501/)
+    })
+  }
+  const s0 = await states(); assert.equal(s0.ready, false); assert(s0.rows.some(r => r.lead_id === v1 && r.state === 'registered'), 'quem ja esta na VOXEN aparece como cadastrado')
+  await rejects(send([p1]), /ainda não confirmou/, 'sem o ensaio aceito nao ha envio')
+  assert.equal(await N('select count(*) n from public.crm_voxen_prospects'), 0, 'a recusa nao escolheu ninguem'); assert.equal((await prospectRows()).length, 0)
+  assert.deepEqual((await status()).rehearsal, { accepted: false, state: null, receipt_status: null })
+  // um evento de lead de verdade (base normal do vinculo), entregue com applied, NAO libera o envio: so o evento de ensaio vale
+  // (defesa em profundidade: pelo app isso nem seria possivel, porque o envio e travado antes)
+  const fakeEvent = U(960002)
+  await db.query(`insert into public.crm_context_outbox(event_id,source_lead_id,source_revision,payload,content_hash,state,receipt,delivered_at)
+    values($1,$2,1,$3::jsonb,'x','delivered',$4::jsonb,now())`, [fakeEvent, U(960001), JSON.stringify({ kind: 'prospect_context', link: { basis: 'lead do CRM sem cadastro na VOXEN' } }), JSON.stringify({ ok: true, status: 'applied' })])
+  assert.equal(await accepted(), false, 'um lead de verdade entregue com applied nao vale como ensaio')
+  await db.query('delete from public.crm_context_outbox where event_id=$1', [fakeEvent])
+  assert.equal(await accepted(), false)
+  const ev1 = (await one('select public.crm_context_enqueue_synthetic_prospect() id')).id
+  const [s1] = await synRows()
+  assert.equal(s1.event_id, ev1); assert.equal(s1.payload.kind, 'prospect_context'); assert.equal(s1.payload.schema_version, 1); assert.equal(s1.payload.event_id, ev1)
+  assert.equal(Number(s1.source_revision), 1); assert.equal(s1.state, 'pending'); assert.equal(s1.payload.source_project, 'mbzwchnxtskysqplqiyy')
+  assert.equal(s1.payload.source_lead_id, s1.source_lead_id); assert.equal(s1.payload.link.crm_lead_id, s1.source_lead_id, 'mesma regra dos leads de verdade')
+  assert.equal(s1.payload.link.basis, 'teste de integração'); assert.equal(s1.payload.link.form_lead_id, null); assert.equal(s1.payload.profile.filled_by_raw, 'Teste de integração — não abordar')
+  for (const k of Object.keys(s1.payload)) assert(ALLOWED_TOP.includes(k), 'chave fora da lista no ensaio: ' + k)
+  for (const x of SECRETS) assert(!JSON.stringify(s1.payload).includes(x), 'vazou no ensaio: ' + x)
+  assert.equal(await N('select count(*) n from public.crm_leads where id=$1', [s1.source_lead_id]), 0, 'o ensaio nao e um lead do CRM')
+  assert.equal((await prospectRows()).length, 0, 'o ensaio nao entra nas contagens de leads')
+  await rejects(q('select public.crm_context_enqueue_synthetic_prospect()'), /aguardando entrega/, 'um ensaio de cada vez')
+  assert.equal(await accepted(), false, 'ensaio ainda nao entregue nao vale')
+  const [c1] = await claim(20, 60, ev1); assert.equal(c1.payload.kind, 'prospect_context'); await ack(c1, 'quarantined', 81)
+  assert.equal(await accepted(), false, 'quarantined nao vale como ensaio aceito'); await rejects(send([p1]), /ainda não confirmou/)
+  assert.deepEqual((await status()).rehearsal, { accepted: false, state: 'delivered', receipt_status: 'quarantined' })
+  const ev2 = (await one('select public.crm_context_enqueue_synthetic_prospect() id')).id; assert.notEqual(ev2, ev1)
+  const [c2] = await claim(20, 60, ev2); await q(`select public.crm_context_fail($1,$2,'http_400',now(),true)`, [c2.event_id, c2.claim_token])
+  assert.equal((await synRows()).at(-1).state, 'blocked'); assert.equal(await accepted(), false)
+  await rejects(q('select public.crm_context_enqueue_synthetic_prospect()'), /aguardando entrega/, 'bloqueado tambem conta como aguardando: reenfileire o mesmo')
+  assert.equal((await one('select public.crm_context_requeue_blocked($1) n', [ev2])).n, 1)
+  // um evento de ensaio do tipo NORMAL (athlete_context), entregue com applied, tambem nao libera o envio
+  const ath = (await one('select public.crm_context_enqueue_synthetic($1) id', [U(556)])).id; const [ca] = await claim(20, 60, ath); await ack(ca, 'applied', 82)
+  assert.equal(await accepted(), false, 'o ensaio do fluxo normal nao vale para os leads')
+  const [c3] = await claim(20, 60, ev2); assert.equal(c3.event_id, ev2); await ack(c3, 'applied', 83)
+  assert.equal(await accepted(), true, 'recibo applied do ensaio libera')
+  const setStatus = s => db.query(`update public.crm_context_outbox set receipt=jsonb_set(receipt,'{status}',to_jsonb($2::text)) where event_id=$1`, [ev2, s])
+  for (const [s, ok] of [['waiting_member', true], ['duplicate', false], ['superseded', false], ['quarantined', false], ['applied', true]]) { await setStatus(s); assert.equal(await accepted(), ok, 'status ' + s) }
+  assert.deepEqual((await status()).rehearsal, { accepted: true, state: 'delivered', receipt_status: 'applied' })
+  assert.equal((await states()).ready, true)
+
+  // --- "Enviar para a VOXEN": sem confirmacao, o clique escolhe o lead e a primeira versao sai na hora ---
+  await rejects(send([]), /1 a 25/); await rejects(send(Array.from({ length: 26 }, (_, i) => U(970000 + i))), /1 a 25/); await rejects(send(null), /1 a 25/)
+  const r1 = await send([p1, p2, p3, pe, v1, U(999999), p1])
+  assert.equal(r1.length, 6, 'repetido conta uma vez')
+  assert.deepEqual([p1, p2, p3, pe, v1, U(999999)].map(id => resultOf(r1, id)), ['sent', 'sent', 'sent', 'nothing_to_send', 'registered', 'not_found'])
+  assert.deepEqual((await q('select lead_id from public.crm_voxen_prospects order by lead_id')).map(r => r.lead_id), [p1, p2, p3, pe].sort(), 'so quem foi escolhido (e e lead de verdade, sem cadastro)')
+  const chosen = await one('select * from public.crm_voxen_prospects where lead_id=$1', [p1]); assert.equal(chosen.enabled_by, PLAIN); assert.equal(chosen.enabled, true); assert.equal(chosen.stopped_at, null)
+  const [e1] = await prospectRows(p1)
+  assert.equal(Number(e1.source_revision), 1); assert.equal(e1.state, 'pending'); assert(new Date(e1.next_attempt_at) <= new Date(), 'a primeira versao sai na hora, sem janela de espera')
+  assert.equal(e1.payload.kind, 'prospect_context'); assert.equal(e1.payload.schema_version, 1); assert.equal(e1.payload.source_lead_id, p1); assert.equal(e1.payload.source_revision, 1)
+  assert.equal(e1.payload.event_id, e1.event_id); assert.equal(e1.payload.source_project, 'mbzwchnxtskysqplqiyy'); assert.match(e1.payload.generated_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/)
+  assert.deepEqual(e1.payload.link, b1.link); assert.equal(e1.payload.link.crm_lead_id, e1.payload.source_lead_id)
+  for (const k of Object.keys(e1.payload)) assert(ALLOWED_TOP.includes(k), 'chave fora da lista no evento: ' + k)
+  assert.equal((await prospectRows(pe)).length, 0, 'escolhido sem nada a enviar: fica marcado, mas nao gera evento vazio')
+  assert.equal((await prospectRows(v1)).length, 0)
+  assert.equal(await stateOf(p1), 'pending'); assert.equal(await stateOf(pe), 'waiting'); assert.equal(await stateOf(v1), 'registered'); assert.equal(await stateOf(p5), 'available')
+  assert.deepEqual(Object.keys((await states()).rows[0]).sort(), ['at', 'lead_id', 'state'], 'so id, estado e hora: nenhum dado pessoal')
+  assert.equal(await enq(p1, true), 'unchanged', 'so contar: igual ao que ja esta na fila'); assert.equal(await enq(p2, true), 'unchanged')
+  await db.query(`update public.crm_leads set athlete_position='Goleiro' where id=$1`, [p1]); assert.equal((await prospectRows(p1)).length, 1, 'versao ainda nao entregue junta a mudanca')
+  await db.query(`update public.crm_leads set athlete_position='Meia' where id=$1`, [p1])
+  const r2 = await send([p1]); assert.equal(resultOf(r2, p1), 'sent', 'clicar de novo e inofensivo'); assert.equal((await prospectRows(p1)).length, 1, 'conteudo igual nao gera versao nova')
+  // a entrega a pega como qualquer outro evento
+  const cp = await deliver(e1.event_id, 'applied', 71); assert.equal(cp.payload.kind, 'prospect_context')
+  assert.equal(await stateOf(p1), 'sent')
+
+  // --- sincronia: cada mudanca que entra no corpo vira versao nova; antes de reservada para envio, mudancas na janela se juntam ---
+  await db.query(`update public.crm_leads set athlete_position='Zagueiro' where id=$1`, [p1])
+  let rows1 = await prospectRows(p1); assert.deepEqual(rows1.map(r => Number(r.source_revision)), [1, 2], 'depois de entregue, a mudanca e a versao 2')
+  assert.equal(rows1[1].state, 'pending'); assert.equal(rows1[1].payload.structured.athlete_position, 'Zagueiro'); assert.equal(rows1[1].payload.source_revision, 2)
+  assert(new Date(rows1[1].next_attempt_at) > new Date(), 'versao nova espera a janela de juncao (45 s)')
+  await db.query(`update public.crm_leads set athlete_position='Lateral' where id=$1`, [p1])
+  rows1 = await prospectRows(p1); assert.equal(rows1.length, 2, 'outra mudanca na janela entra na mesma versao'); assert.equal(rows1[1].payload.structured.athlete_position, 'Lateral')
+  await db.query(`update public.crm_leads set athlete_position='Lateral' where id=$1`, [p1]); assert.equal((await prospectRows(p1)).length, 2, 'salvar o mesmo valor nao gera nada')
+  await db.query(`update public.crm_leads set observations=$2 where id=$1`, [p1, TPL_X + '\nNova observacao da pessoa.'])
+  assert.equal((await prospectRows(p1))[1].payload.crm.observations, 'Nova observacao da pessoa.'); for (const x of TPL_LEAK) assert(!JSON.stringify((await prospectRows(p1))[1].payload).includes(x))
+  await note(p1, 'nota nova depois do envio'); assert.equal((await prospectRows(p1))[1].payload.notes.at(-1).content, 'nota nova depois do envio', 'nota nova chega na fila')
+  await db.query(`update public.crm_lead_contexts set content='nota editada' where lead_id=$1 and context_type='whatsapp_summary'`, [p1]); assert.equal((await prospectRows(p1))[1].payload.notes.at(-1).content, 'nota editada')
+  await db.query(`delete from public.crm_lead_contexts where lead_id=$1`, [p1]); assert(!('notes' in (await prospectRows(p1))[1].payload), 'nota apagada sai do contexto')
+  // respostas do formulario editadas e vinculo manual: P2 (criado a mao)
+  await deliver((await prospectRows(p2))[0].event_id, 'applied', 72)
+  await db.query('update public.meta_form_leads set field_data=$2::jsonb where id=$1', [f2, fieldData({ 'qual_é_a_posição_e_a_categoria_atual_do_atleta?': 'Lateral, sub-17' })])
+  let rows2 = await prospectRows(p2); assert.equal(rows2.length, 2, 'respostas do formulario editadas'); assert.equal(rows2[1].payload.profile.position_category_raw, 'Lateral, sub-17')
+  await deliver(rows2[1].event_id, 'applied', 73)
+  await db.query('delete from public.crm_form_answer_links where crm_lead_id=$1', [p2])
+  rows2 = await prospectRows(p2); assert.equal(rows2.length, 3, 'vinculo manual removido muda o corpo'); assert(!('answers' in rows2[2].payload)); assert.equal(rows2[2].payload.link.form_lead_id, null)
+  await deliver(rows2[2].event_id, 'applied', 77)
+  await db.query('insert into public.crm_form_answer_links(crm_lead_id,form_lead_id,basis) values($1,$2,$3)', [p2, f2, 'mesmo WhatsApp'])
+  rows2 = await prospectRows(p2); assert.equal(rows2.length, 4, 'vinculo manual criado de novo traz as respostas de volta'); assert.equal(rows2[3].payload.answers.length, 11)
+  // lead ligado DIRETO ao formulario da Meta (o caso mais comum: aprovado da leva): editar o formulario chega no lead escolhido
+  assert.equal((await prospectRows(p1)).at(-1).payload.profile.position_category_raw, 'Meia, sub-17')
+  await db.query('update public.meta_form_leads set field_data=$2::jsonb where id=$1', [f1, fieldData({ 'qual_é_a_posição_e_a_categoria_atual_do_atleta?': 'Volante, sub-19' })])
+  assert.equal((await prospectRows(p1)).at(-1).payload.profile.position_category_raw, 'Volante, sub-19', 'formulario editado chega pelo vinculo direto do lead com o formulario')
+  // lead ligado a um registro do site de ID malformado (para a VOXEN e como sem cadastro) cujo registro aponta para um formulario: editar o formulario avisa
+  const fv = await formOnly()
+  await db.query('update public.meta_form_leads set answers_form_lead_id=$2 where id=$1', [bad, fv])
+  assert.equal(resultOf(await send([v2]), v2), 'sent'); await deliver((await prospectRows(v2))[0].event_id, 'applied', 76)
+  await db.query('update public.meta_form_leads set field_data=$2::jsonb where id=$1', [fv, fieldData({ 'qual_é_a_posição_e_a_categoria_atual_do_atleta?': 'Ala, sub-20' })])
+  assert.equal((await prospectRows(v2)).at(-1).payload.profile.position_category_raw, 'Ala, sub-20', 'formulario editado chega pelo registro do site ligado ao lead')
+  // quem nao foi escolhido nao gera nada, por mais que mude
+  await db.query(`update public.crm_leads set athlete_position='Goleiro',observations='mudou' where id=$1`, [p5]); await note(p5, 'nota de lead nao escolhido')
+  await db.query('update public.meta_form_leads set field_data=$2::jsonb where id=$1', [f5, fieldData({}, EXTRA_Q)])
+  assert.equal((await prospectRows(p5)).length, 0, 'lead que ninguem escolheu nunca sai')
+  // a funcao interna tambem recusa sozinha (nao depende de quem a chama): lead nao escolhido, cadastrado ou inexistente
+  assert.equal(await enq(p5), 'skipped', 'lead nao escolhido, mesmo chamando a funcao direto'); assert.equal(await enq(p5, true), 'skipped'); assert.equal(await enq(p5, false, true), 'skipped'); assert.equal(await enq(null), 'skipped'); assert.equal(await enq(U(999997)), 'skipped')
+  assert.equal((await prospectRows(p5)).length, 0)
+  assert.equal(await N('select trigger_error_count n from public.crm_context_delivery_control'), errBase, 'nenhum erro de gatilho')
+
+  // --- parar de sincronizar e voltar ---
+  const st1 = await stop([p1, p5, U(999998)])
+  assert.deepEqual([p1, p5, U(999998)].map(id => resultOf(st1, id)), ['stopped', 'not_enabled', 'not_enabled'])
+  assert.equal(await stateOf(p1), 'stopped'); const n1 = (await prospectRows(p1)).length
+  await db.query(`update public.crm_leads set athlete_position='Volante' where id=$1`, [p1]); await note(p1, 'durante a pausa')
+  assert.equal((await prospectRows(p1)).length, n1, 'parado: nada novo sai'); assert.equal(resultOf(await stop([p1]), p1), 'not_enabled')
+  assert.equal(await enq(p1), 'skipped', 'parado: a funcao interna tambem recusa'); assert.equal(await enq(p1, false, true), 'skipped'); assert.equal((await prospectRows(p1)).length, n1)
+  const back = await send([p1]); assert.equal(resultOf(back, p1), 'sent')
+  const again = await one('select * from public.crm_voxen_prospects where lead_id=$1', [p1]); assert.equal(again.enabled, true); assert.equal(again.stopped_at, null)
+  const rowsBack = await prospectRows(p1); assert.equal(rowsBack.at(-1).payload.structured.athlete_position, 'Volante', 'ao voltar, vai o que mudou durante a pausa'); assert(rowsBack.length > n1 || rowsBack.at(-1).payload.notes.at(-1).content === 'durante a pausa')
+  assert(new Date(rowsBack.at(-1).next_attempt_at) <= new Date(), 'o clique em Enviar sempre sai na hora, mesmo ao voltar')
+
+  // --- estados da entrega: na fila, entregue, quarentena da VOXEN, bloqueado ---
+  const lastEvent = async lead => (await prospectRows(lead)).at(-1)
+  await deliver((await lastEvent(p1)).event_id, 'applied', 74); assert.equal(await stateOf(p1), 'sent')
+  await db.query(`update public.crm_leads set athlete_position='Meia' where id=$1`, [p2]); await db.query(`update public.crm_leads set athlete_position='Atacante' where id=$1`, [p3])
+  await deliver((await lastEvent(p2)).event_id, 'quarantined', 75); assert.equal(await stateOf(p2), 'quarantined')
+  const eb = await lastEvent(p3); await makeDue(); const [cb] = await claim(20, 60, eb.event_id); await q(`select public.crm_context_fail($1,$2,'http_400',now(),true)`, [cb.event_id, cb.claim_token])
+  assert.equal(await stateOf(p3), 'blocked')
+  { // a situacao do Executivo mostra quarentena e bloqueio (a fila conta quarantined como entregue; so este numero avisa)
+    const s = await status()
+    assert.equal(s.quarantined, 1, 'quarentena aparece na situacao do Executivo'); assert.equal(s.blocked, 1, 'bloqueio aparece na situacao do Executivo')
+    assert.equal(s.enabled, s.waiting + s.pending + s.delivered + s.blocked + s.quarantined, 'cada lead escolhido cai em um estado so')
+    assert(s.delivered >= 1 && s.waiting >= 1, 'enviado e aguardando conteudo tambem aparecem: ' + JSON.stringify(s))
+  }
+  assert.equal((await one('select public.crm_context_requeue_blocked($1) n', [eb.event_id])).n, 1); assert.equal(await stateOf(p3), 'pending')
+
+  // --- quando o lead se cadastra na VOXEN, o fluxo normal assume pelo ID da VOXEN, ligado pelo mesmo crm_lead_id ---
+  const newVoxen = U(9900), site = U(9901)
+  await db.query(`insert into public.meta_form_leads(id,meta_lead_id,field_data,full_name,entry_channel) values($1,$2,'[]'::jsonb,'Fulano','website')`, [site, 'site:zyron:' + newVoxen])
+  const before3 = (await prospectRows(p3)).length
+  await db.query('update public.crm_leads set meta_form_lead_id=$2 where id=$1', [p3, site])
+  const [funnel] = await outboxOf(newVoxen)
+  assert(funnel, 'o cadastro novo gerou o evento normal'); assert.equal(funnel.payload.kind, 'athlete_context'); assert.equal(funnel.payload.source_lead_id, newVoxen); assert.equal(funnel.payload.link.crm_lead_id, p3, 'mesmo crm_lead_id do lead enviado antes: a chave para a VOXEN juntar os dois')
+  await db.query(`update public.crm_leads set athlete_position='Zagueiro' where id=$1`, [p3])
+  assert.equal((await prospectRows(p3)).length, before3, 'depois de cadastrado o lead nao gera mais versao de lead sem cadastro')
+  assert.equal(await stateOf(p3), 'registered'); assert.equal(resultOf(await send([p3]), p3), 'registered'); assert(!(await cand()).includes(p3))
+  { const st = await states(); assert.equal(new Set(st.rows.map(r => r.lead_id)).size, st.rows.length, 'cada lead aparece uma vez so, e cadastrado vale mais que escolhido') }
+
+  // --- varredura de seguranca: pega o que o gatilho perdeu, com cursor, e um erro nao derruba as outras ---
+  await auth(null, 'service_role')
+  await db.exec('alter table public.crm_leads disable trigger zz_crm_context_prospect_lead')
+  await db.query(`update public.crm_leads set observations='so a varredura enxerga isto' where id=$1`, [p1])
+  await db.exec('alter table public.crm_leads enable trigger zz_crm_context_prospect_lead')
+  const nBeforeSweep = (await prospectRows(p1)).length
+  assert.notEqual((await lastEvent(p1)).payload.crm?.observations, 'so a varredura enxerga isto', 'sem o gatilho a fila ficou desatualizada')
+  const enabledNow = await N('select count(*) n from public.crm_voxen_prospects where enabled')
+  let pex = 0, pch = 0, cycles = 0, pdone = false
+  for (let i = 0; i < 300 && !pdone; i++) {
+    const s = (await one('select public.crm_context_reconcile(1) s')).s
+    pex += s.prospects_examined; pch += s.prospects_changed; cycles++; assert.equal(s.errors, 0)
+    const cur = (await one('select prospects_cursor c from public.crm_context_delivery_control')).c
+    if (cur === null) pdone = true; else assert.notEqual(cur, null, 'ciclo incompleto guarda o cursor')
+  }
+  assert(pdone, 'o ciclo dos leads escolhidos termina'); assert.equal(pex, enabledNow, 'o ciclo percorre cada lead escolhido exatamente uma vez'); assert(pch >= 1); assert(cycles > 1, 'lotes pequenos retomam pelo cursor')
+  assert((await prospectRows(p1)).length > nBeforeSweep || (await lastEvent(p1)).payload.crm.observations === 'so a varredura enxerga isto')
+  assert.equal((await lastEvent(p1)).payload.crm.observations, 'so a varredura enxerga isto', 'a varredura trouxe a fila de volta ao alinhamento')
+  await one('select public.crm_context_reconcile(500) s')   // termina o ciclo dos registros do site (a fila foi esvaziada no inicio deste bloco)
+  const sweep2 = (await one('select public.crm_context_reconcile(500) s')).s; assert.equal(sweep2.prospects_changed, 0, 'segunda varredura: idempotente'); assert.equal(sweep2.changed, 0)
+  const errBefore = await N('select trigger_error_count n from public.crm_context_delivery_control')
+  await db.exec('alter function public.meta_form_field_rank(text) rename to meta_form_field_rank_bak')
+  try {
+    const bad2 = (await one('select public.crm_context_reconcile(500) s')).s
+    assert(bad2.errors >= 1, 'a falha da varredura de leads vira contagem, nunca excecao: ' + JSON.stringify(bad2))
+  } finally { await db.exec('alter function public.meta_form_field_rank_bak(text) rename to meta_form_field_rank') }
+  assert((await N('select trigger_error_count n from public.crm_context_delivery_control')) >= errBefore, 'falhas registradas')
+  await db.exec('update public.crm_context_delivery_control set trigger_error_count=0')
+  await auth(null, '')
+
+  // --- lead apagado: a escolha some junto (o historico de eventos fica) ---
+  const evCount = (await prospectRows(p2)).length
+  await db.query('delete from public.crm_leads where id=$1', [p2])
+  assert.equal(await N('select count(*) n from public.crm_voxen_prospects where lead_id=$1', [p2]), 0); assert.equal((await prospectRows(p2)).length, evCount)
+  assert.equal(await stateOf(p2), 'available', 'lead que nao existe mais nao tem estado')
+
+  // --- situacao para o Executivo ---
+  assert.equal(resultOf(await stop([p1]), p1), 'stopped')   // um lead parado: a situacao conta escolhidos e parados em separado
+  assert.equal(await stateOf(p1), 'stopped')
+  await auth(null, 'service_role')
+  const stt = (await one('select public.crm_context_prospects_status() s')).s
+  const chosenNow = await N('select count(*) n from public.crm_voxen_prospects where enabled')
+  assert.equal(stt.ready, true); assert.equal(stt.enabled, chosenNow); assert.equal(stt.stopped, await N('select count(*) n from public.crm_voxen_prospects where not enabled'))
+  assert(stt.stopped >= 1, 'o lead parado aparece em parados'); assert.equal(stt.enabled + stt.stopped, await N('select count(*) n from public.crm_voxen_prospects'), 'parado nao conta como escolhido')
+  assert.equal(stt.enabled, stt.waiting + stt.pending + stt.delivered + stt.blocked + stt.quarantined, 'cada lead escolhido cai em um estado só')
+  const anyChosen = new Set((await q('select lead_id from public.crm_voxen_prospects')).map(r => r.lead_id))
+  assert.equal(stt.available, (await cand()).filter(c => !anyChosen.has(c)).length, 'disponiveis: com contexto, sem cadastro e ainda nao escolhidos')
+  assert.deepEqual(stt.rehearsal, { accepted: true, state: 'delivered', receipt_status: 'applied' })
+  await auth(PLAIN, 'authenticated'); await rejects(q('select public.crm_context_prospects_status()'), /Executive|42501/)
+  await auth(EXEC, 'authenticated'); assert.equal((await one('select public.crm_context_prospects_status() s')).s.enabled, chosenNow)
+  await auth(null, '')
+  const flat = JSON.stringify([await states(), stt])
+  for (const x of [...SECRETS, 'Maria Responsavel', 'Joao Prospect', 'OBSERVACAO DO SDR', 'nota editada', 'Atleta Manual']) assert(!flat.includes(x), 'estado e situacao nao trazem dado de lead: ' + x)
+
+  // --- permissoes: o app so chama as 3 acoes; o resto e interno; nenhuma tabela e acessivel ---
+  for (const sig of ['public.crm_voxen_send(uuid[])', 'public.crm_voxen_stop(uuid[])', 'public.crm_voxen_sync_states()']) {
+    assert.equal(await exec('authenticated', sig), true, sig); assert.equal(await exec('anon', sig), false, sig)
+  }
+  assert.equal(await exec('service_role', 'public.crm_context_enqueue_synthetic_prospect()'), true); assert.equal(await exec('anon', 'public.crm_context_enqueue_synthetic_prospect()') || await exec('authenticated', 'public.crm_context_enqueue_synthetic_prospect()'), false)
+  assert.equal(await exec('authenticated', 'public.crm_context_prospects_status()'), true); assert.equal(await exec('anon', 'public.crm_context_prospects_status()'), false)
+  assert.equal((await one(`select relrowsecurity r from pg_class where oid='public.crm_voxen_prospects'::regclass`)).r, true, 'RLS ligado')
+  for (const role of ['anon', 'authenticated', 'service_role']) for (const priv of ['SELECT', 'INSERT', 'UPDATE', 'DELETE'])
+    assert.equal((await one(`select has_table_privilege('${role}','public.crm_voxen_prospects','${priv}') p`)).p, false, `${role} nao pode ${priv} em crm_voxen_prospects`)
 }
 
 // ---------- evento sintetico de ensaio ----------
