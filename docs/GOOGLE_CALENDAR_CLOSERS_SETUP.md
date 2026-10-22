@@ -22,6 +22,22 @@ O administrador conecta o Google na seção **Google Agenda · Closers** dessa p
 - **Atualizar**, na Agenda, solicita reconciliação e entrega no servidor e recarrega calls/status. O botão permanece ocupado durante a solicitação. Acesso exige Closer aprovado; o servidor limita solicitações concorrentes/repetidas. Filas maiores continuam no cron e mostram processamento pendente.
 - O closer responsável entra como **convidado** do evento, com o e-mail de login dele no CRM (`auth.users`), lido pelo servidor a cada entrega. Quem está na lista do evento entra no Meet sem o organizador (admvoxenai) estar na sala; o limite de duração segue o plano do organizador. O envio é com `sendUpdates=none`: o Google não manda e-mail. Trocar de closer remove o convite do anterior e convida o novo; closer sem e-mail válido fica sem convite. A marca do convite do CRM fica em `extendedProperties.private.closer_email`; convidados colocados à mão no Google são preservados. Não são criadas recorrências. Campos externos não controlados pelo CRM são preservados.
 
+## Acesso aberto do Meet (22/10/2026)
+
+**Para que serve.** Sem isso, o lead (que não está na lista de convidados do evento) cai na sala de espera e alguém dentro precisa admiti-lo. Com isso, o link do Meet de cada call fica com **acesso aberto** (`config.accessType = OPEN`): closer e lead entram direto, mesmo sem a conta que criou a call e sem ninguém admitir. O limite de duração continua sendo o da conta organizadora (conta gratuita: 60 min com 3 ou mais pessoas na sala; com 2 pessoas, até 24 h).
+
+**Como funciona.** Depois que o evento tem o link do Meet, o worker lê o espaço pelo código da reunião (`GET https://meet.googleapis.com/v2/spaces/{código}`; o GET aceita o código como apelido) e, se não estiver aberto, altera pelo ID do espaço (`PATCH /v2/spaces/{id}?updateMask=config.accessType`; o PATCH só aceita o ID). É idempotente: se já está aberto, só lê. Vale para calls futuras e para as que começaram há até uma hora (call que atrasou); calls concluídas e as que já passaram dessa janela não são tocadas. A reconciliação de 15 min refaz a conferência e **reabre se alguém fechar na mão**.
+
+**O que ele precisa.** (1) Ativar a **Google Meet REST API** no mesmo projeto do Google Cloud do app (`https://console.cloud.google.com/apis/library/meet.googleapis.com`) e incluir o escopo `https://www.googleapis.com/auth/meetings.space.settings` (não sensível) nas permissões da tela de consentimento. (2) Um administrador clicar em **Reconectar Google** em Configurações e aceitar a permissão nova. O pedido de autorização já traz o escopo; a agenda **não exige** que ele seja concedido.
+
+**Falha não derruba a agenda.** Sem a permissão, com a API desligada ou se o Google recusar, o evento sincroniza normalmente e a tela de Configurações mostra o motivo em "Acesso aberto do Meet": `scope_missing` (botão Reconectar Google), `api_disabled`, `not_permitted` ou `error`; antes da primeira tentativa, "ainda não verificado". Erros do Meet usam códigos próprios (`meet_*`) e **nunca** pausam a conexão do Google Agenda. Falha momentânea (rede, 5xx, 429, espaço do Meet ainda não criado) repete o job até a 4ª tentativa, sem duplicar o evento; depois o evento é confirmado e a varredura seguinte tenta de novo.
+
+**Banco (migration `20261022190000_google_calendar_meet_access`, aditiva).** Duas colunas em `calendar_private.connection` (`meet_access_state`, `meet_access_checked_at`), a função `google_calendar_set_meet_access(text)` (só `service_role`; grava só quando o estado muda ou o registro tem mais de 10 min) e `meetAccess` no `google_calendar_admin_status`. **Ordem de publicação:** primeiro o app (a tela passa a aceitar o campo novo; o schema do status é estrito), depois as Edge Functions, por último a migration; fazer a migration antes quebraria o card de Configurações do app antigo. Depois de reconectar, o callback define o estado de partida pelo que o Google concedeu de verdade (`unknown` ou `scope_missing`).
+
+**Limite conhecido, a validar com uma call real.** A documentação do Google não diz se uma conta pessoal `@gmail.com` pode abrir o acesso de reuniões criadas pelo Google Agenda. Por isso o primeiro teste é uma call de teste: conferir em Configurações se o estado vira **ativo** e entrar com um closer e com uma conta de fora da lista. Se aparecer "o Google recusou" (`not_permitted`), a alternativa sem plano pago é adicionar o lead como convidado do evento.
+
+**Risco aceito.** Com acesso aberto, quem tiver o link entra sem ser barrado. O link só aparece no evento da agenda compartilhada, para o closer e para quem ele envia.
+
 ## Estado da entrega
 
 **Sincronização comercial ativa desde 12/10/2026, às 01:18:58 (São Paulo).** O dashboard autenticado mostra **Google conectado · Sincronização ativa** para **Agenda - Closers**, da conta **admvoxenai@gmail.com**, no Supabase **dash / mbzwchnxtskysqplqiyy**. ID canônico fixado: `234bbc5bd841e08df54e838d73a7fb0d3ad6511966f883634cc72ebb7d7713aa@group.calendar.google.com`.
@@ -68,6 +84,7 @@ Validação desta mudança: **49/49 testes Calendar Node/VM**, verificação uni
 3. Configure a tela de consentimento OAuth e as permissões:
    - `https://www.googleapis.com/auth/calendar.events`
    - `https://www.googleapis.com/auth/calendar.calendarlist.readonly`
+   - `https://www.googleapis.com/auth/meetings.space.settings` (opcional, só para o acesso aberto do Meet; ver a seção "Acesso aberto do Meet". Ative também a **Google Meet REST API** do mesmo projeto.)
 4. Crie credenciais OAuth do tipo **Aplicativo da Web**.
 5. Registre exatamente a URI de redirecionamento comercial:
    `https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/google-calendar-oauth-callback`

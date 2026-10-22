@@ -110,7 +110,8 @@ test('worker: call que já passou, call concluída e worker sem Meet não chamam
   const done = await workerFixture(); done.deps.now = BEFORE_CALL; withMeetScope(done)
   done.edit(x => { x.call.isCompleted = true; x.call.outcome = 'venda_concluida'; x.lead.pipelineStage = 'fechado_ganho' })
   done.meetHandler = () => { calls++; return response({}) }; done.deps.meet = done.worker.meetAccessDeps(done.deps.client, done.deps.store)
-  const before = calls; await done.deliver(); assert.ok(done.synced); assert.equal(calls, before, 'call concluída não reabre o acesso')
+  const before = calls; await done.deliver(); assert.ok(done.synced); assert.equal(calls, before, 'call concluída não reabre o acesso (1º envio: passa pelo patch do evento)')
+  done.edit(() => {}); await done.deliver(); assert.ok(done.synced); assert.equal(calls, before, 'nem na reentrega (evento já igual ao desejado)')
   const plain = await workerFixture(); plain.deps.now = BEFORE_CALL; plain.meetHandler = () => { calls++; return response({}) }
   await plain.deliver(); assert.ok(plain.synced); assert.equal(calls, before, 'sem as dependências do Meet o worker só sincroniza o evento')
 })
