@@ -19,6 +19,12 @@ type ExtraFunctions = {
   // Envio do contexto do atleta do CRM para a VOXEN (migration 20261020120000): so o Executivo; so numeros e codigos.
   crm_context_health: FunctionDef<Record<string, never>>;
   crm_context_alignment: FunctionDef<Record<string, never>>;
+  // Leads sem cadastro na VOXEN enviados por escolha do time (migration 20261021233000). A situacao e so do Executivo; as tres acoes valem para quem usa o CRM.
+  // Todas devolvem so ids, estados e contagens: nenhum dado pessoal.
+  crm_context_prospects_status: FunctionDef<Record<string, never>>;
+  crm_voxen_send: FunctionDef<{ p_leads: string[] }>;
+  crm_voxen_stop: FunctionDef<{ p_leads: string[] }>;
+  crm_voxen_sync_states: FunctionDef<Record<string, never>>;
   // Legacy ranking contract may be deployed separately from the traffic schema.
   get_daily_call_ranking: FunctionDef<Record<string, never>>;
   meta_traffic_operation: FunctionDef<Record<string, never>>;

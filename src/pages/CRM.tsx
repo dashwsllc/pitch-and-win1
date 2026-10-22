@@ -50,6 +50,7 @@ import { errorMessage } from "@/lib/sales";
 import type { Json } from "@/integrations/supabase/types";
 import { CRMLeadDetail } from "@/components/crm/CRMLeadDetail";
 import { CRMImportsSection } from '@/components/crm/CRMImportsSection';
+import { CRMVoxenSection } from '@/components/crm/CRMVoxenSection';
 import { compareCRMImportRecency, matchesCRMImport, type ImportSection, type ImportMethodFilter } from '@/lib/crm-imports';
 import { CRMLeadEditor } from "@/components/crm/CRMLeadEditor";
 import { CRMLeadCard } from "@/components/crm/CRMLeadCard";
@@ -570,7 +571,7 @@ export default function CRM() {
     sales.isLoading ||
     contextSummary.loading;
   const permittedTab =
-    ["leads", "results", "importados"].includes(tab) ||
+    ["leads", "results", "importados", "voxen"].includes(tab) ||
     (tab === "followup" && (capabilities.sdr || capabilities.closer)) ||
     (tab === "sdr" && capabilities.sdr) ||
     (tab === "closer" && capabilities.closer) ||
@@ -662,6 +663,7 @@ export default function CRM() {
               <TabsTrigger className="h-8 px-3 text-xs" value="followup">Follow-up</TabsTrigger>
             )}
             <TabsTrigger className="h-8 px-3 text-xs" value="results">Resultados</TabsTrigger>
+            <TabsTrigger className="h-8 px-3 text-xs" value="voxen">VOXEN</TabsTrigger>
             {capabilities.admin && (
               <>
                 <TabsTrigger className="h-8 px-3 text-xs" value="users">Gerenciar Usuários</TabsTrigger>
@@ -685,6 +687,8 @@ export default function CRM() {
         ) : ["users", "permissions"].includes(tab) ? (
           capabilities.admin &&
           (tab === "users" ? <CRMUserManagement /> : <CRMPermissionsReport />)
+        ) : tab === "voxen" ? (
+          <CRMVoxenSection leads={crm.leads} contextIds={contextSummary.leadIds} loading={loading} failure={failure} onRetry={retry} onRead={setReadId} />
         ) : (
           <>
             {failure && (
