@@ -86,6 +86,12 @@ await db.exec(extractFunction(MIGRATION, 'crm_context_payload').replace('public.
 const PROSPECTS = '20261021233000_crm_context_prospects.sql'
 await db.exec(read(PROSPECTS))
 await db.exec(read(PROSPECTS))   // idempotente: reaplicar nao quebra nem muda nada
+// Gabarito dos estados: a funcao de crm_voxen_sync_states da migration acima (uma pergunta por lead) fica instalada ao lado com outro nome, para provar que a versao
+// rapida (migration seguinte) devolve EXATAMENTE o mesmo em cada situacao.
+await db.exec(extractFunction(PROSPECTS, 'crm_voxen_sync_states').replace('public.crm_voxen_sync_states(', 'public.crm_voxen_sync_states_legacy('))
+const FAST = '20261022174000_crm_voxen_sync_states_fast.sql'
+await db.exec(read(FAST))
+await db.exec(read(FAST))   // idempotente
 
 // ---------- estrutura, permissoes, agendamento desligado ----------
 {
@@ -108,7 +114,7 @@ await db.exec(read(PROSPECTS))   // idempotente: reaplicar nao quebra nem muda n
   }
   for (const sig of ['public.crm_context_payload(uuid)', 'public.crm_context_enqueue(uuid,boolean)', 'public.crm_context_on_answer_link()', 'public.crm_context_on_crm_lead()', 'public.crm_context_on_form_lead()',
     'public.crm_context_on_lead_context()', 'public.crm_context_on_crm_lead_delete()', 'public.crm_context_build(uuid,uuid,uuid,text,boolean)', 'public.crm_context_strip_auto_observations(text)', 'public.crm_context_lead_has_voxen(uuid)',
-    'public.crm_context_payload_prospect(uuid)', 'public.crm_context_prospect_candidates()', 'public.crm_context_enqueue_prospect(uuid,boolean,boolean)', 'public.crm_context_rehearsal_accepted()', 'public.crm_context_is_contact_field(text)',
+    'public.crm_context_payload_prospect(uuid)', 'public.crm_context_prospect_candidates()', 'public.crm_context_registered_leads()', 'public.crm_context_enqueue_prospect(uuid,boolean,boolean)', 'public.crm_context_rehearsal_accepted()', 'public.crm_context_is_contact_field(text)',
     'public.crm_context_touch_prospect(uuid)', 'public.crm_context_on_prospect_lead()', 'public.crm_context_on_prospect_note()', 'public.crm_context_on_prospect_link()', 'public.crm_context_on_prospect_form()', 'public.crm_context_scrub(text)', 'public.crm_context_candidate_sites()', 'public.crm_context_sites_of_lead(uuid)', 'public.crm_context_touch(uuid)', 'public.crm_context_log_error(text,text)'])
     for (const role of ['anon', 'authenticated', 'service_role'])
       assert.equal(await exec(role, sig), false, `${role} nao executa a funcao interna ${sig}`)
@@ -847,6 +853,12 @@ const EXTRA_LEAK = ['trabalho.segredo@example.invalid', 'PrimeiroNomeSecreto', '
   const states = (user = PLAIN) => as(user, 'authenticated', async () => (await one('select public.crm_voxen_sync_states() s')).s)
   const status = () => as(null, 'service_role', async () => (await one('select public.crm_context_prospects_status() s')).s)
   const stateOf = async lead => (await states()).rows.find(r => r.lead_id === lead)?.state ?? 'available'
+  const statesLegacy = (user = PLAIN) => as(user, 'authenticated', async () => (await one('select public.crm_voxen_sync_states_legacy() s')).s)
+  const sameStates = async why => assert.deepEqual(await states(), await statesLegacy(), 'estados da versao rapida = estados da versao anterior: ' + why)
+  // A lista dos ja cadastrados vem de UMA consulta; a regra por lead (crm_context_lead_has_voxen) continua sendo a verdade e as duas nao podem divergir.
+  const registeredSet = async () => (await q('select r from public.crm_context_registered_leads() r order by 1')).map(x => x.r)
+  const hasVoxenSet = async () => (await q('select c.id r from public.crm_leads c where public.crm_context_lead_has_voxen(c.id) order by 1')).map(x => x.r)
+  const sameRegistered = async why => assert.deepEqual(await registeredSet(), await hasVoxenSet(), 'lista de cadastrados = regra por lead: ' + why)
   const resultOf = (r, lead) => r.find(x => x.lead_id === lead)?.result
   let pseq = 0
   const formOnly = async (overrides = {}, extra = []) => {
@@ -879,6 +891,7 @@ const EXTRA_LEAK = ['trabalho.segredo@example.invalid', 'PrimeiroNomeSecreto', '
   const expected = [p1, p2, p3, p5, v2].sort()
   assert.deepEqual(await cand(), expected, 'candidatos: tem contexto e nao tem cadastro valido na VOXEN (fora: P4 e o lead vazio sem contexto, e V1 ja cadastrado)')
   assert.equal(await N(`select count(*) n from public.crm_context_outbox where ${ONLY_PROSPECTS}`), 0, 'nada vai sozinho: so quem for escolhido')
+  await sameStates('antes de qualquer envio'); await sameRegistered('antes de qualquer envio')
 
   // --- o corpo do evento: mesma lista fechada, base propria, nada que nunca sai ---
   const body = async id => (await one('select public.crm_context_payload_prospect($1) p', [id])).p
@@ -967,6 +980,7 @@ const EXTRA_LEAK = ['trabalho.segredo@example.invalid', 'PrimeiroNomeSecreto', '
   assert.deepEqual([p1, p2, p3, pe, v1, U(999999)].map(id => resultOf(r1, id)), ['sent', 'sent', 'sent', 'nothing_to_send', 'registered', 'not_found'])
   assert.deepEqual((await q('select lead_id from public.crm_voxen_prospects order by lead_id')).map(r => r.lead_id), [p1, p2, p3, pe].sort(), 'so quem foi escolhido (e e lead de verdade, sem cadastro)')
   const chosen = await one('select * from public.crm_voxen_prospects where lead_id=$1', [p1]); assert.equal(chosen.enabled_by, PLAIN); assert.equal(chosen.enabled, true); assert.equal(chosen.stopped_at, null)
+  await sameStates('depois do envio (escolhidos, na fila e um lead ja cadastrado)')
   const [e1] = await prospectRows(p1)
   assert.equal(Number(e1.source_revision), 1); assert.equal(e1.state, 'pending'); assert(new Date(e1.next_attempt_at) <= new Date(), 'a primeira versao sai na hora, sem janela de espera')
   assert.equal(e1.payload.kind, 'prospect_context'); assert.equal(e1.payload.schema_version, 1); assert.equal(e1.payload.source_lead_id, p1); assert.equal(e1.payload.source_revision, 1)
@@ -1129,6 +1143,36 @@ const EXTRA_LEAK = ['trabalho.segredo@example.invalid', 'PrimeiroNomeSecreto', '
   assert.equal((await one(`select relrowsecurity r from pg_class where oid='public.crm_voxen_prospects'::regclass`)).r, true, 'RLS ligado')
   for (const role of ['anon', 'authenticated', 'service_role']) for (const priv of ['SELECT', 'INSERT', 'UPDATE', 'DELETE'])
     assert.equal((await one(`select has_table_privilege('${role}','public.crm_voxen_prospects','${priv}') p`)).p, false, `${role} nao pode ${priv} em crm_voxen_prospects`)
+
+  // --- cadastrados na VOXEN: a lista de uma consulta so e igual a regra por lead nos 3 caminhos de vinculo e nos casos que NAO valem ---
+  // Ao fim do bloco de proposito: estes leads novos geram eventos normais e nao podem mexer nas contagens acima.
+  await sameStates('fim dos cenarios'); await sameRegistered('fim dos cenarios')
+  await auth(null, '')
+  const okA = await seed(), okB = await seed(), okC = await seed()             // cada um: formulario Meta + registro do site com ID valido da VOXEN apontando para ele
+  const lA = await crmFor(okA.site)                                           // ligado pelo registro do site
+  const lB = await crmFor(okB.form)                                           // ligado pelo formulario que o registro do site aponta
+  const lC = await bare('Lead C', 'Atleta C'); await db.query('insert into public.crm_form_answer_links(crm_lead_id,form_lead_id,basis) values($1,$2,$3)', [lC, okC.form, 'mesmo WhatsApp'])   // vinculo manual
+  const okD = await seed(), lK = await crmFor(okD.site)                          // ligado pelo registro do site E por vinculo manual ao mesmo formulario: casa em dois caminhos e conta uma vez so
+  await db.query('insert into public.crm_form_answer_links(crm_lead_id,form_lead_id,basis) values($1,$2,$3)', [lK, okD.form, 'mesmo WhatsApp'])
+  const mk = async (n, meta, channel, answers) => { const id = U(9700 + n); await db.query(`insert into public.meta_form_leads(id,meta_lead_id,field_data,full_name,entry_channel,answers_form_lead_id) values($1,$2,'[]'::jsonb,'X',$3,$4)`, [id, meta, channel, answers]); return id }
+  const fY = await mk(1, 'form:neg-1', 'form', null), fZ = await mk(2, 'form:neg-2', 'form', null), fW = await mk(3, 'form:neg-3', 'form', null), fV = await mk(8, 'form:neg-4', 'form', null)
+  const siteBad = await mk(4, 'site:zyron:malformado-neg', 'website', fY)                                  // ID malformado
+  const siteUp = await mk(5, 'site:zyron:ABCDEF01-0000-4000-8000-000000000001', 'website', fZ)             // maiusculas: o ID da VOXEN e minusculo
+  const siteJunk = await mk(6, 'site:zyron:' + U(9751) + '-x', 'website', fW)                              // sobra depois do ID
+  const notSite = await mk(7, 'site:zyron:' + U(9752), 'form', null)                                       // parece ID da VOXEN, mas nao e registro do site
+  const siteJunk2 = await mk(9, 'x-site:zyron:' + U(9753), 'website', fV)                                  // sobra antes do ID
+  const neg = async meta => (await one('insert into public.crm_leads(name,meta_form_lead_id) values($1,$2) returning id', ['Neg ' + meta.slice(-4), meta])).id
+  const lD = await neg(siteBad), lE = await neg(fY), lG = await neg(siteJunk), lI = await neg(notSite), lJ = await neg(siteJunk2)
+  const lF = await bare('Lead F', 'Atleta F'); await db.query('insert into public.crm_form_answer_links(crm_lead_id,form_lead_id,basis) values($1,$2,$3)', [lF, fZ, 'mesmo WhatsApp'])
+  const lH = await bare('Lead H', 'Atleta H'); await db.query('insert into public.crm_form_answer_links(crm_lead_id,form_lead_id,basis) values($1,$2,$3)', [lH, fW, 'mesmo WhatsApp'])
+  const reg = new Set(await registeredSet())
+  for (const id of [lA, lB, lC, lK]) assert(reg.has(id), 'cadastrado na VOXEN: ' + id)
+  for (const id of [lD, lE, lF, lG, lH, lI, lJ]) assert(!reg.has(id), 'cadastro que nao vale: ' + id)
+  await sameRegistered('tres caminhos de vinculo e sete casos que nao valem')
+  const viaCandidates = await cand(); for (const id of [lA, lB, lC, lK]) assert(!viaCandidates.includes(id), 'cadastrado nao e candidato a envio')
+  await sameStates('com os leads novos'); await auth(PLAIN, 'authenticated')
+  { const st = await states(); for (const id of [lA, lB, lC, lK]) assert.equal(st.rows.find(r => r.lead_id === id)?.state, 'registered', id); for (const id of [lD, lE, lF, lG, lH, lI, lJ]) assert(!st.rows.some(r => r.lead_id === id), 'sem cadastro valido e nao escolhido: nao aparece') }
+  await auth(null, '')
 }
 
 // ---------- evento sintetico de ensaio ----------
