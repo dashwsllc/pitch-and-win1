@@ -6,8 +6,8 @@ import { useCRMVoxenActions, useCRMVoxenStates } from '@/hooks/useCRMVoxen'
 import { canSendToVoxen, canStopVoxen, describeSend, describeStop, VOXEN_TONE_CLASS, voxenStatusText, voxenViewOf, type VoxenLeadView } from '@/lib/voxen-send'
 
 /** Controle do lead: um clique em "Enviar para a VOXEN" e pronto, sem janela de confirmação. Depois de enviado o lead fica em sincronia. */
-export function VoxenSendControl({ view, at, ready, hasContext, busy, onSend, onStop }: {
-  view: VoxenLeadView; at?: string | null; ready: boolean; hasContext: boolean; busy: boolean; onSend: () => void; onStop: () => void
+export function VoxenSendControl({ view, at, ready, hasContext, busy, notice, onSend, onStop }: {
+  view: VoxenLeadView; at?: string | null; ready: boolean; hasContext: boolean; busy: boolean; notice?: string | null; onSend: () => void; onStop: () => void
 }) {
   const text = voxenStatusText(view, at)
   const sendable = view === 'available' || view === 'stopped'
@@ -26,6 +26,7 @@ export function VoxenSendControl({ view, at, ready, hasContext, busy, onSend, on
     </div>
     {text.detail && <p className="text-xs text-muted-foreground">{text.detail}</p>}
     {why && <p className="text-xs text-muted-foreground">{why}</p>}
+    {notice && <p role="status" className="text-xs text-amber-300">{notice}</p>}
   </section>
 }
 
@@ -37,7 +38,7 @@ export function CRMVoxenSend({ lead }: { lead: CRMLead }) {
   if (!voxen.supported || voxen.loading) return null
   if (voxen.error) return <p role="alert" className="text-xs text-destructive">Não foi possível consultar o envio para a VOXEN. <Button size="sm" variant="outline" onClick={() => void voxen.refetch()}>Tentar novamente</Button></p>
   const row = voxen.states.get(lead.id)
-  return <VoxenSendControl view={voxenViewOf(voxen.states, lead.id)} at={row?.at} ready={voxen.ready} hasContext={summary.leadIds.has(lead.id)} busy={actions.busy}
+  return <VoxenSendControl view={voxenViewOf(voxen.states, lead.id)} at={row?.at} ready={voxen.ready} hasContext={summary.leadIds.has(lead.id)} busy={actions.busy} notice={actions.notice}
     onSend={() => { void actions.send([lead.id]).then(outcome => toast(describeSend(outcome))) }}
     onStop={() => { void actions.stop([lead.id]).then(outcome => toast(describeStop(outcome))) }} />
 }

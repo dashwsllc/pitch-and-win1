@@ -221,8 +221,9 @@ export const arenaClient = supabase as unknown as SupabaseClient<ArenaDatabase>;
 export async function arenaRpc<
   T,
   N extends keyof ExtraFunctions = keyof ExtraFunctions,
->(name: N, args: ExtraFunctions[N]["Args"]): Promise<T> {
-  const { data, error } = await arenaClient.rpc(name, args);
+>(name: N, args: ExtraFunctions[N]["Args"], options?: { signal?: AbortSignal }): Promise<T> {
+  const call = arenaClient.rpc(name, args);
+  const { data, error } = await (options?.signal ? call.abortSignal(options.signal) : call);
   if (error) throw error;
   return data as unknown as T;
 }

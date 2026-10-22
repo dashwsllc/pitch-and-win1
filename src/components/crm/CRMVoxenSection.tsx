@@ -13,9 +13,9 @@ import { canStopVoxen, describeSend, describeStop, selectableIn, VOXEN_FILTERS, 
 const leadTitle = (lead: CRMLead) => lead.athlete_name?.trim() || lead.name
 
 /** Tela da seção VOXEN do CRM: escolher leads (um a um ou vários) e enviar. Sem janela de confirmação. */
-export function VoxenSectionView({ rows, filter, search, selected, ready, supported, busy, progress, loading, failure, onFilter, onSearch, onToggle, onToggleAll, onClear, onSend, onStop, onRead, onRetry }: {
+export function VoxenSectionView({ rows, filter, search, selected, ready, supported, busy, progress, notice, loading, failure, onFilter, onSearch, onToggle, onToggleAll, onClear, onSend, onStop, onRead, onRetry }: {
   rows: VoxenRowData<CRMLead>[]; filter: VoxenFilter; search: string; selected: ReadonlySet<string>; ready: boolean; supported: boolean; busy: boolean
-  progress: { done: number; total: number } | null; loading: boolean; failure: unknown
+  progress: { done: number; total: number } | null; notice?: string | null; loading: boolean; failure: unknown
   onFilter: (value: VoxenFilter) => void; onSearch: (value: string) => void; onToggle: (leadId: string) => void; onToggleAll: (leadIds: string[]) => void
   onClear: () => void; onSend: (leadIds: string[]) => void; onStop: (leadIds: string[]) => void; onRead: (leadId: string) => void; onRetry: () => void
 }) {
@@ -51,6 +51,7 @@ export function VoxenSectionView({ rows, filter, search, selected, ready, suppor
         {stopping && <Button size="sm" variant="outline" disabled={!chosen.length || busy} onClick={() => onStop(chosen)}><SquareX className="mr-1.5 h-3.5 w-3.5" />Parar de sincronizar ({chosen.length})</Button>}
       </div>
       {progress && <p role="status" className="text-xs">{`Enviando ${progress.done} de ${progress.total}…`}</p>}
+      {notice && <p role="status" className="text-xs text-amber-300">{notice}</p>}
       {visible.length === 0 ? <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">Nenhum lead nesta situação{term ? ' para essa busca' : ''}.</p>
         : <ul className="space-y-1.5">
           {visible.map(row => {
@@ -87,7 +88,7 @@ export function CRMVoxenSection({ leads, contextIds, loading, failure, onRetry, 
   }), [leads, contextIds, voxen.states])
   const forget = (ids: string[]) => setSelected(previous => new Set([...previous].filter(id => !ids.includes(id))))
   return <VoxenSectionView rows={rows} filter={filter} search={search} selected={selected} ready={voxen.ready} supported={voxen.supported} busy={actions.busy}
-    progress={actions.progress} loading={loading || voxen.loading} failure={failure ?? voxen.error} onRetry={() => { onRetry(); void voxen.refetch() }} onRead={onRead}
+    progress={actions.progress} notice={actions.notice} loading={loading || voxen.loading} failure={failure ?? voxen.error} onRetry={() => { onRetry(); void voxen.refetch() }} onRead={onRead}
     onFilter={value => { setFilter(value); setSelected(new Set()) }} onSearch={setSearch}
     onToggle={id => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next })}
     onToggleAll={ids => setSelected(previous => ids.every(id => previous.has(id)) ? new Set([...previous].filter(id => !ids.includes(id))) : new Set([...previous, ...ids]))}

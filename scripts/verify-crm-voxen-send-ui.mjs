@@ -62,15 +62,63 @@ test('blocos: 15 por chamada (o banco aceita 25), sem repetir, na ordem, e para 
   assert.deepEqual(calls, [15, 15, 15, 15, 15, 15, 15, 15, 7]); assert.equal(out.requested, 127); assert.equal(out.done, 127); assert.equal(out.error, null)
   assert.equal(out.counts.sent + out.counts.nothing_to_send, 127); assert.deepEqual(progress.at(-1), [127, 127]); assert.equal(progress.length, 9)
   let n = 0
-  const partial = await l.runVoxenBatch(all, async chunk => { if (++n === 3) throw Object.assign(new Error('timeout da sessao'), { code: '57014' }); return chunk.map(id => ({ lead_id: id, result: 'sent' })) })
-  assert.equal(partial.done, 30); assert.equal(partial.counts.sent, 30); assert.equal(partial.error.message, 'timeout da sessao'); assert.equal(n, 3, 'depois do erro nao chama mais')
-  const d = l.describeSend(partial); assert.equal(d.variant, 'destructive'); assert.match(d.description, /timeout da sessao.*Já enviados: 30/)
+  const partial = await l.runVoxenBatch(all, async chunk => { if (++n === 3) throw Object.assign(new Error('Acesso ao CRM necessário'), { code: '42501' }); return chunk.map(id => ({ lead_id: id, result: 'sent' })) })
+  assert.equal(partial.done, 30); assert.equal(partial.counts.sent, 30); assert.equal(partial.error.message, 'Acesso ao CRM necessário'); assert.equal(n, 3, 'erro de regra: nao repete e nao chama mais')
+  const d = l.describeSend(partial); assert.equal(d.variant, 'destructive'); assert.match(d.description, /Acesso ao CRM necessário.*Já enviados: 30.*Tente de novo em instantes/)
   assert.deepEqual(l.describeSend({ requested: 3, done: 3, counts: { sent: 1 }, error: null }), { title: '1 lead enviado para a VOXEN', description: undefined })
   const mixed = l.describeSend({ requested: 6, done: 6, counts: { sent: 2, nothing_to_send: 1, registered: 2, not_found: 1 }, error: null })
   assert.equal(mixed.title, '2 leads enviados para a VOXEN'); assert.match(mixed.description, /1 lead ficou marcado sem nada para enviar ainda/); assert.match(mixed.description, /2 leads já estão cadastrados na VOXEN e sincronizam sozinhos/); assert.match(mixed.description, /1 lead não foi encontrado/)
   assert.equal(l.describeSend({ requested: 1, done: 1, counts: { registered: 1 }, error: null }).title, 'Nada novo foi enviado')
   assert.equal(l.describeStop({ requested: 2, done: 2, counts: { stopped: 2 }, error: null }).title, 'Sincronização parada em 2 leads'); assert.match(l.describeStop({ requested: 2, done: 2, counts: { stopped: 2 }, error: null }).description, /continua na VOXEN/)
   assert.equal(l.describeStop({ requested: 1, done: 1, counts: { not_enabled: 1 }, error: null }).title, 'Nada para parar')
+})
+
+test('falha passageira: o bloco repete (o envio e idempotente), erro de regra nao, e o que insiste em falhar para mostrando o que ja foi', async () => {
+  const l = lib()
+  for (const transient of [{ code: '57014', message: 'canceling statement due to statement timeout' }, { message: 'upstream request timeout' }, { code: '', message: 'Bad Gateway' }, new TypeError('Failed to fetch'),
+    Object.assign(new Error('signal is aborted without reason'), { name: 'AbortError' }), { code: 'PGRST002', message: 'Could not query the database for the schema cache. Retrying.' }, { code: 'voxen_timeout', message: 'x' }, { code: '40P01', message: 'deadlock detected' }])
+    assert.equal(l.isTransientVoxenError(transient), true, String(transient?.message))
+  for (const rule of [{ code: '42501', message: 'Acesso ao CRM necessário' }, { code: '22023', message: 'Envie de 1 a 25 leads por vez' }, { code: '55000', message: 'A VOXEN ainda não confirmou o recebimento de leads sem cadastro' },
+    { code: 'PGRST202', message: 'Could not find the function public.crm_voxen_send(p_leads) in the schema cache' }, { code: '42883', message: 'function does not exist' }, null, undefined, 'texto', 42])
+    assert.equal(l.isTransientVoxenError(rule), false, JSON.stringify(rule))
+  const all = ids(40), sleeps = [], retries = []
+  const options = { delaysMs: [2000, 6000], sleep: async ms => { sleeps.push(ms) }, onRetry: (attempt, of) => retries.push([attempt, of]) }
+  // o gateway cai duas vezes no segundo bloco e volta: o envio termina inteiro, sem repetir lead e sem pular nenhum
+  const seen = []; let tries = 0
+  const ok = await l.runVoxenBatch(all, async chunk => { if (chunk[0] === all[15] && ++tries <= 2) throw Object.assign(new Error('upstream request timeout'), { code: '' }); seen.push(...chunk); return chunk.map(id => ({ lead_id: id, result: 'sent' })) }, undefined, options)
+  assert.equal(ok.error, null); assert.equal(ok.done, 40); assert.equal(ok.counts.sent, 40); assert.deepEqual(seen, all); assert.deepEqual(sleeps, [2000, 6000]); assert.deepEqual(retries, [[1, 2], [2, 2]])
+  // insiste em falhar: a chamada e mais duas novas tentativas no mesmo bloco; depois para e mostra o que ja foi
+  sleeps.length = 0; let hits = 0
+  const down = await l.runVoxenBatch(all, async chunk => { if (chunk[0] === all[15]) { hits++; throw new Error('upstream request timeout') } return chunk.map(id => ({ lead_id: id, result: 'sent' })) }, undefined, options)
+  assert.equal(hits, 3); assert.equal(down.done, 15); assert.equal(down.counts.sent, 15); assert.equal(down.error.message, 'upstream request timeout'); assert.deepEqual(sleeps, [2000, 6000])
+  assert.match(l.describeSend(down).description, /upstream request timeout.*Já enviados: 15.*não se repete/)
+  // erro de regra: uma chamada so
+  let calls = 0
+  const denied = await l.runVoxenBatch(all, async () => { calls++; throw Object.assign(new Error('Acesso ao CRM necessário'), { code: '42501' }) }, undefined, options)
+  assert.equal(calls, 1); assert.equal(denied.done, 0)
+  assert.deepEqual([...l.VOXEN_RETRY_DELAYS_MS], [2000, 6000]); assert(l.VOXEN_CALL_TIMEOUT_MS > 8000 && l.VOXEN_CALL_TIMEOUT_MS <= 30000, 'passa do corte de 8 s do banco, mas nao espera para sempre')
+})
+
+test('tempo-limite: servidor que nao responde vira erro em vez de deixar o clique preso', async () => {
+  const l = lib()
+  let seenSignal = null
+  await assert.rejects(l.withVoxenTimeout(signal => { seenSignal = signal; return new Promise(() => {}) }, 30), error => error.code === 'voxen_timeout' && /demorou para responder/.test(error.message) && l.isTransientVoxenError(error))
+  assert.equal(seenSignal.aborted, true, 'a chamada de rede e cancelada junto')
+  assert.equal(await l.withVoxenTimeout(async signal => { assert.equal(signal.aborted, false); return 'ok' }, 1000), 'ok')
+  await assert.rejects(l.withVoxenTimeout(async () => { throw Object.assign(new Error('regra'), { code: '42501' }) }, 1000), error => error.code === '42501', 'o erro da propria chamada passa como esta')
+  // ponta a ponta: servidor que nunca responde -> tres tentativas, cada uma cortada, e o envio devolve o erro depressa em vez de ficar em "Enviando 0 de N" para sempre
+  const started = Date.now(); let attempts = 0
+  const out = await l.runVoxenBatch(ids(20), () => l.withVoxenTimeout(() => { attempts++; return new Promise(() => {}) }, 20), undefined, { delaysMs: [5, 5] })
+  assert.equal(attempts, 3); assert.equal(out.done, 0); assert.equal(out.error.code, 'voxen_timeout'); assert(Date.now() - started < 2000)
+  assert.match(l.describeSend(out).description, /O servidor demorou para responder\. Tente de novo em instantes/)
+})
+
+test('fila: a tela so consulta o banco de tempos em tempos enquanto ha lead na fila', () => {
+  const l = lib()
+  assert.equal(l.hasVoxenInFlight(null), false); assert.equal(l.hasVoxenInFlight(undefined), false); assert.equal(l.hasVoxenInFlight({ ready: true, rows: [] }), false)
+  const rows = state => ({ ready: true, rows: [{ lead_id: 'a', state, at: null }] })
+  for (const state of ['registered', 'waiting', 'sent', 'quarantined', 'blocked', 'stopped']) assert.equal(l.hasVoxenInFlight(rows(state)), false, state)
+  assert.equal(l.hasVoxenInFlight(rows('pending')), true)
 })
 
 const control = (over = {}) => ({ view: 'available', at: null, ready: true, hasContext: true, busy: false, onSend() {}, onStop() {}, ...over })
@@ -87,7 +135,8 @@ test('botao do lead: um clique envia, sem confirmacao; cada estado mostra o que 
   html = view({ view: 'stopped' }); assert.match(html, /Sincronização parada/); assert.match(html, /Enviar para a VOXEN/); assert.doesNotMatch(html, /Parar de sincronizar/)
   html = view({ view: 'quarantined' }); assert.match(html, /role="alert"/); assert.match(text(html), /Avise a Zyron/)
   html = view({ view: 'blocked' }); assert.match(html, /role="alert"/); assert.match(text(html), /A VOXEN recusou o envio/)
-  html = view({ busy: true }); assert.match(html, /Enviando…/); assert.match(html, / disabled=""/)
+  html = view({ busy: true }); assert.match(html, /Enviando…/); assert.match(html, / disabled=""/); assert.doesNotMatch(text(html), /Tentando de novo/)
+  html = view({ busy: true, notice: 'O servidor demorou para responder. Tentando de novo (1 de 2)…' }); assert.match(text(html), /Tentando de novo \(1 de 2\)/)
   // o clique age na hora: uma chamada, sem janela no meio
   let sends = 0, stops = 0
   const send = interactive(VoxenSendControl(control({ onSend: () => sends++ }))).find(node => /Enviar para a VOXEN/.test(labelOf(node)))
@@ -125,7 +174,8 @@ test('secao VOXEN: contagens, o que da para selecionar e os avisos de cada situa
   html = view({ supported: false }); assert.match(text(html), /ainda não está disponível neste ambiente/); assert.doesNotMatch(html, /Situação dos leads/)
   html = view({ failure: new Error('rede caiu') }); assert.match(html, /role="alert"/); assert.match(text(html), /rede caiu/); assert.match(text(html), /Tentar novamente/)
   html = view({ loading: true }); assert.match(html, /Carregando/); assert.doesNotMatch(html, /Situação dos leads/)
-  html = view({ progress: { done: 30, total: 127 } }); assert.match(text(html), /Enviando 30 de 127…/)
+  html = view({ progress: { done: 30, total: 127 } }); assert.match(text(html), /Enviando 30 de 127…/); assert.doesNotMatch(text(html), /Tentando de novo/)
+  html = view({ progress: { done: 30, total: 127 }, notice: 'O servidor demorou para responder. Tentando de novo (2 de 2)…' }); assert.match(text(html), /Enviando 30 de 127….*Tentando de novo \(2 de 2\)/)
   html = view({ search: 'dois' }); assert.match(text(html), /Atleta Dois/); assert.doesNotMatch(text(html), /Atleta Um/)
   html = view({ search: 'zzz' }); assert.match(text(html), /Nenhum lead nesta situação para essa busca/)
   html = view({ filter: 'sent' }); assert.match(text(html), /Atleta Quatro/); assert.match(text(html), /Enviado e em sincronia/); assert.match(text(html), /Parar de sincronizar \(0\)/); assert.match(text(html), /Parar/); assert.doesNotMatch(text(html), /Enviar para a VOXEN \(/)
@@ -176,7 +226,10 @@ test('guardas de codigo: aba no CRM, botao na ficha, sem confirmacao, blocos e f
   }
   const hook = read('src/hooks/useCRMVoxen.ts')
   assert.match(hook, /queryKey: \['crm', 'voxen', 'states', user\?\.id\]/, 'sob ["crm"]: mudancas em lead, nota e contexto renovam o estado'); assert.match(hook, /isMissingRpc\(error\)\) return null/)
-  assert.match(hook, /refetchInterval: poll \? 15_000 : false/); assert.match(hook, /runVoxenBatch\(ids, chunk => arenaRpc/)
+  assert.match(hook, /refetchInterval: poll \? query => \(hasVoxenInFlight\(query\.state\.data\) \? 15_000 : false\) : false/, 'so consulta de tempos em tempos enquanto ha fila')
+  assert.match(hook, /runVoxenBatch\(ids, chunk => withVoxenTimeout\(signal => arenaRpc<VoxenRpcRow\[\]>\(name, \{ p_leads: chunk \}, \{ signal \}\)\)/, 'cada bloco com tempo-limite')
+  assert.match(hook, /void client\.invalidateQueries\(\{ queryKey: \['crm', 'voxen'\] \}\)/, 'o aviso do resultado nao espera a releitura')
   const api = read('src/lib/arena-api.ts')
+  assert.match(api, /options\?\.signal \? call\.abortSignal\(options\.signal\) : call/)
   for (const name of ['crm_voxen_send', 'crm_voxen_stop', 'crm_voxen_sync_states']) assert.match(api, new RegExp(name + ': FunctionDef'))
 })

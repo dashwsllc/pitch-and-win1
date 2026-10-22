@@ -13,6 +13,10 @@ export interface VoxenRpcRow { lead_id: string; result: string }
 
 /** O banco aceita até 25 leads por chamada; o app manda em blocos menores para cada chamada caber no limite de tempo da sessão. */
 export const VOXEN_SEND_CHUNK = 15
+/** Uma chamada de bloco que passa disso foi para um servidor engasgado (o banco corta a sessão em 8 s): o app desiste dela em vez de esperar para sempre. */
+export const VOXEN_CALL_TIMEOUT_MS = 20_000
+/** Esperas entre as novas tentativas do mesmo bloco (duas). Repetir é seguro: o envio é idempotente, bloco já aplicado volta como "sent" sem criar nada. */
+export const VOXEN_RETRY_DELAYS_MS: readonly number[] = [2_000, 6_000]
 const STATES: readonly string[] = ['registered', 'waiting', 'pending', 'sent', 'quarantined', 'blocked', 'stopped']
 
 export function isVoxenSyncStates(value: unknown): value is VoxenSyncStates {
@@ -27,6 +31,29 @@ export function isMissingRpc(error: unknown) {
   const code = (error as { code?: unknown } | null)?.code
   return code === 'PGRST202' || code === '42883'
 }
+
+/** Falha de infraestrutura (gateway, rede, sessão cortada por tempo, trava passageira): repetir o mesmo bloco pode dar certo. Erro de regra (permissão, parâmetro, função ausente) não melhora repetindo. */
+export function isTransientVoxenError(error: unknown): boolean {
+  const e = error as { code?: unknown; message?: unknown; name?: unknown } | null
+  if (!e || typeof e !== 'object') return false
+  const code = typeof e.code === 'string' ? e.code : ''
+  if (code === 'voxen_timeout' || /^PGRST00[0-3]$/.test(code) || ['57014', '40001', '40P01', '55P03', '53300', '57P01', '57P03', '08000', '08003', '08006'].includes(code)) return true
+  const words = `${typeof e.name === 'string' ? e.name : ''} ${typeof e.message === 'string' ? e.message : ''}`
+  return /abort|timeout|timed out|network|failed to fetch|fetch failed|load failed|bad gateway|service unavailable|gateway|too many connections/i.test(words)
+}
+
+/** Cancela a chamada quando passa do tempo: o clique nunca fica preso esperando um servidor que não responde. */
+export async function withVoxenTimeout<T>(run: (signal: AbortSignal) => Promise<T>, ms = VOXEN_CALL_TIMEOUT_MS): Promise<T> {
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { controller.abort(); reject(Object.assign(new Error('O servidor demorou para responder.'), { code: 'voxen_timeout' })) }, ms)
+  })
+  try { return await Promise.race([run(controller.signal), expired]) } finally { clearTimeout(timer) }
+}
+
+/** A fila da VOXEN anda sozinha enquanto há lead na fila ("pending"); sem fila não há nada a acompanhar e o app não precisa consultar o banco de tempos em tempos. */
+export const hasVoxenInFlight = (states: VoxenSyncStates | null | undefined) => !!states?.rows.some(row => row.state === 'pending')
 
 export function voxenViewOf(states: ReadonlyMap<string, VoxenSyncRow>, leadId: string): VoxenLeadView {
   return states.get(leadId)?.state ?? 'available'
@@ -80,13 +107,34 @@ export function chunkLeadIds(ids: readonly string[], size = VOXEN_SEND_CHUNK): s
 
 export interface VoxenBatchOutcome { requested: number; done: number; counts: Record<string, number>; error: unknown | null }
 
-/** Manda os ids em blocos, um de cada vez. Se um bloco falhar, para e devolve o que já foi feito (cada bloco é atômico no banco). */
-export async function runVoxenBatch(ids: readonly string[], call: (chunk: string[]) => Promise<VoxenRpcRow[]>, onProgress?: (done: number, total: number) => void): Promise<VoxenBatchOutcome> {
+export interface VoxenBatchOptions {
+  /** Esperas entre as novas tentativas do mesmo bloco; o tamanho da lista é o número de novas tentativas. */
+  delaysMs?: readonly number[]
+  sleep?: (ms: number) => Promise<void>
+  /** Chamado antes de esperar para tentar de novo: `attempt` é a nova tentativa que vem (1, 2…). */
+  onRetry?: (attempt: number, of: number, error: unknown) => void
+}
+
+/**
+ * Manda os ids em blocos, um de cada vez. Falha passageira (gateway, rede, tempo esgotado) repete o mesmo bloco depois de uma espera; erro de regra ou falha que
+ * persiste para e devolve o que já foi feito (cada bloco é atômico no banco, então nada fica pela metade).
+ */
+export async function runVoxenBatch(ids: readonly string[], call: (chunk: string[]) => Promise<VoxenRpcRow[]>, onProgress?: (done: number, total: number) => void, options: VoxenBatchOptions = {}): Promise<VoxenBatchOutcome> {
+  const { delaysMs = VOXEN_RETRY_DELAYS_MS, sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)), onRetry } = options
   const total = new Set(ids).size, counts: Record<string, number> = {}
   let done = 0
+  const attempt = async (part: string[]): Promise<VoxenRpcRow[]> => {
+    for (let tries = 0; ; tries++) {
+      try { return await call(part) } catch (error) {
+        if (tries >= delaysMs.length || !isTransientVoxenError(error)) throw error
+        onRetry?.(tries + 1, delaysMs.length, error)
+        await sleep(delaysMs[tries])
+      }
+    }
+  }
   try {
     for (const part of chunkLeadIds(ids)) {
-      const rows = await call(part)
+      const rows = await attempt(part)
       for (const row of rows) counts[row.result] = (counts[row.result] ?? 0) + 1
       done += part.length
       onProgress?.(done, total)
@@ -107,7 +155,7 @@ export function describeSend(outcome: VoxenBatchOutcome): { title: string; descr
     registered ? `${plural(registered, 'lead já está cadastrado', 'leads já estão cadastrados')} na VOXEN e sincroniza${registered === 1 ? '' : 'm'} sozinho${registered === 1 ? '' : 's'}.` : '',
     missing ? `${plural(missing, 'lead não foi encontrado', 'leads não foram encontrados')}.` : '',
   ].filter(Boolean)
-  if (outcome.error) return { title: 'Envio interrompido', description: `${errorMessage(outcome.error)}${sent ? ` Já enviados: ${sent}.` : ''}`, variant: 'destructive' }
+  if (outcome.error) return { title: 'Envio interrompido', description: `${errorMessage(outcome.error)}${sent ? ` Já enviados: ${sent}.` : ''} Tente de novo em instantes: o que já foi enviado não se repete.`, variant: 'destructive' }
   return { title: sent ? `${plural(sent, 'lead enviado', 'leads enviados')} para a VOXEN` : 'Nada novo foi enviado', description: notes.join(' ') || undefined }
 }
 
