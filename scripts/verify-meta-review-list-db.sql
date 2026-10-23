@@ -27,7 +27,7 @@ BEGIN
   IF stage=1 THEN
    PERFORM public.meta_capture_review_decide(review,1,'aprovar');
    PERFORM pg_temp.assert((public.meta_capture_review_part(review,2,0,500)->>'total')::int=2,'approved history unreadable');
-   PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_part(%L,1,0,500)',review),'40001');
+   PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_part(%L,1,0,500)',review),'PT409');
   END IF;
  END LOOP;
  result:=public.meta_traffic_review_list('metrics','pendente',0,50);

@@ -31,11 +31,11 @@ BEGIN
  PERFORM pg_temp.assert((SELECT count(*)=0 FROM public.meta_lead_events_claim(1,60,ARRAY['qa-page'])),'event claimed twice');
  UPDATE public.meta_webhook_events SET lease_until=clock_timestamp()-interval '1 second' WHERE meta_webhook_events.id=id;
  SELECT * INTO STRICT newer FROM public.meta_lead_events_claim(1,60,ARRAY['qa-page']);
- PERFORM pg_temp.expect_error(format('SELECT public.meta_lead_event_fail(%L,%L,%L,%L)',id,claim.claim_token,'late failure','transient'),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_lead_event_fail(%L,%L,%L,%L)',id,claim.claim_token,'late failure','transient'),'PT409');
  row_data:=jsonb_build_object('meta_lead_id',prefix,'page_id','qa-page','form_id','qa-form','created_time','2026-10-09T12:00:00Z','field_data','[]'::jsonb,'full_name','Original');
  form_id:=public.meta_lead_event_ingest(id,newer.claim_token,row_data);
  PERFORM pg_temp.assert((SELECT status='processed' AND meta_form_lead_id=form_id FROM public.meta_webhook_events WHERE meta_webhook_events.id=id),'ingest and completion separated');
- PERFORM pg_temp.expect_error(format('SELECT public.meta_lead_event_fail(%L,%L,%L,%L)',id,newer.claim_token,'late failure','transient'),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_lead_event_fail(%L,%L,%L,%L)',id,newer.claim_token,'late failure','transient'),'PT409');
  PERFORM public.meta_webhook_event_receive(prefix,'qa-page','qa-form');
  PERFORM pg_temp.assert((SELECT status='processed' AND receipt_count=3 FROM public.meta_webhook_events WHERE meta_webhook_events.id=id),'receipt requeued processed event');
  -- Recover an old uncompleted event whose contact has since been corrected and approved.

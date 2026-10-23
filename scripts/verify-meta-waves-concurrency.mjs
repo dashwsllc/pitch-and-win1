@@ -66,7 +66,7 @@ test('concurrent intake never exceeds twenty and competing decisions reject the 
     }
     assert(locked,'review did not lock the wave before deciding')
     await first.query('COMMIT')
-    assert.equal((await competing).code,'40001')
+    assert.equal((await competing).code,'PT409')
     await second.query('ROLLBACK')
     assert.equal((await setup.query("SELECT count(*)::int n FROM public.meta_form_leads WHERE wave_id=$1 AND approval_status='aprovado'",[wave])).rows[0].n,20)
   } finally {

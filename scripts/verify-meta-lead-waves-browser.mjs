@@ -48,7 +48,7 @@ async function makeContext(role) {
       data = { wave: target, leads: state.leads[number] }
     }
     else if (name === 'meta_wave_decide_versioned') {
-      if (state.staleOnce) { state.staleOnce = false; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: '40001', message: 'A leva mudou; recarregue antes de decidir' }) }) }
+      if (state.staleOnce) { state.staleOnce = false; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'PT409', message: 'A leva mudou; recarregue antes de decidir' }) }) }
       const target = state.waves.find(item => item.id === args.p_wave), excluded = new Map(args.p_excluded.map(item => [item.id, item.reason]))
       for (const item of state.leads[target.number]) {
         if (excluded.has(item.id)) Object.assign(item, { approval_status: 'rejeitado', status: 'ignorado', review_note: excluded.get(item.id) })

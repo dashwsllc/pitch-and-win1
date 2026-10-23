@@ -1,5 +1,6 @@
 import { arenaClient, arenaRpc } from '@/lib/arena-api'
 import { errorMessage } from './sales'
+import { isStaleConflict } from './stale-conflict'
 import type { ImportRow, MetaDailyRow } from './meta-traffic'
 import type { LeadImportRow } from './meta-lead-import'
 
@@ -26,7 +27,7 @@ export async function fetchLegacyBatchRows(kind: 'metrics' | 'leads', id: string
   const { data, error } = await arenaClient.from(kind === 'metrics' ? 'meta_import_batches' : 'meta_lead_import_batches')
     .select('rows,updated_at,status').eq('id', id).single()
   if (error) throw error
-  if (expectedUpdatedAt && data.updated_at !== expectedUpdatedAt) throw { code: '40001', message: 'Importação alterada; recarregue para conferir.' }
+  if (expectedUpdatedAt && data.updated_at !== expectedUpdatedAt) throw { code: 'PT409', message: 'Importação alterada; recarregue para conferir.' }
   return data.rows as (ImportRow | LeadImportRow)[]
 }
 export function canApproveTrafficReview(summary: TrafficReviewSummary, detailReady: boolean, acknowledged: boolean) {
@@ -44,7 +45,7 @@ export async function decideTrafficReviews(reviews: TrafficReviewSummary[], acti
         { p_batch_id: review.id, p_expected_updated_at: review.updated_at, p_action: action, p_note: note })
       recorded++
     } catch (cause) {
-      const stale = (cause as { code?: string })?.code === '40001'
+      const stale = isStaleConflict(cause)
       failures.push({ id: review.id, stale, message: stale ? 'A revisão mudou ou já foi decidida. Recarregue e confira a versão atual.' : errorMessage(cause) })
     }
   }

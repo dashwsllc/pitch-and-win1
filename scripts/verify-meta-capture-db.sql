@@ -33,13 +33,13 @@ BEGIN
  old_claim:=claim;
  UPDATE public.meta_sync_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE id=run;
  claim:=(public.meta_capture_claim(run)->>'claim_token')::uuid;
- PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_abort(%L,%L,%L)',run,old_claim,'Cursor expirado'),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_abort(%L,%L,%L)',run,old_claim,'Cursor expirado'),'PT409');
  PERFORM pg_temp.assert((SELECT status='running' FROM public.meta_sync_runs WHERE id=run),'old owner aborted new lease');
  PERFORM public.meta_capture_release(run,claim);
  item:='{"date":"2026-10-09","level":"campaign","account_id":"92001","campaign_id":"A","campaign_name":"A","spend":10,"leads":2,"purchases":0,"available_metrics":["spend","leads"],"metric_metadata":{"definition_version":"canonical-v1"}}';
  -- Open resumes the unfinished run instead of abandoning its persisted pages.
  review:=pg_temp.capture('92001','2026-10-08','2026-10-09',jsonb_build_array(item,item||'{"campaign_id":"B"}'));
- PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_abort(%L,%L,%L)',run,claim,'Conclusão antiga'),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_abort(%L,%L,%L)',run,claim,'Conclusão antiga'),'PT409');
  EXECUTE 'RESET ROLE';
  PERFORM set_config('request.jwt.claim.role','authenticated',true);
  PERFORM set_config('request.jwt.claim.sub',actor::text,true);
@@ -48,7 +48,7 @@ BEGIN
  PERFORM pg_temp.assert((response->>'total')::int=2,'replayed page duplicated rows');
  PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_edit(%L,1,0,%L,%L)',review,'{"campaign_id":"B"}','Corrigir identificação'),'23505');
  PERFORM public.meta_capture_review_edit(review,1,0,'{"spend":12}','Corrigir gasto');
- PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',review,'aprovar'),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',review,'aprovar'),'PT409');
  PERFORM public.meta_capture_review_decide(review,2,'aprovar');
  EXECUTE 'RESET ROLE';
  SELECT * INTO fact FROM public.meta_traffic_daily WHERE campaign_id='A' AND account_id='92001';
@@ -59,7 +59,7 @@ BEGIN
  EXECUTE 'RESET ROLE';
  UPDATE public.meta_traffic_daily SET spend=99,updated_at=clock_timestamp() WHERE id=fact.id;
  PERFORM set_config('request.jwt.claim.role','authenticated',true); EXECUTE 'SET LOCAL ROLE authenticated';
- PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',again,'aprovar'),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',again,'aprovar'),'PT409');
  EXECUTE 'RESET ROLE';
  PERFORM pg_temp.assert(NOT EXISTS(SELECT 1 FROM public.meta_traffic_daily WHERE account_id='92001' AND campaign_id='C'),'partial publication after conflict');
  -- Empty complete captures propose removals, while edited facts require a decision.
@@ -68,7 +68,7 @@ BEGIN
  EXECUTE 'RESET ROLE';
  PERFORM pg_temp.assert(EXISTS(SELECT 1 FROM public.meta_capture_review_rows WHERE review_id=review AND operation='remove'),'empty capture did not propose removals');
  PERFORM set_config('request.jwt.claim.role','authenticated',true); EXECUTE 'SET LOCAL ROLE authenticated';
- PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',again,'aprovar'),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',again,'aprovar'),'PT409');
  EXECUTE 'RESET ROLE';
  -- The revision exceeds one legacy batch; approval still has one atomic boundary.
  SELECT jsonb_agg(item||jsonb_build_object('campaign_id','many-'||n)) INTO many FROM generate_series(1,2001) n;
@@ -119,7 +119,7 @@ BEGIN
  PERFORM pg_temp.assert((SELECT count(*)=2 FROM public.meta_capture_review_rows WHERE review_id=review),'outside or edited legacy row lost');
  PERFORM pg_temp.assert(EXISTS(SELECT 1 FROM public.meta_capture_review_rows WHERE review_id=review AND original_key->>2='original' AND payload->>'campaign_id'='edited' AND (payload->>'spend')::numeric=15),'original-key edit not retained');
  PERFORM set_config('request.jwt.claim.role','authenticated',true); EXECUTE 'SET LOCAL ROLE authenticated';
- PERFORM pg_temp.expect_error(format('SELECT public.meta_review_traffic_import(%L,%L,%L)',prior.id,'aprovar',prior.updated_at),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_review_traffic_import(%L,%L,%L)',prior.id,'aprovar',prior.updated_at),'PT409');
  SELECT (value->>'row_no')::int INTO row_no FROM jsonb_array_elements(public.meta_capture_review_part(review,1)->'rows') WHERE value->'conflict_details'<>'null'::jsonb;
  PERFORM public.meta_capture_review_resolve(review,1,row_no,'use_edited','{}','Conservar edição do lote legado');
  PERFORM public.meta_capture_review_decide(review,2,'aprovar');
@@ -133,7 +133,7 @@ BEGIN
  EXECUTE 'RESET ROLE';
  SELECT r.row_no INTO row_no FROM public.meta_capture_review_rows r WHERE review_id=review;
  PERFORM set_config('request.jwt.claim.role','authenticated',true); EXECUTE 'SET LOCAL ROLE authenticated';
- PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',review,'aprovar'),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',review,'aprovar'),'PT409');
  PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_resolve(%L,1,%s,%L,NULL,%L)',review,row_no,'remove','x'),'22023');
  PERFORM public.meta_capture_review_resolve(review,1,row_no,'keep_published',NULL,'Conservar correção publicada');
  PERFORM public.meta_capture_review_decide(review,2,'aprovar');

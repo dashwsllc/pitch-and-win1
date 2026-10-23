@@ -77,7 +77,7 @@ BEGIN
   SELECT array_agg(id) INTO ids FROM public.meta_form_leads WHERE wave_id=w1;
   -- Approval needs a reason for exclusions, only accepts members and refuses the SDR.
   PERFORM pg_temp.expect_error(format('SELECT public.meta_wave_decide(%L,%L,%L::uuid[],%L::jsonb)',w1,'aprovar',ids,format('[{"id":"%s","reason":"x"}]',lead5)),'22023');
-  PERFORM pg_temp.expect_error(format('SELECT public.meta_wave_decide(%L,%L,%L::uuid[])',w1,'aprovar',ARRAY[gen_random_uuid()]),'40001');
+  PERFORM pg_temp.expect_error(format('SELECT public.meta_wave_decide(%L,%L,%L::uuid[])',w1,'aprovar',ARRAY[gen_random_uuid()]),'PT409');
   PERFORM pg_temp.expect_error(format('SELECT public.meta_wave_decide(%L,%L,%L::uuid[])',w1,'rejeitar',ids),'22023');
   PERFORM set_config('request.jwt.claim.sub',sdr::text,true);
   PERFORM pg_temp.expect_error(format('SELECT public.meta_wave_decide(%L,%L,%L::uuid[])',w1,'aprovar',ids),'42501');

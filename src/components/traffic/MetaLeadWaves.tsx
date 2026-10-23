@@ -10,6 +10,7 @@ import { arenaRpc } from '@/lib/arena-api'
 import { waveDecisionPayload } from '@/lib/meta-wave-decisions'
 import { importGenerationLabel } from '@/lib/crm-imports'
 import { errorMessage } from '@/lib/sales'
+import { isStaleConflict } from '@/lib/stale-conflict'
 import {
   decisionMessage, elapsedLabel, leadClock, leadDateTime, leadDateTimeShort, leadDay, leadSyncView, leadUrgency, urgencyClass, waveOutcomeLabel,
   waveRangeLabel, waveStatusLabel, type WaveDecision, type WaveDetail, type WaveLead, type WaveList, type WaveRetry, type WaveStatus, type WaveSummary,
@@ -31,7 +32,7 @@ const statusTone: Record<WaveStatus, string> = {
   rejeitada: 'border-white/15 bg-white/[0.04] text-muted-foreground',
 }
 const accent: Record<WaveStatus, string> = { pendente: 'before:bg-gradient-ember', aprovada: 'before:bg-emerald-500/70', rejeitada: 'before:bg-white/20' }
-const stale = (cause: unknown) => (cause as { code?: string })?.code === '40001'
+const stale = isStaleConflict
 
 function Chip({ className = '', children }: { className?: string; children: React.ReactNode }) {
   return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${className}`}>{children}</span>

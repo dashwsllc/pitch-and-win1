@@ -102,7 +102,7 @@ test('real PostgreSQL: paginated capture and signed webhook require approval, su
     const review = (await client.query('SELECT id,version FROM public.meta_capture_reviews WHERE sync_run_id=$1', [run])).rows[0]
     assert.equal((await client.query('SELECT count(*)::int n FROM public.meta_capture_review_rows WHERE review_id=$1', [review.id])).rows[0].n, 2001)
     const oldClaim = await admin.rpc('meta_capture_append', { p_id: run, p_claim: abandoned.claim_token, p_page_no: 0, p_request_hash: 'stale', p_rows: [], p_next: null })
-    assert.equal(oldClaim.error.code, '40001')
+    assert.equal(oldClaim.error.code, 'PT409')
     console.log('PASS: 2001 captured rows, five pages, expired claimant, no publication before approval')
     await client.query('BEGIN'); await rival.query('BEGIN')
     for (const conn of [client, rival]) { await conn.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claim.role','authenticated',true)", [actor]); await conn.query('SET LOCAL ROLE authenticated') }
@@ -112,7 +112,7 @@ test('real PostgreSQL: paginated capture and signed webhook require approval, su
     let waiting = false
     for (let attempt = 0; attempt < 100; attempt++) { waiting = (await control.query("SELECT wait_event_type='Lock' waiting FROM pg_stat_activity WHERE pid=$1", [rivalPid])).rows[0]?.waiting; if (waiting) break; await new Promise(resolve => setTimeout(resolve, 20)) }
     assert(waiting, 'Concurrent reviewer did not wait on the transaction lock')
-    await client.query('COMMIT'); assert.equal((await competing).code, '40001'); await rival.query('ROLLBACK')
+    await client.query('COMMIT'); assert.equal((await competing).code, 'PT409'); await rival.query('ROLLBACK')
     const published = (await client.query('SELECT * FROM public.meta_traffic_daily')).rows
     assert.equal(published.length, 2001)
     const view = buildTrafficView(published, { start: since, end: since, level: 'ad', accountId: '95001', campaignId: null, source: 'api' })

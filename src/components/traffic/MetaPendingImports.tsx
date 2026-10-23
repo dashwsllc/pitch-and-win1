@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/hooks/useAuth'
 import { arenaRpc } from '@/lib/arena-api'
 import { errorMessage } from '@/lib/sales'
+import { isStaleConflict } from '@/lib/stale-conflict'
 import { metaEditFields } from '@/lib/meta-edit'
 import { canApproveTrafficReview, decideTrafficReviews, fetchLegacyBatchRows, fetchTrafficReviewList, fetchTrafficReviewPart,
   trafficReviewOptions, trafficReviewPartKey, trafficReviewSeenKey, type TrafficReviewSummary, type TrafficReviewRow } from '@/lib/meta-traffic-queries'
@@ -39,7 +40,7 @@ function ConflictActions({ summary, row, disabled, refresh }: { summary: Traffic
       await arenaRpc('meta_capture_review_resolve', { p_id: summary.id, p_version: summary.version!, p_row_no: row.row_no, p_action: action, p_payload: {}, p_reason: reason.trim() })
       toast.success('Conflito resolvido com auditoria')
       try { await refresh() } catch { toast.warning('Resolução registrada. Atualize para conferir.') }
-    } catch (cause) { setError((cause as { code?: string })?.code === '40001' ? 'A revisão mudou. Recarregue antes de continuar.' : errorMessage(cause)); await refresh().catch(() => undefined) }
+    } catch (cause) { setError(isStaleConflict(cause) ? 'A revisão mudou. Recarregue antes de continuar.' : errorMessage(cause)); await refresh().catch(() => undefined) }
     finally { setBusy(false) }
   }
   return <div className="mt-3 space-y-3 rounded-lg border border-amber-500/50 p-3"><p className="font-medium">Conflito: escolha o valor que deve prevalecer</p>
@@ -68,7 +69,7 @@ function ReviewCard({ summary: s, active, canReview, busy, history, refresh, dec
     <Button variant="outline" size="sm" onClick={() => { setExpanded(!expanded); if (expanded) { setAck(false); mark(trafficReviewSeenKey(s), false) } }}>{expanded ? 'Fechar detalhes' : 'Conferir detalhes'}</Button>
     {expanded && <div className="space-y-3">
       {details.isPending && <p role="status">Carregando esta revisão…</p>}
-      {details.isError && <div role="alert" className="text-sm text-destructive"><p>{(details.error as { code?: string })?.code === '40001' ? 'A revisão mudou. Recarregue e confira a versão atual.' : errorMessage(details.error)}</p><Button variant="outline" size="sm" onClick={() => void refresh()}>Recarregar revisões</Button></div>}
+      {details.isError && <div role="alert" className="text-sm text-destructive"><p>{isStaleConflict(details.error) ? 'A revisão mudou. Recarregue e confira a versão atual.' : errorMessage(details.error)}</p><Button variant="outline" size="sm" onClick={() => void refresh()}>Recarregar revisões</Button></div>}
       {details.data && <><div className="max-h-[32rem] space-y-3 overflow-auto">{details.data.rows.map(row => {
         const payload = row.payload as ImportRow & LeadImportRow
         return <div key={row.row_no} className="space-y-2 rounded-lg border p-3 text-sm"><p className="font-medium">Linha {row.row_no + 1} · {row.operation === 'remove' ? 'Remoção proposta' : payload.full_name || payload.campaign_name || payload.campaign_id || 'Sem nome'}</p>

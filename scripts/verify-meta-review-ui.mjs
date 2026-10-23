@@ -11,7 +11,7 @@ const api = { arenaClient: { from(table) {
   return query
 } }, async arenaRpc(name, args) {
   calls.push({ name, args })
-  if (stale) throw { code: '40001', message: 'changed' }
+  if (stale) throw { code: 'PT409', message: 'changed' }
   if (name === 'meta_traffic_review_list') return { rows: [], count: 100 }
   if (name === 'meta_capture_review_part') return { id: args.p_id, version: args.p_version, total: 2001, rows: [], next_offset: 500 }
   return { id: args.p_id, status: 'aprovado', version: args.p_version }
@@ -67,7 +67,7 @@ test('bulk decisions publish logical reviews once and retain legacy optimistic l
   assert.deepEqual(calls.at(-1), { name: 'meta_review_lead_import', args: { p_batch_id: 'csv-b', p_expected_updated_at: 'current', p_action: 'aprovar', p_note: '' } })
 })
 test('opening an edited legacy batch refuses to display an unseen snapshot', async () => {
-  await assert.rejects(queries.fetchLegacyBatchRows('metrics', 'csv-b', 'previous'), cause => cause.code === '40001')
+  await assert.rejects(queries.fetchLegacyBatchRows('metrics', 'csv-b', 'previous'), cause => cause.code === 'PT409')
 })
 test('a slow file A cannot overwrite the successful preview for file B', async () => {
   const { createLatestFileLoader } = queries

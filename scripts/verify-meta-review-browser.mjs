@@ -27,10 +27,10 @@ await context.route('https://**/*',async route=>{
  else if(name==='meta_traffic_cohort')data={state:'insufficient',campaigns:[],reasons:[],unattributed_contacts:0}
  else if(name==='meta_capture_review_part'){
   const s=reviews.find(s=>s.id===args.p_id)
-  if(!s||s.version!==args.p_version)return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({code:'40001',message:'changed'})})
+  if(!s||s.version!==args.p_version)return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({code:'PT409',message:'changed'})})
   data={id:s.id,version:s.version,total:s.row_count,next_offset:args.p_offset+500<s.row_count?args.p_offset+500:null,rows:[{row_no:args.p_offset,operation:s.id===summary.id?'remove':'upsert',payload,before_snapshot:{...payload,id:actor},edit_reason:null,conflict_details:s.conflict_count?{reason:'published_changed',incoming:{...payload,spend:20}}:null}]}
  } else if(name==='meta_capture_review_decide'){
-  if(stale){stale=false;summary.version=6;return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({code:'40001',message:'changed'})})}
+  if(stale){stale=false;summary.version=6;return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({code:'PT409',message:'changed'})})}
   reviews=reviews.filter(s=>s.id!==args.p_id);revision++;data={status:'aprovado'}
  } else if(name==='meta_capture_review_resolve'){second.version++;second.conflict_count=0;revision++;data={id:second.id,version:second.version}}
  else if(fixtures[name])data=fixtures[name](args)

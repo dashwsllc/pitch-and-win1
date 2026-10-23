@@ -62,7 +62,7 @@ BEGIN
   PERFORM public.meta_capture_review_edit(review,1,0,CASE WHEN acct='93003' THEN '{"spend":12,"campaign_id":"B"}'::jsonb ELSE '{"spend":12}'::jsonb END,'Correção pendente');
   review:=pg_temp.capture_case(acct,jsonb_build_array(item||'{"spend":20}'));
   PERFORM pg_temp.assert(EXISTS(SELECT 1 FROM public.meta_capture_review_rows WHERE review_id=review AND conflict_details->'incoming'->>'spend'='20' AND conflict_details->'edited'->>'spend'='12'),'recapture hid divergence from pending edited proposal');
-  PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',review,'aprovar'),'40001');
+  PERFORM pg_temp.expect_error(format('SELECT public.meta_capture_review_decide(%L,1,%L)',review,'aprovar'),'PT409');
   PERFORM public.meta_capture_review_resolve(review,1,0,'use_edited','{}','Manter correção deliberadamente');
   PERFORM public.meta_capture_review_decide(review,2,'aprovar');
   PERFORM pg_temp.assert((SELECT count(*)=1 AND sum(spend)=12 FROM public.meta_traffic_daily WHERE account_id=acct),'recapture resolution did not preserve selected edit');
@@ -95,14 +95,14 @@ BEGIN
  SELECT * INTO b FROM public.meta_import_batches WHERE id=(response->>'batch_id')::uuid;
  SELECT * INTO fact FROM public.meta_traffic_daily WHERE account_id='93005';
  PERFORM public.meta_edit_traffic_row(fact.id,fact.updated_at,'{"spend":15}','Correção após upload');
- PERFORM pg_temp.expect_error(format('SELECT public.meta_review_traffic_import(%L,%L,%L)',b.id,'aprovar',b.updated_at),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_review_traffic_import(%L,%L,%L)',b.id,'aprovar',b.updated_at),'PT409');
  PERFORM pg_temp.assert((SELECT spend=15 FROM public.meta_traffic_daily WHERE id=fact.id),'stale CSV overwrote intervening published edit');
  response:=public.meta_import_daily('absent.csv',jsonb_build_array(item||'{"campaign_id":"B"}'));
  SELECT * INTO b FROM public.meta_import_batches WHERE id=(response->>'batch_id')::uuid;
  response:=public.meta_import_daily('rival.csv',jsonb_build_array(item||'{"campaign_id":"B","spend":30}'));
  SELECT * INTO rival FROM public.meta_import_batches WHERE id=(response->>'batch_id')::uuid;
  PERFORM public.meta_review_traffic_import(rival.id,'aprovar',rival.updated_at);
- PERFORM pg_temp.expect_error(format('SELECT public.meta_review_traffic_import(%L,%L,%L)',b.id,'aprovar',b.updated_at),'40001');
+ PERFORM pg_temp.expect_error(format('SELECT public.meta_review_traffic_import(%L,%L,%L)',b.id,'aprovar',b.updated_at),'PT409');
  PERFORM pg_temp.assert((SELECT spend=30 FROM public.meta_traffic_daily WHERE account_id='93005' AND campaign_id='B'),'stale absent target overwrote rival publication');
 END $$;
 -- CASE manual-availability
