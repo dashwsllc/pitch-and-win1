@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, ScanSearch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,7 +12,7 @@ const day = (value: string) => value.split('-').reverse().join('/')
 /** Conferência por dia e campanha: o que a Meta informa × os leads que chegaram × os que já estão no CRM. */
 export function MetaLeadConference({ active, start, end, campaignId, onOpenWaves }: { active: boolean; start: string; end: string; campaignId: string | null; onOpenWaves: () => void }) {
   const { user } = useAuth()
-  const query = useQuery({ queryKey: ['meta-lead-conference', user?.id, start, end], enabled: active && !!user, refetchInterval: active ? 60_000 : false,
+  const query = useQuery({ queryKey: ['meta-lead-conference', user?.id, start, end], enabled: active && !!user, refetchInterval: active ? pollEvery(POLL.conference) : false,
     queryFn: () => arenaRpc<ConferenceRow[]>('meta_traffic_conference', { p_start: start, p_end: end }) })
   const rows = (Array.isArray(query.data) ? query.data : []).filter(row => !campaignId || row.campaign_id === campaignId)
   const summary = summarizeConference(rows)

@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
@@ -20,7 +21,7 @@ export function SiteBridgeHealth({ data, now = Date.now() }: { data: BridgeHealt
 }
 export function SiteBridgeStatus({ active }: { active: boolean }) {
   const { user } = useAuth()
-  const query = useQuery({ queryKey: ['site-bridge', user?.id], enabled: active && !!user, refetchInterval: active ? 20_000 : false, retry: 1,
+  const query = useQuery({ queryKey: ['site-bridge', user?.id], enabled: active && !!user, refetchInterval: active ? pollEvery(POLL.bridge) : false, retry: 1,
     queryFn: () => arenaRpc<BridgeHealth>('site_bridge_operation', {}) })
   return <section aria-label="Integração do site" className="space-y-3 rounded-xl border p-4">
     <h3 className="font-semibold">Site / conversão direta</h3>
@@ -35,7 +36,7 @@ function QuarantinedSiteEvents({ active }: { active: boolean }) {
   const [open, setOpen] = useState(false)
   const [offset, setOffset] = useState(0)
   const [eventId, setEventId] = useState<string | null>(null)
-  const query = useQuery({ queryKey: ['site-bridge', 'quarantined', user?.id, offset], enabled: active && open && !!user, refetchInterval: active && open ? 20_000 : false,
+  const query = useQuery({ queryKey: ['site-bridge', 'quarantined', user?.id, offset], enabled: active && open && !!user, refetchInterval: active && open ? pollEvery(POLL.bridge) : false,
     queryFn: async () => {
       const { data, error, count } = await arenaClient.from('site_import_events').select(siteEventListColumns, { count: 'exact' })
         .eq('status', 'quarantined').order('received_at', { ascending: false }).order('event_id', { ascending: false }).range(offset, offset + 19)

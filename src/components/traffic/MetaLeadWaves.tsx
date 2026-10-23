@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -54,7 +55,7 @@ export function MetaLeadWaves({ active, canReview, onReviewed }: { active: boole
   const [touched, setTouched] = useState(false)
   const [rebuilding, setRebuilding] = useState(false)
   const list = useQuery({
-    queryKey: ['meta-waves', user?.id, filter, offset], enabled: active && !!user, refetchInterval: active ? 20_000 : false,
+    queryKey: ['meta-waves', user?.id, filter, offset], enabled: active && !!user, refetchInterval: active ? pollEvery(POLL.traffic) : false,
     queryFn: () => arenaRpc<WaveList>('meta_wave_list', { p_status: filter === 'todas' ? null : filter, p_limit: PAGE, p_offset: offset }),
   })
   // A leva mais recente abre sozinha: é onde estão os leads que acabaram de cair.
@@ -140,7 +141,7 @@ function WaveCard({ wave, newest, open, active, canReview, refresh, onToggle }: 
 
 function WavePanel({ wave, active, canReview, refresh }: { wave: WaveSummary; active: boolean; canReview: boolean; refresh: () => Promise<void> }) {
   const { user } = useAuth()
-  const detail = useQuery({ queryKey: ['meta-wave-leads', user?.id, wave.id], enabled: active && !!user, refetchInterval: active ? 20_000 : false,
+  const detail = useQuery({ queryKey: ['meta-wave-leads', user?.id, wave.id], enabled: active && !!user, refetchInterval: active ? pollEvery(POLL.traffic) : false,
     queryFn: () => arenaRpc<WaveDetail>('meta_wave_leads', { p_wave: wave.id }) })
   const [snapshot, setSnapshot] = useState<WaveDetail | null>(null)
   const requestId = useRef<string | null>(null)

@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -61,15 +62,15 @@ export default function Leads() {
   const [ignoreReason, setIgnoreReason] = useState('')
   const [busy, setBusy] = useState(false)
   const query = useQuery({ queryKey: ['meta-form-leads', user?.id], enabled: !!user,
-    refetchInterval: 30_000,
+    refetchInterval: pollEvery(POLL.traffic),
     queryFn: () => fetchAllPages<MetaFormLead>((from, to) => arenaClient.from('meta_form_leads')
       .select('*').eq('approval_status', 'aprovado').order('created_time', { ascending: false }).order('id').range(from, to)),
   })
-  const webhookQuery = useQuery({ queryKey: ['meta-webhook-events', user?.id], enabled: !!user, refetchInterval: 30_000,
+  const webhookQuery = useQuery({ queryKey: ['meta-webhook-events', user?.id], enabled: !!user, refetchInterval: pollEvery(POLL.traffic),
     queryFn: () => fetchAllPages<{ status: string }>((from, to) => arenaClient.from('meta_webhook_events')
       .select('status').in('status', ['pending', 'error']).range(from, to)),
   })
-  const reconciliationRunsQuery = useQuery({ queryKey: ['meta-reconciliation-runs', user?.id], enabled: !!user, refetchInterval: 30_000,
+  const reconciliationRunsQuery = useQuery({ queryKey: ['meta-reconciliation-runs', user?.id], enabled: !!user, refetchInterval: pollEvery(POLL.traffic),
     queryFn: () => fetchAllPages<MetaSyncRun>((from, to) => arenaClient.from('meta_sync_runs')
       .select('*').eq('kind', 'leads_reconciliation').order('started_at', { ascending: false }).limit(20).range(from, to)),
   })

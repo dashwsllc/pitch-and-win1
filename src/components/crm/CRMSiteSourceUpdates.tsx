@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
@@ -41,7 +42,7 @@ function EventHistory({ formLeadId }: { formLeadId: string }) {
   const [offset, setOffset] = useState(0)
   const [openId, setOpenId] = useState<string | null>(null)
   const query = useQuery({ queryKey: ['crm', 'site-source-updates', user?.id, formLeadId, offset], enabled: !!user,
-    staleTime: 5_000, refetchInterval: 20_000, retry: 1, queryFn: async () => {
+    staleTime: 5_000, refetchInterval: pollEvery(POLL.bridge), retry: 1, queryFn: async () => {
       const { data, error, count } = await arenaClient.from('site_import_events').select(siteEventListColumns, { count: 'exact' })
         .eq('meta_form_lead_id', formLeadId).order('received_at', { ascending: false }).order('event_id', { ascending: false }).range(offset, offset + 19)
       if (error) throw error

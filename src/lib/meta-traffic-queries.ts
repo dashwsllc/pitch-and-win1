@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from './polling'
 import { arenaClient, arenaRpc } from '@/lib/arena-api'
 import { errorMessage } from './sales'
 import { isStaleConflict } from './stale-conflict'
@@ -14,7 +15,7 @@ export type TrafficReviewRow = { row_no: number; operation: 'upsert' | 'remove';
   before_snapshot: MetaDailyRow | null; edit_reason: string | null;
   conflict_details: { reason?: string; incoming?: ImportRow | null; edited?: ImportRow | null; published?: MetaDailyRow | null } | null }
 export type TrafficReviewPart = { id: string; version: number; total: number; rows: TrafficReviewRow[]; next_offset: number | null }
-export const trafficReviewOptions = (active: boolean) => ({ enabled: active, refetchInterval: active ? 30_000 : false as const })
+export const trafficReviewOptions = (active: boolean) => ({ enabled: active, refetchInterval: active ? pollEvery(POLL.traffic) : false as const })
 export const trafficReviewPartKey = (user: string | undefined, summary: TrafficReviewSummary, offset: number) =>
   ['meta-review-detail', user, summary.format, summary.kind, summary.id, summary.version ?? summary.updated_at, offset, 500] as const
 export const trafficReviewSeenKey = (summary: TrafficReviewSummary) => JSON.stringify([summary.id, summary.version ?? summary.updated_at])

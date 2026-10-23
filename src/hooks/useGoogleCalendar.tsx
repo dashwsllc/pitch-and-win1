@@ -1,3 +1,4 @@
+import {pollEvery,POLL} from '@/lib/polling'
 import {useEffect,useRef} from 'react'
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query'
 import {useAuth} from '@/hooks/useAuth'
@@ -33,7 +34,7 @@ export function useGoogleCalendarRefresh(){
 }
 export function useGoogleCalendarAdmin(){
   const {userId,adminAllowed,client,sessionKey,isCurrent}=useCalendarSession()
-  const query=useQuery({queryKey:adminQueryKey(userId),enabled:adminAllowed,queryFn:()=>manageCalendar({action:'status'}),refetchInterval:30000,refetchOnWindowFocus:true,retry:1})
+  const query=useQuery({queryKey:adminQueryKey(userId),enabled:adminAllowed,queryFn:()=>manageCalendar({action:'status'}),refetchInterval:pollEvery(POLL.calendar),refetchOnWindowFocus:true,retry:1})
   const mutation=useMutation({mutationFn:async(request:ManageRequest)=>{
     if(!isCurrent())throw new Error('calendar_admin_required')
     const result=await manageCalendar(request)
@@ -45,6 +46,6 @@ export function useGoogleCalendarAdmin(){
 export function useGoogleCalendarStatuses(callIds:string[]){
   const {userId,allowed}=useCalendarSession()
   const ids=[...new Set(callIds)].sort()
-  const query=useQuery({queryKey:callStatusesQueryKey(userId,ids),enabled:allowed&&ids.length>0,queryFn:()=>fetchCalendarStatuses(ids),refetchInterval:30000,refetchOnWindowFocus:true,retry:1})
+  const query=useQuery({queryKey:callStatusesQueryKey(userId,ids),enabled:allowed&&ids.length>0,queryFn:()=>fetchCalendarStatuses(ids),refetchInterval:pollEvery(POLL.calendar),refetchOnWindowFocus:true,retry:1})
   return{statuses:allowed?query.data??new Map():new Map(),loading:allowed&&ids.length>0&&query.isLoading,error:allowed?query.error:null}
 }

@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -53,7 +54,7 @@ export function GoalHistory({ management = false }: { management?: boolean }) {
       p_offset: page * pageSize,
       p_limit: pageSize,
     }),
-    refetchInterval: 30_000,
+    refetchInterval: pollEvery(POLL.goals),
   });
   const summary = query.data?.summary;
   const items = query.data?.items ?? [];

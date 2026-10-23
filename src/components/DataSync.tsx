@@ -10,6 +10,7 @@ import {
   shouldRefreshDashboardRevision,
 } from '@/lib/sync'
 import { arenaRpc } from '@/lib/arena-api'
+import { nextRefreshDelay, REMOTE_REFRESH_MIN_GAP_MS, REMOTE_REFRESH_JITTER_MS } from '@/lib/polling'
 import type { ArenaEvent, ArenaNotification } from '@/lib/arena'
 
 // When a renewed session replaces a live channel, its first cursor read only needs
@@ -56,6 +57,11 @@ export function DataSync() {
     // Realtime or observed by an earlier poll).
     const seen = new Map<string, string>()
 
+    // Limitação de ritmo (não debounce): vários avisos em sequência (várias vendas, a rajada de um lote) viram UMA releitura de todas as consultas, no máximo uma a
+    // cada REMOTE_REFRESH_MIN_GAP_MS por aba e com uma folga aleatória, para as abas abertas não consultarem o banco juntas. Nunca adia indefinidamente: a releitura
+    // agendada já busca o dado mais novo na hora em que roda. O que a própria pessoa grava usa refreshDashboardMutation e continua imediato.
+    let pendingRefresh = false
+    let lastRunAt = 0   // diferente de lastRefreshStartedAt: não volta a 0 numa falha, senão o servidor lento seria consultado de novo na verificação seguinte
     const refresh = () => {
       if (disposed) return
       // A hidden tab shows nothing: catching up is deferred until it is visible
@@ -65,27 +71,30 @@ export function DataSync() {
         return
       }
       refreshRequested = true
-      window.clearTimeout(debounce)
+      if (pendingRefresh) return
+      pendingRefresh = true
       debounce = window.setTimeout(async () => {
+        pendingRefresh = false
         if (refreshing) {
           refreshQueued = true
           return
         }
         refreshing = true
         try {
-          do {
-            refreshQueued = false
-            lastRefreshStartedAt = Date.now()
-            await refreshDashboardData(queryClient)
-          } while (refreshQueued && !disposed)
+          refreshQueued = false
+          lastRunAt = Date.now()
+          lastRefreshStartedAt = lastRunAt
+          await refreshDashboardData(queryClient)
         } catch (error) {
           // Keep the revision fallback alive after a transient fetch failure.
           lastRefreshStartedAt = 0
           console.warn('Dashboard synchronization retry scheduled', error)
         } finally {
           refreshing = false
+          // Chegou aviso durante a releitura: agenda a próxima respeitando o intervalo mínimo (antes repetia na hora).
+          if (refreshQueued && !disposed) { refreshQueued = false; refresh() }
         }
-      }, 120)
+      }, nextRefreshDelay({ now: Date.now(), lastStartedAt: lastRunAt, minGapMs: REMOTE_REFRESH_MIN_GAP_MS, baseMs: 120, jitterMs: REMOTE_REFRESH_JITTER_MS }))
     }
     // Realtime can miss a change while another route, tab or browser is asleep.
     // Check only the lightweight revision cursor; fetch records only when it moves.

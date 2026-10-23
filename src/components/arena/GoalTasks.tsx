@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -104,7 +105,7 @@ export function GoalTasks() {
       if (error) throw error;
       return data as Task[];
     },
-    refetchInterval: 30_000,
+    refetchInterval: pollEvery(POLL.goals),
   });
   const refresh = () => client.invalidateQueries({ queryKey: ["daily-goals"] });
   const assign = async (event: React.FormEvent) => {

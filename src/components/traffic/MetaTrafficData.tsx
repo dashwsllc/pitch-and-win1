@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -21,7 +22,7 @@ export function MetaTrafficData({ canEdit, onSaved }: { canEdit: boolean; onSave
   const [name, setName] = useState('')
   const [status, setStatus] = useState<'todos' | 'pendente' | 'aprovado' | 'rejeitado'>('todos')
   const [date, setDate] = useState('')
-  const leads = useQuery({ queryKey: ['meta-edit-leads', user?.id, leadPage, name, status], enabled: !!user, refetchInterval: 30_000,
+  const leads = useQuery({ queryKey: ['meta-edit-leads', user?.id, leadPage, name, status], enabled: !!user, refetchInterval: pollEvery(POLL.edit),
     queryFn: async () => {
       let request = arenaClient.from('meta_form_leads').select('*', { count: 'exact' })
       if (name.trim()) request = request.ilike('full_name', `%${name.trim()}%`)
@@ -30,7 +31,7 @@ export function MetaTrafficData({ canEdit, onSaved }: { canEdit: boolean; onSave
       if (error) throw error
       return { rows: data as MetaFormLead[], count: count || 0 }
     } })
-  const metrics = useQuery({ queryKey: ['meta-edit-metrics', user?.id, metricPage, date], enabled: !!user, refetchInterval: 30_000,
+  const metrics = useQuery({ queryKey: ['meta-edit-metrics', user?.id, metricPage, date], enabled: !!user, refetchInterval: pollEvery(POLL.edit),
     queryFn: async () => {
       let request = arenaClient.from('meta_traffic_daily').select('*', { count: 'exact' })
       if (date) request = request.eq('date', date)

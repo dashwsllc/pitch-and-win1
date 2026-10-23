@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -28,7 +29,7 @@ export function MetaAudit() {
   const { user } = useAuth()
   const [page, setPage] = useState(0)
   const query = useQuery({
-    queryKey: ['meta-audit', user?.id, page], enabled: !!user, refetchInterval: 30_000,
+    queryKey: ['meta-audit', user?.id, page], enabled: !!user, refetchInterval: pollEvery(POLL.audit),
     queryFn: async () => {
       const { data, error, count } = await arenaClient.from('meta_audit_events').select('*', { count: 'exact' })
         .order('created_at', { ascending: false }).order('id', { ascending: false }).range(page * 50, page * 50 + 49)

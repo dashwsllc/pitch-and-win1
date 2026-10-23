@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { arenaRpc } from '@/lib/arena-api'
@@ -47,7 +48,7 @@ export function VoxenCoverageView({ data, prospects }: { data: VoxenBridgeAlignm
 /** Só para o Executivo (as RPCs recusam os demais). A saúde da fila é barata e atualiza sozinha; a cobertura recalcula o conteúdo de cada atleta, então só roda quando pedida. */
 export function VoxenContextBridgeStatus({ active }: { active: boolean }) {
   const { user } = useAuth()
-  const health = useQuery({ queryKey: ['voxen-bridge', 'health', user?.id], enabled: active && !!user, refetchInterval: active ? 30_000 : false, retry: 1,
+  const health = useQuery({ queryKey: ['voxen-bridge', 'health', user?.id], enabled: active && !!user, refetchInterval: active ? pollEvery(POLL.bridge) : false, retry: 1,
     queryFn: async () => {
       const data = await arenaRpc<unknown>('crm_context_health', {})
       if (!isVoxenBridgeHealth(data)) throw new Error('invalid_voxen_bridge_health')

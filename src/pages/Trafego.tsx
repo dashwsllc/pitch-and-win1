@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -287,8 +288,8 @@ export default function Trafego() {
   const end = period === 'custom' ? customEnd : period === 'yesterday' ? shiftDate(today, -1) : today
   const validRange = validTrafficDate(start) && validTrafficDate(end) && start <= end && end <= today
   const query = useQuery({ queryKey: ['meta-traffic', user?.id, start, end, level], enabled: !!user && validRange && tab === 'performance', queryFn: () => fetchAllPages<MetaDailyRow>((from, to) => arenaClient.from('meta_traffic_daily').select('*').gte('date', start).lte('date', end).eq('level', level).order('date').order('id').range(from, to)) })
-  const pendingCount = useQuery({ queryKey: ['meta-review-count', user?.id], enabled: !!user, refetchInterval: tab === 'approvals' ? 30_000 : false, queryFn: () => fetchTrafficReviewList({ status: 'pendente', limit: 1 }) })
-  const waveBadge = useQuery({ queryKey: ['meta-wave-badge', user?.id], enabled: !!user, refetchInterval: 30_000,
+  const pendingCount = useQuery({ queryKey: ['meta-review-count', user?.id], enabled: !!user, refetchInterval: tab === 'approvals' ? pollEvery(POLL.traffic) : false, queryFn: () => fetchTrafficReviewList({ status: 'pendente', limit: 1 }) })
+  const waveBadge = useQuery({ queryKey: ['meta-wave-badge', user?.id], enabled: !!user, refetchInterval: pollEvery(POLL.trafficBadge),
     queryFn: () => arenaRpc<WaveList>('meta_wave_list', { p_status: 'pendente', p_limit: 1, p_offset: 0 }) })
   const pendingLeads = waveBadge.data?.pending_leads ?? 0, failedLeads = waveBadge.data?.failed_leads ?? 0, pendingReviews = pendingCount.data?.count ?? 0
   const allRows = query.data || emptyRows

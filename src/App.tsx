@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -9,6 +9,8 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DataSync } from "@/components/DataSync";
 import { SaleAlerts } from "@/components/arena/ArenaNotifications";
+import { OutageBanner } from "@/components/OutageBanner";
+import { createAppQueryClient } from "@/lib/outage-client";
 import { pageLoaders, preloadRoute } from "@/lib/route-preload";
 const Index = lazy(pageLoaders.index);
 const Auth = lazy(pageLoaders.auth);
@@ -36,20 +38,16 @@ const NotFound = lazy(pageLoaders.notFound);
 // the address bar now so its download overlaps with those requests.
 preloadRoute(window.location.pathname);
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-    },
-  },
-});
+// Padrões do React Query (1 nova tentativa, mutations sempre enviadas) e disjuntor que pausa as atualizações automáticas quando o servidor está sofrendo:
+// ver src/lib/outage-client.ts e src/lib/outage-guard.ts.
+const queryClient = createAppQueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
         <DataSync />
+        <OutageBanner />
         <SaleAlerts />
         <TooltipProvider>
           <Toaster />

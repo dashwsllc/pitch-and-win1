@@ -1,3 +1,4 @@
+import { pollEvery, POLL } from '@/lib/polling'
 import { memo } from "react"
 import { BarChart3 } from "lucide-react"
 import { NavLink } from "react-router-dom"
@@ -19,7 +20,7 @@ function ExecutiveAppSidebarBase({ isExecutive = false }: AppSidebarProps) {
   const items = itensDoMenu({ isExecutive, isSuperAdmin, roles, capabilities })
   const { user } = useAuth()
   // Leads de formulário aguardando aprovação: o número aparece no ícone de Tráfego em qualquer página.
-  const waves = useQuery({ queryKey: ['meta-wave-badge', user?.id], enabled: !!user && canAccessTraffic(roles), refetchInterval: 30_000, staleTime: 15_000,
+  const waves = useQuery({ queryKey: ['meta-wave-badge', user?.id], enabled: !!user && canAccessTraffic(roles), refetchInterval: pollEvery(POLL.trafficBadge), staleTime: 30_000,
     queryFn: () => arenaRpc<WaveList>('meta_wave_list', { p_status: 'pendente', p_limit: 1, p_offset: 0 }) })
   const pendingLeads = waves.data?.pending_leads ?? 0
 
