@@ -12,6 +12,15 @@ export function CalendarStatusesProvider({callIds,children}:{callIds:string[];ch
   const state=useGoogleCalendarStatuses(callIds)
   return <CalendarContext.Provider value={state}>{children}</CalendarContext.Provider>
 }
+/**
+ * Link do Google Meet que a agenda gerou para a call (vale quando o Closer não colou outro). Sem evento sincronizado,
+ * ou com a call sendo removida da agenda, não há link.
+ */
+export function useGoogleMeetingUrl(callId:string):string|null{
+  const row=useContext(CalendarContext).statuses.get(callId)
+  if(!row?.meetingUrl)return null
+  return ['disabled','removed','removal_pending'].includes(effectiveCallStatus(row))?null:row.meetingUrl
+}
 export function calendarStatusLabel(row:CallSyncStatus|undefined,loading:boolean,error:unknown):string{
   if(error)return 'Status da agenda indisponível'
   if(loading)return 'Consultando agenda…'
@@ -26,6 +35,6 @@ export function CRMCalendarStatus({callId}:{callId:string}){
   return <span className="inline-flex flex-wrap items-center gap-1" role="status">
     <Badge variant="outline" className={`h-5 px-2 text-[10px] ${state==='synced'&&!loading&&!error?'text-emerald-600':failed?'text-amber-600':'text-muted-foreground'}`}>{calendarStatusLabel(row,loading,error)}</Badge>
     {failed&&(capabilities.executive?<Link to="/agenda#google-calendar" className="text-[10px] underline">{action}</Link>:<span className="text-[10px] text-muted-foreground">Solicite a revisão ao administrador.</span>)}
-    {/* O botão de entrar na reunião não vem mais do Google: é o link que o Closer cola na /agenda, só no horário da call (CRMCallMeetButton). */}
+    {/* O botão de entrar na reunião é o CRMCallMeetButton: só no horário da call, com o link que o Closer colou na /agenda ou, sem ele, o do Google (useGoogleMeetingUrl). */}
   </span>
 }

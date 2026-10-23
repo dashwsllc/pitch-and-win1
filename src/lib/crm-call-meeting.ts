@@ -25,6 +25,14 @@ export function normalizarLinkDaCall(texto: string): { link: string | null; erro
   return { link, erro: null }
 }
 
+/**
+ * O link que vale para entrar na call: o que o Closer colou na /agenda; sem ele, o link do Google Meet que a agenda
+ * gerou para o evento (acesso aberto, sem sala de espera). Vazio ou em branco conta como "sem link".
+ */
+export function linkDaCall(call: Pick<CallComLink, 'meeting_link'>, linkDoGoogle?: string | null): string | null {
+  return call.meeting_link?.trim() || linkDoGoogle?.trim() || null
+}
+
 /** Call encerrada (resultado registrado, concluída ou cancelada): o link não aparece mais. */
 export function callEncerrada(call: CallComLink) {
   return call.is_completed || !!call.cancelled_at || !!call.outcome
@@ -37,17 +45,17 @@ export function janelaDaCall(call: CallComLink): { inicio: number; fim: number }
   return Number.isFinite(inicio) && Number.isFinite(fim) ? { inicio, fim } : null
 }
 
-/** O botão aparece só do início ao fim da call, com link e enquanto ela não foi encerrada. */
-export function podeEntrarNaCall(call: CallComLink, agora: number) {
+/** O botão aparece só do início ao fim da call, com link (do Closer ou do Google) e enquanto ela não foi encerrada. */
+export function podeEntrarNaCall(call: CallComLink, agora: number, linkDoGoogle?: string | null) {
   const janela = janelaDaCall(call)
-  return !!call.meeting_link && !callEncerrada(call) && !!janela && agora >= janela.inicio && agora < janela.fim
+  return !!linkDaCall(call, linkDoGoogle) && !callEncerrada(call) && !!janela && agora >= janela.inicio && agora < janela.fim
 }
 
 /**
  * Se a call está no horário agora. Acorda exatamente no início e no fim (não fica consultando o relógio): o botão
  * aparece e some na hora certa mesmo com a tela parada.
  */
-export function useCallNoHorario(call: CallComLink) {
+export function useCallNoHorario(call: CallComLink, linkDoGoogle?: string | null) {
   const janela = janelaDaCall(call)
   const inicio = janela?.inicio ?? null
   const fim = janela?.fim ?? null
@@ -62,5 +70,5 @@ export function useCallNoHorario(call: CallComLink) {
     const timer = window.setTimeout(() => setVirada((n) => n + 1), Math.min(proxima - atual + 50, 2_147_483_000))
     return () => window.clearTimeout(timer)
   }, [inicio, fim, virada])
-  return podeEntrarNaCall(call, Date.now())
+  return podeEntrarNaCall(call, Date.now(), linkDoGoogle)
 }

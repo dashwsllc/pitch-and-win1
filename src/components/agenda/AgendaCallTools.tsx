@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useGoogleMeetingUrl } from '@/components/crm/CRMCalendarStatus'
 import type { CRMActivity, CRMLead } from '@/hooks/useCRM'
 import type { Json } from '@/integrations/supabase/types'
 import { arenaRpc } from '@/lib/arena-api'
@@ -15,20 +16,25 @@ import { errorMessage, money } from '@/lib/sales'
 import { refreshDashboardMutation } from '@/lib/sync'
 import { lerValorEmReais, valorParaBanco } from '@/lib/valor-reais'
 
-/** Campo do link da reunião ao lado da call: o Closer cola o link do Google Meet e salva. */
+/**
+ * Campo do link da reunião ao lado da call. Já vem preenchido com o link do Google Meet que a agenda gerou; o Closer
+ * pode colar outro e salvar (o dele passa a valer) ou apagar o dele para voltar ao do Google.
+ */
 export function AgendaMeetingLink({ call, editavel }: { call: CRMActivity; editavel: boolean }) {
   const client = useQueryClient()
   const salvo = call.meeting_link ?? ''
-  const [valor, setValor] = useState(salvo)
+  const doGoogle = useGoogleMeetingUrl(call.id) ?? ''
+  const vigente = salvo || doGoogle   // o que vale hoje para entrar na call
+  const [valor, setValor] = useState(vigente)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
   const [aviso, setAviso] = useState('')
-  // Outra pessoa (ou outra aba) mudou o link: o campo acompanha, a menos que esteja sendo editado.
-  useEffect(() => setValor((atual) => (atual === '' || atual === salvo ? salvo : atual)), [salvo])
+  // Outra pessoa (ou outra aba) mudou o link, ou o Google acabou de gerar o dele: o campo acompanha, a menos que esteja sendo editado.
+  useEffect(() => setValor((atual) => (atual === '' || atual === vigente ? vigente : atual)), [vigente])
 
   if (!editavel) {
-    return salvo
-      ? <p className="flex items-center gap-1.5 text-sm"><Link2 className="h-4 w-4 text-primary" aria-hidden="true" />Link da call: <a className="break-all underline" href={salvo} target="_blank" rel="noopener noreferrer">{salvo}</a></p>
+    return vigente
+      ? <p className="flex items-center gap-1.5 text-sm"><Link2 className="h-4 w-4 text-primary" aria-hidden="true" />Link da call: <a className="break-all underline" href={vigente} target="_blank" rel="noopener noreferrer">{vigente}</a></p>
       : <p className="text-sm text-muted-foreground">O Closer ainda não colocou o link da reunião.</p>
   }
 
@@ -38,8 +44,9 @@ export function AgendaMeetingLink({ call, editavel }: { call: CRMActivity; edita
     setSalvando(true); setErro(''); setAviso('')
     try {
       await arenaRpc('crm_set_call_meeting_link', { p_activity_id: call.id, p_link: link ?? '', p_expected_revision: call.updated_at })
-      setValor(link ?? '')
-      setAviso(link ? 'Link salvo. O botão "Entrar na call" aparece no CRM no horário da call.' : 'Link removido.')
+      setValor(link ?? doGoogle)
+      setAviso(link ? 'Link salvo. O botão "Entrar na call" aparece no CRM no horário da call.'
+        : doGoogle ? 'Link removido. Vale o link do Google Meet da agenda.' : 'Link removido.')
       await refreshDashboardMutation(client)
     } catch (causa) {
       setErro(errorMessage(causa))
@@ -62,10 +69,11 @@ export function AgendaMeetingLink({ call, editavel }: { call: CRMActivity; edita
           className="h-9 min-w-0 flex-1 sm:min-w-72"
           disabled={salvando}
         />
-        <Button type="button" variant="outline" className="h-9" onClick={salvar} disabled={salvando || valor.trim() === salvo}>
+        <Button type="button" variant="outline" className="h-9" onClick={salvar} disabled={salvando || valor.trim() === vigente}>
           {salvando ? 'Salvando…' : 'Salvar link'}
         </Button>
       </div>
+      {!salvo && doGoogle && valor === doGoogle && <p className="text-xs text-muted-foreground">Link gerado pela agenda do Google. Cole outro e salve para usar o seu.</p>}
       {erro && <p role="alert" className="text-xs text-destructive">{erro}</p>}
       {aviso && <p role="status" className="text-xs text-muted-foreground">{aviso}</p>}
     </div>
