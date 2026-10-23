@@ -1,6 +1,7 @@
--- SOMENTE LEITURA. Diagnostico completo do banco do dash quando o dashboard trava (sessoes, esperas, bloqueios, taxa de commits/rollbacks/WAL em 5 s, I/O, tabelas que mais escrevem, cron, pg_stat_statements). Termina SEMPRE em excecao (nada e gravado); o resultado vem no texto "DIAG {json}". Rodar: npx supabase db query --linked --project-ref mbzwchnxtskysqplqiyy --file scripts/db-incident-diag.sql --output json
+-- SOMENTE LEITURA. Diagnostico completo do banco do dash quando o dashboard trava (sessoes, esperas, bloqueios, taxa de commits/rollbacks/WAL em 5 s, I/O, tabelas que mais escrevem, cron, pg_stat_statements). Roda numa transacao READ ONLY (o Postgres recusa qualquer gravacao) e devolve uma linha com a coluna "diag". Rodar: npx supabase db query --linked --project-ref mbzwchnxtskysqplqiyy --file scripts/db-incident-diag.sql --output json > diag.json && node scripts/show-db-rows.cjs diag.json
+-- Antes devolvia tudo numa excecao "DIAG {json}", mas a CLI corta a mensagem de erro em ~1000 caracteres (23/10) e o diagnostico vinha truncado.
 -- Cada bloco é limitado e protegido: se um falhar ou estourar, os outros ainda voltam.
-begin;
+begin read only;
 set local lock_timeout = '3s';
 set local statement_timeout = '50s';
 do $$
@@ -117,5 +118,6 @@ begin
   exception when query_canceled or others then r := r || jsonb_build_object('erro_papeis', sqlerrm);
   end;
 
-  raise exception 'DIAG %', r::text using errcode = 'P0001';
+  perform set_config('diag.resultado', r::text, true);
 end $$;
+select current_setting('diag.resultado')::jsonb as diag;
