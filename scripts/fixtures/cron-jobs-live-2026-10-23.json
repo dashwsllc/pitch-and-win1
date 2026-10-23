@@ -1,0 +1,107 @@
+[
+ {
+  "jobid": 1,
+  "jobname": "arena-cycle-deadlines",
+  "schedule": "15 seconds",
+  "command": "SELECT public.arena_tick()",
+  "active": true
+ },
+ {
+  "jobid": 5,
+  "jobname": "meta-insights-sync-frequent",
+  "schedule": "*/30 * * * *",
+  "command": "\r\n     SELECT net.http_post(url:='https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/meta-insights-sync',\r\n       headers:=jsonb_build_object('Content-Type','application/json',\r\n         'Authorization','Bearer '||(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_cron_anon_key' LIMIT 1),\r\n         'x-cron-secret',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_sync_cron_secret' LIMIT 1)),\r\n       body:='{\"days\": 8}'::jsonb,timeout_milliseconds:=60000)\r\n     WHERE (SELECT count(DISTINCT name)=2 FROM vault.decrypted_secrets WHERE name IN ('meta_cron_anon_key','meta_sync_cron_secret') AND length(decrypted_secret)>0);\r\n   ",
+  "active": true
+ },
+ {
+  "jobid": 6,
+  "jobname": "meta-insights-sync-deep",
+  "schedule": "0 3 * * *",
+  "command": "\r\n     SELECT net.http_post(url:='https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/meta-insights-sync',\r\n       headers:=jsonb_build_object('Content-Type','application/json',\r\n         'Authorization','Bearer '||(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_cron_anon_key' LIMIT 1),\r\n         'x-cron-secret',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_sync_cron_secret' LIMIT 1)),\r\n       body:='{\"days\": 8}'::jsonb,timeout_milliseconds:=60000)\r\n     WHERE (SELECT count(DISTINCT name)=2 FROM vault.decrypted_secrets WHERE name IN ('meta_cron_anon_key','meta_sync_cron_secret') AND length(decrypted_secret)>0);\r\n   ",
+  "active": true
+ },
+ {
+  "jobid": 7,
+  "jobname": "meta-insights-resume",
+  "schedule": "* * * * *",
+  "command": "\r\n     SELECT net.http_post(url:='https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/meta-insights-sync',\r\n       headers:=jsonb_build_object('Content-Type','application/json',\r\n         'Authorization','Bearer '||(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_cron_anon_key' LIMIT 1),\r\n         'x-cron-secret',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_sync_cron_secret' LIMIT 1)),\r\n       body:='{\"resumeOnly\": true}'::jsonb,timeout_milliseconds:=60000)\r\n     WHERE (SELECT count(DISTINCT name)=2 FROM vault.decrypted_secrets WHERE name IN ('meta_cron_anon_key','meta_sync_cron_secret') AND length(decrypted_secret)>0)\n AND EXISTS (SELECT 1 FROM public.meta_sync_runs WHERE kind='insights' AND status IN ('running','partial') AND level IS NOT NULL);",
+  "active": true
+ },
+ {
+  "jobid": 8,
+  "jobname": "meta-leads-reconciliation-hourly",
+  "schedule": "*/5 * * * *",
+  "command": "\r\n     SELECT net.http_post(url:='https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/meta-leads-reconciliation',\r\n       headers:=jsonb_build_object('Content-Type','application/json',\r\n         'Authorization','Bearer '||(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_cron_anon_key' LIMIT 1),\r\n         'x-cron-secret',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_sync_cron_secret' LIMIT 1)),\r\n       body:='{\"discover\": true}'::jsonb,timeout_milliseconds:=60000)\r\n     WHERE (SELECT count(DISTINCT name)=2 FROM vault.decrypted_secrets WHERE name IN ('meta_cron_anon_key','meta_sync_cron_secret') AND length(decrypted_secret)>0);\r\n   ",
+  "active": true
+ },
+ {
+  "jobid": 9,
+  "jobname": "meta-lead-worker",
+  "schedule": "* * * * *",
+  "command": "\r\n     SELECT net.http_post(url:='https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/meta-leads-reconciliation',\r\n       headers:=jsonb_build_object('Content-Type','application/json',\r\n         'Authorization','Bearer '||(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_cron_anon_key' LIMIT 1),\r\n         'x-cron-secret',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='meta_sync_cron_secret' LIMIT 1)),\r\n       body:='{\"discover\": false}'::jsonb,timeout_milliseconds:=60000)\r\n     WHERE (SELECT count(DISTINCT name)=2 FROM vault.decrypted_secrets WHERE name IN ('meta_cron_anon_key','meta_sync_cron_secret') AND length(decrypted_secret)>0);\r\n   ",
+  "active": true
+ },
+ {
+  "jobid": 12,
+  "jobname": "google-calendar-deliver",
+  "schedule": "* * * * *",
+  "command": "\n  SELECT net.http_post(\n    url := 'https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/google-calendar-sync',\n    headers := jsonb_build_object('Content-Type','application/json',\n      'Authorization','Bearer ' || keys.anon_key,'x-cron-secret',keys.cron_secret),\n    body := '{\"mode\":\"deliver\"}'::jsonb, timeout_milliseconds := 50000)\n  FROM (SELECT\n    (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='google_calendar_cron_anon_key') AS anon_key,\n    (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='google_calendar_cron_secret') AS cron_secret) keys\n  WHERE keys.anon_key IS NOT NULL AND keys.cron_secret IS NOT NULL\n    AND EXISTS (SELECT 1 FROM calendar_private.connection WHERE connection_status='connected' AND activated_at IS NOT NULL);\n",
+  "active": true
+ },
+ {
+  "jobid": 13,
+  "jobname": "google-calendar-reconcile",
+  "schedule": "*/15 * * * *",
+  "command": "\n  SELECT net.http_post(\n    url := 'https://mbzwchnxtskysqplqiyy.supabase.co/functions/v1/google-calendar-sync',\n    headers := jsonb_build_object('Content-Type','application/json',\n      'Authorization','Bearer ' || keys.anon_key,'x-cron-secret',keys.cron_secret),\n    body := '{\"mode\":\"reconcile\"}'::jsonb, timeout_milliseconds := 50000)\n  FROM (SELECT\n    (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='google_calendar_cron_anon_key') AS anon_key,\n    (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='google_calendar_cron_secret') AS cron_secret) keys\n  WHERE keys.anon_key IS NOT NULL AND keys.cron_secret IS NOT NULL\n    AND EXISTS (SELECT 1 FROM calendar_private.connection WHERE connection_status='connected' AND activated_at IS NOT NULL);\n",
+  "active": true
+ },
+ {
+  "jobid": 15,
+  "jobname": "meta-site-form-link",
+  "schedule": "*/5 * * * *",
+  "command": "SELECT public.meta_link_site_answers(true)",
+  "active": true
+ },
+ {
+  "jobid": 17,
+  "jobname": "meta-form-context-refresh",
+  "schedule": "*/10 * * * *",
+  "command": "SELECT public.meta_refresh_form_contexts()",
+  "active": true
+ },
+ {
+  "jobid": 34,
+  "jobname": "crm-context-delivery",
+  "schedule": "* * * * *",
+  "command": "SELECT public.crm_context_delivery_invoke()",
+  "active": true
+ },
+ {
+  "jobid": 35,
+  "jobname": "crm-context-reconcile",
+  "schedule": "*/15 * * * *",
+  "command": "SELECT public.crm_context_reconcile(150)",
+  "active": true
+ },
+ {
+  "jobid": 36,
+  "jobname": "db-housekeeping",
+  "schedule": "17 6 * * *",
+  "command": "SELECT public.db_housekeeping_run()",
+  "active": true
+ },
+ {
+  "jobid": 37,
+  "jobname": "db-vacuum-cron-history",
+  "schedule": "27 6 * * *",
+  "command": "VACUUM cron.job_run_details",
+  "active": true
+ },
+ {
+  "jobid": 38,
+  "jobname": "db-vacuum-net-responses",
+  "schedule": "7 */6 * * *",
+  "command": "VACUUM net._http_response",
+  "active": true
+ }
+]
