@@ -193,7 +193,7 @@ const generated = mode => {
   for (const f of later) {
     const text = readFileSync(dir + f, 'utf8')
     if (!/cron\.schedule\s*\(/i.test(text)) continue
-    if (/--\s*guard-exempt:\s*\S+/i.test(text)) continue   // comentario "-- guard-exempt: <motivo>" documenta a excecao
+    if (/--[ \t]*guard-exempt:[ \t]*\S+/i.test(text)) continue   // comentario "-- guard-exempt: <motivo>" documenta a excecao
     if (!/db_under_pressure\s*\(/.test(text)) offenders.push(`${f}: cron.schedule sem "WHERE NOT public.db_under_pressure()"`)
     if (!/statement_timeout/i.test(text)) offenders.push(`${f}: cron.schedule sem statement_timeout`)
     // minuto :00 explícito ("0 ...") ou passos que começam no :00 ("*/5", "*/10", "*/15", "*/30"): coincidem com os outros jobs

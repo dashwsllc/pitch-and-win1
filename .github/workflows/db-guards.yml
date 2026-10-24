@@ -1,0 +1,27 @@
+name: Database and load guards
+
+# Impede que uma mudanca futura reintroduza o que derrubou o dashboard em 22-23/10 (ver docs/RUNBOOK_BANCO_FORA_DO_AR.md):
+# ERRCODE 40001, job do pg_cron sem guarda, gatilho de aviso que dispara a toa, polling abaixo de 45 s etc.
+# Tudo roda em banco descartavel (PGlite) e sem segredo: nenhum teste toca o Supabase de verdade.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # PGlite fica fora do package.json de proposito (so os testes de banco usam): mesmo padrao do Playwright em sales-regression.yml.
+      - run: mkdir -p .verification.local/calendar-tools && npm install --prefix .verification.local/calendar-tools --no-package-lock --no-save @electric-sql/pglite@0.5.8
+      - run: node scripts/run-guards.mjs

@@ -3,7 +3,7 @@
 // Migration 20261023200000_background_signals_only_on_change: o trabalho de fundo da Meta so sinaliza o dashboard quando algo muda de verdade.
 // Rodar: node scripts/verify-background-signals-db.mjs
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { PGlite } from '../.verification.local/calendar-tools/node_modules/@electric-sql/pglite/dist/index.js'
 
 const file = process.env.SIGNALS_MIGRATION ?? 'supabase/migrations/20261023200000_background_signals_only_on_change.sql'   // so a checagem de mutacao troca o arquivo
@@ -138,6 +138,28 @@ test('os gatilhos incondicionais antigos sumiram e os novos existem', async () =
 test('reaplicar a migration falha alto em vez de duplicar gatilhos', async () => {
   const db = await freshDb(true)
   await assert.rejects(db.exec(migration), /already exists/)
+})
+
+// ---------- regra para o futuro: gatilho novo que avisa o dashboard precisa de justificativa ----------
+// Cada aviso faz TODA aba aberta rereler TODAS as consultas (DataSync -> invalidateQueries) e o arena_tick reavaliar as metas. Em 23/10 o robo da Meta, gravando tabelas de
+// controle a cada minuto, gerava ~11 avisos/min sem ninguem usando. Um gatilho novo com dashboard_signal/meta_changed_signal so passa com "-- signal-ok: <por que so dispara quando
+// a pessoa precisa ver algo novo>" no arquivo da migration (e nunca em tabela de fila, lease, heartbeat ou execucao de trabalho de fundo).
+const SIGNAL_TRIGGER = /CREATE\s+(OR\s+REPLACE\s+)?TRIGGER[\s\S]*?EXECUTE\s+(FUNCTION|PROCEDURE)\s+(public\.)?(dashboard_signal|meta_changed_signal)\s*\(/i
+const SIGNAL_OK = /--[ \t]*signal-ok:[ \t]*\S+/i   // [ \t], nao \s: senao a quebra de linha engole o espaco e o texto da linha seguinte vira "justificativa"
+const signalOffenders = files => files.filter(([, text]) => SIGNAL_TRIGGER.test(text) && !SIGNAL_OK.test(text)).map(([name]) => name)
+
+test('regra: gatilho novo de aviso sem justificativa e reprovado (a regra em si, com texto sintetico)', async () => {
+  const trig = 'CREATE TRIGGER x_signal AFTER INSERT ON public.fila FOR EACH STATEMENT EXECUTE FUNCTION public.dashboard_signal(\'crm\');'
+  assert.deepEqual(signalOffenders([['a.sql', trig]]), ['a.sql'])
+  assert.deepEqual(signalOffenders([['b.sql', `CREATE TRIGGER y AFTER UPDATE ON public.t REFERENCING NEW TABLE AS meta_signal_new FOR EACH STATEMENT EXECUTE FUNCTION meta_changed_signal('arena');`]]), ['b.sql'])
+  assert.deepEqual(signalOffenders([['c.sql', `-- signal-ok: so quando a venda muda de status, que a pessoa precisa ver\n${trig}`]]), [])
+  assert.deepEqual(signalOffenders([['d.sql', '-- signal-ok:\n' + trig]]), ['d.sql'], 'comentario vazio nao vale')
+  assert.deepEqual(signalOffenders([['e.sql', 'CREATE TRIGGER z AFTER INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION public.outra_funcao();'], ['f.sql', 'CREATE FUNCTION public.dashboard_signal() RETURNS trigger AS $$ BEGIN RETURN NULL; END $$ LANGUAGE plpgsql;']]), [], 'outros gatilhos e a definicao da funcao nao contam')
+})
+
+test('regra: nenhuma migration posterior a estas cria gatilho de aviso sem justificativa', async () => {
+  const dir = 'supabase/migrations/', later = readdirSync(dir).filter(f => f.endsWith('.sql') && f > '20261023210000')
+  assert.deepEqual(signalOffenders(later.map(f => [f, readFileSync(dir + f, 'utf8')])), [], 'gatilho novo que chama dashboard_signal/meta_changed_signal precisa de "-- signal-ok: <motivo>" (ver docs/RUNBOOK_BANCO_FORA_DO_AR.md)')
 })
 
 let failed = 0
