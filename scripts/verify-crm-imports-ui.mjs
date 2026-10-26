@@ -58,29 +58,38 @@ test('generation display never presents absent dates or synthetic noon as a real
  }
 })
 
-test('import period filter keeps leads received on the picked Brasília day or range, newest-day logic included',()=>{
- const today='2026-10-26',lead=(id,iso)=>({id,lead_source:'meta_ads_form',import_channel:'form',import_method:'automatic',lead_received_at:iso})
+test('import period filter follows the day the lead ENTERED the CRM, not the day Meta delivered it',()=>{
+ const today='2026-10-26',lead=(id,created_at,received='2026-10-15T15:00:00Z')=>({id,lead_source:'meta_ads_form',import_channel:'form',import_method:'automatic',lead_received_at:received,lead_generated_at:'2026-09-24T15:00:00Z',created_at})
  const items=[
-  lead('hoje-manha','2026-10-26T13:00:00Z'),
-  lead('hoje-noite-utc','2026-10-27T02:30:00Z'), // 26/10 23:30 em Brasília, ainda é hoje
-  lead('ontem','2026-10-25T15:00:00Z'),
+  lead('leva-hoje-manha','2026-10-26T14:56:03Z'), // recebido 15/10, aprovado e importado hoje 11:56 em Brasília
+  lead('leva-hoje-noite-utc','2026-10-27T02:30:00Z'), // 26/10 23:30 em Brasília, ainda é hoje
+  lead('ontem','2026-10-25T15:00:00Z','2026-10-26T12:00:00Z'), // recebido hoje, mas importado ontem
   lead('semana','2026-10-20T15:00:00Z'),
-  {id:'sem-recebimento',lead_source:'meta_ads_form',import_channel:'form',import_method:'manual',created_at:'2026-10-26T16:00:00Z'},
-  {id:'sem-data',lead_source:'meta_ads_form',import_channel:'form',import_method:'manual'},
+  {id:'sem-criacao',lead_source:'meta_ads_form',import_channel:'form',import_method:'manual',lead_received_at:'2026-10-26T12:00:00Z'},
  ]
  const ids=selection=>{
   const range=imports.resolveImportPeriod({period:'all',date:'',start:'',end:'',...selection},today)
   return items.filter(x=>imports.matchesImportPeriod(x,range)).map(x=>x.id)
  }
  assert.deepEqual(ids({}),items.map(x=>x.id),'sem filtro mostra tudo, até o que não tem data')
- assert.deepEqual(ids({period:'today'}),['hoje-manha','hoje-noite-utc','sem-recebimento'])
- assert.deepEqual(ids({period:'yesterday'}),['ontem'])
+ assert.deepEqual(ids({period:'today'}),['leva-hoje-manha','leva-hoje-noite-utc'],'lead recebido dias antes mas importado hoje entra em Hoje')
+ assert.deepEqual(ids({period:'yesterday'}),['ontem'],'lead recebido hoje mas importado ontem fica em Ontem')
  assert.deepEqual(ids({period:'date',date:'2026-10-20'}),['semana'])
  assert.deepEqual(ids({period:'range',start:'2026-10-20',end:'2026-10-25'}),['ontem','semana'])
  assert.deepEqual(ids({period:'range',start:'2026-10-25',end:'2026-10-25'}),['ontem'],'intervalo de um dia é inclusivo')
 })
+test('Importações lists the newest import first even when its leads were received long before',()=>{
+ const row=(id,created_at,received)=>({id,import_channel:'form',created_at,lead_received_at:received,lead_generated_at:received})
+ const sorted=[
+  row('recebido-ontem-importado-antes','2026-10-21T19:30:00Z','2026-10-25T10:00:00Z'),
+  row('leva-45-b','2026-10-26T14:56:10Z','2026-10-15T09:00:00Z'),
+  row('leva-45-a','2026-10-26T14:56:02Z','2026-10-15T18:00:00Z'),
+  row('leva-46','2026-10-26T14:56:40Z','2026-10-15T12:00:00Z'),
+ ].sort(imports.compareCRMImportRecency).map(x=>x.id)
+ assert.deepEqual(sorted,['leva-45-a','leva-46','leva-45-b','recebido-ontem-importado-antes'],'a leva de hoje vem antes; dentro do mesmo minuto vale o recebimento mais recente')
+})
 test('import period filter explains an unusable pick and does not hide anything meanwhile',()=>{
- const today='2026-10-26',lead={id:'a',import_channel:'form',lead_received_at:'2026-10-01T15:00:00Z'}
+ const today='2026-10-26',lead={id:'a',import_channel:'form',created_at:'2026-10-01T15:00:00Z'}
  for(const [selection,message] of [
   [{period:'date',date:''},/data válida/],
   [{period:'date',date:'2026-02-31'},/data válida/],
@@ -100,21 +109,20 @@ test('import period survives the URL round trip and ignores unknown values',()=>
  for(const p of ['today','yesterday','date','range']) assert.equal(imports.parseImportPeriod(read({periodo:imports.importPeriodUrlValue(p)})).period,p)
  assert.equal(imports.importPeriodUrlValue('all'),null)
 })
-
 test('imports section renders the period filter with Hoje/Ontem counts and the inputs of the chosen mode',()=>{
  const {CRMImportsSection}=load('src/components/crm/CRMImportsSection.tsx')
  const today='2026-10-26',leads=[
-  {id:'a',import_channel:'form',import_method:'automatic',lead_received_at:'2026-10-26T13:00:00Z'},
-  {id:'b',import_channel:'form',import_method:'automatic',lead_received_at:'2026-10-26T14:00:00Z'},
-  {id:'c',import_channel:'form',import_method:'manual',lead_received_at:'2026-10-25T14:00:00Z'},
+  {id:'a',import_channel:'form',import_method:'automatic',lead_received_at:'2026-10-15T13:00:00Z',created_at:'2026-10-26T14:56:00Z'},
+  {id:'b',import_channel:'form',import_method:'automatic',lead_received_at:'2026-10-15T14:00:00Z',created_at:'2026-10-26T14:56:30Z'},
+  {id:'c',import_channel:'form',import_method:'manual',lead_received_at:'2026-10-26T14:00:00Z',created_at:'2026-10-25T14:00:00Z'},
  ]
  const render=(selection)=>{
   const period={period:'all',date:'',start:'',end:'',...selection}
   return renderToStaticMarkup(React.createElement(CRMImportsSection,{leads,section:'all',method:'all',period,range:imports.resolveImportPeriod(period,today),today,onSection(){},onMethod(){},onPeriod(){}}))
  }
  const all=render({})
- for(const label of ['Todas as datas','Hoje','Ontem','Data específica','Período']) assert.match(all,new RegExp(label))
- assert.match(all,/Hoje<span[^>]*>\(2\)/)
+ for(const label of ['Todas as datas','Hoje','Ontem','Data específica','Período','Importadas em']) assert.match(all,new RegExp(label))
+ assert.match(all,/Hoje<span[^>]*>\(2\)/,'Hoje conta o que entrou hoje no CRM, mesmo recebido antes')
  assert.match(all,/Ontem<span[^>]*>\(1\)/)
  assert.doesNotMatch(all,/type="date"/)
  assert.match(render({period:'date',date:'2026-10-25'}),/type="date"[^>]*value="2026-10-25"/)

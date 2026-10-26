@@ -2,7 +2,8 @@ import { CRMCalendarStatus } from './CRMCalendarStatus';
 import { CRMCallMeetButton } from './CRMCallMeetButton';
 import { money } from '@/lib/sales';
 import { CRMLeadArrival } from './CRMLeadArrival';
-import { importChannelLabels, importMethodLabels } from '@/lib/crm-imports';
+import { importChannel, importChannelLabels, importedAt, importMethodLabels } from '@/lib/crm-imports';
+import { leadDateTimeShort } from '@/lib/meta-waves';
 import {
   BookOpen,
   Pencil,
@@ -280,6 +281,7 @@ export function CRMLeadCard({
       </div>
       <div className="flex flex-wrap gap-1">
         <CRMLeadArrival lead={lead} />
+        {importedAt(lead) && importChannel(lead) && <Badge variant="outline" title="Momento em que o lead entrou no CRM · Brasília" className="h-auto px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground">Importado em {leadDateTimeShort(importedAt(lead))}</Badge>}
         {lead.import_channel && <Badge variant="outline" className="h-auto px-2 py-0.5 text-[10px]">{importChannelLabels[lead.import_channel]}{lead.import_method ? ` · ${importMethodLabels[lead.import_method]}` : ''}</Badge>}
         <Badge className={`h-5 px-2 text-[10px] ${tempColor}`}>
           {{ frio: "Frio", morno: "Morno", quente: "Quente" }[lead.temperature]}

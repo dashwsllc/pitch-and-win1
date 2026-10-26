@@ -880,7 +880,7 @@ export default function CRM() {
                       {callDateFilter !== "all" && !dailyPipeline && (
                         <option value="calls">Horário mais próximo</option>
                       )}
-                      <option value="newest">{tab === 'importados' ? 'Recebimentos mais recentes' : 'Mais recentes'}</option>
+                      <option value="newest">{tab === 'importados' ? 'Importações mais recentes' : 'Mais recentes'}</option>
                       <option value="automatic">Calls e retornos prioritários</option>
                       <option value="name">Nome A–Z</option>
                       <option value="hot">Mais quentes</option>

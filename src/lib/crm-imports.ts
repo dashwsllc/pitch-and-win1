@@ -67,10 +67,17 @@ export function resolveImportPeriod(selection: ImportPeriodSelection, today: str
   }
   return null
 }
-/** Dia de Brasília em que o lead foi recebido; a mesma referência que ordena a lista. */
+/**
+ * Momento em que o lead ENTROU no CRM (criação da linha). Não é o recebimento da Meta: uma leva aprovada
+ * hoje pode trazer leads recebidos dias antes, e a aba Importações mostra o que foi importado, não o que chegou.
+ */
+export function importedAt(lead: ImportedLead) {
+  return lead.created_at && Number.isFinite(Date.parse(lead.created_at)) ? lead.created_at : null
+}
+/** Dia de Brasília em que o lead entrou no CRM; a mesma referência que ordena a lista. */
 export function importDateKey(lead: ImportedLead) {
-  const reference = importReceivedAt(lead) || lead.created_at
-  return reference && Number.isFinite(Date.parse(reference)) ? brasiliaDateKey(reference) : null
+  const at = importedAt(lead)
+  return at ? brasiliaDateKey(at) : null
 }
 export function matchesImportPeriod(lead: ImportedLead, range: ImportPeriodRange) {
   if (!range || 'invalid' in range) return true
@@ -78,7 +85,14 @@ export function matchesImportPeriod(lead: ImportedLead, range: ImportPeriodRange
   return !!key && key >= range.startKey && key <= range.endKey
 }
 const timestamp = (value?: string | null) => value && Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0
+/**
+ * Importações mais recentes primeiro. A entrada no CRM manda; leads gravados no mesmo minuto (uma leva aprovada)
+ * contam como a mesma importação e se ordenam pelo recebimento, depois pela geração, para a ordem não depender
+ * dos microssegundos do insert.
+ */
 export function compareCRMImportRecency(a: ImportedLead, b: ImportedLead) {
-  return timestamp(importReceivedAt(b) || b.created_at) - timestamp(importReceivedAt(a) || a.created_at) ||
-    timestamp(b.lead_generated_at) - timestamp(a.lead_generated_at) || (a.id || '').localeCompare(b.id || '')
+  const minute = (lead: ImportedLead) => Math.floor(timestamp(importedAt(lead)) / 60_000)
+  return minute(b) - minute(a) || timestamp(importReceivedAt(b)) - timestamp(importReceivedAt(a)) ||
+    timestamp(b.lead_generated_at) - timestamp(a.lead_generated_at) || timestamp(b.created_at) - timestamp(a.created_at) ||
+    (a.id || '').localeCompare(b.id || '')
 }

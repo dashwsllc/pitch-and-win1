@@ -35,7 +35,7 @@ export function CRMImportsSection({ leads, section, method, period, range, today
     ? range.startKey === range.endKey ? formatDateKey(range.startKey) : `${formatDateKey(range.startKey)} a ${formatDateKey(range.endKey)}`
     : null
   return <section className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4" aria-label="Importações do SDR">
-    <div><h2 className="font-semibold">Importações · SDR</h2><p className="mt-1 text-xs text-muted-foreground">Contatos aprovados, com dados e contexto da origem. Recebimentos mais recentes primeiro · data e horário de Brasília.</p></div>
+    <div><h2 className="font-semibold">Importações · SDR</h2><p className="mt-1 text-xs text-muted-foreground">Contatos aprovados, com dados e contexto da origem. Importações mais recentes primeiro, pela data em que o lead entrou no CRM · horário de Brasília.</p></div>
     <div className="flex flex-wrap gap-2" role="group" aria-label="Origem dos leads importados">
       {([{value:'all',label:'Todas'}] as const).map(item =>
         <Button key={item.value} size="sm" variant={section === item.value ? 'default' : 'outline'} aria-pressed={section === item.value} onClick={() => onSection(item.value)}>
@@ -46,9 +46,9 @@ export function CRMImportsSection({ leads, section, method, period, range, today
       {([{value:'all',label:'Automáticas e manuais'}, {value:'automatic',label:'Automáticas'}, {value:'manual',label:'Manuais'}] as const).map(item =>
         <Button key={item.value} size="sm" variant={method === item.value ? 'secondary' : 'ghost'} aria-pressed={method === item.value} onClick={() => onMethod(item.value)}>{item.label}</Button>)}
     </div>
-    <div className="space-y-2 border-t border-border/40 pt-3" role="group" aria-label="Filtrar importações por data de recebimento">
+    <div className="space-y-2 border-t border-border/40 pt-3" role="group" aria-label="Filtrar importações por data de entrada no CRM">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><CalendarClock className="h-3.5 w-3.5" />Recebidas em:</span>
+        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><CalendarClock className="h-3.5 w-3.5" />Importadas em:</span>
         {periodOptions.map(option => {
           const total = count(option.value)
           return <Button key={option.value} type="button" size="sm" variant={period.period === option.value ? 'default' : 'outline'}
@@ -57,7 +57,7 @@ export function CRMImportsSection({ leads, section, method, period, range, today
           </Button>
         })}
       </div>
-      {period.period === 'date' && <Input type="date" aria-label="Escolher a data de recebimento" className="h-9 w-full sm:w-44"
+      {period.period === 'date' && <Input type="date" aria-label="Escolher a data da importação" className="h-9 w-full sm:w-44"
         value={period.date} onChange={event => onPeriod({ date: event.target.value })} />}
       {period.period === 'range' && <div className="grid gap-2 sm:grid-cols-[repeat(2,minmax(0,11rem))]">
         <label className="space-y-1 text-xs text-muted-foreground">Data inicial
@@ -68,7 +68,7 @@ export function CRMImportsSection({ leads, section, method, period, range, today
         </label>
       </div>}
       {invalid && <p role="alert" className="text-xs text-amber-400">{invalid}</p>}
-      {applied && <p role="status" className="text-xs text-muted-foreground">Mostrando recebidas em {applied} (inclusive) · dia de Brasília</p>}
+      {applied && <p role="status" className="text-xs text-muted-foreground">Mostrando importadas em {applied} (inclusive) · dia da entrada no CRM, em Brasília</p>}
     </div>
   </section>
 }
