@@ -51,7 +51,10 @@ import type { Json } from "@/integrations/supabase/types";
 import { CRMLeadDetail } from "@/components/crm/CRMLeadDetail";
 import { CRMImportsSection } from '@/components/crm/CRMImportsSection';
 import { CRMVoxenSection } from '@/components/crm/CRMVoxenSection';
-import { compareCRMImportRecency, matchesCRMImport, type ImportSection, type ImportMethodFilter } from '@/lib/crm-imports';
+import {
+  compareCRMImportRecency, importPeriodParams, importPeriodUrlValue, matchesCRMImport, matchesImportPeriod, parseImportPeriod, resolveImportPeriod,
+  type ImportSection, type ImportMethodFilter, type ImportPeriodSelection,
+} from '@/lib/crm-imports';
 import { CRMLeadEditor } from "@/components/crm/CRMLeadEditor";
 import { CRMLeadCard } from "@/components/crm/CRMLeadCard";
 import { CRMActionDialog } from "@/components/crm/CRMActionDialog";
@@ -199,6 +202,17 @@ export default function CRM() {
   const setImportFilter = (key: string, value: string) => setParams(previous => {
     const next = new URLSearchParams(previous); next.set(key, value); return next;
   });
+  const importPeriod = parseImportPeriod(key => params.get(key));
+  // Digitar uma data não deve empilhar uma entrada de histórico a cada tecla.
+  const setImportPeriod = (patch: Partial<ImportPeriodSelection>) => setParams(previous => {
+    const next = new URLSearchParams(previous);
+    const write = (key: string, value: string | null) => value ? next.set(key, value) : next.delete(key);
+    if (patch.period !== undefined) write(importPeriodParams.period, importPeriodUrlValue(patch.period));
+    if (patch.date !== undefined) write(importPeriodParams.date, patch.date);
+    if (patch.start !== undefined) write(importPeriodParams.start, patch.start);
+    if (patch.end !== undefined) write(importPeriodParams.end, patch.end);
+    return next;
+  }, { replace: true });
   useEffect(() => {
     if (requestedTab === "remarketing") setParams(previous => { const next = new URLSearchParams(previous); next.set("tab", "followup"); return next; }, { replace: true });
   }, [requestedTab, setParams]);
@@ -325,7 +339,7 @@ export default function CRM() {
     if (tab === "leads") return !isClosedStage(lead.pipeline_stage);
     if (tab === "closer") return inQueue(lead, queue);
     if (tab === "sdr") return inSdrQueue(lead, sdrQueue);
-    if (tab === "importados") return matchesCRMImport(lead, importSection, importMethod);
+    if (tab === "importados") return matchesCRMImport(lead, importSection, importMethod) && matchesImportPeriod(lead, importRange);
     if (tab === "followup") return negative(lead);
     return true;
   };
@@ -334,6 +348,7 @@ export default function CRM() {
   const dailyPipeline = view === "pipeline" && ["leads", "sdr", "importados"].includes(tab) && !showResults && !showFollowup;
   const todayKey = brasiliaDateKey(now);
   const tomorrowKey = addDaysToDateKey(todayKey, 1);
+  const importRange = resolveImportPeriod(importPeriod, todayKey);
   const pipelineRange = resolveCRMPipelinePeriod(pipelinePeriod, pipelineCustomRange, todayKey);
   const pipelinePeriodLabel = pipelineRange.allTime
     ? "todo o período"
@@ -792,7 +807,8 @@ export default function CRM() {
                   : showFollowup ? <CRMFollowupBoard leads={crm.leads} names={names} now={now} busy={busy} onRead={lead => setReadId(lead.id)} onManage={setFollowupLead} />
                   : <>
                 {tab === 'importados' && <CRMImportsSection leads={crm.leads} section={importSection} method={importMethod}
-                  onSection={value => setImportFilter('origem', value)} onMethod={value => setImportFilter('entrada', value)} />}
+                  period={importPeriod} range={importRange} today={todayKey}
+                  onSection={value => setImportFilter('origem', value)} onMethod={value => setImportFilter('entrada', value)} onPeriod={setImportPeriod} />}
                 {dailyPipeline && <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
                   <div>
                     <h2 className="font-semibold">Esteira do LEAD</h2>

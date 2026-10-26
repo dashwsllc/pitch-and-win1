@@ -1,3 +1,4 @@
+import { addDaysToDateKey, brasiliaDateKey, isValidDateKey } from './brasilia-time'
 import { leadDateTime, leadDay } from './meta-waves'
 
 export type ImportChannel = 'form' | 'website'
@@ -40,6 +41,41 @@ export function importReceivedAt(lead: CRMImportMetadata) {
 export function importGenerationLabel(at: string | null | undefined, timeKnown: boolean, dateKnown?: boolean) {
   if (!at || !Number.isFinite(Date.parse(at)) || dateKnown === false || (!timeKnown && dateKnown !== true)) return 'Data e horário não informados na origem'
   return timeKnown ? leadDateTime(at) : `${leadDay(at)} · horário não informado na origem`
+}
+export type ImportPeriod = 'all' | 'today' | 'yesterday' | 'date' | 'range'
+export interface ImportPeriodSelection { period: ImportPeriod; date: string; start: string; end: string }
+export type ImportPeriodRange = { startKey: string; endKey: string } | { invalid: string } | null
+export const importPeriodParams = { period: 'periodo', date: 'data', start: 'de', end: 'ate' } as const
+const importPeriodUrlValues: Record<Exclude<ImportPeriod, 'all'>, string> = { today: 'hoje', yesterday: 'ontem', date: 'data', range: 'intervalo' }
+export const importPeriodUrlValue = (period: ImportPeriod) => period === 'all' ? null : importPeriodUrlValues[period]
+export function parseImportPeriod(read: (key: string) => string | null): ImportPeriodSelection {
+  const raw = read(importPeriodParams.period)
+  const period = (Object.keys(importPeriodUrlValues) as Array<keyof typeof importPeriodUrlValues>).find(key => importPeriodUrlValues[key] === raw) ?? 'all'
+  return { period, date: read(importPeriodParams.date) || '', start: read(importPeriodParams.start) || '', end: read(importPeriodParams.end) || '' }
+}
+/** null = sem filtro. `invalid` explains why a picked date cannot filter yet; the list stays unfiltered meanwhile. */
+export function resolveImportPeriod(selection: ImportPeriodSelection, today: string): ImportPeriodRange {
+  if (selection.period === 'today') return { startKey: today, endKey: today }
+  if (selection.period === 'yesterday') { const key = addDaysToDateKey(today, -1); return { startKey: key, endKey: key } }
+  if (selection.period === 'date') {
+    return isValidDateKey(selection.date) ? { startKey: selection.date, endKey: selection.date } : { invalid: 'Escolha uma data válida.' }
+  }
+  if (selection.period === 'range') {
+    if (!isValidDateKey(selection.start) || !isValidDateKey(selection.end)) return { invalid: 'Informe a data inicial e a data final.' }
+    if (selection.start > selection.end) return { invalid: 'A data inicial deve ser anterior ou igual à data final.' }
+    return { startKey: selection.start, endKey: selection.end }
+  }
+  return null
+}
+/** Dia de Brasília em que o lead foi recebido; a mesma referência que ordena a lista. */
+export function importDateKey(lead: ImportedLead) {
+  const reference = importReceivedAt(lead) || lead.created_at
+  return reference && Number.isFinite(Date.parse(reference)) ? brasiliaDateKey(reference) : null
+}
+export function matchesImportPeriod(lead: ImportedLead, range: ImportPeriodRange) {
+  if (!range || 'invalid' in range) return true
+  const key = importDateKey(lead)
+  return !!key && key >= range.startKey && key <= range.endKey
 }
 const timestamp = (value?: string | null) => value && Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0
 export function compareCRMImportRecency(a: ImportedLead, b: ImportedLead) {
